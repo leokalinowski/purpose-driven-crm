@@ -8,6 +8,7 @@ import {
   FileBarChart,
   LogOut
 } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   Sidebar,
   SidebarContent,
@@ -22,7 +23,6 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { useNavigate, useLocation } from 'react-router-dom';
 
 const menuItems = [
   { title: 'Dashboard', url: '/', icon: Home },
@@ -62,10 +62,10 @@ export function AppSidebar() {
                     asChild
                     isActive={location.pathname === item.url}
                   >
-                    <a href={item.url}>
+                    <Link to={item.url}>
                       <item.icon />
                       <span>{item.title}</span>
-                    </a>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
