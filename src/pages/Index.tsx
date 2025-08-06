@@ -1,13 +1,51 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { Layout } from '@/components/layout/Layout';
+import { DashboardCards } from '@/components/dashboard/DashboardCards';
+import { RecentActivity } from '@/components/dashboard/RecentActivity';
 
 const Index = () => {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <h1 className="text-2xl font-semibold">Loading...</h1>
+        </div>
       </div>
-    </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <Layout>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Welcome back! Here's an overview of your real estate business.
+          </p>
+        </div>
+        
+        <DashboardCards />
+        
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+          <RecentActivity />
+        </div>
+      </div>
+    </Layout>
   );
 };
 
