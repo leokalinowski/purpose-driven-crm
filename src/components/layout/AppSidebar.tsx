@@ -6,6 +6,7 @@ import {
   TrendingUp,
   UserCheck,
   FileBarChart,
+  Phone,
   LogOut
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -26,6 +27,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 const menuItems = [
   { title: 'Dashboard', url: '/', icon: Home },
+  { title: 'PO2 Tasks', url: '/po2-tasks', icon: Phone },
   { title: 'DTD2 Tasks', url: '/dtd2', icon: UserCheck },
   { title: 'Database', url: '/database', icon: Users },
   { title: 'Events', url: '/events', icon: Calendar },

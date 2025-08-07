@@ -163,6 +163,45 @@ export type Database = {
           },
         ]
       }
+      leads: {
+        Row: {
+          agent_id: string
+          category: string
+          created_at: string
+          email: string | null
+          first_name: string | null
+          id: string
+          last_name: string
+          name: string
+          phone_number: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          category: string
+          created_at?: string
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          last_name: string
+          name: string
+          phone_number?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          category?: string
+          created_at?: string
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string
+          name?: string
+          phone_number?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       "Leads Table [Agent's Name]": {
         Row: {
           address_1: string | null
@@ -281,6 +320,56 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      po2_tasks: {
+        Row: {
+          agent_id: string
+          completed: boolean
+          completed_at: string | null
+          created_at: string
+          id: string
+          lead_id: string
+          notes: string | null
+          task_type: string
+          updated_at: string
+          week_number: number
+          year: number
+        }
+        Insert: {
+          agent_id: string
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          lead_id: string
+          notes?: string | null
+          task_type: string
+          updated_at?: string
+          week_number: number
+          year?: number
+        }
+        Update: {
+          agent_id?: string
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          lead_id?: string
+          notes?: string | null
+          task_type?: string
+          updated_at?: string
+          week_number?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po2_tasks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
           },
         ]
       }
