@@ -11,8 +11,8 @@ const recentActivities = [
   },
   {
     id: 2,
-    action: 'DTD2 task completed',
-    description: 'Follow-up call with Maria Garcia',
+    action: 'Event task completed',
+    description: 'Finalized speaker arrangements for Q2 event',
     time: '4 hours ago',
     status: 'completed'
   },

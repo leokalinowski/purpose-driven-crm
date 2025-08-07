@@ -173,8 +173,56 @@ export type Database = {
           },
         ]
       }
+      event_tasks: {
+        Row: {
+          agent_id: string
+          completed_at: string | null
+          created_at: string
+          due_date: string | null
+          event_id: string | null
+          id: string
+          responsible_person: string
+          status: string | null
+          task_name: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          completed_at?: string | null
+          created_at?: string
+          due_date?: string | null
+          event_id?: string | null
+          id?: string
+          responsible_person: string
+          status?: string | null
+          task_name: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          completed_at?: string | null
+          created_at?: string
+          due_date?: string | null
+          event_id?: string | null
+          id?: string
+          responsible_person?: string
+          status?: string | null
+          task_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_tasks_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
+          agent_id: string | null
           attendance_count: number | null
           created_at: string
           created_by: string | null
@@ -182,12 +230,20 @@ export type Database = {
           event_date: string
           event_type: string | null
           feedback_score: number | null
+          feedback_summary: string | null
           id: string
+          invited_count: number | null
+          leads_generated: number | null
           location: string | null
+          quarter: string | null
+          registration_info: string | null
+          speakers: string[] | null
+          theme: string | null
           title: string
           updated_at: string
         }
         Insert: {
+          agent_id?: string | null
           attendance_count?: number | null
           created_at?: string
           created_by?: string | null
@@ -195,12 +251,20 @@ export type Database = {
           event_date: string
           event_type?: string | null
           feedback_score?: number | null
+          feedback_summary?: string | null
           id?: string
+          invited_count?: number | null
+          leads_generated?: number | null
           location?: string | null
+          quarter?: string | null
+          registration_info?: string | null
+          speakers?: string[] | null
+          theme?: string | null
           title: string
           updated_at?: string
         }
         Update: {
+          agent_id?: string | null
           attendance_count?: number | null
           created_at?: string
           created_by?: string | null
@@ -208,8 +272,15 @@ export type Database = {
           event_date?: string
           event_type?: string | null
           feedback_score?: number | null
+          feedback_summary?: string | null
           id?: string
+          invited_count?: number | null
+          leads_generated?: number | null
           location?: string | null
+          quarter?: string | null
+          registration_info?: string | null
+          speakers?: string[] | null
+          theme?: string | null
           title?: string
           updated_at?: string
         }

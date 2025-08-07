@@ -28,7 +28,6 @@ import { useAuth } from '@/hooks/useAuth';
 const menuItems = [
   { title: 'Dashboard', url: '/', icon: Home },
   { title: 'PO2 Tasks', url: '/po2-tasks', icon: Phone },
-  { title: 'DTD2 Tasks', url: '/dtd2', icon: UserCheck },
   { title: 'Database', url: '/database', icon: Users },
   { title: 'Events', url: '/events', icon: Calendar },
   { title: 'E-Newsletter', url: '/newsletter', icon: Mail },

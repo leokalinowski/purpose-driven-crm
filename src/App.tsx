@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import PO2Tasks from "./pages/PO2Tasks";
 import Database from "./pages/Database";
+import Events from "./pages/Events";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -19,6 +20,7 @@ const AppContent = () => (
     <Route path="/auth" element={<Auth />} />
     <Route path="/po2-tasks" element={<PO2Tasks />} />
     <Route path="/database" element={<Database />} />
+    <Route path="/events" element={<Events />} />
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />
   </Routes>
