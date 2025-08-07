@@ -22,18 +22,22 @@ const AppContent = () => (
   </Routes>
 );
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <BrowserRouter>
-      <AuthProvider>
-        <TooltipProvider>
-          <AppContent />
-          <Toaster />
-          <Sonner />
-        </TooltipProvider>
-      </AuthProvider>
-    </BrowserRouter>
-  </QueryClientProvider>
-);
+const App = () => {
+  return (
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AuthProvider>
+            <TooltipProvider>
+              <AppContent />
+              <Toaster />
+              <Sonner />
+            </TooltipProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </React.StrictMode>
+  );
+};
 
 export default App;
