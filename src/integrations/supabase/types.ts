@@ -65,6 +65,66 @@ export type Database = {
           },
         ]
       }
+      contacts: {
+        Row: {
+          address_1: string | null
+          address_2: string | null
+          agent_id: string
+          category: string
+          city: string | null
+          created_at: string
+          dnc: boolean
+          email: string | null
+          first_name: string | null
+          id: string
+          last_name: string
+          notes: string | null
+          phone: string | null
+          state: string | null
+          tags: string[] | null
+          updated_at: string
+          zip_code: string | null
+        }
+        Insert: {
+          address_1?: string | null
+          address_2?: string | null
+          agent_id: string
+          category: string
+          city?: string | null
+          created_at?: string
+          dnc?: boolean
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          last_name: string
+          notes?: string | null
+          phone?: string | null
+          state?: string | null
+          tags?: string[] | null
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Update: {
+          address_1?: string | null
+          address_2?: string | null
+          agent_id?: string
+          category?: string
+          city?: string | null
+          created_at?: string
+          dnc?: boolean
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string
+          notes?: string | null
+          phone?: string | null
+          state?: string | null
+          tags?: string[] | null
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
       dtd2_tasks: {
         Row: {
           agent_id: string
