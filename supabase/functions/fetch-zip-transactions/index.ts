@@ -91,10 +91,19 @@ serve(async (req) => {
 
     console.log("[fetch-zip-transactions] Starting Apify actor run", { slug, input });
 
-    const runRes = await fetch(`https://api.apify.com/v2/acts/${encodeURIComponent(slug)}/runs?token=${token}&waitForFinish=${waitSec}`, {
+    // Add hard cap hints to input (many actors ignore unknown keys, harmless if so)
+    const hintedInput = {
+      ...input,
+      maxItems: limit,
+      maxResults: limit,
+      maxListings: limit,
+    };
+
+    // Start run WITHOUT waiting for finish so we can abort early when we have enough items
+    const runRes = await fetch(`https://api.apify.com/v2/acts/${encodeURIComponent(slug)}/runs?token=${encodeURIComponent(token)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
+      body: JSON.stringify(hintedInput),
     });
 
     const runJson: any = await runRes.json().catch(() => ({}));
@@ -105,7 +114,7 @@ serve(async (req) => {
           error: runJson?.error?.message || runJson?.message || "Actor start failed",
           apify_error: runJson,
           slug,
-          input,
+          input: hintedInput,
         }),
         {
           status: 502,
@@ -128,43 +137,47 @@ serve(async (req) => {
     const started = Date.now();
     let datasetId: string | undefined = runJson?.data?.defaultDatasetId || runJson?.defaultDatasetId;
     let items: any[] = [];
+    let abortedEarly = false;
 
     while (Date.now() - started < maxWaitMs) {
       // Check run status
-      const runStatusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${token}`);
+      const runStatusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${encodeURIComponent(token)}`);
       const runStatusJson: any = await runStatusRes.json().catch(() => ({}));
       datasetId = datasetId || runStatusJson?.data?.defaultDatasetId || runStatusJson?.defaultDatasetId;
 
       if (datasetId) {
         const itemsRes = await fetch(
-          `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&clean=true&limit=${encodeURIComponent(String(limit))}`
+          `https://api.apify.com/v2/datasets/${datasetId}/items?token=${encodeURIComponent(token)}&clean=true&limit=${encodeURIComponent(String(limit))}`
         );
         const arr = (await itemsRes.json().catch(() => [])) as any[];
-        if (Array.isArray(arr) && arr.length > 0) {
+        if (Array.isArray(arr)) {
           items = arr;
-          break;
+          // Abort the run as soon as we have at least 'limit' items to hard-cap cost
+          if (arr.length >= limit) {
+            try {
+              await fetch(`https://api.apify.com/v2/actor-runs/${runId}/abort?token=${encodeURIComponent(token)}`, { method: "POST" });
+              abortedEarly = true;
+              console.log("[fetch-zip-transactions] Early-aborted run after reaching limit", { runId, limit });
+            } catch (e) {
+              console.warn("[fetch-zip-transactions] Failed to abort run early", e);
+            }
+            break;
+          }
         }
       }
 
-      // If run finished but still no items, break early
+      // If run finished, break
       const status: string | undefined = runStatusJson?.data?.status || runStatusJson?.status;
       if (status && ["SUCCEEDED", "FAILED", "ABORTED", "TIMED_OUT"].includes(status)) {
         if (status !== "SUCCEEDED") {
-          console.error("[fetch-zip-transactions] Run ended without success", { status });
-        }
-        // Try one last time to read items
-        if (datasetId) {
-          const itemsRes = await fetch(
-            `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&clean=true&limit=${encodeURIComponent(String(limit))}`
-          );
-          const arr = (await itemsRes.json().catch(() => [])) as any[];
-          if (Array.isArray(arr) && arr.length > 0) items = arr;
+          console.error("[fetch-zip-transactions] Run ended", { status });
         }
         break;
       }
 
       await sleep(1500);
     }
+
 
     if (!items || items.length === 0) {
       console.error("[fetch-zip-transactions] No dataset items ready within wait window");

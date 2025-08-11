@@ -82,14 +82,6 @@ serve(async (req) => {
     });
   }
 
-  const auth = req.headers.get("authorization") || req.headers.get("Authorization");
-  if (!auth) {
-    // Function uses verify_jwt by default; this is an additional friendly error
-    return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
-    });
-  }
 
   let payload: SendEmailRequest;
   try {

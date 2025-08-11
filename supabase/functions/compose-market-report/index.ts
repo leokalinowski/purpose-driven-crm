@@ -89,66 +89,84 @@ async function runApifyAndGetItems(args: {
   if (!token) throw new Error("Missing APIFY_API_TOKEN secret");
 
   const slug = normalizeActorSlug(args.actorId);
-  const startUrl = `https://api.apify.com/v2/acts/${slug}/runs?token=${encodeURIComponent(token)}`;
 
-  const baseInput = {
-    forRent: false,
-    forSaleByAgent: false,
-    forSaleByOwner: false,
+  // Base input with sold + zip, plus hints to cap items
+  const baseInput: Record<string, unknown> = {
     sold: true,
     zipCodes: [args.zip],
-  } as Record<string, unknown>;
-
+    maxItems: args.limit,
+    maxResults: args.limit,
+    maxListings: args.limit,
+  };
   const input = { ...baseInput, ...(args.inputOverride || {}) };
 
-  const startRes = await fetch(startUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ input }) as string,
-  });
-
+  // Start run without waiting for finish to be able to abort early
+  const startRes = await fetch(
+    `https://api.apify.com/v2/acts/${slug}/runs?token=${encodeURIComponent(token)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }
+  );
   if (!startRes.ok) {
-    const text = await startRes.text();
-    throw new Error(`Failed to start Apify actor: ${startRes.status} ${text}`);
+    const t = await startRes.text();
+    throw new Error(`Failed to start Apify actor: ${startRes.status} ${t}`);
   }
-
   const startData = await startRes.json();
-  const runId = startData?.data?.id ?? startData?.data?.id ?? startData?.data?.id;
+  const runId = startData?.data?.id || startData?.id;
   if (!runId) throw new Error(`Apify actor did not return run ID: ${JSON.stringify(startData)}`);
 
+  let datasetId: string | null = startData?.data?.defaultDatasetId || startData?.defaultDatasetId || null;
   const startedAt = Date.now();
-  let datasetId: string | null = null;
+  let items: any[] = [];
 
   while (Date.now() - startedAt < args.maxWaitMs) {
+    // Get latest run status and dataset id
     const runRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${encodeURIComponent(token)}`);
-    if (!runRes.ok) {
-      const t = await runRes.text();
-      throw new Error(`Failed to fetch Apify run: ${t}`);
-    }
-    const runData = await runRes.json();
-    const status = runData?.data?.status as string;
-    datasetId = runData?.data?.defaultDatasetId ?? datasetId;
+    const runData = await runRes.json().catch(() => ({}));
+    datasetId = datasetId || runData?.data?.defaultDatasetId || runData?.defaultDatasetId || datasetId;
 
-    if (status === "SUCCEEDED" || status === "FAILED" || status === "ABORTED" || status === "TIMED-OUT") {
+    if (datasetId) {
+      const itemsRes = await fetch(
+        `https://api.apify.com/v2/datasets/${datasetId}/items?token=${encodeURIComponent(token)}&clean=true&format=json&limit=${args.limit}`
+      );
+      const arr = (await itemsRes.json().catch(() => [])) as any[];
+      if (Array.isArray(arr)) {
+        items = arr;
+        if (arr.length >= args.limit) {
+          // Abort run to stop further scraping once we have enough items
+          try {
+            await fetch(`https://api.apify.com/v2/actor-runs/${runId}/abort?token=${encodeURIComponent(token)}`, { method: "POST" });
+            console.log("[compose-market-report] Early-aborted Apify run after reaching limit", { runId, limit: args.limit });
+          } catch (e) {
+            console.warn("[compose-market-report] Failed to abort run early", e);
+          }
+          break;
+        }
+      }
+    }
+
+    const status: string | undefined = runData?.data?.status || runData?.status;
+    if (status && ["SUCCEEDED", "FAILED", "ABORTED", "TIMED_OUT"].includes(status)) {
       break;
     }
+
     await new Promise((r) => setTimeout(r, 1500));
   }
 
   if (!datasetId) throw new Error("Apify run finished without datasetId");
 
-  // Fetch dataset items
-  const itemsRes = await fetch(
-    `https://api.apify.com/v2/datasets/${datasetId}/items?token=${encodeURIComponent(token)}&clean=true` +
-      `&format=json&limit=${args.limit}`
+  // Final fetch to ensure we return up to 'limit' items
+  const finalItemsRes = await fetch(
+    `https://api.apify.com/v2/datasets/${datasetId}/items?token=${encodeURIComponent(token)}&clean=true&format=json&limit=${args.limit}`
   );
-  if (!itemsRes.ok) {
-    const t = await itemsRes.text();
+  if (!finalItemsRes.ok) {
+    const t = await finalItemsRes.text();
     throw new Error(`Failed to fetch Apify dataset items: ${t}`);
   }
-  const rawItems: any[] = await itemsRes.json();
+  const rawItems: any[] = await finalItemsRes.json();
 
-  // Map and sort
   const txs = rawItems.map(mapTransaction).filter((x) => x.soldPrice != null);
   txs.sort((a, b) => {
     const ta = a.soldDate ? Date.parse(a.soldDate) : 0;
