@@ -78,15 +78,18 @@ export default function MarketReportTest() {
   const [sending, setSending] = useState(false);
   const [sendingBatch, setSendingBatch] = useState(false);
   const [actorId, setActorId] = useState("maxcopell/zillow-zip-search");
-  const [maxWaitSeconds, setMaxWaitSeconds] = useState<number>(30);
+  const [maxWaitSeconds, setMaxWaitSeconds] = useState<number>(45);
   const [advancedInput, setAdvancedInput] = useState<string>("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiHtml, setAiHtml] = useState<string | null>(null);
+  const [recipient, setRecipient] = useState<string>("");
   const { toast } = useToast();
 
   const subject = useMemo(() => {
     return `${zip} Recent Sales — ${monthLabel(month)}`;
   }, [zip, month]);
 
-  const onSend = async () => {
+const onSend = async () => {
     setSending(true);
     try {
       if (!/^\d{5}$/.test(zip)) {
@@ -162,7 +165,120 @@ export default function MarketReportTest() {
     }
   };
 
-  const onSendToContactsInZip = async () => {
+  // New: One-click AI market report
+  const onGenerateAI = async () => {
+    setAiLoading(true);
+    setAiHtml(null);
+    try {
+      if (!/^\d{5}$/.test(zip)) {
+        toast({ title: "Invalid ZIP", description: "Please enter a 5-digit ZIP code.", variant: "destructive" });
+        return;
+      }
+      if (!actorId.trim()) {
+        toast({ title: "Actor ID required", description: "Please enter your Apify Actor ID.", variant: "destructive" });
+        return;
+      }
+      let apifyInput: any | undefined = undefined;
+      if (advancedInput.trim()) {
+        try {
+          apifyInput = JSON.parse(advancedInput);
+        } catch (e) {
+          toast({ title: "Invalid JSON", description: "Advanced Apify input must be valid JSON.", variant: "destructive" });
+          return;
+        }
+      }
+
+      const { data, error } = await supabase.functions.invoke("compose-market-report", {
+        body: {
+          zip_code: zip,
+          limit: 10,
+          actorId,
+          maxWaitMs: Math.max(0, maxWaitSeconds) * 1000,
+          advancedInput: apifyInput,
+          mode: "preview",
+        },
+      });
+      if (error) {
+        console.error("[MarketReportTest] compose-market-report error", error, data);
+        toast({ title: "Failed to compose report", description: String((data as any)?.error || error.message).slice(0, 200), variant: "destructive" });
+        return;
+      }
+
+      setAiHtml((data as any)?.html || null);
+      const fm = (data as any)?.metrics?.formatted;
+      if (fm) {
+        toast({ title: "Report ready", description: `Median ${fm.medianPrice}, Avg ${fm.avgPrice}, Change ${fm.changePct}` });
+      } else {
+        toast({ title: "Report ready", description: "AI market report generated." });
+      }
+    } catch (err) {
+      console.error("[MarketReportTest] Unexpected error (compose)", err);
+      toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const onSendAI = async () => {
+    setAiLoading(true);
+    try {
+      if (!/^\d{5}$/.test(zip)) {
+        toast({ title: "Invalid ZIP", description: "Please enter a 5-digit ZIP code.", variant: "destructive" });
+        return;
+      }
+      if (!actorId.trim()) {
+        toast({ title: "Actor ID required", description: "Please enter your Apify Actor ID.", variant: "destructive" });
+        return;
+      }
+
+      let toEmail = recipient.trim();
+      if (!toEmail) {
+        const { data: userRes } = await supabase.auth.getUser();
+        toEmail = userRes?.user?.email || "";
+      }
+      if (!toEmail) {
+        toast({ title: "Recipient required", description: "Enter a recipient email or sign in.", variant: "destructive" });
+        return;
+      }
+
+      let apifyInput: any | undefined = undefined;
+      if (advancedInput.trim()) {
+        try {
+          apifyInput = JSON.parse(advancedInput);
+        } catch (e) {
+          toast({ title: "Invalid JSON", description: "Advanced Apify input must be valid JSON.", variant: "destructive" });
+          return;
+        }
+      }
+
+      const { data, error } = await supabase.functions.invoke("compose-market-report", {
+        body: {
+          zip_code: zip,
+          limit: 10,
+          actorId,
+          maxWaitMs: Math.max(0, maxWaitSeconds) * 1000,
+          advancedInput: apifyInput,
+          mode: "send",
+          to: toEmail,
+          subject: `${zip} Market Report – ${new Date().toLocaleDateString()}`,
+        },
+      });
+
+      if (error) {
+        console.error("[MarketReportTest] compose-market-report send error", error, data);
+        toast({ title: "Failed to send report", description: String((data as any)?.error || error.message).slice(0, 200), variant: "destructive" });
+        return;
+      }
+
+      toast({ title: "Sent", description: `Market report sent to ${toEmail}.` });
+    } catch (err) {
+      console.error("[MarketReportTest] Unexpected error (send)", err);
+      toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+const onSendToContactsInZip = async () => {
     setSendingBatch(true);
     try {
       const { data: userRes } = await supabase.auth.getUser();
@@ -197,7 +313,6 @@ export default function MarketReportTest() {
       setSendingBatch(false);
     }
   };
-
   return (
     <Card className="mb-4">
       <CardHeader>
