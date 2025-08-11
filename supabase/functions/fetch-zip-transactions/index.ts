@@ -76,12 +76,16 @@ serve(async (req) => {
     const slug = normalizeActorSlug(apify.actorId);
     const maxWaitMs = Math.max(0, apify?.maxWaitMs ?? 15000);
 
-    // Prepare actor input: pass through provided input, but ensure a zip field exists
+    // Prepare actor input: pass through provided input, but ensure required fields for this actor
     const input: Record<string, unknown> = {
       ...(apify?.input || {}),
     };
-    if (!("zip" in input) && !("zipCode" in input) && !("zip_code" in input)) {
-      input.zip = String(zip_code);
+    // Actor expects `zipCodes` array and supports `sold` flag for recently sold
+    if (!("zipCodes" in input)) {
+      input.zipCodes = [String(zip_code)];
+    }
+    if (!("sold" in input)) {
+      input.sold = true;
     }
 
     console.log("[fetch-zip-transactions] Starting Apify actor run", { slug, input });
