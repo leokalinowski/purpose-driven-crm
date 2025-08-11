@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -82,8 +82,25 @@ export default function MarketReportTest() {
   const [advancedInput, setAdvancedInput] = useState<string>("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiHtml, setAiHtml] = useState<string | null>(null);
-  const [recipient, setRecipient] = useState<string>("");
+  const [recipient, setRecipient] = useState<string>("leonardo@realestateonpurpose.com");
   const { toast } = useToast();
+
+  // Load and persist recipient email
+  useEffect(() => {
+    const saved = localStorage.getItem("marketReportRecipient");
+    if (saved && saved !== recipient) {
+      setRecipient(saved);
+    } else if (!saved && !recipient) {
+      setRecipient("leonardo@realestateonpurpose.com");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (recipient) {
+      localStorage.setItem("marketReportRecipient", recipient);
+    }
+  }, [recipient]);
 
   const subject = useMemo(() => {
     return `${zip} Recent Sales — ${monthLabel(month)}`;
@@ -135,27 +152,35 @@ const onSend = async () => {
         return;
       }
 
-      // Current user email
-      const { data: userRes } = await supabase.auth.getUser();
-      const toEmail = userRes?.user?.email;
+      // Resolve recipient (prefer manual, then logged-in user)
+      let toEmail = recipient.trim();
       if (!toEmail) {
-        toast({ title: "No logged-in user", description: "Please sign in to send a test email.", variant: "destructive" });
+        const { data: userRes } = await supabase.auth.getUser();
+        toEmail = userRes?.user?.email || "";
+      }
+      if (!toEmail) {
+        toast({ title: "Recipient required", description: "Enter a recipient email or sign in.", variant: "destructive" });
         return;
       }
+      try {
+        localStorage.setItem("marketReportRecipient", toEmail);
+      } catch {}
 
       // Build HTML strictly from real transactions
       const html = buildTransactionsHTML(zip, month, transactions);
 
       // Send email via edge function
-      const { error: sendErr } = await supabase.functions.invoke("send-email", {
+      const { data: sendData, error: sendErr } = await supabase.functions.invoke("send-email", {
         body: { to: toEmail, subject, html },
       });
       if (sendErr) {
-        console.error("[MarketReportTest] send-email error", sendErr);
-        toast({ title: "Failed to send email", description: "Please try again.", variant: "destructive" });
+        console.error("[MarketReportTest] send-email error", sendErr, sendData);
+        const msg = (sendData as any)?.error || sendErr.message || "Please try again.";
+        toast({ title: "Failed to send email", description: String(msg).slice(0, 200), variant: "destructive" });
         return;
       }
 
+      console.log("[MarketReportTest] send-email success", sendData);
       toast({ title: "Test email sent", description: `Sent recent sales for ${zip} to ${toEmail}.` });
     } catch (err) {
       console.error("[MarketReportTest] Unexpected error", err);
@@ -240,6 +265,9 @@ const onSend = async () => {
         toast({ title: "Recipient required", description: "Enter a recipient email or sign in.", variant: "destructive" });
         return;
       }
+      try {
+        localStorage.setItem("marketReportRecipient", toEmail);
+      } catch {}
 
       let apifyInput: any | undefined = undefined;
       if (advancedInput.trim()) {
@@ -380,6 +408,19 @@ const onSendToContactsInZip = async () => {
             onChange={(e) => setAdvancedInput(e.target.value)}
             placeholder='{"zipCodes":["90210"],"sold":true}'
             rows={4}
+            className="w-full"
+          />
+        </div>
+        <div className="flex flex-col md:col-span-5">
+          <label htmlFor="recipient" className="text-sm text-muted-foreground mb-1">
+            Recipient email (defaults to leonardo@realestateonpurpose.com)
+          </label>
+          <Input
+            id="recipient"
+            type="email"
+            value={recipient}
+            onChange={(e) => setRecipient(e.target.value)}
+            placeholder="name@example.com"
             className="w-full"
           />
         </div>
