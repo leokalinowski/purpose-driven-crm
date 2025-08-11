@@ -25,74 +25,82 @@ export default function MarketReportTest() {
 
   const onSend = async () => {
     setSending(true);
-    console.log("[MarketReportTest] Starting test send", { zip, month });
+    try {
+      console.log("[MarketReportTest] Starting test send", { zip, month });
 
-    // 1) Fetch or generate market stats via Edge Function (sample mode by default)
-    const { data: statsResp, error: statsErr } = await supabase.functions.invoke("fetch-market-stats", {
-      body: { zip_code: zip, period_month: month, mode: "sample" },
-    });
+      // 1) Fetch or generate market stats via Edge Function (sample mode by default)
+      const { data: statsResp, error: statsErr } = await supabase.functions.invoke("fetch-market-stats", {
+        body: { zip_code: zip, period_month: month, mode: "sample" },
+      });
 
-    if (statsErr) {
-      console.error("[MarketReportTest] fetch-market-stats error", statsErr);
-      // Let error bubble
-      throw statsErr;
-    }
+      if (statsErr) {
+        console.error("[MarketReportTest] fetch-market-stats error", statsErr);
+        // Continue with placeholders if stats fail
+      }
 
-    const statsRow = (statsResp?.data ?? null) as (MarketStats | null);
-    if (!statsRow) {
-      console.warn("[MarketReportTest] No stats returned from function");
-      // Let it proceed with placeholders, but in our flow we expect data
-    }
+      const statsRow = (statsResp?.data ?? null) as MarketStats | null;
 
-    // 2) Current user email
-    const { data: userRes } = await supabase.auth.getUser();
-    const toEmail = userRes?.user?.email;
-    if (!toEmail) {
-      console.warn("[MarketReportTest] No logged-in user email found");
+      // 2) Current user email
+      const { data: userRes } = await supabase.auth.getUser();
+      const toEmail = userRes?.user?.email;
+      if (!toEmail) {
+        console.warn("[MarketReportTest] No logged-in user email found");
+        toast({
+          title: "No logged-in user",
+          description: "Please sign in to send a test email to your address.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 3) Build HTML
+      const html = buildMarketReportHTML(zip, {
+        zip_code: zip,
+        period_month: `${month}-01`,
+        median_sale_price: statsRow?.median_sale_price ?? null,
+        median_list_price: statsRow?.median_list_price ?? null,
+        homes_sold: statsRow?.homes_sold ?? null,
+        new_listings: statsRow?.new_listings ?? null,
+        median_dom: statsRow?.median_dom ?? null,
+        avg_price_per_sqft: statsRow?.avg_price_per_sqft ?? null,
+        inventory: statsRow?.inventory ?? null,
+      });
+
+      // 4) Send via existing send-email function
+      const { data: sendRes, error: sendErr } = await supabase.functions.invoke("send-email", {
+        body: {
+          to: toEmail,
+          subject,
+          html,
+        },
+      });
+
+      if (sendErr) {
+        console.error("[MarketReportTest] send-email error", sendErr);
+        toast({
+          title: "Failed to send email",
+          description: "Please try again in a moment.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log("[MarketReportTest] send-email response", sendRes);
+
       toast({
-        title: "No logged-in user",
-        description: "Please sign in to send a test email to your address.",
+        title: "Test email sent",
+        description: `We sent the ${zip} Market Report for ${monthLabel(month)} to ${toEmail}.`,
+      });
+    } catch (err) {
+      console.error("[MarketReportTest] Unexpected error", err);
+      toast({
+        title: "Something went wrong",
+        description: "Please try again.",
         variant: "destructive",
       });
+    } finally {
       setSending(false);
-      return;
     }
-
-    // 3) Build HTML
-    const html = buildMarketReportHTML(zip, {
-      zip_code: zip,
-      period_month: `${month}-01`,
-      median_sale_price: statsRow?.median_sale_price ?? null,
-      median_list_price: statsRow?.median_list_price ?? null,
-      homes_sold: statsRow?.homes_sold ?? null,
-      new_listings: statsRow?.new_listings ?? null,
-      median_dom: statsRow?.median_dom ?? null,
-      avg_price_per_sqft: statsRow?.avg_price_per_sqft ?? null,
-      inventory: statsRow?.inventory ?? null,
-    });
-
-    // 4) Send via existing send-email function
-    const { data: sendRes, error: sendErr } = await supabase.functions.invoke("send-email", {
-      body: {
-        to: toEmail,
-        subject,
-        html,
-      },
-    });
-
-    if (sendErr) {
-      console.error("[MarketReportTest] send-email error", sendErr);
-      // Let error bubble
-      throw sendErr;
-    }
-
-    console.log("[MarketReportTest] send-email response", sendRes);
-
-    toast({
-      title: "Test email sent",
-      description: `We sent the ${zip} Market Report for ${monthLabel(month)} to ${toEmail}.`,
-    });
-    setSending(false);
   };
 
   return (
