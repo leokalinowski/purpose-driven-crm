@@ -183,17 +183,18 @@ export const useEvents = () => {
 
   const getPreviousQuarterEvent = () => {
     const now = new Date();
-    const previousQuarter = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
-    
-    return events.find(event => {
-      const eventDate = new Date(event.event_date);
-      return eventDate < now && eventDate >= previousQuarter;
-    });
+    // Most recent past event
+    const pastEvents = [...events].filter(e => new Date(e.event_date) < now);
+    pastEvents.sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
+    return pastEvents[0];
   };
 
   const getNextEvent = () => {
     const now = new Date();
-    return events.find(event => new Date(event.event_date) > now);
+    // Nearest upcoming event
+    const futureEvents = [...events].filter(e => new Date(e.event_date) >= now);
+    futureEvents.sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+    return futureEvents[0];
   };
 
   useEffect(() => {
@@ -202,6 +203,21 @@ export const useEvents = () => {
       Promise.all([fetchEvents(), fetchEventTasks()]).finally(() => {
         setLoading(false);
       });
+
+      // Realtime refresh on changes
+      const channel = supabase
+        .channel('events-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => {
+          fetchEvents();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'event_tasks' }, () => {
+          fetchEventTasks();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [user]);
 

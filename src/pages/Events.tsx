@@ -8,6 +8,7 @@ import { TaskManagement } from '@/components/events/TaskManagement';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Calendar } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const Events = () => {
   const { user, loading: authLoading } = useAuth();
@@ -23,6 +24,8 @@ const Events = () => {
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth');
+    } else if (user) {
+      document.title = 'Events | Real Estate on Purpose';
     }
   }, [user, authLoading, navigate]);
 
@@ -60,53 +63,57 @@ const Events = () => {
         </div>
 
         {/* Events Overview */}
-        <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
-          {/* Previous Quarter Event */}
-          <div>
-            {previousEvent ? (
-              <EventCard event={previousEvent} type="previous" />
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Calendar className="h-5 w-5" />
-                    <span>Previous Quarter Event</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">
-                    No events found from the previous quarter.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+        <Accordion type="single" collapsible className="space-y-4">
+          <AccordionItem value="previous">
+            <AccordionTrigger>Previous Quarter Event</AccordionTrigger>
+            <AccordionContent>
+              {previousEvent ? (
+                <EventCard event={previousEvent} type="previous" />
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <Calendar className="h-5 w-5" />
+                      <span>Previous Quarter Event</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground">
+                      No events found from the previous quarter.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </AccordionContent>
+          </AccordionItem>
 
-          {/* Next Event */}
-          <div>
-            {nextEvent ? (
-              <EventCard event={nextEvent} type="next" />
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Calendar className="h-5 w-5" />
-                    <span>Next Event</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">
-                    No upcoming events scheduled.
-                  </p>
-                  <Button className="mt-4">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Schedule Event
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
+          <AccordionItem value="next">
+            <AccordionTrigger>Next Quarter Event</AccordionTrigger>
+            <AccordionContent>
+              {nextEvent ? (
+                <EventCard event={nextEvent} type="next" />
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <Calendar className="h-5 w-5" />
+                      <span>Next Event</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground">
+                      No upcoming events scheduled.
+                    </p>
+                    <Button className="mt-4">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Schedule Event
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
 
         {/* Task Management for Next Event */}
         {nextEvent && (
