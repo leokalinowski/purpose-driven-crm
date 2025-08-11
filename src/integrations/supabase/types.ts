@@ -567,6 +567,57 @@ export type Database = {
           },
         ]
       }
+      market_stats: {
+        Row: {
+          avg_price_per_sqft: number | null
+          created_at: string
+          fetched_at: string
+          homes_sold: number | null
+          id: string
+          inventory: number | null
+          median_dom: number | null
+          median_list_price: number | null
+          median_sale_price: number | null
+          new_listings: number | null
+          period_month: string
+          source: Json | null
+          updated_at: string
+          zip_code: string
+        }
+        Insert: {
+          avg_price_per_sqft?: number | null
+          created_at?: string
+          fetched_at?: string
+          homes_sold?: number | null
+          id?: string
+          inventory?: number | null
+          median_dom?: number | null
+          median_list_price?: number | null
+          median_sale_price?: number | null
+          new_listings?: number | null
+          period_month: string
+          source?: Json | null
+          updated_at?: string
+          zip_code: string
+        }
+        Update: {
+          avg_price_per_sqft?: number | null
+          created_at?: string
+          fetched_at?: string
+          homes_sold?: number | null
+          id?: string
+          inventory?: number | null
+          median_dom?: number | null
+          median_list_price?: number | null
+          median_sale_price?: number | null
+          new_listings?: number | null
+          period_month?: string
+          source?: Json | null
+          updated_at?: string
+          zip_code?: string
+        }
+        Relationships: []
+      }
       newsletter_campaigns: {
         Row: {
           campaign_name: string
