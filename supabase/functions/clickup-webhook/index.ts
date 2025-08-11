@@ -102,14 +102,55 @@ serve(async (req) => {
       });
     }
 
-    // Build task record
-    const rawTask = payload?.task || payload?.history_items?.[0]?.after || {};
-    const name: string = rawTask?.name || rawTask?.text || payload?.title || "Untitled";
-    const status: string | undefined = rawTask?.status?.status || rawTask?.status || payload?.status;
+    // Fetch full task details from ClickUp to check tags and parent
+    const CLICKUP_API_TOKEN = Deno.env.get("CLICKUP_API_TOKEN");
+    if (!CLICKUP_API_TOKEN) throw new Error("Missing CLICKUP_API_TOKEN secret");
 
-    // ClickUp due_date can be ms timestamp string
+    async function fetchTask(taskIdToFetch: string) {
+      const resp = await fetch(`https://api.clickup.com/api/v2/task/${taskIdToFetch}`, {
+        headers: {
+          "Authorization": CLICKUP_API_TOKEN,
+          "Content-Type": "application/json",
+        },
+      });
+      if (!resp.ok) {
+        console.warn("ClickUp task fetch failed", taskIdToFetch, resp.status);
+        return null;
+      }
+      return await resp.json();
+    }
+
+    const taskDetail: any = await fetchTask(taskId);
+    if (!taskDetail) {
+      return new Response(JSON.stringify({ ok: true, skipped: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const lower = (s: any) => (typeof s === "string" ? s.toLowerCase() : "");
+    const hasEventTag = (t: any): boolean => Array.isArray(t?.tags) && t.tags.some((tag: any) => lower(tag?.name) === "event");
+
+    let include = hasEventTag(taskDetail);
+    let parentDetail: any = null;
+    if (!include && taskDetail?.parent) {
+      parentDetail = await fetchTask(taskDetail.parent);
+      include = hasEventTag(parentDetail);
+    }
+
+    if (!include) {
+      console.log("Task ignored due to missing 'event' tag on task or parent", taskId);
+      return new Response(JSON.stringify({ ok: true, ignored: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Build task record from detailed payload
+    const name: string = taskDetail?.name || "Untitled";
+    const status: string | undefined = taskDetail?.status?.status || taskDetail?.status;
+
+    // ClickUp due_date is ms timestamp string
     let dueDate: string | null = null;
-    const rawDue = rawTask?.due_date || rawTask?.dueDate || payload?.due_date;
+    const rawDue = taskDetail?.due_date;
     if (rawDue) {
       try {
         const ms = typeof rawDue === "string" ? parseInt(rawDue) : rawDue;
@@ -118,7 +159,7 @@ serve(async (req) => {
       } catch (_) {}
     }
 
-    const completedAtRaw = rawTask?.date_done || rawTask?.completed_at || payload?.completed_at;
+    const completedAtRaw = taskDetail?.date_done || taskDetail?.completed_at;
     let completedAt: string | null = null;
     if (completedAtRaw) {
       try {
@@ -128,12 +169,10 @@ serve(async (req) => {
       } catch (_) {}
     }
 
-    const assignees = rawTask?.assignees || rawTask?.assignee || [];
+    const assignees = taskDetail?.assignees || [];
     let responsible = "";
     if (Array.isArray(assignees) && assignees.length) {
       responsible = assignees.map((a: any) => a.username || a.email || a.id).join(", ");
-    } else if (assignees && typeof assignees === "object") {
-      responsible = assignees.username || assignees.email || String(assignees.id || "");
     }
 
     const doneKeywords = ["done", "closed", "complete", "completed"];
