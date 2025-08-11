@@ -3,6 +3,7 @@ import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { buildMarketReportHTML, monthKey, type MarketStats } from "@/utils/marketReport";
@@ -17,6 +18,9 @@ export default function MarketReportTest() {
   const [zip, setZip] = useState("90210");
   const [month, setMonth] = useState(monthKey());
   const [sending, setSending] = useState(false);
+  const [sendingBatch, setSendingBatch] = useState(false);
+  const [dataSource, setDataSource] = useState<"sample" | "apify">("sample");
+  const [actorId, setActorId] = useState("");
   const { toast } = useToast();
 
   const subject = useMemo(() => {
@@ -28,9 +32,13 @@ export default function MarketReportTest() {
     try {
       console.log("[MarketReportTest] Starting test send", { zip, month });
 
-      // 1) Fetch or generate market stats via Edge Function (sample mode by default)
+      // 1) Fetch or generate market stats via Edge Function
+      const body: any = { zip_code: zip, period_month: month, mode: dataSource };
+      if (dataSource === "apify" && actorId) {
+        body.apify = { actorId };
+      }
       const { data: statsResp, error: statsErr } = await supabase.functions.invoke("fetch-market-stats", {
-        body: { zip_code: zip, period_month: month, mode: "sample" },
+        body,
       });
 
       if (statsErr) {
@@ -103,12 +111,64 @@ export default function MarketReportTest() {
     }
   };
 
+  const onSendToContactsInZip = async () => {
+    setSendingBatch(true);
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      if (!userRes?.user) {
+        toast({
+          title: "No logged-in user",
+          description: "Please sign in to send emails to your contacts.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const payload: any = {
+        period_month: month,
+        mode: dataSource,
+        zip_filter: [zip],
+      };
+      if (dataSource === "apify" && actorId) {
+        payload.apify = { actorId };
+      }
+
+      const { data, error } = await supabase.functions.invoke("market-report-send", {
+        body: payload,
+      });
+
+      if (error) {
+        console.error("[MarketReportTest] market-report-send error", error);
+        toast({
+          title: "Failed to send to contacts",
+          description: "Please try again in a moment.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Market reports sent",
+        description: `Sent ${data?.sent ?? 0} of ${data?.recipients ?? 0} emails for ${zip}.`,
+      });
+    } catch (err) {
+      console.error("[MarketReportTest] Unexpected error (batch)", err);
+      toast({
+        title: "Something went wrong",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingBatch(false);
+    }
+  };
+
   return (
     <Card className="mb-4">
       <CardHeader>
         <CardTitle>Send Market Report Test</CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-3 md:grid-cols-[1fr_160px_160px_auto]">
+      <CardContent className="grid gap-3 md:grid-cols-[1fr_160px_160px_180px_auto]">
         <div className="flex flex-col">
           <label htmlFor="zip" className="text-sm text-muted-foreground mb-1">
             ZIP code
@@ -134,9 +194,42 @@ export default function MarketReportTest() {
             className="w-full"
           />
         </div>
-        <div className="flex items-end">
+        <div className="flex flex-col">
+          <label className="text-sm text-muted-foreground mb-1">Data source</label>
+          <Select value={dataSource} onValueChange={(v) => setDataSource(v as any)}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select source" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sample">Sample</SelectItem>
+              <SelectItem value="apify">Apify</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col">
+          <label htmlFor="actor" className="text-sm text-muted-foreground mb-1">
+            Apify Actor ID
+          </label>
+          <Input
+            id="actor"
+            value={actorId}
+            onChange={(e) => setActorId(e.target.value)}
+            placeholder="e.g., user/actor"
+            className="w-full"
+            disabled={dataSource !== "apify"}
+          />
+        </div>
+        <div className="flex items-end gap-2">
           <Button onClick={onSend} disabled={sending || !/^\d{5}$/.test(zip)} className="w-full">
             {sending ? "Sending..." : "Send Test Email"}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={onSendToContactsInZip}
+            disabled={sendingBatch || !/^\d{5}$/.test(zip)}
+            className="w-full"
+          >
+            {sendingBatch ? "Sending..." : "Send to Contacts in ZIP"}
           </Button>
         </div>
       </CardContent>
