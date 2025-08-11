@@ -229,12 +229,16 @@ async function generateEmailHTML(zip: string, txs: TransactionItem[], metrics: R
     },
   };
 
-  const system = `You are a real estate analyst. Write concise, factual email content using ONLY the provided metrics. Do not invent numbers.`;
-  const user = `Create an HTML email for homeowners in ZIP ${zip} summarizing the last ${txs.length} sales. Include:
-- Headline with ZIP
-- Bulleted key stats with Median price, Average price, Min/Max, Avg $/sqft
-- One line about price change (up/down) based solely on provided change metrics
-- Short closing and CTA to contact the agent
+  const system = `You are a senior real estate analyst. Be concise, fact-based, and use ONLY the provided metrics. Do not invent or estimate numbers. No external data.`;
+  const user = `Write clean HTML for a homeowner email about ZIP ${zip}. Structure:
+- H1 with the ZIP (e.g., 
+  
+  ${zip} Market Snapshot)
+- Short paragraph intro (1–2 sentences)
+- Bulleted key stats using ONLY these metrics: Median price, Average price, Min/Max price, Average $/sqft
+- One explicit line on price direction using changeAbs/changePct (e.g., “Median down 3.2% MoM” or “Median up 1.5%”) — if unknown, say “Price change is inconclusive with limited data.”
+- Brief closing + clear CTA to contact the agent
+Avoid fluff. Keep it under 140 words before the table.
 
 Metrics (JSON):\n${JSON.stringify(statsForPrompt)}`;
 

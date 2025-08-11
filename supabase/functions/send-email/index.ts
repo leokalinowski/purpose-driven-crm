@@ -32,19 +32,23 @@ function normalizeRecipients(
 }
 
 function footerHtml(): string {
-  const companyAddress = Deno.env.get("COMPANY_PHYSICAL_ADDRESS");
-  const unsubscribeSecret = Deno.env.get("UNSUBSCRIBE_SECRET");
-  // Simple footer. If UNSUBSCRIBE_SECRET is present you can implement a real unsubscribe mechanism later.
+  const rawAddress = Deno.env.get("COMPANY_PHYSICAL_ADDRESS") || "";
+  // Sanitize to avoid accidentally leaking secrets (e.g., SendGrid keys starting with SG., OpenAI keys sk-...)
+  const sanitized = rawAddress
+    .replace(/(SG\.[A-Za-z0-9_\-.]+)/g, "[redacted]")
+    .replace(/(sk-[A-Za-z0-9]{20,})/gi, "[redacted]")
+    .replace(/[^\w\s\.,#\-\/]/g, "")
+    .trim();
+
   const parts: string[] = [];
-  if (companyAddress) {
-    parts.push(`<p style="margin: 8px 0; color:#6b7280; font-size:12px;">${companyAddress}</p>`);
+  if (sanitized) {
+    parts.push(`<p style="margin: 8px 0; color:#6b7280; font-size:12px;">${sanitized}</p>`);
   }
-  if (unsubscribeSecret) {
-    parts.push(
-      `<p style="margin: 8px 0; color:#6b7280; font-size:12px;">If you no longer wish to receive these emails, you can unsubscribe by replying with "UNSUBSCRIBE".</p>`
-    );
-  }
-  if (parts.length === 0) return "";
+  // Always include a generic unsubscribe line; do not depend on any secret presence
+  parts.push(
+    `<p style="margin: 8px 0; color:#6b7280; font-size:12px;">If you no longer wish to receive these emails, you can unsubscribe by replying with "UNSUBSCRIBE".</p>`
+  );
+
   return `<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />${parts.join("")}`;
 }
 

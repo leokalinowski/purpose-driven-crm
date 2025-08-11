@@ -25,9 +25,14 @@ function fmtInt(n: number | null | undefined) {
 }
 
 function buildTransactionsHTML(zip: string, monthKeyStr: string, txs: any[]) {
-  const rows = txs
+  const filtered = (Array.isArray(txs) ? txs : []).filter((t) => t && t.soldPrice != null);
+  const rows = filtered
     .map((t) => {
-      const bedsBaths = [t.beds != null ? `${fmtInt(t.beds)} bd` : null, t.baths != null ? `${fmtInt(t.baths)} ba` : null, t.sqft != null ? `${fmtInt(t.sqft)} sqft` : null]
+      const bedsBaths = [
+        t.beds != null ? `${fmtInt(t.beds)} bd` : null,
+        t.baths != null ? `${fmtInt(t.baths)} ba` : null,
+        t.sqft != null ? `${fmtInt(t.sqft)} sqft` : null,
+      ]
         .filter(Boolean)
         .join(" · ");
       const addr = t.address || "—";
@@ -341,7 +346,7 @@ const onSendToContactsInZip = async () => {
       setSendingBatch(false);
     }
   };
-  return (
+  return (<>
     <Card className="mb-4">
       <CardHeader>
         <CardTitle>Send Market Report Test</CardTitle>
@@ -424,20 +429,42 @@ const onSendToContactsInZip = async () => {
             className="w-full"
           />
         </div>
-        <div className="flex items-end gap-2">
-          <Button onClick={onSend} disabled={sending || !/^\d{5}$/.test(zip) || !actorId.trim()} className="w-full">
-            {sending ? "Sending..." : "Send Test Email"}
+        <div className="flex items-end gap-2 flex-wrap">
+          <Button onClick={onGenerateAI} disabled={aiLoading || !/^\d{5}$/.test(zip) || !actorId.trim()} className="w-full md:w-auto">
+            {aiLoading ? "Generating..." : "Generate AI Report (Preview)"}
+          </Button>
+          <Button onClick={onSendAI} disabled={aiLoading || !/^\d{5}$/.test(zip) || !actorId.trim()} className="w-full md:w-auto">
+            {aiLoading ? "Sending..." : "Send AI Report"}
+          </Button>
+          <Button onClick={onSend} disabled={sending || !/^\d{5}$/.test(zip) || !actorId.trim()} variant="secondary" className="w-full md:w-auto">
+            {sending ? "Sending..." : "Send Test Email (Table Only)"}
           </Button>
           <Button
             variant="secondary"
             onClick={onSendToContactsInZip}
             disabled={sendingBatch || !/^\d{5}$/.test(zip) || !actorId.trim()}
-            className="w-full"
+            className="w-full md:w-auto"
           >
             {sendingBatch ? "Sending..." : "Send to Contacts in ZIP"}
           </Button>
         </div>
       </CardContent>
     </Card>
-  );
+    {aiHtml && (
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle>AI Report Preview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div style={{ border: "1px solid hsl(var(--border))", borderRadius: 8, overflow: "hidden" }}>
+            <iframe
+              title="AI Report Preview"
+              srcDoc={aiHtml}
+              style={{ width: "100%", height: 480, border: "none" }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+    )}
+  </>);
 }
