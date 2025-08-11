@@ -3,10 +3,9 @@ import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { buildMarketReportHTML, monthKey, type MarketStats } from "@/utils/marketReport";
+import { monthKey } from "@/utils/marketReport";
 
 function monthLabel(yyyymm: string) {
   const d = new Date(`${yyyymm}-01T00:00:00Z`);
@@ -14,98 +13,135 @@ function monthLabel(yyyymm: string) {
   return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
+function fmtUSD(n: number | null | undefined) {
+  if (n == null || isNaN(Number(n))) return "—";
+  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(n));
+}
+
+function fmtInt(n: number | null | undefined) {
+  if (n == null || isNaN(Number(n))) return "—";
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(Number(n));
+}
+
+function buildTransactionsHTML(zip: string, monthKeyStr: string, txs: any[]) {
+  const rows = txs
+    .map((t) => {
+      const bedsBaths = [t.beds != null ? `${fmtInt(t.beds)} bd` : null, t.baths != null ? `${fmtInt(t.baths)} ba` : null, t.sqft != null ? `${fmtInt(t.sqft)} sqft` : null]
+        .filter(Boolean)
+        .join(" · ");
+      const addr = t.address || "—";
+      const price = fmtUSD(t.soldPrice);
+      const date = t.soldDate ? new Date(t.soldDate).toLocaleDateString() : "—";
+      const link = t.url ? `<a href="${t.url}">View</a>` : "—";
+      return `<tr>
+        <td style="padding:8px;border-bottom:1px solid #eee;">${addr}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;">${price}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;">${bedsBaths || "—"}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;">${date}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;">${link}</td>
+      </tr>`;
+    })
+    .join("");
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${zip} Recent Sales — ${monthLabel(monthKeyStr)}</title>
+  </head>
+  <body style="font-family: Arial, sans-serif; color: #111;">
+    <h1 style="font-size:20px; margin: 0 0 8px;">${zip} Recent Sales — ${monthLabel(monthKeyStr)}</h1>
+    <p style="margin:0 0 16px;">Real, recent transactions fetched via Apify actor.</p>
+    <table style="width:100%; border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th align="left" style="padding:8px;border-bottom:2px solid #000;">Address</th>
+          <th align="left" style="padding:8px;border-bottom:2px solid #000;">Sold price</th>
+          <th align="left" style="padding:8px;border-bottom:2px solid #000;">Beds/Baths/Sqft</th>
+          <th align="left" style="padding:8px;border-bottom:2px solid #000;">Sold date</th>
+          <th align="left" style="padding:8px;border-bottom:2px solid #000;">Link</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  </body>
+</html>`;
+}
+
 export default function MarketReportTest() {
   const [zip, setZip] = useState("90210");
   const [month, setMonth] = useState(monthKey());
   const [sending, setSending] = useState(false);
   const [sendingBatch, setSendingBatch] = useState(false);
-  const [dataSource, setDataSource] = useState<"sample" | "apify">("sample");
-  const [actorId, setActorId] = useState("");
+  const [actorId, setActorId] = useState("maxcopell/zillow-zip-search");
+  const [maxWaitSeconds, setMaxWaitSeconds] = useState<number>(20);
   const { toast } = useToast();
 
   const subject = useMemo(() => {
-    return `${zip} Market Report — ${monthLabel(month)}`;
+    return `${zip} Recent Sales — ${monthLabel(month)}`;
   }, [zip, month]);
 
   const onSend = async () => {
     setSending(true);
     try {
-      console.log("[MarketReportTest] Starting test send", { zip, month });
-
-      // 1) Fetch or generate market stats via Edge Function
-      const body: any = { zip_code: zip, period_month: month, mode: dataSource };
-      if (dataSource === "apify" && actorId) {
-        body.apify = { actorId };
+      if (!/^\d{5}$/.test(zip)) {
+        toast({ title: "Invalid ZIP", description: "Please enter a 5-digit ZIP code.", variant: "destructive" });
+        return;
       }
-      const { data: statsResp, error: statsErr } = await supabase.functions.invoke("fetch-market-stats", {
-        body,
-      });
-
-      if (statsErr) {
-        console.error("[MarketReportTest] fetch-market-stats error", statsErr);
-        // Continue with placeholders if stats fail
-      }
-
-      const statsRow = (statsResp?.data ?? null) as MarketStats | null;
-
-      // 2) Current user email
-      const { data: userRes } = await supabase.auth.getUser();
-      const toEmail = userRes?.user?.email;
-      if (!toEmail) {
-        console.warn("[MarketReportTest] No logged-in user email found");
-        toast({
-          title: "No logged-in user",
-          description: "Please sign in to send a test email to your address.",
-          variant: "destructive",
-        });
+      if (!actorId.trim()) {
+        toast({ title: "Actor ID required", description: "Please enter your Apify Actor ID.", variant: "destructive" });
         return;
       }
 
-      // 3) Build HTML
-      const html = buildMarketReportHTML(zip, {
-        zip_code: zip,
-        period_month: `${month}-01`,
-        median_sale_price: statsRow?.median_sale_price ?? null,
-        median_list_price: statsRow?.median_list_price ?? null,
-        homes_sold: statsRow?.homes_sold ?? null,
-        new_listings: statsRow?.new_listings ?? null,
-        median_dom: statsRow?.median_dom ?? null,
-        avg_price_per_sqft: statsRow?.avg_price_per_sqft ?? null,
-        inventory: statsRow?.inventory ?? null,
-      });
-
-      // 4) Send via existing send-email function
-      const { data: sendRes, error: sendErr } = await supabase.functions.invoke("send-email", {
+      // Fetch transactions from our Edge Function (Apify-only)
+      const { data: txResp, error: txErr } = await supabase.functions.invoke("fetch-zip-transactions", {
         body: {
-          to: toEmail,
-          subject,
-          html,
+          zip_code: zip,
+          limit: 10,
+          apify: { actorId, maxWaitMs: Math.max(0, maxWaitSeconds) * 1000 },
         },
       });
 
-      if (sendErr) {
-        console.error("[MarketReportTest] send-email error", sendErr);
-        toast({
-          title: "Failed to send email",
-          description: "Please try again in a moment.",
-          variant: "destructive",
-        });
+      if (txErr) {
+        console.error("[MarketReportTest] fetch-zip-transactions error", txErr);
+        toast({ title: "No data returned", description: "Apify did not return transactions within the wait window.", variant: "destructive" });
         return;
       }
 
-      console.log("[MarketReportTest] send-email response", sendRes);
+      const transactions: any[] = txResp?.transactions ?? [];
+      if (!Array.isArray(transactions) || transactions.length === 0) {
+        toast({ title: "No transactions found", description: "No recent sales found for this ZIP.", variant: "destructive" });
+        return;
+      }
 
-      toast({
-        title: "Test email sent",
-        description: `We sent the ${zip} Market Report for ${monthLabel(month)} to ${toEmail}.`,
+      // Current user email
+      const { data: userRes } = await supabase.auth.getUser();
+      const toEmail = userRes?.user?.email;
+      if (!toEmail) {
+        toast({ title: "No logged-in user", description: "Please sign in to send a test email.", variant: "destructive" });
+        return;
+      }
+
+      // Build HTML strictly from real transactions
+      const html = buildTransactionsHTML(zip, month, transactions);
+
+      // Send email via edge function
+      const { error: sendErr } = await supabase.functions.invoke("send-email", {
+        body: { to: toEmail, subject, html },
       });
+      if (sendErr) {
+        console.error("[MarketReportTest] send-email error", sendErr);
+        toast({ title: "Failed to send email", description: "Please try again.", variant: "destructive" });
+        return;
+      }
+
+      toast({ title: "Test email sent", description: `Sent recent sales for ${zip} to ${toEmail}.` });
     } catch (err) {
       console.error("[MarketReportTest] Unexpected error", err);
-      toast({
-        title: "Something went wrong",
-        description: "Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
     } finally {
       setSending(false);
     }
@@ -116,48 +152,32 @@ export default function MarketReportTest() {
     try {
       const { data: userRes } = await supabase.auth.getUser();
       if (!userRes?.user) {
-        toast({
-          title: "No logged-in user",
-          description: "Please sign in to send emails to your contacts.",
-          variant: "destructive",
-        });
+        toast({ title: "No logged-in user", description: "Please sign in to send emails to your contacts.", variant: "destructive" });
+        return;
+      }
+
+      if (!actorId.trim()) {
+        toast({ title: "Actor ID required", description: "Please enter your Apify Actor ID.", variant: "destructive" });
         return;
       }
 
       const payload: any = {
         period_month: month,
-        mode: dataSource,
         zip_filter: [zip],
+        apify: { actorId, maxWaitMs: Math.max(0, maxWaitSeconds) * 1000 },
       };
-      if (dataSource === "apify" && actorId) {
-        payload.apify = { actorId };
-      }
 
-      const { data, error } = await supabase.functions.invoke("market-report-send", {
-        body: payload,
-      });
-
+      const { data, error } = await supabase.functions.invoke("market-report-send", { body: payload });
       if (error) {
         console.error("[MarketReportTest] market-report-send error", error);
-        toast({
-          title: "Failed to send to contacts",
-          description: "Please try again in a moment.",
-          variant: "destructive",
-        });
+        toast({ title: "Failed to send to contacts", description: "Please try again.", variant: "destructive" });
         return;
       }
 
-      toast({
-        title: "Market reports sent",
-        description: `Sent ${data?.sent ?? 0} of ${data?.recipients ?? 0} emails for ${zip}.`,
-      });
+      toast({ title: "Market reports sent", description: `Sent ${data?.sent ?? 0} of ${data?.recipients ?? 0} emails for ${zip}.` });
     } catch (err) {
       console.error("[MarketReportTest] Unexpected error (batch)", err);
-      toast({
-        title: "Something went wrong",
-        description: "Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
     } finally {
       setSendingBatch(false);
     }
@@ -195,18 +215,6 @@ export default function MarketReportTest() {
           />
         </div>
         <div className="flex flex-col">
-          <label className="text-sm text-muted-foreground mb-1">Data source</label>
-          <Select value={dataSource} onValueChange={(v) => setDataSource(v as any)}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select source" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="sample">Sample</SelectItem>
-              <SelectItem value="apify">Apify</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex flex-col">
           <label htmlFor="actor" className="text-sm text-muted-foreground mb-1">
             Apify Actor ID
           </label>
@@ -214,19 +222,32 @@ export default function MarketReportTest() {
             id="actor"
             value={actorId}
             onChange={(e) => setActorId(e.target.value)}
-            placeholder="e.g., user/actor"
+            placeholder="e.g., maxcopell/zillow-zip-search"
             className="w-full"
-            disabled={dataSource !== "apify"}
+          />
+        </div>
+        <div className="flex flex-col">
+          <label htmlFor="wait" className="text-sm text-muted-foreground mb-1">
+            Max wait (seconds)
+          </label>
+          <Input
+            id="wait"
+            type="number"
+            value={maxWaitSeconds}
+            onChange={(e) => setMaxWaitSeconds(Number(e.target.value) || 0)}
+            min={5}
+            max={60}
+            className="w-full"
           />
         </div>
         <div className="flex items-end gap-2">
-          <Button onClick={onSend} disabled={sending || !/^\d{5}$/.test(zip)} className="w-full">
+          <Button onClick={onSend} disabled={sending || !/^\d{5}$/.test(zip) || !actorId.trim()} className="w-full">
             {sending ? "Sending..." : "Send Test Email"}
           </Button>
           <Button
             variant="secondary"
             onClick={onSendToContactsInZip}
-            disabled={sendingBatch || !/^\d{5}$/.test(zip)}
+            disabled={sendingBatch || !/^\d{5}$/.test(zip) || !actorId.trim()}
             className="w-full"
           >
             {sendingBatch ? "Sending..." : "Send to Contacts in ZIP"}
