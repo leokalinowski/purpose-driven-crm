@@ -10,8 +10,7 @@ type Mode = "sample" | "apify";
 
 interface RequestBody {
   period_month: string; // YYYY-MM
-  mode?: Mode;
-  apify?: { actorId?: string };
+  apify?: { actorId?: string; input?: Record<string, unknown>; maxWaitMs?: number };
   zip_filter?: string[]; // e.g., ["90210"]
 }
 
@@ -52,24 +51,48 @@ function fmtInt(n: number | null | undefined): string {
   }
 }
 
-function buildReportHTML(zip: string, monthKey: string, stats: any): string {
+function buildTransactionsHTML(
+  zip: string,
+  monthKey: string,
+  transactions: Array<{ address?: string; soldPrice?: number; beds?: number; baths?: number; sqft?: number; soldDate?: string; url?: string }>
+): string {
   const label = monthLabel(monthKey);
+  const rows = (transactions || [])
+    .map((t) => {
+      const addr = t.address ? String(t.address) : "—";
+      const price = t.soldPrice != null ? fmtUSD(Number(t.soldPrice)) : "—";
+      const bb = [t.beds != null ? `${t.beds} bd` : null, t.baths != null ? `${t.baths} ba` : null, t.sqft != null ? `${fmtInt(Number(t.sqft))} sqft` : null]
+        .filter(Boolean)
+        .join(" · ") || "—";
+      const date = t.soldDate ? new Date(t.soldDate).toLocaleDateString() : "—";
+      const link = t.url ? `<a href="${t.url}" target="_blank" rel="noopener" style="color:#2563eb; text-decoration:underline;">View</a>` : "—";
+      return `<tr>
+        <td style=\"padding:8px;border-bottom:1px solid #e2e8f0;\">${addr}</td>
+        <td style=\"padding:8px;border-bottom:1px solid #e2e8f0; text-align:right; font-weight:600;\">${price}</td>
+        <td style=\"padding:8px;border-bottom:1px solid #e2e8f0;\">${bb}</td>
+        <td style=\"padding:8px;border-bottom:1px solid #e2e8f0;\">${date}</td>
+        <td style=\"padding:8px;border-bottom:1px solid #e2e8f0; text-align:center;\">${link}</td>
+      </tr>`;
+    })
+    .join("");
+
   return `
   <div style="font-family: Inter, Arial, sans-serif; line-height: 1.6; color: #0f172a;">
-    <h1 style="margin: 0 0 8px; font-size: 20px;">${zip} Market Report — ${label}</h1>
-    <p style="margin: 0 0 16px; color: #475569;">Your monthly snapshot of the real estate market.</p>
+    <h1 style="margin: 0 0 8px; font-size: 20px;">${zip} Recent Sales — ${label}</h1>
+    <p style="margin: 0 0 16px; color: #475569;">Latest ${transactions.length} closed transactions in ${zip}.</p>
     <table style="width:100%; border-collapse: collapse;">
-      <tbody>
-        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;">Median Sale Price</td><td style="padding:8px;border-bottom:1px solid #e2e8f0; font-weight:600;">${fmtUSD(Number(stats?.median_sale_price ?? null))}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;">Median List Price</td><td style="padding:8px;border-bottom:1px solid #e2e8f0; font-weight:600;">${fmtUSD(Number(stats?.median_list_price ?? null))}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;">Homes Sold</td><td style="padding:8px;border-bottom:1px solid #e2e8f0; font-weight:600;">${fmtInt(stats?.homes_sold ?? null)}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;">New Listings</td><td style="padding:8px;border-bottom:1px solid #e2e8f0; font-weight:600;">${fmtInt(stats?.new_listings ?? null)}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;">Median Days on Market</td><td style="padding:8px;border-bottom:1px solid #e2e8f0; font-weight:600;">${fmtInt(stats?.median_dom ?? null)} days</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;">Avg Price / Sqft</td><td style="padding:8px;border-bottom:1px solid #e2e8f0; font-weight:600;">${fmtUSD(Number(stats?.avg_price_per_sqft ?? null))}</td></tr>
-        <tr><td style="padding:8px;">Inventory</td><td style="padding:8px; font-weight:600;">${fmtInt(stats?.inventory ?? null)} homes</td></tr>
-      </tbody>
+      <thead>
+        <tr>
+          <th style="text-align:left; padding:8px; border-bottom:2px solid #94a3b8;">Address</th>
+          <th style="text-align:right; padding:8px; border-bottom:2px solid #94a3b8;">Sold price</th>
+          <th style="text-align:left; padding:8px; border-bottom:2px solid #94a3b8;">Details</th>
+          <th style="text-align:left; padding:8px; border-bottom:2px solid #94a3b8;">Sold date</th>
+          <th style="text-align:center; padding:8px; border-bottom:2px solid #94a3b8;">Link</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
     </table>
-    <p style="margin-top:16px; color:#64748b; font-size:12px;">This is an automated update. Values may be approximate.</p>
+    <p style="margin-top:16px; color:#64748b; font-size:12px;">Data sourced in real-time from your configured Apify actor.</p>
   </div>`;
 }
 
@@ -91,10 +114,17 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   try {
-    const { period_month, mode = "sample", apify, zip_filter = [] } = (await req.json()) as RequestBody;
+    const { period_month, apify, zip_filter = [] } = (await req.json()) as RequestBody;
 
     if (!period_month) {
       return new Response(JSON.stringify({ error: "period_month (YYYY-MM) is required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    if (!apify?.actorId) {
+      return new Response(JSON.stringify({ error: "apify.actorId is required" }), {
         status: 400,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
@@ -134,22 +164,23 @@ serve(async (req) => {
       });
     }
 
-    // Cache stats per ZIP to avoid repeated calls
-    const statsCache = new Map<string, any>();
+    // Cache transactions per ZIP to avoid repeated calls
+    const txCache = new Map<string, any[]>();
 
-    async function getStatsFor(zip: string) {
-      if (statsCache.has(zip)) return statsCache.get(zip);
-      const payload: any = { zip_code: zip, period_month, mode };
-      if (mode === "apify" && apify?.actorId) payload.apify = { actorId: apify.actorId };
-      const { data: statsResp, error: statsErr } = await supabase.functions.invoke("fetch-market-stats", {
+    async function getTransactionsFor(zip: string) {
+      if (txCache.has(zip)) return txCache.get(zip)!;
+      const payload: any = { zip_code: zip, limit: 10, apify: { actorId: apify!.actorId!, input: apify?.input, maxWaitMs: apify?.maxWaitMs } };
+      const { data: txResp, error: txErr } = await supabase.functions.invoke("fetch-zip-transactions", {
         body: payload,
       });
-      if (statsErr) {
-        console.error("[market-report-send] fetch-market-stats error", statsErr);
+      if (txErr) {
+        console.error("[market-report-send] fetch-zip-transactions error", txErr);
+        txCache.set(zip, []);
+        return [] as any[];
       }
-      const row = statsResp?.data ?? null;
-      statsCache.set(zip, row);
-      return row;
+      const items: any[] = (txResp?.transactions ?? []) as any[];
+      txCache.set(zip, items);
+      return items;
     }
 
     let sent = 0;
@@ -157,9 +188,13 @@ serve(async (req) => {
 
     for (const c of recipients) {
       const zip = String(c.zip_code || zip_filter[0]);
-      const stats = await getStatsFor(zip);
-      const subject = `${zip} Market Report — ${monthLabel(period_month)}`;
-      const html = buildReportHTML(zip, period_month, stats);
+      const tx = await getTransactionsFor(zip);
+      if (!tx || tx.length === 0) {
+        errors.push({ email: c.email, reason: "No transactions returned for ZIP; email skipped" });
+        continue;
+      }
+      const subject = `${zip} Recent Sales — ${monthLabel(period_month)}`;
+      const html = buildTransactionsHTML(zip, period_month, tx);
 
       try {
         const { error: sendErr } = await supabase.functions.invoke("send-email", {

@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.market-report-send]
 verify_jwt = false
+
+[functions.fetch-zip-transactions]
+verify_jwt = false
