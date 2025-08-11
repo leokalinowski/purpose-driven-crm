@@ -168,7 +168,7 @@ export type Database = {
             foreignKeyName: "dtd2_tasks_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
-            referencedRelation: "Leads Table [Agent's Name]"
+            referencedRelation: "Leads_Table_Agents_Name"
             referencedColumns: ["user_id"]
           },
         ]
@@ -333,7 +333,7 @@ export type Database = {
         }
         Relationships: []
       }
-      "Leads Table [Agent's Name]": {
+      Leads_Table_Agents_Name: {
         Row: {
           address_1: string | null
           address_2: string | null
@@ -617,7 +617,7 @@ export type Database = {
             foreignKeyName: "transaction_coordination_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
-            referencedRelation: "Leads Table [Agent's Name]"
+            referencedRelation: "Leads_Table_Agents_Name"
             referencedColumns: ["user_id"]
           },
           {
