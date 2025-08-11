@@ -3,6 +3,7 @@ import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { monthKey } from "@/utils/marketReport";
@@ -77,7 +78,8 @@ export default function MarketReportTest() {
   const [sending, setSending] = useState(false);
   const [sendingBatch, setSendingBatch] = useState(false);
   const [actorId, setActorId] = useState("maxcopell/zillow-zip-search");
-  const [maxWaitSeconds, setMaxWaitSeconds] = useState<number>(20);
+  const [maxWaitSeconds, setMaxWaitSeconds] = useState<number>(30);
+  const [advancedInput, setAdvancedInput] = useState<string>("");
   const { toast } = useToast();
 
   const subject = useMemo(() => {
@@ -96,24 +98,37 @@ export default function MarketReportTest() {
         return;
       }
 
+      // Optional advanced Apify input
+      let apifyInput: any | undefined = undefined;
+      if (advancedInput.trim()) {
+        try {
+          apifyInput = JSON.parse(advancedInput);
+        } catch (e: any) {
+          toast({ title: "Invalid JSON", description: "Advanced Apify input must be valid JSON.", variant: "destructive" });
+          return;
+        }
+      }
+
       // Fetch transactions from our Edge Function (Apify-only)
       const { data: txResp, error: txErr } = await supabase.functions.invoke("fetch-zip-transactions", {
         body: {
           zip_code: zip,
           limit: 10,
-          apify: { actorId, maxWaitMs: Math.max(0, maxWaitSeconds) * 1000 },
+          apify: { actorId, maxWaitMs: Math.max(0, maxWaitSeconds) * 1000, input: apifyInput },
         },
       });
 
       if (txErr) {
-        console.error("[MarketReportTest] fetch-zip-transactions error", txErr);
-        toast({ title: "No data returned", description: "Apify did not return transactions within the wait window.", variant: "destructive" });
+        console.error("[MarketReportTest] fetch-zip-transactions error", txErr, txResp);
+        const msg = (txResp as any)?.error || txErr.message || "Apify did not return transactions within the wait window.";
+        toast({ title: "Apify error", description: String(msg).slice(0, 200), variant: "destructive" });
         return;
       }
 
-      const transactions: any[] = txResp?.transactions ?? [];
+      const transactions: any[] = (txResp as any)?.transactions ?? [];
       if (!Array.isArray(transactions) || transactions.length === 0) {
-        toast({ title: "No transactions found", description: "No recent sales found for this ZIP.", variant: "destructive" });
+        const msg = (txResp as any)?.error || "No recent sales found for this ZIP.";
+        toast({ title: "No transactions found", description: String(msg).slice(0, 200), variant: "destructive" });
         return;
       }
 
@@ -164,7 +179,7 @@ export default function MarketReportTest() {
       const payload: any = {
         period_month: month,
         zip_filter: [zip],
-        apify: { actorId, maxWaitMs: Math.max(0, maxWaitSeconds) * 1000 },
+        apify: { actorId, maxWaitMs: Math.max(0, maxWaitSeconds) * 1000, input: advancedInput.trim() ? JSON.parse(advancedInput) : undefined },
       };
 
       const { data, error } = await supabase.functions.invoke("market-report-send", { body: payload });
@@ -237,6 +252,19 @@ export default function MarketReportTest() {
             onChange={(e) => setMaxWaitSeconds(Number(e.target.value) || 0)}
             min={5}
             max={60}
+            className="w-full"
+          />
+        </div>
+        <div className="flex flex-col md:col-span-5">
+          <label htmlFor="advanced" className="text-sm text-muted-foreground mb-1">
+            Advanced Apify input (JSON, optional)
+          </label>
+          <Textarea
+            id="advanced"
+            value={advancedInput}
+            onChange={(e) => setAdvancedInput(e.target.value)}
+            placeholder='{"zipCodes":["90210"],"sold":true}'
+            rows={4}
             className="w-full"
           />
         </div>

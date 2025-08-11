@@ -75,6 +75,7 @@ serve(async (req) => {
 
     const slug = normalizeActorSlug(apify.actorId);
     const maxWaitMs = Math.max(0, apify?.maxWaitMs ?? 15000);
+    const waitSec = Math.max(1, Math.ceil(maxWaitMs / 1000));
 
     // Prepare actor input: pass through provided input, but ensure required fields for this actor
     const input: Record<string, unknown> = {
@@ -90,7 +91,7 @@ serve(async (req) => {
 
     console.log("[fetch-zip-transactions] Starting Apify actor run", { slug, input });
 
-    const runRes = await fetch(`https://api.apify.com/v2/acts/${encodeURIComponent(slug)}/runs?token=${token}`, {
+    const runRes = await fetch(`https://api.apify.com/v2/acts/${encodeURIComponent(slug)}/runs?token=${token}&waitForFinish=${waitSec}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
@@ -99,10 +100,18 @@ serve(async (req) => {
     const runJson: any = await runRes.json().catch(() => ({}));
     if (!runRes.ok) {
       console.error("[fetch-zip-transactions] Actor run start failed", runJson);
-      return new Response(JSON.stringify({ error: runJson?.error?.message || runJson?.message || "Actor start failed" }), {
-        status: 502,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+      return new Response(
+        JSON.stringify({
+          error: runJson?.error?.message || runJson?.message || "Actor start failed",
+          apify_error: runJson,
+          slug,
+          input,
+        }),
+        {
+          status: 502,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        }
+      );
     }
 
     const runId = runJson?.data?.id || runJson?.id;
@@ -117,7 +126,7 @@ serve(async (req) => {
     console.log("[fetch-zip-transactions] Actor run started", { runId });
 
     const started = Date.now();
-    let datasetId: string | undefined;
+    let datasetId: string | undefined = runJson?.data?.defaultDatasetId || runJson?.defaultDatasetId;
     let items: any[] = [];
 
     while (Date.now() - started < maxWaitMs) {
@@ -159,17 +168,20 @@ serve(async (req) => {
 
     if (!items || items.length === 0) {
       console.error("[fetch-zip-transactions] No dataset items ready within wait window");
-      return new Response(JSON.stringify({ error: "Apify run returned no items within wait window" }), {
-        status: 424,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+      return new Response(
+        JSON.stringify({ error: "Apify run returned no items within wait window", runId, slug, input }),
+        {
+          status: 424,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        }
+      );
     }
 
     const mapped = items.map(mapTransaction).filter((t) => t.address || t.soldPrice || t.url);
     console.log("[fetch-zip-transactions] Items fetched", { count: mapped.length, runId });
 
     return new Response(
-      JSON.stringify({ transactions: mapped.slice(0, limit) }),
+      JSON.stringify({ transactions: mapped.slice(0, limit), runId, slug }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (err: any) {
