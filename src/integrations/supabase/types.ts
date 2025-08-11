@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      automation_runs: {
+        Row: {
+          created_at: string
+          dry_run: boolean
+          emails_sent: number
+          error: string | null
+          finished_at: string | null
+          id: string
+          started_at: string
+          status: string
+          test_zip: string | null
+          triggered_by: string | null
+          zip_codes_processed: number
+        }
+        Insert: {
+          created_at?: string
+          dry_run?: boolean
+          emails_sent?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          test_zip?: string | null
+          triggered_by?: string | null
+          zip_codes_processed?: number
+        }
+        Update: {
+          created_at?: string
+          dry_run?: boolean
+          emails_sent?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          test_zip?: string | null
+          triggered_by?: string | null
+          zip_codes_processed?: number
+        }
+        Relationships: []
+      }
+      automation_settings: {
+        Row: {
+          apify_max_results: number
+          created_at: string
+          enabled: boolean
+          id: string
+          prompt_template: string | null
+          updated_at: string
+        }
+        Insert: {
+          apify_max_results?: number
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          prompt_template?: string | null
+          updated_at?: string
+        }
+        Update: {
+          apify_max_results?: number
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          prompt_template?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       clickup_tasks: {
         Row: {
           clickup_task_id: string
