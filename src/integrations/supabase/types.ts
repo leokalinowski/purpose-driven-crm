@@ -61,6 +61,50 @@ export type Database = {
           },
         ]
       }
+      clickup_webhooks: {
+        Row: {
+          active: boolean
+          created_at: string
+          event_id: string | null
+          id: string
+          last_sync_at: string | null
+          list_id: string
+          team_id: string | null
+          updated_at: string
+          webhook_id: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          last_sync_at?: string | null
+          list_id: string
+          team_id?: string | null
+          updated_at?: string
+          webhook_id?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          last_sync_at?: string | null
+          list_id?: string
+          team_id?: string | null
+          updated_at?: string
+          webhook_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clickup_webhooks_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coaching_sessions: {
         Row: {
           agent_id: string
