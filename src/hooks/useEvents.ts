@@ -17,6 +17,7 @@ export interface Event {
   registration_info?: string;
   quarter?: string;
   event_type?: string;
+  clickup_list_id?: string;
   agent_id: string;
 }
 

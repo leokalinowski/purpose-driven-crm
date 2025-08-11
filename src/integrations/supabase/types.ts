@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      clickup_tasks: {
+        Row: {
+          clickup_task_id: string
+          completed_at: string | null
+          created_at: string
+          due_date: string | null
+          event_id: string
+          id: string
+          responsible_person: string | null
+          status: string | null
+          task_name: string
+          updated_at: string
+        }
+        Insert: {
+          clickup_task_id: string
+          completed_at?: string | null
+          created_at?: string
+          due_date?: string | null
+          event_id: string
+          id?: string
+          responsible_person?: string | null
+          status?: string | null
+          task_name: string
+          updated_at?: string
+        }
+        Update: {
+          clickup_task_id?: string
+          completed_at?: string | null
+          created_at?: string
+          due_date?: string | null
+          event_id?: string
+          id?: string
+          responsible_person?: string | null
+          status?: string | null
+          task_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clickup_tasks_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coaching_sessions: {
         Row: {
           agent_id: string
@@ -224,6 +271,7 @@ export type Database = {
         Row: {
           agent_id: string | null
           attendance_count: number | null
+          clickup_list_id: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -245,6 +293,7 @@ export type Database = {
         Insert: {
           agent_id?: string | null
           attendance_count?: number | null
+          clickup_list_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -266,6 +315,7 @@ export type Database = {
         Update: {
           agent_id?: string | null
           attendance_count?: number | null
+          clickup_list_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
