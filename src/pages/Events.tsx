@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Calendar } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ClickUpTasks } from '@/components/events/ClickUpTasks';
+import { ClickUpConnect } from '@/components/events/ClickUpConnect';
 
 const Events = () => {
   const { user, loading: authLoading } = useAuth();
@@ -126,6 +127,14 @@ const Events = () => {
                 tasks={tasks}
               />
             </div>
+
+            {!nextEvent.clickup_list_id && (
+              <div className="space-y-4">
+                <h3 className="text-xl font-semibold">Connect ClickUp</h3>
+                <p className="text-sm text-muted-foreground">Link your REOP HQ Action Items list to sync tasks tagged "event" and their subtasks.</p>
+                <ClickUpConnect teamId="9011620633" listId="901106742430" tag="event" eventId={nextEvent.id} />
+              </div>
+            )}
 
             {nextEvent.clickup_list_id && (
               <div className="space-y-4">
