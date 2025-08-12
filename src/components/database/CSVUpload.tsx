@@ -6,8 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Upload, Download } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-
+import { useUser } from '@supabase/auth-helpers-react';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 interface ContactInput {
   first_name: string;
   last_name: string;
@@ -32,12 +32,19 @@ interface CSVUploadProps {
 }
 
 export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUpload }) => {
-  const { user } = useAuth();
+  const user = useUser();
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [step, setStep] = useState<'upload' | 'map'>('upload');
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [rawRows, setRawRows] = useState<any[]>([]);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+
+  const REQUIRED_FIELDS: Array<keyof ContactInput> = ['last_name'];
+  const OPTIONAL_FIELDS: Array<keyof ContactInput> = ['first_name','email','phone','address_1','address_2','city','state','zip_code','tags','dnc','notes'];
+  const ALL_FIELDS: Array<keyof ContactInput> = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
 
   const agentId = user?.id || '';
-
   const parseCSV = (text: string): ContactInput[] => {
     const { data } = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
     const contacts: ContactInput[] = [];
@@ -102,49 +109,102 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
     return contacts;
   };
 
-  const handleFileUpload = async (file: File) => {
-    setLoading(true);
+const handleFileUpload = async (file: File) => {
+  setLoading(true);
+  try {
+    if (!agentId) {
+      toast({ title: 'Error', description: 'Please log in to upload contacts.' });
+      onOpenChange(false);
+      return;
+    }
+
+    const text = await file.text();
+    const result = Papa.parse(text, { header: true, skipEmptyLines: true });
+    const rows = (result.data as any[]).filter((r) => r && Object.keys(r).length > 0);
+    const headers = (result.meta as any).fields || Object.keys(rows[0] || {});
+
+    const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, '_');
+    const defaultMap: Record<string, string> = {};
+    ALL_FIELDS.forEach((field) => {
+      const match = headers.find((h: string) => {
+        const nh = normalize(h);
+        if (field === 'phone') return nh === 'phone' || nh === 'phone_number';
+        if (field === 'zip_code') return nh === 'zip' || nh === 'zip_code' || nh === 'zipcode';
+        if (field === 'last_name') return nh === 'last_name' || nh === 'lastname' || nh === 'last';
+        if (field === 'first_name') return nh === 'first_name' || nh === 'firstname' || nh === 'first';
+        return nh === field;
+      });
+      if (match) defaultMap[field] = match;
+    });
+
+    setCsvHeaders(headers as string[]);
+    setRawRows(rows);
+    setMapping(defaultMap);
+    setStep('map');
+  } catch (error: any) {
+    console.error('CSV parsing error:', error);
+    toast({ title: 'Error', description: error?.message || 'Failed to read CSV file.' });
+  } finally {
+    setLoading(false);
+  }
+};
+
+  const handleImport = async () => {
     try {
-      if (!agentId) {
-        toast({ title: 'Error', description: 'Please log in to upload contacts.' });
+      const normalize = (v: any) => (v == null ? '' : String(v));
+      const getVal = (row: any, field: keyof ContactInput) => {
+        const header = mapping[field];
+        if (!header || header === '__ignore__') return '';
+        return normalize(row[header]);
+      };
+
+      const contacts: ContactInput[] = rawRows.map((row: any) => {
+        const last_name = getVal(row, 'last_name');
+        if (!last_name) return null;
+        const tagsRaw = getVal(row, 'tags');
+        const tags = tagsRaw
+          ? tagsRaw.split(/[;,]/).map((t: string) => t.trim()).filter(Boolean)
+          : null;
+        const dncRaw = getVal(row, 'dnc').toLowerCase();
+        const dnc = ['true', '1', 'yes', 'y'].includes(dncRaw);
+        const contact: ContactInput = {
+          first_name: getVal(row, 'first_name'),
+          last_name,
+          phone: getVal(row, 'phone'),
+          email: getVal(row, 'email'),
+          address_1: getVal(row, 'address_1'),
+          address_2: getVal(row, 'address_2'),
+          city: getVal(row, 'city'),
+          state: getVal(row, 'state'),
+          zip_code: getVal(row, 'zip_code'),
+          tags,
+          dnc,
+          notes: getVal(row, 'notes'),
+          category: last_name.charAt(0).toUpperCase() || 'U',
+          agent_id: agentId,
+        };
+        return contact;
+      }).filter(Boolean) as ContactInput[];
+
+      if (contacts.length === 0) {
+        toast({ title: 'Error', description: 'No valid rows. Ensure last_name is mapped.' });
+        return;
+      }
+
+      if (onUpload) {
+        const payload = contacts.map(({ agent_id, category, ...rest }) => rest);
+        await onUpload(payload);
         onOpenChange(false);
         return;
       }
 
-      const text = await file.text();
-      const contacts = parseCSV(text);
-      console.log('Parsed contacts from CSV:', contacts);
-
-      // If parent provided onUpload, delegate to parent (it will handle inserting and refreshing)
-      if (onUpload) {
-        const payload = contacts.map(({ agent_id, category, ...rest }) => rest);
-        await onUpload(payload);
-        // Parent handles toast and closing dialog
-        return;
-      }
-
-      // Fallback: handle upload internally
-      const { data, count, error } = await supabase
-        .from('contacts')
-        .upsert(contacts, { onConflict: 'email, agent_id' })
-        .select();
-
+      const { data, error } = await supabase.from('contacts').insert(contacts).select();
       if (error) throw error;
-
-      const addedCount = count || data?.length || 0;
-      console.log('Inserted/updated contacts:', data);
-
-      if (addedCount === 0) {
-        throw new Error('No contacts were added/updated. Check for duplicates or invalid data.');
-      }
-
-      toast({ title: 'Success', description: `${addedCount} contacts uploaded/updated!` });
+      toast({ title: 'Success', description: `${contacts.length} contacts imported!` });
       onOpenChange(false);
-    } catch (error: any) {
-      console.error('Upload error details:', error);
-      toast({ title: 'Error', description: error?.message || 'Upload failed. Check console for details.' });
-    } finally {
-      setLoading(false);
+    } catch (e: any) {
+      console.error('Import failed:', e);
+      toast({ title: 'Error', description: e?.message || 'Failed to import contacts.' });
     }
   };
 
@@ -170,7 +230,6 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
       toast({ title: 'Error', description: 'Please upload a CSV file' });
     }
   };
-
   const downloadTemplate = () => {
     const template = [
       'first_name,last_name,phone,email,address_1,address_2,city,state,zip_code,tags,dnc,notes',
@@ -192,55 +251,121 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
         <DialogHeader>
           <DialogTitle>Upload Contacts CSV</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
-          <div
-            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              dragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'
-            }`}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-          >
-            <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground mb-4">
-              Drag and drop your CSV file here, or click to browse
-            </p>
-            <Button
-              variant="outline"
-              onClick={() => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = '.csv';
-                input.onchange = (e) => {
-                  const file = (e.target as HTMLInputElement).files?.[0];
-                  if (file) handleFileUpload(file);
-                };
-                input.click();
-              }}
-              disabled={loading}
+<div className="space-y-4">
+  {step === 'upload' ? (
+    <>
+      <div
+        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+          dragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'
+        }`}
+        onDragEnter={handleDrag}
+        onDragLeave={handleDrag}
+        onDragOver={handleDrag}
+        onDrop={handleDrop}
+      >
+        <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground mb-4">
+          Drag and drop your CSV file here, or click to browse
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.csv';
+            input.onchange = (e) => {
+              const file = (e.target as HTMLInputElement).files?.[0];
+              if (file) handleFileUpload(file);
+            };
+            input.click();
+          }}
+          disabled={loading}
+        >
+          {loading ? 'Uploading...' : 'Browse Files'}
+        </Button>
+      </div>
+      <div className="space-y-2">
+        <h4 className="font-medium">CSV Format Requirements:</h4>
+        <ul className="text-sm text-muted-foreground space-y-1">
+          <li>• Headers: first_name, last_name, phone, email, etc.</li>
+          <li>• last_name is required as the main data point</li>
+          <li>• Tags can be separated by semicolons (;) or commas (,)</li>
+          <li>• DNC column should be true/false or 1/0</li>
+        </ul>
+      </div>
+      <Button
+        variant="outline"
+        onClick={downloadTemplate}
+        className="w-full"
+      >
+        <Download className="h-4 w-4 mr-2" />
+        Download Template
+      </Button>
+    </>
+  ) : (
+    <div className="space-y-6">
+      <div>
+        <h4 className="font-medium">Map your columns</h4>
+        <p className="text-sm text-muted-foreground">Match your CSV columns to contact fields. Last name is required.</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {ALL_FIELDS.map((field) => (
+          <div key={field as string} className="space-y-1">
+            <label className="text-sm font-medium">
+              {String(field)}
+              {REQUIRED_FIELDS.includes(field) && <span className="text-destructive ml-1">*</span>}
+            </label>
+            <Select
+              value={mapping[field] || ''}
+              onValueChange={(val) => setMapping((m) => ({ ...m, [field]: val }))}
             >
-              {loading ? 'Uploading...' : 'Browse Files'}
-            </Button>
+              <SelectTrigger>
+                <SelectValue placeholder="Select column" />
+              </SelectTrigger>
+              <SelectContent>
+                {csvHeaders.map((h) => (
+                  <SelectItem key={h} value={h}>{h}</SelectItem>
+                ))}
+                {!REQUIRED_FIELDS.includes(field) && (
+                  <SelectItem value="__ignore__">Ignore</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
           </div>
-          <div className="space-y-2">
-            <h4 className="font-medium">CSV Format Requirements:</h4>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Headers: first_name, last_name, phone, email, etc.</li>
-              <li>• last_name is required for each contact</li>
-              <li>• Tags should be separated by semicolons (;) or commas (,)</li>
-              <li>• DNC column should be true/false or 1/0</li>
-            </ul>
+        ))}
+      </div>
+      {rawRows.length > 0 && (
+        <div className="rounded-md border p-3">
+          <div className="text-sm font-medium mb-2">Preview (first 5 rows)</div>
+          <div className="text-xs overflow-auto">
+            <table className="w-full">
+              <thead>
+                <tr>
+                  {ALL_FIELDS.filter((f) => mapping[f] && mapping[f] !== '__ignore__').map((f) => (
+                    <th key={String(f)} className="text-left pr-3 py-1 capitalize">{String(f).replace('_',' ')}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rawRows.slice(0, 5).map((row, i) => (
+                  <tr key={i} className="border-t">
+                    {ALL_FIELDS.filter((f) => mapping[f] && mapping[f] !== '__ignore__').map((f) => (
+                      <td key={String(f)} className="pr-3 py-1">{String(row[mapping[f] as string] ?? '')}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <Button
-            variant="outline"
-            onClick={downloadTemplate}
-            className="w-full"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Download Template
-          </Button>
         </div>
+      )}
+      <div className="flex justify-between">
+        <Button variant="outline" onClick={() => setStep('upload')}>Back</Button>
+        <Button onClick={handleImport} disabled={!mapping['last_name']}>Import</Button>
+      </div>
+    </div>
+  )}
+</div>
       </DialogContent>
     </Dialog>
   );
