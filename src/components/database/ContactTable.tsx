@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,7 +13,8 @@ interface ContactTableProps {
   sortBy: keyof Contact;
   sortOrder: 'asc' | 'desc';
   onSort: (column: keyof Contact) => void;
-  onEdit: (contact: Contact) => Promise<void>; // Changed to async for save
+  onEdit: (contact: Contact) => Promise<void>; // async for inline save
+  onOpenEdit: (contact: Contact) => void; // new prop for opening edit form
   onDelete: (contact: Contact) => void;
 }
 
@@ -22,6 +24,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({
   sortOrder,
   onSort,
   onEdit,
+  onOpenEdit,
   onDelete,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -152,7 +155,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => onEdit(contact)}
+                      onClick={() => onOpenEdit(contact)}
                       className="h-8 w-8 p-0"
                     >
                       <Edit className="h-4 w-4" />

@@ -9,7 +9,7 @@ import { Layout } from '@/components/layout/Layout';
 import { ContactTable } from '@/components/database/ContactTable';
 import { ContactForm } from '@/components/database/ContactForm';
 import { CSVUpload } from '@/components/database/CSVUpload';
-import { useContacts, Contact } from '@/hooks/useContacts';
+import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useToast } from '@/hooks/use-toast';
 
 const Database = () => {
@@ -109,6 +109,28 @@ const Database = () => {
     }
   };
 
+  const handleInlineSave = async (updated: Contact) => {
+    const patch: Partial<ContactInput> = {
+      first_name: updated.first_name,
+      last_name: updated.last_name,
+      phone: updated.phone,
+      email: updated.email,
+      address_1: updated.address_1,
+      address_2: updated.address_2,
+      zip_code: updated.zip_code,
+      state: updated.state,
+      city: updated.city,
+      tags: updated.tags,
+      dnc: updated.dnc,
+      notes: updated.notes,
+    };
+    await updateContact(updated.id, patch);
+    toast({
+      title: "Saved",
+      description: "Contact updated.",
+    });
+  };
+
   const openEditForm = (contact: Contact) => {
     setEditingContact(contact);
     setShowContactForm(true);
@@ -187,7 +209,8 @@ const Database = () => {
                   sortBy={sortBy}
                   sortOrder={sortOrder}
                   onSort={handleSort}
-                  onEdit={openEditForm}
+                  onEdit={handleInlineSave}
+                  onOpenEdit={openEditForm}
                   onDelete={setDeletingContact}
                 />
 
