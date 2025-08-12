@@ -1,10 +1,12 @@
+
 import React, { useState } from 'react';
 import Papa from 'papaparse';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Upload, Download } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ContactInput {
   first_name: string;
@@ -26,21 +28,15 @@ interface ContactInput {
 interface CSVUploadProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onUpload?: (csvData: any[]) => Promise<void> | void; // optional callback for parent-managed upload
 }
 
-export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange }) => {
-  const supabase = useSupabaseClient();
+export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUpload }) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
 
-  const { data: { user } } = supabase.auth.getUser();
   const agentId = user?.id || '';
-
-  if (!agentId) {
-    toast({ title: 'Error', description: 'Please log in to upload contacts.' });
-    onOpenChange(false);
-    return null;
-  }
 
   const parseCSV = (text: string): ContactInput[] => {
     const { data } = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
@@ -51,8 +47,9 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange }) => {
       const normalizeKey = (key: string) => key.trim().toLowerCase().replace(/\s+/g, '_');
       const getValue = (keys: string[]) => {
         for (const k of keys) {
-          const val = row[normalizeKey(k)] || row[k] || '';
-          if (val) return val;
+          const nk = normalizeKey(k);
+          const val = row[nk] ?? row[k] ?? '';
+          if (val) return String(val);
         }
         return '';
       };
@@ -65,6 +62,18 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange }) => {
 
       const lastName = getValue(['last_name', 'lastname', 'last name']) || 'Unknown'; // Default if missing
 
+      const tagsRaw = getValue(['tags']);
+      const tagList =
+        tagsRaw
+          ? tagsRaw
+              .split(/[;,]/) // support both semicolons and commas
+              .map((t: string) => t.trim())
+              .filter(Boolean)
+          : null;
+
+      const dncRaw = getValue(['dnc', 'do not contact', 'do_not_contact']).toString().toLowerCase();
+      const dncVal = ['true', '1', 'yes', 'y'].includes(dncRaw);
+
       const contact: ContactInput = {
         first_name: getValue(['first_name', 'firstname', 'first name']),
         last_name: lastName,
@@ -75,8 +84,8 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange }) => {
         zip_code: getValue(['zip_code', 'zipcode', 'zip code', 'zip']),
         state: getValue(['state']),
         city: getValue(['city']),
-        tags: getValue(['tags']) ? getValue(['tags']).split(';').map((t: string) => t.trim()) : null,
-        dnc: [true, 'true', 1, '1', 'yes'].includes(getValue(['dnc', 'do not contact', 'do_not_contact']).toLowerCase()),
+        tags: tagList,
+        dnc: dncVal,
         notes: getValue(['notes']),
         category: lastName.charAt(0).toUpperCase() || 'U',
         agent_id: agentId,
@@ -96,10 +105,25 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange }) => {
   const handleFileUpload = async (file: File) => {
     setLoading(true);
     try {
+      if (!agentId) {
+        toast({ title: 'Error', description: 'Please log in to upload contacts.' });
+        onOpenChange(false);
+        return;
+      }
+
       const text = await file.text();
       const contacts = parseCSV(text);
       console.log('Parsed contacts from CSV:', contacts);
 
+      // If parent provided onUpload, delegate to parent (it will handle inserting and refreshing)
+      if (onUpload) {
+        const payload = contacts.map(({ agent_id, category, ...rest }) => rest);
+        await onUpload(payload);
+        // Parent handles toast and closing dialog
+        return;
+      }
+
+      // Fallback: handle upload internally
       const { data, count, error } = await supabase
         .from('contacts')
         .upsert(contacts, { onConflict: 'email, agent_id' })
@@ -116,9 +140,9 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange }) => {
 
       toast({ title: 'Success', description: `${addedCount} contacts uploaded/updated!` });
       onOpenChange(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error details:', error);
-      toast({ title: 'Error', description: error.message || 'Upload failed. Check console for details.' });
+      toast({ title: 'Error', description: error?.message || 'Upload failed. Check console for details.' });
     } finally {
       setLoading(false);
     }
@@ -204,7 +228,7 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange }) => {
             <ul className="text-sm text-muted-foreground space-y-1">
               <li>• Headers: first_name, last_name, phone, email, etc.</li>
               <li>• last_name is required for each contact</li>
-              <li>• Tags should be separated by semicolons (;)</li>
+              <li>• Tags should be separated by semicolons (;) or commas (,)</li>
               <li>• DNC column should be true/false or 1/0</li>
             </ul>
           </div>
