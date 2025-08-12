@@ -1,16 +1,20 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Edit, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Contact } from '@/hooks/useContacts';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Plus, Upload, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { ContactTable } from '@/components/database/ContactTable';
 import { ContactForm } from '@/components/database/ContactForm';
 import { CSVUpload } from '@/components/database/CSVUpload';
-import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
-import { useToast } from '@/hooks/use-toast';
+import { useContacts, Contact } from '@/hooks/useContacts';
+import { useToast } from '@/components/ui/use-toast';
 
 const Database = () => {
   const {
@@ -28,10 +32,10 @@ const Database = () => {
     handleSort,
     handleSearch,
     goToPage,
+    refreshContacts,  // Added this from your hook to refresh the list
   } = useContacts();
-
   const { toast } = useToast();
-  
+ 
   const [showContactForm, setShowContactForm] = useState(false);
   const [showCSVUpload, setShowCSVUpload] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
@@ -45,6 +49,7 @@ const Database = () => {
         description: "Contact added successfully",
       });
       setShowContactForm(false);
+      refreshContacts();  // Refresh table after add
     } catch (error) {
       toast({
         title: "Error",
@@ -56,7 +61,7 @@ const Database = () => {
 
   const handleEditContact = async (contactData: any) => {
     if (!editingContact) return;
-    
+   
     try {
       await updateContact(editingContact.id, contactData);
       toast({
@@ -64,6 +69,7 @@ const Database = () => {
         description: "Contact updated successfully",
       });
       closeContactForm();
+      refreshContacts();  // Refresh table after edit
     } catch (error) {
       toast({
         title: "Error",
@@ -75,7 +81,7 @@ const Database = () => {
 
   const handleDeleteContact = async () => {
     if (!deletingContact) return;
-    
+   
     try {
       await deleteContact(deletingContact.id);
       setDeletingContact(null);
@@ -83,6 +89,7 @@ const Database = () => {
         title: "Success",
         description: "Contact deleted successfully",
       });
+      refreshContacts();  // Refresh table after delete
     } catch (error) {
       toast({
         title: "Error",
@@ -100,6 +107,7 @@ const Database = () => {
         description: `${csvData.length} contacts uploaded successfully`,
       });
       setShowCSVUpload(false);
+      refreshContacts();  // Key fix: Refresh table after CSV upload
     } catch (error) {
       toast({
         title: "Error",
@@ -107,28 +115,6 @@ const Database = () => {
         variant: "destructive",
       });
     }
-  };
-
-  const handleInlineSave = async (updated: Contact) => {
-    const patch: Partial<ContactInput> = {
-      first_name: updated.first_name,
-      last_name: updated.last_name,
-      phone: updated.phone,
-      email: updated.email,
-      address_1: updated.address_1,
-      address_2: updated.address_2,
-      zip_code: updated.zip_code,
-      state: updated.state,
-      city: updated.city,
-      tags: updated.tags,
-      dnc: updated.dnc,
-      notes: updated.notes,
-    };
-    await updateContact(updated.id, patch);
-    toast({
-      title: "Saved",
-      description: "Contact updated.",
-    });
   };
 
   const openEditForm = (contact: Contact) => {
@@ -146,15 +132,15 @@ const Database = () => {
     const maxVisible = 5;
     let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
     let end = Math.min(totalPages, start + maxVisible - 1);
-    
+   
     if (end - start + 1 < maxVisible) {
       start = Math.max(1, end - maxVisible + 1);
     }
-    
+   
     for (let i = start; i <= end; i++) {
       pages.push(i);
     }
-    
+   
     return pages;
   };
 
@@ -166,7 +152,7 @@ const Database = () => {
             <h1 className="text-3xl font-bold">Contact Database</h1>
             <p className="text-muted-foreground">Manage your contacts and leads</p>
           </div>
-          
+         
           <div className="flex gap-2">
             <Button
               onClick={() => setShowCSVUpload(true)}
@@ -181,7 +167,6 @@ const Database = () => {
             </Button>
           </div>
         </div>
-
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
@@ -199,7 +184,6 @@ const Database = () => {
                 className="max-w-sm"
               />
             </div>
-
             {loading ? (
               <div className="text-center py-8">Loading contacts...</div>
             ) : (
@@ -209,17 +193,15 @@ const Database = () => {
                   sortBy={sortBy}
                   sortOrder={sortOrder}
                   onSort={handleSort}
-                  onEdit={handleInlineSave}
-                  onOpenEdit={openEditForm}
+                  onEdit={openEditForm}
                   onDelete={setDeletingContact}
                 />
-
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-muted-foreground">
                       Page {currentPage} of {totalPages}
                     </div>
-                    
+                   
                     <div className="flex items-center space-x-2">
                       <Button
                         variant="outline"
@@ -230,7 +212,7 @@ const Database = () => {
                         <ChevronLeft className="h-4 w-4" />
                         Previous
                       </Button>
-                      
+                     
                       {generatePageNumbers().map((page) => (
                         <Button
                           key={page}
@@ -242,7 +224,7 @@ const Database = () => {
                           {page}
                         </Button>
                       ))}
-                      
+                     
                       <Button
                         variant="outline"
                         size="sm"
@@ -259,7 +241,6 @@ const Database = () => {
             )}
           </CardContent>
         </Card>
-
         <ContactForm
           open={showContactForm}
           onOpenChange={closeContactForm}
@@ -267,19 +248,17 @@ const Database = () => {
           onSubmit={editingContact ? handleEditContact : handleAddContact}
           title={editingContact ? "Edit Contact" : "Add New Contact"}
         />
-
         <CSVUpload
           open={showCSVUpload}
           onOpenChange={setShowCSVUpload}
           onUpload={handleCSVUpload}
         />
-
         <AlertDialog open={!!deletingContact} onOpenChange={() => setDeletingContact(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Delete Contact</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete {deletingContact?.first_name} {deletingContact?.last_name}? 
+                Are you sure you want to delete {deletingContact?.first_name} {deletingContact?.last_name}?
                 This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
