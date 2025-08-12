@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import Papa from 'papaparse';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Upload, Download } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { useAuth } from '@/hooks/useAuth';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
 
 interface ContactInput {
   first_name: string;
@@ -27,97 +26,86 @@ interface ContactInput {
 interface CSVUploadProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUpload: (csvData: any[]) => Promise<void>;
+  onUpload: (data: ContactInput[]) => Promise<void>; // Keep if needed, but we handle inside now
 }
 
-export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUpload }) => {
-  const { user } = useAuth();
-  const agentId = user?.id || '';
+export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange }) => {
+  const supabase = useSupabaseClient();
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
 
+  const { data: { user } } = supabase.auth.getUser(); // Get logged-in user
+  const agentId = user?.id || '';
+
+  if (!agentId) {
+    toast({ title: 'Error', description: 'Please log in to upload contacts.' });
+    onOpenChange(false);
+    return null;
+  }
+
   const parseCSV = (text: string): ContactInput[] => {
     const { data } = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
+    const contacts: ContactInput[] = data.map((row: any) => {
+      const normalizeKey = (key: string) => key.trim().toLowerCase().replace(/\s+/g, '_');
+      const getValue = (keys: string[]) => {
+        for (const k of keys) {
+          const val = row[normalizeKey(k)] || row[k] || '';
+          if (val) return val;
+        }
+        return '';
+      };
 
-    const contacts: ContactInput[] = (data as any[])
-      .map((row: any) => {
-        const normalizeKey = (key: string) =>
-          key
-            .toString()
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '_')
-            .replace(/_{2,}/g, '_')
-            .replace(/^_|_$/g, '');
+      const contact: ContactInput = {
+        first_name: getValue(['first_name', 'firstname', 'first name']),
+        last_name: getValue(['last_name', 'lastname', 'last name']),
+        phone: getValue(['phone', 'phone_number', 'phone number']),
+        email: getValue(['email', 'email_address', 'email address']),
+        address_1: getValue(['address_1', 'address1', 'address 1', 'address']),
+        address_2: getValue(['address_2', 'address2', 'address 2']),
+        zip_code: getValue(['zip_code', 'zipcode', 'zip code', 'zip']),
+        state: getValue(['state']),
+        city: getValue(['city']),
+        tags: getValue(['tags']) ? getValue(['tags']).split(';').map((t: string) => t.trim()) : null,
+        dnc: [true, 'true', 1, '1', 'yes'].includes(getValue(['dnc', 'do not contact', 'do_not_contact']).toLowerCase()),
+        notes: getValue(['notes']),
+        category: getValue(['last_name']).charAt(0).toUpperCase() || 'U',
+        agent_id: agentId,
+      };
 
-        // Normalize row keys once so lookups are case/space-insensitive
-        const normalizedRow: Record<string, any> = Object.fromEntries(
-          Object.entries(row).map(([k, v]) => [normalizeKey(k), v])
-        );
-
-        const getValue = (keys: string[]) => {
-          for (const k of keys) {
-            const nk = normalizeKey(k);
-            const val = normalizedRow[nk];
-            // Accept 0/false, but skip undefined/null/empty-string
-            if (val !== undefined && val !== null && !(typeof val === 'string' && val.trim() === '')) {
-              return val;
-            }
-          }
-          return '';
-        };
-
-        const tagsRaw = String(getValue(['tags']));
-        const tags = tagsRaw
-          ? tagsRaw
-              .split(/[;,]/)
-              .map((t: string) => t.trim())
-              .filter(Boolean)
-          : null;
-
-        const contact: ContactInput = {
-          first_name: String(getValue(['first_name', 'firstname', 'first name'])).trim(),
-          last_name: String(getValue(['last_name', 'lastname', 'last name'])).trim(),
-          phone: String(getValue(['phone', 'phone_number', 'phone number'])).trim(),
-          email: String(getValue(['email', 'email_address', 'email address'])).trim(),
-          address_1: String(getValue(['address_1', 'address1', 'address 1', 'address'])).trim(),
-          address_2: String(getValue(['address_2', 'address2', 'address 2'])).trim(),
-          zip_code: String(getValue(['zip_code', 'zipcode', 'zip code', 'zip'])).trim(),
-          state: String(getValue(['state'])).trim(),
-          city: String(getValue(['city'])).trim(),
-          tags,
-          dnc: ['true', '1', 'yes', 'y'].includes(
-            String(getValue(['dnc', 'do not contact', 'do_not_contact'])).toLowerCase()
-          ),
-          notes: String(getValue(['notes'])).trim(),
-          category: String(getValue(['last_name'])).charAt(0).toUpperCase() || 'U',
-          agent_id: agentId,
-        };
-
-        return contact;
-      })
-      // Only require last_name to keep valid entries; email can be optional
-      .filter((contact) => !!contact.last_name);
+      return contact;
+    }).filter(contact => contact.last_name && contact.email);
 
     if (contacts.length === 0) throw new Error('No valid contacts found in CSV');
     return contacts;
   };
+
   const handleFileUpload = async (file: File) => {
     setLoading(true);
     try {
       const text = await file.text();
       const contacts = parseCSV(text);
-      console.log('Parsed contacts from CSV:', contacts);
+      console.log('Parsed contacts from CSV:', contacts); // Check console for this
 
-      if (!onUpload) {
-        throw new Error('Upload handler is not available.');
+      const { data, count, error } = await supabase
+        .from('contacts')
+        .upsert(contacts, { onConflict: 'email, agent_id' })
+        .select();
+
+      if (error) throw error;
+
+      const addedCount = count || data?.length || 0;
+      console.log('Inserted/updated contacts:', data); // Check console for this
+
+      if (addedCount === 0) {
+        throw new Error('No contacts were added/updated. Check for duplicates or invalid data.');
       }
 
-      await onUpload(contacts);
-      // Success handling (toast/close) is managed by the parent (Database.tsx) to avoid duplicates.
-    } catch (error: any) {
+      toast({ title: 'Success', description: `${addedCount} contacts uploaded/updated!` });
+      onOpenChange(false);
+      // Note: Refresh happens in parent (Database page)
+    } catch (error) {
       console.error('Upload error details:', error);
-      toast({ title: 'Error', description: error?.message || 'Upload failed. Check console for details.' });
+      toast({ title: 'Error', description: error.message || 'Upload failed. Check console for details.' });
     } finally {
       setLoading(false);
     }
