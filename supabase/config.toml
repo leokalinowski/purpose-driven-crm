@@ -1,3 +1,4 @@
+
 project_id = "cguoaokqwgqvzkqqezcq"
 
 [functions.clickup-webhook]
@@ -18,3 +19,5 @@ verify_jwt = false
 [functions.compose-market-report]
 verify_jwt = false
 
+[functions.market-report-monthly]
+verify_jwt = false

@@ -843,6 +843,33 @@ export type Database = {
           },
         ]
       }
+      zip_reports: {
+        Row: {
+          created_at: string
+          data: Json
+          id: string
+          report_month: string
+          updated_at: string
+          zip_code: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          id?: string
+          report_month: string
+          updated_at?: string
+          zip_code: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          id?: string
+          report_month?: string
+          updated_at?: string
+          zip_code?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
