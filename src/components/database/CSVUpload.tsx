@@ -1,109 +1,180 @@
-import React, { useState } from 'react';
-import Papa from 'papaparse'; // Install with npm install papaparse
+
+import React, { useCallback, useRef, useState } from 'react';
+import Papa from 'papaparse';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Upload, Download } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { useSupabaseClient } from '@supabase/auth-helpers-react'; // Assuming you use this for Supabase client
-
-interface ContactInput {
-  first_name: string;
-  last_name: string;
-  phone: string;
-  email: string;
-  address_1: string;
-  address_2: string;
-  zip_code: string;
-  state: string;
-  city: string;
-  tags: string[] | null;
-  dnc: boolean;
-  notes: string;
-  category: string; // Added for first letter of last name
-  agent_id: string; // Added for current agent
-}
 
 interface CSVUploadProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onUpload: (rows: any[]) => Promise<void> | void;
 }
 
-export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange }) => {
-  const supabase = useSupabaseClient(); // Get Supabase client
+export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUpload }) => {
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Get current agent's ID from Supabase auth
-  const { data: { user } } = supabase.auth.getUser(); // Simple way to get user
-  const agentId = user?.id || ''; // Agent ID is user ID
+  const parseCSV = useCallback(async (file: File) => {
+    return new Promise<any[]>((resolve, reject) => {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: false,
+        complete: (results) => {
+          const data = Array.isArray(results.data) ? results.data : [];
+          resolve(data);
+        },
+        error: (err) => reject(err),
+      });
+    });
+  }, []);
 
-  if (!agentId) {
-    toast({ title: 'Error', description: 'Please log in to upload contacts.' });
-    onOpenChange(false);
-    return null;
-  }
-
-  const parseCSV = (text: string): ContactInput[] => {
-    const { data } = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
-    const contacts: ContactInput[] = data.map((row: any) => {
-      const normalizeKey = (key: string) => key.trim().toLowerCase().replace(/\s+/g, '_');
-      const getValue = (keys: string[]) => {
-        for (const k of keys) {
-          const val = row[normalizeKey(k)] || row[k] || '';
-          if (val) return val;
+  const handleFile = useCallback(
+    async (file: File) => {
+      setLoading(true);
+      try {
+        const rows = await parseCSV(file);
+        if (!rows.length) {
+          toast({ title: 'No rows found', description: 'The CSV appears to be empty.' });
+          return;
         }
-        return '';
-      };
+        await onUpload(rows);
+        toast({ title: 'Upload ready', description: `${rows.length} rows parsed successfully.` });
+        onOpenChange(false);
+      } catch (error: any) {
+        console.error('Error handling CSV:', error);
+        toast({
+          title: 'Error parsing CSV',
+          description: error?.message || 'Please check your file format.',
+        });
+      } finally {
+        setLoading(false);
+        setDragActive(false);
+      }
+    },
+    [onUpload, onOpenChange, parseCSV]
+  );
 
-      const contact: ContactInput = {
-        first_name: getValue(['first_name', 'firstname', 'first name']),
-        last_name: getValue(['last_name', 'lastname', 'last name']),
-        phone: getValue(['phone', 'phone_number', 'phone number']),
-        email: getValue(['email', 'email_address', 'email address']),
-        address_1: getValue(['address_1', 'address1', 'address 1', 'address']),
-        address_2: getValue(['address_2', 'address2', 'address 2']),
-        zip_code: getValue(['zip_code', 'zipcode', 'zip code', 'zip']),
-        state: getValue(['state']),
-        city: getValue(['city']),
-        tags: getValue(['tags']) ? getValue(['tags']).split(';').map((t: string) => t.trim()) : null,
-        dnc: [true, 'true', 1, '1', 'yes'].includes(getValue(['dnc', 'do not contact', 'do_not_contact']).toLowerCase()),
-        notes: getValue(['notes']),
-        category: getValue(['last_name']).charAt(0).toUpperCase() || 'U', // U for Unknown
-        agent_id: agentId,
-      };
+  const onDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragActive(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file) handleFile(file);
+    },
+    [handleFile]
+  );
 
-      return contact;
-    }).filter(contact => contact.last_name && contact.email); // Require last_name and email
-
-    if (contacts.length === 0) throw new Error('No valid contacts found in CSV');
-    return contacts;
+  const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragActive) setDragActive(true);
   };
 
-  const handleFileUpload = async (file: File) => {
-    setLoading(true);
-    try {
-      const text = await file.text();
-      const contacts = parseCSV(text);
-
-      // Upsert to Supabase (update if email + agent_id match)
-      const { data, error } = await supabase
-        .from('contacts')
-        .upsert(contacts, { onConflict: 'email, agent_id' }); // Assume unique on email per agent
-
-      if (error) throw error;
-
-      toast({ title: 'Success', description: `${contacts.length} contacts uploaded/updated!` });
-      onOpenChange(false);
-    } catch (error) {
-      console.error('Error uploading CSV:', error);
-      toast({ title: 'Error', description: error.message || 'Failed to upload CSV. Check file format.' });
-    } finally {
-      setLoading(false);
-    }
+  const onDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
   };
 
-  // Drag/drop and other UI same as before...
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+  };
 
-  // (Paste the rest of the UI code from your original, like handleDrag, handleDrop, downloadTemplate)
-  // For downloadTemplate, keep it similar, but add category example if wanted.
+  const downloadTemplate = () => {
+    const headers = [
+      'first_name',
+      'last_name',
+      'phone',
+      'email',
+      'address_1',
+      'address_2',
+      'zip_code',
+      'state',
+      'city',
+      'tags',
+      'dnc',
+      'notes',
+    ];
+    const sample = [
+      {
+        first_name: 'John',
+        last_name: 'Doe',
+        phone: '555-123-4567',
+        email: 'john.doe@example.com',
+        address_1: '123 Main St',
+        address_2: 'Apt 4B',
+        zip_code: '90210',
+        state: 'CA',
+        city: 'Beverly Hills',
+        tags: 'buyer;vip',
+        dnc: 'false',
+        notes: 'Met at open house',
+      },
+    ];
+    const csv = Papa.unparse({ fields: headers, data: sample.map((r) => headers.map((h) => (r as any)[h] ?? '')) });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'contacts_template.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Upload Contacts CSV</DialogTitle>
+        </DialogHeader>
+
+        <div
+          className={`mt-4 border-2 border-dashed rounded-md p-6 text-center transition-colors ${
+            dragActive ? 'border-primary bg-muted/50' : 'border-border'
+          }`}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+        >
+          <div className="flex flex-col items-center gap-2">
+            <Upload className="h-6 w-6 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              Drag and drop your CSV file here, or click to select.
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={onFileChange}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+            >
+              Choose File
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between">
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>
+            Cancel
+          </Button>
+          <Button type="button" variant="outline" onClick={downloadTemplate}>
+            <Download className="h-4 w-4 mr-2" />
+            Download Template
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 };
