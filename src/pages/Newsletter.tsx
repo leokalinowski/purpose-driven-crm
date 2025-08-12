@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Helmet } from "react-helmet-async";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +15,6 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
-import MarketReportTest from "@/components/newsletter/MarketReportTest";
 
 function formatPercent(value: number | null | undefined) {
   if (value == null) return "—";
@@ -43,8 +41,6 @@ export default function Newsletter() {
         <header className="mb-4">
           <h1 className="text-2xl font-semibold tracking-tight">Newsletter Analytics</h1>
         </header>
-
-        <MarketReportTest />
 
         {error ? (
           <Card className="mb-4">
