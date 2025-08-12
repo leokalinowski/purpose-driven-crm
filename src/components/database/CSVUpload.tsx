@@ -38,45 +38,70 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
 
   const parseCSV = (text: string): ContactInput[] => {
     const { data } = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
-    const contacts: ContactInput[] = (data as any[]).map((row: any) => {
-      const normalizeKey = (key: string) => key.trim().toLowerCase().replace(/\s+/g, '_');
-      const getValue = (keys: string[]) => {
-        for (const k of keys) {
-          const val = row[normalizeKey(k)] ?? row[k] ?? '';
-          if (val) return val;
-        }
-        return '';
-      };
 
-      const contact: ContactInput = {
-        first_name: String(getValue(['first_name', 'firstname', 'first name'])).trim(),
-        last_name: String(getValue(['last_name', 'lastname', 'last name'])).trim(),
-        phone: String(getValue(['phone', 'phone_number', 'phone number'])).trim(),
-        email: String(getValue(['email', 'email_address', 'email address'])).trim(),
-        address_1: String(getValue(['address_1', 'address1', 'address 1', 'address'])).trim(),
-        address_2: String(getValue(['address_2', 'address2', 'address 2'])).trim(),
-        zip_code: String(getValue(['zip_code', 'zipcode', 'zip code', 'zip'])).trim(),
-        state: String(getValue(['state'])).trim(),
-        city: String(getValue(['city'])).trim(),
-        tags: getValue(['tags'])
-          ? String(getValue(['tags']))
-              .split(';')
+    const contacts: ContactInput[] = (data as any[])
+      .map((row: any) => {
+        const normalizeKey = (key: string) =>
+          key
+            .toString()
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/_{2,}/g, '_')
+            .replace(/^_|_$/g, '');
+
+        // Normalize row keys once so lookups are case/space-insensitive
+        const normalizedRow: Record<string, any> = Object.fromEntries(
+          Object.entries(row).map(([k, v]) => [normalizeKey(k), v])
+        );
+
+        const getValue = (keys: string[]) => {
+          for (const k of keys) {
+            const nk = normalizeKey(k);
+            const val = normalizedRow[nk];
+            // Accept 0/false, but skip undefined/null/empty-string
+            if (val !== undefined && val !== null && !(typeof val === 'string' && val.trim() === '')) {
+              return val;
+            }
+          }
+          return '';
+        };
+
+        const tagsRaw = String(getValue(['tags']));
+        const tags = tagsRaw
+          ? tagsRaw
+              .split(/[;,]/)
               .map((t: string) => t.trim())
               .filter(Boolean)
-          : null,
-        dnc: ['true', '1', 'yes'].includes(String(getValue(['dnc', 'do not contact', 'do_not_contact'])).toLowerCase()),
-        notes: String(getValue(['notes'])).trim(),
-        category: String(getValue(['last_name'])).charAt(0).toUpperCase() || 'U',
-        agent_id: agentId,
-      };
+          : null;
 
-      return contact;
-    }).filter(contact => contact.last_name && contact.email);
+        const contact: ContactInput = {
+          first_name: String(getValue(['first_name', 'firstname', 'first name'])).trim(),
+          last_name: String(getValue(['last_name', 'lastname', 'last name'])).trim(),
+          phone: String(getValue(['phone', 'phone_number', 'phone number'])).trim(),
+          email: String(getValue(['email', 'email_address', 'email address'])).trim(),
+          address_1: String(getValue(['address_1', 'address1', 'address 1', 'address'])).trim(),
+          address_2: String(getValue(['address_2', 'address2', 'address 2'])).trim(),
+          zip_code: String(getValue(['zip_code', 'zipcode', 'zip code', 'zip'])).trim(),
+          state: String(getValue(['state'])).trim(),
+          city: String(getValue(['city'])).trim(),
+          tags,
+          dnc: ['true', '1', 'yes', 'y'].includes(
+            String(getValue(['dnc', 'do not contact', 'do_not_contact'])).toLowerCase()
+          ),
+          notes: String(getValue(['notes'])).trim(),
+          category: String(getValue(['last_name'])).charAt(0).toUpperCase() || 'U',
+          agent_id: agentId,
+        };
+
+        return contact;
+      })
+      // Only require last_name to keep valid entries; email can be optional
+      .filter((contact) => !!contact.last_name);
 
     if (contacts.length === 0) throw new Error('No valid contacts found in CSV');
     return contacts;
   };
-
   const handleFileUpload = async (file: File) => {
     setLoading(true);
     try {

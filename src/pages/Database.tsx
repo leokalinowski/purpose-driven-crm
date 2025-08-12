@@ -125,6 +125,7 @@ const Database = () => {
         description: `${csvData.length} contacts uploaded successfully`,
       });
       setShowCSVUpload(false);
+      goToPage(1);
       fetchContacts();  // Refresh table after CSV upload
     } catch (error) {
       toast({
