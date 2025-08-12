@@ -44,6 +44,7 @@ const Database = () => {
         title: "Success",
         description: "Contact added successfully",
       });
+      setShowContactForm(false);
     } catch (error) {
       toast({
         title: "Error",
@@ -58,11 +59,11 @@ const Database = () => {
     
     try {
       await updateContact(editingContact.id, contactData);
-      setEditingContact(null);
       toast({
         title: "Success",
         description: "Contact updated successfully",
       });
+      closeContactForm();
     } catch (error) {
       toast({
         title: "Error",
@@ -98,6 +99,7 @@ const Database = () => {
         title: "Success",
         description: `${csvData.length} contacts uploaded successfully`,
       });
+      setShowCSVUpload(false);
     } catch (error) {
       toast({
         title: "Error",
