@@ -1,10 +1,11 @@
+
 import React, { useState } from 'react';
 import Papa from 'papaparse';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Upload, Download } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ContactInput {
   first_name: string;
@@ -26,48 +27,46 @@ interface ContactInput {
 interface CSVUploadProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onUpload: (csvData: any[]) => Promise<void>;
 }
 
-export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange }) => {
-  const supabase = useSupabaseClient();
+export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUpload }) => {
+  const { user } = useAuth();
+  const agentId = user?.id || '';
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
 
-  const { data: { user } } = supabase.auth.getUser();
-  const agentId = user?.id || '';
-
-  if (!agentId) {
-    toast({ title: 'Error', description: 'Please log in to upload contacts.' });
-    onOpenChange(false);
-    return null;
-  }
-
   const parseCSV = (text: string): ContactInput[] => {
     const { data } = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
-    const contacts: ContactInput[] = data.map((row: any) => {
+    const contacts: ContactInput[] = (data as any[]).map((row: any) => {
       const normalizeKey = (key: string) => key.trim().toLowerCase().replace(/\s+/g, '_');
       const getValue = (keys: string[]) => {
         for (const k of keys) {
-          const val = row[normalizeKey(k)] || row[k] || '';
+          const val = row[normalizeKey(k)] ?? row[k] ?? '';
           if (val) return val;
         }
         return '';
       };
 
       const contact: ContactInput = {
-        first_name: getValue(['first_name', 'firstname', 'first name']),
-        last_name: getValue(['last_name', 'lastname', 'last name']),
-        phone: getValue(['phone', 'phone_number', 'phone number']),
-        email: getValue(['email', 'email_address', 'email address']),
-        address_1: getValue(['address_1', 'address1', 'address 1', 'address']),
-        address_2: getValue(['address_2', 'address2', 'address 2']),
-        zip_code: getValue(['zip_code', 'zipcode', 'zip code', 'zip']),
-        state: getValue(['state']),
-        city: getValue(['city']),
-        tags: getValue(['tags']) ? getValue(['tags']).split(';').map((t: string) => t.trim()) : null,
-        dnc: [true, 'true', 1, '1', 'yes'].includes(getValue(['dnc', 'do not contact', 'do_not_contact']).toLowerCase()),
-        notes: getValue(['notes']),
-        category: getValue(['last_name']).charAt(0).toUpperCase() || 'U',
+        first_name: String(getValue(['first_name', 'firstname', 'first name'])).trim(),
+        last_name: String(getValue(['last_name', 'lastname', 'last name'])).trim(),
+        phone: String(getValue(['phone', 'phone_number', 'phone number'])).trim(),
+        email: String(getValue(['email', 'email_address', 'email address'])).trim(),
+        address_1: String(getValue(['address_1', 'address1', 'address 1', 'address'])).trim(),
+        address_2: String(getValue(['address_2', 'address2', 'address 2'])).trim(),
+        zip_code: String(getValue(['zip_code', 'zipcode', 'zip code', 'zip'])).trim(),
+        state: String(getValue(['state'])).trim(),
+        city: String(getValue(['city'])).trim(),
+        tags: getValue(['tags'])
+          ? String(getValue(['tags']))
+              .split(';')
+              .map((t: string) => t.trim())
+              .filter(Boolean)
+          : null,
+        dnc: ['true', '1', 'yes'].includes(String(getValue(['dnc', 'do not contact', 'do_not_contact'])).toLowerCase()),
+        notes: String(getValue(['notes'])).trim(),
+        category: String(getValue(['last_name'])).charAt(0).toUpperCase() || 'U',
         agent_id: agentId,
       };
 
@@ -85,25 +84,15 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange }) => {
       const contacts = parseCSV(text);
       console.log('Parsed contacts from CSV:', contacts);
 
-      const { data, error } = await supabase
-        .from('contacts')
-        .upsert(contacts, { onConflict: 'email, agent_id' })
-        .select();
-
-      if (error) throw error;
-
-      const addedCount = data?.length || 0;
-      console.log('Inserted/updated contacts:', data);
-
-      if (addedCount === 0) {
-        throw new Error('No contacts were added/updated. Check for duplicates or invalid data.');
+      if (!onUpload) {
+        throw new Error('Upload handler is not available.');
       }
 
-      toast({ title: 'Success', description: `${addedCount} contacts uploaded/updated!` });
-      onOpenChange(false);
-    } catch (error) {
+      await onUpload(contacts);
+      // Success handling (toast/close) is managed by the parent (Database.tsx) to avoid duplicates.
+    } catch (error: any) {
       console.error('Upload error details:', error);
-      toast({ title: 'Error', description: error.message || 'Upload failed. Check console for details.' });
+      toast({ title: 'Error', description: error?.message || 'Upload failed. Check console for details.' });
     } finally {
       setLoading(false);
     }
