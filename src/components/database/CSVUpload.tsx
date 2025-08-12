@@ -1,114 +1,95 @@
 import React, { useState } from 'react';
+import Papa from 'papaparse';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Upload, Download } from 'lucide-react';
-import { ContactInput } from '@/hooks/useContacts';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
+
+interface ContactInput {
+  first_name: string;
+  last_name: string;
+  phone: string;
+  email: string;
+  address_1: string;
+  address_2: string;
+  zip_code: string;
+  state: string;
+  city: string;
+  tags: string[] | null;
+  dnc: boolean;
+  notes: string;
+  category: string;
+  agent_id: string;
+}
 
 interface CSVUploadProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUpload: (data: ContactInput[]) => Promise<void>;
 }
 
-export const CSVUpload: React.FC<CSVUploadProps> = ({
-  open,
-  onOpenChange,
-  onUpload,
-}) => {
+export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange }) => {
+  const supabase = useSupabaseClient();
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
 
+  const { data: { user } } = supabase.auth.getUser();
+  const agentId = user?.id || '';
+
+  if (!agentId) {
+    toast({ title: 'Error', description: 'Please log in to upload contacts.' });
+    onOpenChange(false);
+    return null;
+  }
+
   const parseCSV = (text: string): ContactInput[] => {
-    const lines = text.split('\n').filter(line => line.trim());
-    if (lines.length < 2) throw new Error('CSV must have headers and at least one data row');
-
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const { data } = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
     const contacts: ContactInput[] = [];
+    const skipped: number[] = []; // Track skipped row numbers
 
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-      const contact: any = {
-        first_name: '',
-        last_name: '',
-        phone: '',
-        email: '',
-        address_1: '',
-        address_2: '',
-        zip_code: '',
-        state: '',
-        city: '',
-        tags: null,
-        dnc: false,
-        notes: '',
+    data.forEach((row: any, index: number) => {
+      const normalizeKey = (key: string) => key.trim().toLowerCase().replace(/\s+/g, '_');
+      const getValue = (keys: string[]) => {
+        for (const k of keys) {
+          const val = row[normalizeKey(k)] || row[k] || '';
+          if (val) return val;
+        }
+        return '';
       };
 
-      headers.forEach((header, index) => {
-        const value = values[index] || '';
-        
-        switch (header) {
-          case 'first_name':
-          case 'firstname':
-          case 'first name':
-            contact.first_name = value;
-            break;
-          case 'last_name':
-          case 'lastname':
-          case 'last name':
-            contact.last_name = value;
-            break;
-          case 'phone':
-          case 'phone_number':
-          case 'phone number':
-            contact.phone = value;
-            break;
-          case 'email':
-          case 'email_address':
-          case 'email address':
-            contact.email = value;
-            break;
-          case 'address_1':
-          case 'address1':
-          case 'address 1':
-          case 'address':
-            contact.address_1 = value;
-            break;
-          case 'address_2':
-          case 'address2':
-          case 'address 2':
-            contact.address_2 = value;
-            break;
-          case 'zip_code':
-          case 'zipcode':
-          case 'zip code':
-          case 'zip':
-            contact.zip_code = value;
-            break;
-          case 'state':
-            contact.state = value;
-            break;
-          case 'city':
-            contact.city = value;
-            break;
-          case 'tags':
-            contact.tags = value ? value.split(';').map(t => t.trim()) : null;
-            break;
-          case 'dnc':
-          case 'do not contact':
-            contact.dnc = value.toLowerCase() === 'true' || value === '1';
-            break;
-          case 'notes':
-            contact.notes = value;
-            break;
-        }
-      });
-
-      if (contact.last_name) {
-        contacts.push(contact);
+      const email = getValue(['email', 'email_address', 'email address']);
+      if (!email) {
+        skipped.push(index + 1); // Skip if no email
+        return;
       }
+
+      const lastName = getValue(['last_name', 'lastname', 'last name']) || 'Unknown'; // Default if missing
+
+      const contact: ContactInput = {
+        first_name: getValue(['first_name', 'firstname', 'first name']),
+        last_name: lastName,
+        phone: getValue(['phone', 'phone_number', 'phone number']),
+        email,
+        address_1: getValue(['address_1', 'address1', 'address 1', 'address']),
+        address_2: getValue(['address_2', 'address2', 'address 2']),
+        zip_code: getValue(['zip_code', 'zipcode', 'zip code', 'zip']),
+        state: getValue(['state']),
+        city: getValue(['city']),
+        tags: getValue(['tags']) ? getValue(['tags']).split(';').map((t: string) => t.trim()) : null,
+        dnc: [true, 'true', 1, '1', 'yes'].includes(getValue(['dnc', 'do not contact', 'do_not_contact']).toLowerCase()),
+        notes: getValue(['notes']),
+        category: lastName.charAt(0).toUpperCase() || 'U',
+        agent_id: agentId,
+      };
+
+      contacts.push(contact);
+    });
+
+    if (skipped.length > 0) {
+      toast({ title: 'Warning', description: `Skipped ${skipped.length} rows missing email (rows: ${skipped.join(', ')})` });
     }
 
+    if (contacts.length === 0) throw new Error('No valid contacts found in CSV');
     return contacts;
   };
 
@@ -126,7 +107,7 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({
 
       if (error) throw error;
 
-      const addedCount = count ?? data?.length ?? 0;
+      const addedCount = count || data?.length || 0;
       console.log('Inserted/updated contacts:', data);
 
       if (addedCount === 0) {
@@ -135,9 +116,9 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({
 
       toast({ title: 'Success', description: `${addedCount} contacts uploaded/updated!` });
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Upload error details:', error);
-      toast({ title: 'Error', description: error?.message || 'Upload failed. Check console for details.' });
+      toast({ title: 'Error', description: error.message || 'Upload failed. Check console for details.' });
     } finally {
       setLoading(false);
     }
@@ -157,23 +138,21 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
     const files = Array.from(e.dataTransfer.files);
     const csvFile = files.find(file => file.type === 'text/csv' || file.name.endsWith('.csv'));
-    
     if (csvFile) {
       handleFileUpload(csvFile);
     } else {
-      alert('Please upload a CSV file');
+      toast({ title: 'Error', description: 'Please upload a CSV file' });
     }
   };
 
   const downloadTemplate = () => {
     const template = [
       'first_name,last_name,phone,email,address_1,address_2,city,state,zip_code,tags,dnc,notes',
-      'John,Doe,555-1234,john@example.com,123 Main St,,Anytown,CA,12345,client;lead,false,Sample contact'
+      'John,Doe,555-1234,john@example.com,123 Main St,Apt 4,Anytown,CA,12345,client;lead,false,Important client',
+      'Jane,Smith,555-5678,jane@example.com,456 Elm St,,Othertown,TX,67890,prospect,true,Do not call'
     ].join('\n');
-
     const blob = new Blob([template], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -189,7 +168,6 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({
         <DialogHeader>
           <DialogTitle>Upload Contacts CSV</DialogTitle>
         </DialogHeader>
-
         <div className="space-y-4">
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
@@ -221,7 +199,6 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({
               {loading ? 'Uploading...' : 'Browse Files'}
             </Button>
           </div>
-
           <div className="space-y-2">
             <h4 className="font-medium">CSV Format Requirements:</h4>
             <ul className="text-sm text-muted-foreground space-y-1">
@@ -231,7 +208,6 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({
               <li>• DNC column should be true/false or 1/0</li>
             </ul>
           </div>
-
           <Button
             variant="outline"
             onClick={downloadTemplate}
