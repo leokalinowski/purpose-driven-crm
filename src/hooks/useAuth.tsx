@@ -83,7 +83,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut({ scope: 'global' });
+    // Force hard navigation to clear any stale in-memory state
+    window.location.href = '/auth';
     return { error };
   };
 

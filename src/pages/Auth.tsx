@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { cleanupAuthState } from '@/utils/auth';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -18,6 +20,10 @@ const Auth = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    cleanupAuthState();
+  }, []);
+
+  useEffect(() => {
     if (user) {
       navigate('/');
     }
@@ -26,45 +32,66 @@ const Auth = () => {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
-    const { error } = await signIn(email, password);
-    
-    if (error) {
+
+    try {
+      // Ensure no stale sessions interfere with sign-in
+      await supabase.auth.signOut({ scope: 'global' }).catch(() => {});
+
+      const { error } = await signIn(email, password);
+
+      if (error) {
+        toast({
+          title: 'Sign-in failed',
+          description: `${error.message}. If this persists, ensure this site's origin is configured in Supabase Auth Redirect URLs.`,
+          variant: 'destructive',
+        });
+      } else {
+        // Hard redirect to reload app state with fresh session
+        window.location.href = '/';
+        return;
+      }
+    } catch (err: any) {
       toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
+        title: 'Unexpected error',
+        description: err?.message ?? 'Please try again.',
+        variant: 'destructive',
       });
-    } else {
-      toast({
-        title: "Success",
-        description: "Signed in successfully!",
-      });
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
-    const { error } = await signUp(email, password, firstName, lastName);
-    
-    if (error) {
+
+    try {
+      // Clear any existing session to avoid redirect conflicts
+      await supabase.auth.signOut({ scope: 'global' }).catch(() => {});
+
+      const { error } = await signUp(email, password, firstName, lastName);
+
+      if (error) {
+        toast({
+          title: 'Sign-up failed',
+          description: `${error.message}. If this persists, verify your Site URL and Allowed Redirect URLs in Supabase.`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: 'Account created! Please check your email to confirm your account.',
+        });
+      }
+    } catch (err: any) {
       toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
+        title: 'Unexpected error',
+        description: err?.message ?? 'Please try again.',
+        variant: 'destructive',
       });
-    } else {
-      toast({
-        title: "Success",
-        description: "Account created successfully! Please check your email to confirm your account.",
-      });
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (
