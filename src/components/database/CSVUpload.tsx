@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Upload, Download } from 'lucide-react';
 import { ContactInput } from '@/hooks/useContacts';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/components/ui/use-toast';
 
 interface CSVUploadProps {
   open: boolean;
@@ -113,32 +115,33 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({
   const handleFileUpload = async (file: File) => {
     setLoading(true);
     try {
-  const text = await file.text();
-  const contacts = parseCSV(text);
-  console.log('Parsed contacts from CSV:', contacts); // Log to see what was parsed
+      const text = await file.text();
+      const contacts = parseCSV(text);
+      console.log('Parsed contacts from CSV:', contacts);
 
-  const { data, count, error } = await supabase
-    .from('contacts')
-    .upsert(contacts, { onConflict: 'email, agent_id' })
-    .select();
+      const { data, count, error } = await supabase
+        .from('contacts')
+        .upsert(contacts, { onConflict: 'email, agent_id' })
+        .select();
 
-  if (error) throw error;
+      if (error) throw error;
 
-  const addedCount = count || data?.length || 0;
-  console.log('Inserted/updated contacts:', data); // Log what was added
+      const addedCount = count ?? data?.length ?? 0;
+      console.log('Inserted/updated contacts:', data);
 
-  if (addedCount === 0) {
-    throw new Error('No contacts were added/updated. Check for duplicates or invalid data.');
-  }
+      if (addedCount === 0) {
+        throw new Error('No contacts were added/updated. Check for duplicates or invalid data.');
+      }
 
-  toast({ title: 'Success', description: `${addedCount} contacts uploaded/updated!` });
-  onOpenChange(false);
-} catch (error) {
-  console.error('Upload error details:', error);
-  toast({ title: 'Error', description: error.message || 'Upload failed. Check console for details.' });
-} finally {
-  setLoading(false);
-}
+      toast({ title: 'Success', description: `${addedCount} contacts uploaded/updated!` });
+      onOpenChange(false);
+    } catch (error: any) {
+      console.error('Upload error details:', error);
+      toast({ title: 'Error', description: error?.message || 'Upload failed. Check console for details.' });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
