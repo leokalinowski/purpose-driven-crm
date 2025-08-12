@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
-import { Contact } from '@/hooks/useContacts';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +12,7 @@ import { Layout } from '@/components/layout/Layout';
 import { ContactTable } from '@/components/database/ContactTable';
 import { ContactForm } from '@/components/database/ContactForm';
 import { CSVUpload } from '@/components/database/CSVUpload';
-import { useContacts, Contact } from '@/hooks/useContacts';
+import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useToast } from '@/components/ui/use-toast';
 
 const Database = () => {
@@ -32,7 +31,7 @@ const Database = () => {
     handleSort,
     handleSearch,
     goToPage,
-    refreshContacts,  // Added this from your hook to refresh the list
+    fetchContacts,
   } = useContacts();
   const { toast } = useToast();
  
@@ -40,6 +39,25 @@ const Database = () => {
   const [showCSVUpload, setShowCSVUpload] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
+
+  // Satisfy ContactTable's async onEdit signature for inline saves
+  const handleInlineSave = async (updated: Contact) => {
+    const original = contacts.find(c => c.id === updated.id);
+    if (!original) return;
+    const fields: (keyof ContactInput)[] = [
+      'first_name', 'last_name', 'phone', 'email',
+      'address_1', 'address_2', 'zip_code', 'state', 'city',
+      'tags', 'dnc', 'notes'
+    ];
+    const patch: Partial<ContactInput> = {};
+    for (const key of fields) {
+      if ((original as any)[key] !== (updated as any)[key]) {
+        (patch as any)[key] = (updated as any)[key];
+      }
+    }
+    if (Object.keys(patch).length === 0) return;
+    await updateContact(updated.id, patch);
+  };
 
   const handleAddContact = async (contactData: any) => {
     try {
@@ -49,7 +67,7 @@ const Database = () => {
         description: "Contact added successfully",
       });
       setShowContactForm(false);
-      refreshContacts();  // Refresh table after add
+      fetchContacts();  // Refresh table after add
     } catch (error) {
       toast({
         title: "Error",
@@ -69,7 +87,7 @@ const Database = () => {
         description: "Contact updated successfully",
       });
       closeContactForm();
-      refreshContacts();  // Refresh table after edit
+      fetchContacts();  // Refresh table after edit
     } catch (error) {
       toast({
         title: "Error",
@@ -89,7 +107,7 @@ const Database = () => {
         title: "Success",
         description: "Contact deleted successfully",
       });
-      refreshContacts();  // Refresh table after delete
+      fetchContacts();  // Refresh table after delete
     } catch (error) {
       toast({
         title: "Error",
@@ -107,7 +125,7 @@ const Database = () => {
         description: `${csvData.length} contacts uploaded successfully`,
       });
       setShowCSVUpload(false);
-      refreshContacts();  // Key fix: Refresh table after CSV upload
+      fetchContacts();  // Refresh table after CSV upload
     } catch (error) {
       toast({
         title: "Error",
@@ -193,7 +211,8 @@ const Database = () => {
                   sortBy={sortBy}
                   sortOrder={sortOrder}
                   onSort={handleSort}
-                  onEdit={openEditForm}
+                  onEdit={handleInlineSave}
+                  onOpenEdit={openEditForm}
                   onDelete={setDeletingContact}
                 />
                 {totalPages > 1 && (
