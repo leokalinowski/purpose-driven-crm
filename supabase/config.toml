@@ -21,3 +21,6 @@ verify_jwt = false
 
 [functions.market-report-monthly]
 verify_jwt = false
+
+[functions.newsletter-monthly]
+verify_jwt = false
