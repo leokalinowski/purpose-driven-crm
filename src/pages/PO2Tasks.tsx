@@ -3,15 +3,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { Phone, MessageSquare, RefreshCw, Calendar, Users } from 'lucide-react';
 import { usePO2Tasks } from '@/hooks/usePO2Tasks';
 import { PO2TaskCard } from '@/components/po2/PO2TaskCard';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
 
 export default function PO2Tasks() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const {
     callTasks,
     textTasks,
@@ -23,24 +22,6 @@ export default function PO2Tasks() {
     refreshTasks
   } = usePO2Tasks();
 
-  const handleGenerateTasks = async () => {
-    try {
-      await generateWeeklyTasks();
-      toast({
-        title: 'Success',
-        description: 'Tasks generated successfully',
-      });
-      refreshTasks();
-    } catch (error) {
-      console.error(error);
-      toast({
-        title: 'Error',
-        description: 'Failed to generate tasks',
-        variant: 'destructive',
-      });
-    }
-  };
-
   if (!user) {
     return (
       <Layout>
@@ -49,6 +30,11 @@ export default function PO2Tasks() {
         </div>
       </Layout>
     );
+  }
+
+  // Auto-generate if no tasks
+  if (!loading && callTasks.length === 0 && textTasks.length === 0 && !generatingTasks) {
+    generateWeeklyTasks();
   }
 
   return (
@@ -72,7 +58,7 @@ export default function PO2Tasks() {
               Refresh
             </Button>
             <Button
-              onClick={handleGenerateTasks}
+              onClick={generateWeeklyTasks}
               disabled={generatingTasks || loading}
             >
               {generatingTasks ? (
@@ -93,7 +79,7 @@ export default function PO2Tasks() {
               Week {currentWeek.weekNumber} - {new Date().getFullYear()}
             </CardTitle>
             <CardDescription>
-              Current week's categories and assignments. Emails are automatically sent every Monday at 5:30 AM with this list.
+              Current week's categories and assignments
             </CardDescription>
           </CardHeader>
           <CardContent>
