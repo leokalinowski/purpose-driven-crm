@@ -24,3 +24,6 @@ verify_jwt = false
 
 [functions.newsletter-monthly]
 verify_jwt = false
+
+[functions.po2-email-function]
+verify_jwt = false
