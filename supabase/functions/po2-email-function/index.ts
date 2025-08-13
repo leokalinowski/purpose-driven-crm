@@ -1,171 +1,232 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-function getCurrentWeekNumber(date = new Date()): number {
-  const startOfYear = new Date(date.getFullYear(), 0, 1);
-  const diff = date.getTime() - startOfYear.getTime();
-  const day = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const week = Math.floor(day / 7) + 1;
-  return Math.max(1, Math.min(52, week));
+// Helper function to get current week number
+function getCurrentWeekNumber(date: Date): number {
+  const start = new Date(date.getFullYear(), 0, 1);
+  const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dayOfYear = ((today.getTime() - start.getTime()) / 86400000) + 1;
+  return Math.ceil(dayOfYear / 7);
 }
 
+// Helper function to format lead name
 function formatLeadName(lead: any): string {
-  if (!lead) return "Unknown Lead";
-  if (lead.name && lead.name.trim().length > 0) return lead.name;
-  return `${lead.first_name ? lead.first_name + " " : ""}${lead.last_name ?? ""}`.trim() || "Unknown Lead";
+  const firstName = lead?.first_name || '';
+  const lastName = lead?.last_name || '';
+  return `${firstName} ${lastName}`.trim();
 }
 
-async function sendEmail({ to, subject, html, text }: { to: string; subject: string; html: string; text: string }) {
-  const sendgridKey = Deno.env.get("SENDGRID_API_KEY");
-  const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") || "no-reply@example.com";
-  const fromName = Deno.env.get("SENDGRID_FROM_NAME") || "PO2 Tasks";
+// Send email using SendGrid
+async function sendEmail({ to, subject, html, text }: { to: string; subject: string; html: string; text: string }): Promise<void> {
+  const SENDGRID_API_KEY = Deno.env.get('SENDGRID_API_KEY');
+  const SENDGRID_FROM_EMAIL = Deno.env.get('SENDGRID_FROM_EMAIL');
+  const SENDGRID_FROM_NAME = Deno.env.get('SENDGRID_FROM_NAME');
 
-  if (!sendgridKey) {
-    console.error("SENDGRID_API_KEY not configured");
-    throw new Error("Missing SENDGRID_API_KEY");
+  if (!SENDGRID_API_KEY || !SENDGRID_FROM_EMAIL || !SENDGRID_FROM_NAME) {
+    console.error('Missing SendGrid configuration');
+    throw new Error('SendGrid not configured');
   }
 
-  const resp = await fetch("https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
+  const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
     headers: {
-      "Authorization": `Bearer ${sendgridKey}`,
-      "Content-Type": "application/json",
+      'Authorization': `Bearer ${SENDGRID_API_KEY}`,
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      personalizations: [
-        { to: [{ email: to }] }
-      ],
-      from: { email: fromEmail, name: fromName },
+      personalizations: [{ to: [{ email: to }] }],
+      from: { email: SENDGRID_FROM_EMAIL, name: SENDGRID_FROM_NAME },
       subject,
       content: [
-        { type: "text/plain", value: text },
-        { type: "text/html", value: html }
+        { type: 'text/plain', value: text },
+        { type: 'text/html', value: html }
       ]
     })
   });
 
-  if (resp.status !== 202) {
-    const body = await resp.text();
-    console.error("SendGrid error", resp.status, body);
-    throw new Error(`SendGrid error ${resp.status}`);
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('SendGrid error:', error);
+    throw new Error(`SendGrid failed: ${response.status}`);
   }
 }
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceRole);
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const currentWeek = getCurrentWeekNumber(new Date());
+    const currentYear = new Date().getFullYear();
+    
+    console.log(`Processing PO2 email for week ${currentWeek}, year ${currentYear}`);
 
-    const now = new Date();
-    const week = getCurrentWeekNumber(now);
-    const year = now.getFullYear();
-
-    let payload: any = {};
-    try {
-      payload = await req.json();
-    } catch (_) {}
-
-    const mode = payload?.mode ?? "global"; // "global" or a specific user_id
-
-    // Fetch tasks for current week/year
+    // Fetch all tasks for the current week
     const { data: tasks, error: tasksError } = await supabase
-      .from("po2_tasks")
-      .select("id, task_type, completed, agent_id, lead:leads(name, first_name, last_name, phone_number, category)")
-      .eq("week_number", week)
-      .eq("year", year);
+      .from('po2_tasks')
+      .select(`
+        *,
+        lead:contacts(*)
+      `)
+      .eq('week_number', currentWeek)
+      .eq('year', currentYear);
 
-    if (tasksError) throw tasksError;
-
-    // Group by agent
-    const byAgent = new Map<string, any[]>();
-    for (const t of tasks || []) {
-      if (mode !== "global" && t.agent_id !== mode) continue;
-      if (!byAgent.has(t.agent_id)) byAgent.set(t.agent_id, []);
-      byAgent.get(t.agent_id)!.push(t);
+    if (tasksError) {
+      console.error('Error fetching tasks:', tasksError);
+      throw tasksError;
     }
 
-    const agentIds = Array.from(byAgent.keys());
-    if (agentIds.length === 0) {
-      return new Response(JSON.stringify({ message: "No tasks to email" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    // Group tasks by agent_id
+    const tasksByAgent = tasks?.reduce((acc: any, task: any) => {
+      if (!acc[task.agent_id]) {
+        acc[task.agent_id] = [];
+      }
+      acc[task.agent_id].push(task);
+      return acc;
+    }, {}) || {};
 
-    // Fetch agent emails
+    // Get agent emails
+    const agentIds = Object.keys(tasksByAgent);
     const { data: profiles, error: profilesError } = await supabase
-      .from("profiles")
-      .select("user_id, first_name, last_name, email")
-      .in("user_id", agentIds);
-    if (profilesError) throw profilesError;
+      .from('profiles')
+      .select('user_id, email, first_name, last_name')
+      .in('user_id', agentIds);
 
-    const profileMap = new Map<string, { email: string | null; name: string }>();
-    for (const p of profiles || []) {
-      profileMap.set(p.user_id, { email: p.email, name: `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() });
+    if (profilesError) {
+      console.error('Error fetching profiles:', profilesError);
+      throw profilesError;
     }
 
-    let sent = 0;
-    for (const agentId of agentIds) {
-      const agentTasks = byAgent.get(agentId)!;
-      const profile = profileMap.get(agentId);
-      const toEmail = profile?.email;
-      if (!toEmail) {
-        console.warn(`Skipping agent ${agentId} due to missing email`);
+    let emailsSent = 0;
+
+    // Send email to each agent
+    for (const profile of profiles || []) {
+      const agentTasks = tasksByAgent[profile.user_id] || [];
+      
+      if (agentTasks.length === 0) {
+        console.log(`No tasks for agent ${profile.email}, skipping email`);
         continue;
       }
 
-      const callTasks = agentTasks.filter((t) => t.task_type === "call");
-      const textTasks = agentTasks.filter((t) => t.task_type === "text");
+      const callTasks = agentTasks.filter((task: any) => task.task_type === 'call');
+      const textTasks = agentTasks.filter((task: any) => task.task_type === 'text');
 
-      const lines: string[] = [];
-      lines.push(`PO2 Tasks for Week ${week} - ${year}`);
-      lines.push("");
-      lines.push(`Call Tasks (${callTasks.length})`);
-      for (const t of callTasks) {
-        lines.push(`- ${formatLeadName(t.lead)}${t.lead?.category ? ` (Category ${t.lead.category})` : ""}${t.lead?.phone_number ? ` - ${t.lead.phone_number}` : ""}`);
+      // Build email content
+      const agentName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Agent';
+      
+      let emailContent = `Hi ${agentName},\n\nHere are your PO2 tasks for Week ${currentWeek}:\n\n`;
+      
+      if (callTasks.length > 0) {
+        emailContent += `CALLS (${callTasks.length}):\n`;
+        callTasks.forEach((task: any, index: number) => {
+          const leadName = formatLeadName(task.lead);
+          const phone = task.lead?.phone ? ` - ${task.lead.phone}` : '';
+          emailContent += `${index + 1}. ${leadName}${phone}\n`;
+        });
+        emailContent += '\n';
       }
-      lines.push("");
-      lines.push(`Text Tasks (${textTasks.length})`);
-      for (const t of textTasks) {
-        lines.push(`- ${formatLeadName(t.lead)}${t.lead?.category ? ` (Category ${t.lead.category})` : ""}${t.lead?.phone_number ? ` - ${t.lead.phone_number}` : ""}`);
+
+      if (textTasks.length > 0) {
+        emailContent += `TEXTS (${textTasks.length}):\n`;
+        textTasks.forEach((task: any, index: number) => {
+          const leadName = formatLeadName(task.lead);
+          const phone = task.lead?.phone ? ` - ${task.lead.phone}` : '';
+          emailContent += `${index + 1}. ${leadName}${phone}\n`;
+        });
+        emailContent += '\n';
       }
 
-      const text = lines.join("\n");
-      const html = `
-        <div>
-          <h2>PO2 Tasks for Week ${week} - ${year}</h2>
-          <p>Hi ${profile?.name || "Agent"}, here are your assignments:</p>
-          <h3>Call Tasks (${callTasks.length})</h3>
-          <ul>
-            ${callTasks.map((t: any) => `<li>${formatLeadName(t.lead)}${t.lead?.category ? ` (Category ${t.lead.category})` : ""}${t.lead?.phone_number ? ` - ${t.lead.phone_number}` : ""}</li>`).join("")}
-          </ul>
-          <h3>Text Tasks (${textTasks.length})</h3>
-          <ul>
-            ${textTasks.map((t: any) => `<li>${formatLeadName(t.lead)}${t.lead?.category ? ` (Category ${t.lead.category})` : ""}${t.lead?.phone_number ? ` - ${t.lead.phone_number}` : ""}</li>`).join("")}
-          </ul>
-          <p style="color:#666">This list is generated automatically every Monday at 5:30 AM.</p>
-        </div>`;
+      emailContent += `Total tasks: ${agentTasks.length}\n\nBest regards,\nThe PO2 System`;
 
-      await sendEmail({ to: toEmail, subject: `PO2 Tasks - Week ${week}`, html, text });
-      sent++;
+      // HTML version
+      let htmlContent = `
+        <h2>PO2 Tasks for Week ${currentWeek}</h2>
+        <p>Hi ${agentName},</p>
+        <p>Here are your PO2 tasks for this week:</p>
+      `;
+
+      if (callTasks.length > 0) {
+        htmlContent += `
+          <h3>CALLS (${callTasks.length})</h3>
+          <ul>
+        `;
+        callTasks.forEach((task: any) => {
+          const leadName = formatLeadName(task.lead);
+          const phone = task.lead?.phone ? ` - ${task.lead.phone}` : '';
+          htmlContent += `<li>${leadName}${phone}</li>`;
+        });
+        htmlContent += '</ul>';
+      }
+
+      if (textTasks.length > 0) {
+        htmlContent += `
+          <h3>TEXTS (${textTasks.length})</h3>
+          <ul>
+        `;
+        textTasks.forEach((task: any) => {
+          const leadName = formatLeadName(task.lead);
+          const phone = task.lead?.phone ? ` - ${task.lead.phone}` : '';
+          htmlContent += `<li>${leadName}${phone}</li>`;
+        });
+        htmlContent += '</ul>';
+      }
+
+      htmlContent += `
+        <p><strong>Total tasks: ${agentTasks.length}</strong></p>
+        <p>Best regards,<br>The PO2 System</p>
+      `;
+
+      try {
+        await sendEmail({
+          to: profile.email,
+          subject: `PO2 Tasks - Week ${currentWeek}`,
+          text: emailContent,
+          html: htmlContent
+        });
+        
+        console.log(`Email sent to ${profile.email} (${agentTasks.length} tasks)`);
+        emailsSent++;
+      } catch (emailError) {
+        console.error(`Failed to send email to ${profile.email}:`, emailError);
+      }
     }
 
-    return new Response(JSON.stringify({ sent }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (e: any) {
-    console.error("po2-email-function error", e);
-    return new Response(JSON.stringify({ error: e.message || "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: `PO2 emails sent for week ${currentWeek}`,
+        emailsSent,
+        totalAgents: agentIds.length
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      }
+    );
+
+  } catch (error) {
+    console.error('Error in PO2 email function:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      }
+    );
   }
 });

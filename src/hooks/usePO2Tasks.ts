@@ -51,14 +51,30 @@ export function usePO2Tasks() {
 
       if (contactsError) throw contactsError;
 
-      // Auto-set category if missing
-      const updatedContacts = contactsData.map(c => ({
-        ...c,
-        category: c.category || (c.last_name.charAt(0).toUpperCase() || 'U')
-      }));
+      // Auto-set category if missing and log contact info
+      const updatedContacts = contactsData.map(c => {
+        if (!c.category) {
+          const newCategory = c.last_name?.charAt(0)?.toUpperCase() || 'U';
+          console.log(`Auto-assigning category '${newCategory}' to contact: ${c.first_name} ${c.last_name}`);
+          return { ...c, category: newCategory };
+        }
+        return c;
+      });
+
+      // Log category distribution for debugging
+      const categoryCount = updatedContacts.reduce((acc, c) => {
+        acc[c.category] = (acc[c.category] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log('Contact category distribution:', categoryCount);
+      console.log(`Week ${currentWeek.weekNumber} requires - Calls: ${currentWeek.callCategories.join(', ')}, Texts: ${currentWeek.textCategory}`);
 
       // Update contacts with categories if changed
-      await supabase.from('contacts').upsert(updatedContacts, { onConflict: 'id' });
+      const contactsNeedingUpdate = updatedContacts.filter((c, i) => c.category !== contactsData[i].category);
+      if (contactsNeedingUpdate.length > 0) {
+        await supabase.from('contacts').upsert(contactsNeedingUpdate, { onConflict: 'id' });
+        console.log(`Updated ${contactsNeedingUpdate.length} contacts with categories`);
+      }
 
       setContacts(updatedContacts);
 
@@ -82,8 +98,12 @@ export function usePO2Tasks() {
         await generateWeeklyTasksInternal(updatedContacts);
       }
     } catch (error) {
-      console.error('Error loading:', error);
-      toast({ title: "Error", description: "Failed to load tasks/contacts", variant: "destructive" });
+      console.error('Error loading tasks and contacts:', error);
+      toast({ 
+        title: "Error", 
+        description: "Failed to load tasks and contacts. Check console for details.", 
+        variant: "destructive" 
+      });
     } finally {
       setLoading(false);
     }
@@ -95,6 +115,10 @@ export function usePO2Tasks() {
     try {
       const callContacts = contactsList.filter(c => currentWeek.callCategories.includes(c.category));
       const textContacts = contactsList.filter(c => c.category === currentWeek.textCategory);
+
+      console.log(`Generating tasks for week ${currentWeek.weekNumber}:`);
+      console.log(`- Call contacts (${currentWeek.callCategories.join(', ')}):`, callContacts.length);
+      console.log(`- Text contacts (${currentWeek.textCategory}):`, textContacts.length);
 
       const callTasks = callContacts.map(c => ({
         task_type: 'call',
@@ -115,16 +139,36 @@ export function usePO2Tasks() {
       const allTasks = [...callTasks, ...textTasks];
 
       if (allTasks.length > 0) {
+        console.log(`Inserting ${allTasks.length} tasks:`, { calls: callTasks.length, texts: textTasks.length });
         const { error } = await supabase.from('po2_tasks').upsert(allTasks, { onConflict: 'lead_id,agent_id,task_type,week_number,year' });
-        if (error) throw error;
-        toast({ title: "Success", description: `Generated ${allTasks.length} tasks for week ${currentWeek.weekNumber}` });
+        if (error) {
+          console.error('Database error inserting tasks:', error);
+          throw error;
+        }
+        
+        const callMsg = callTasks.length > 0 ? `${callTasks.length} calls (${currentWeek.callCategories.join(', ')})` : '';
+        const textMsg = textTasks.length > 0 ? `${textTasks.length} texts (${currentWeek.textCategory})` : '';
+        const parts = [callMsg, textMsg].filter(Boolean);
+        
+        toast({ 
+          title: "Success", 
+          description: `Generated ${parts.join(' and ')} for week ${currentWeek.weekNumber}` 
+        });
       } else {
-        toast({ title: "Info", description: "No matching contacts for this week's categories" });
+        console.log('No matching contacts found for this week\'s categories');
+        toast({ 
+          title: "Info", 
+          description: `No contacts found for week ${currentWeek.weekNumber} categories (calls: ${currentWeek.callCategories.join(', ')}, texts: ${currentWeek.textCategory})` 
+        });
       }
       await loadTasksAndContacts();
     } catch (error) {
       console.error('Error generating tasks:', error);
-      toast({ title: "Error", description: "Failed to generate weekly tasks", variant: "destructive" });
+      toast({ 
+        title: "Error", 
+        description: "Failed to generate weekly tasks. Check console for details.", 
+        variant: "destructive" 
+      });
     } finally {
       setGeneratingTasks(false);
     }
