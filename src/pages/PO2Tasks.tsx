@@ -38,7 +38,7 @@ export default function PO2Tasks() {
     if (!loading && callTasks.length === 0 && textTasks.length === 0 && !generatingTasks) {
       generateWeeklyTasks();
     }
-  }, [loading, callTasks.length, textTasks.length, generatingTasks, generateWeeklyTasks]);
+  }, [loading, callTasks.length, textTasks.length, generatingTasks]);
 
   return (
     <Layout>

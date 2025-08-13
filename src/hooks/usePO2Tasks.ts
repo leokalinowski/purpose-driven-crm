@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { getCurrentWeekTasks } from '@/utils/po2Logic';
@@ -39,7 +39,7 @@ export function usePO2Tasks() {
     }
   }, [user]);
 
-  const loadTasksAndLeads = async () => {
+  const loadTasksAndLeads = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -78,9 +78,9 @@ export function usePO2Tasks() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, currentWeek.weekNumber, toast]);
 
-  const generateWeeklyTasks = async () => {
+  const generateWeeklyTasks = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -149,7 +149,7 @@ export function usePO2Tasks() {
     } finally {
       setGeneratingTasks(false);
     }
-  };
+  }, [user, leads, currentWeek, toast, loadTasksAndLeads]);
 
   const updateTask = async (taskId: string, updates: Partial<PO2Task>) => {
     try {
