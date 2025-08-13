@@ -40,11 +40,9 @@ export function usePO2Tasks() {
   }, [user]);
 
   const loadTasksAndContacts = useCallback(async () => {
-    console.log('loadTasksAndContacts called', { user: user?.id, currentWeek });
     if (!user) return;
 
     try {
-      console.log('Starting to load tasks and contacts...');
       setLoading(true);
 
       // Load existing tasks for current week
@@ -58,10 +56,7 @@ export function usePO2Tasks() {
         .eq('week_number', currentWeek.weekNumber)
         .eq('year', new Date().getFullYear());
 
-      if (tasksError) {
-        console.error('Tasks error:', tasksError);
-        throw tasksError;
-      }
+      if (tasksError) throw tasksError;
 
       // Load all contacts for the agent
       const { data: contactsData, error: contactsError } = await supabase
@@ -69,30 +64,23 @@ export function usePO2Tasks() {
         .select('*')
         .eq('agent_id', user.id);
 
-      if (contactsError) {
-        console.error('Contacts error:', contactsError);
-        throw contactsError;
-      }
+      if (contactsError) throw contactsError;
 
-      console.log('Data loaded:', { tasksCount: tasksData?.length, contactsCount: contactsData?.length });
-      
       setTasks((tasksData || []) as unknown as PO2Task[]);
       setContacts(contactsData || []);
 
       // Auto-generate tasks if none exist for this week
       if (!tasksData || tasksData.length === 0) {
-        console.log('No tasks found, auto-generating...');
         await generateWeeklyTasksInternal(contactsData || []);
       }
     } catch (error) {
       console.error('Error loading tasks and contacts:', error);
       toast({
         title: "Error",
-        description: "Failed to load tasks and contacts: " + (error as Error).message,
+        description: "Failed to load tasks and contacts",
         variant: "destructive",
       });
     } finally {
-      console.log('Loading complete');
       setLoading(false);
     }
   }, [user, currentWeek.weekNumber, toast]);
