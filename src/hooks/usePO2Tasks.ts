@@ -29,10 +29,10 @@ export function usePO2Tasks() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [generatingTasks, setGeneratingTasks] = useState(false);
-
   const currentWeek = getCurrentWeekTasks();
+  const year = new Date().getFullYear();
 
-  // Load existing tasks and contacts
+  // Load tasks and contacts
   useEffect(() => {
     if (user) {
       loadTasksAndContacts();
@@ -41,11 +41,28 @@ export function usePO2Tasks() {
 
   const loadTasksAndContacts = useCallback(async () => {
     if (!user) return;
-
+    setLoading(true);
     try {
-      setLoading(true);
+      // Load contacts
+      const { data: contactsData, error: contactsError } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('agent_id', user.id);
 
-      // Load existing tasks for current week
+      if (contactsError) throw contactsError;
+
+      // Auto-set category if missing
+      const updatedContacts = contactsData.map(c => ({
+        ...c,
+        category: c.category || (c.last_name.charAt(0).toUpperCase() || 'U')
+      }));
+
+      // Update contacts with categories if changed
+      await supabase.from('contacts').upsert(updatedContacts, { onConflict: 'id' });
+
+      setContacts(updatedContacts);
+
+      // Load tasks
       const { data: tasksData, error: tasksError } = await supabase
         .from('po2_tasks')
         .select(`
@@ -54,32 +71,19 @@ export function usePO2Tasks() {
         `)
         .eq('agent_id', user.id)
         .eq('week_number', currentWeek.weekNumber)
-        .eq('year', new Date().getFullYear());
+        .eq('year', year);
 
       if (tasksError) throw tasksError;
 
-      // Load all contacts for the agent
-      const { data: contactsData, error: contactsError } = await supabase
-        .from('contacts')
-        .select('*')
-        .eq('agent_id', user.id);
-
-      if (contactsError) throw contactsError;
-
       setTasks((tasksData || []) as unknown as PO2Task[]);
-      setContacts(contactsData || []);
 
-      // Auto-generate tasks if none exist for this week
+      // Auto-generate if no tasks
       if (!tasksData || tasksData.length === 0) {
-        await generateWeeklyTasksInternal(contactsData || []);
+        await generateWeeklyTasksInternal(updatedContacts);
       }
     } catch (error) {
-      console.error('Error loading tasks and contacts:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load tasks and contacts",
-        variant: "destructive",
-      });
+      console.error('Error loading:', error);
+      toast({ title: "Error", description: "Failed to load tasks/contacts", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -87,60 +91,42 @@ export function usePO2Tasks() {
 
   const generateWeeklyTasksInternal = async (contactsList: Contact[]) => {
     if (!user) return;
-
+    setGeneratingTasks(true);
     try {
-      // Get contacts for call categories
-      const callContacts = contactsList.filter(contact => 
-        currentWeek.callCategories.includes(contact.category)
-      );
+      const callContacts = contactsList.filter(c => currentWeek.callCategories.includes(c.category));
+      const textContacts = contactsList.filter(c => c.category === currentWeek.textCategory);
 
-      // Get contacts for text category
-      const textContacts = contactsList.filter(contact => 
-        contact.category === currentWeek.textCategory
-      );
-
-      // Create call tasks
-      const callTasks = callContacts.map(contact => ({
-        task_type: 'call' as const,
-        lead_id: contact.id,
+      const callTasks = callContacts.map(c => ({
+        task_type: 'call',
+        lead_id: c.id,
         agent_id: user.id,
         week_number: currentWeek.weekNumber,
-        year: new Date().getFullYear()
+        year
       }));
 
-      // Create text tasks
-      const textTasks = textContacts.map(contact => ({
-        task_type: 'text' as const,
-        lead_id: contact.id,
+      const textTasks = textContacts.map(c => ({
+        task_type: 'text',
+        lead_id: c.id,
         agent_id: user.id,
         week_number: currentWeek.weekNumber,
-        year: new Date().getFullYear()
+        year
       }));
 
       const allTasks = [...callTasks, ...textTasks];
 
       if (allTasks.length > 0) {
-        const { error } = await supabase
-          .from('po2_tasks')
-          .upsert(allTasks, { 
-            onConflict: 'lead_id,agent_id,task_type,week_number,year',
-            ignoreDuplicates: true 
-          });
-
+        const { error } = await supabase.from('po2_tasks').upsert(allTasks, { onConflict: 'lead_id,agent_id,task_type,week_number,year' });
         if (error) throw error;
-
-        toast({
-          title: "Success",
-          description: `Generated ${allTasks.length} tasks for week ${currentWeek.weekNumber}`,
-        });
+        toast({ title: "Success", description: `Generated ${allTasks.length} tasks for week ${currentWeek.weekNumber}` });
+      } else {
+        toast({ title: "Info", description: "No matching contacts for this week's categories" });
       }
+      await loadTasksAndContacts();
     } catch (error) {
       console.error('Error generating tasks:', error);
-      toast({
-        title: "Error",
-        description: "Failed to generate weekly tasks",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to generate weekly tasks", variant: "destructive" });
+    } finally {
+      setGeneratingTasks(false);
     }
   };
 
@@ -155,46 +141,30 @@ export function usePO2Tasks() {
     try {
       const { error } = await supabase
         .from('po2_tasks')
-        .update({
-          ...updates,
-          completed_at: updates.completed ? new Date().toISOString() : null
-        })
-        .eq('id', taskId);
+        .update(updates)
+        .eq('id', taskId)
+        .eq('agent_id', user.id);
 
       if (error) throw error;
 
-      // Update local state
-      setTasks(prev => prev.map(task => 
-        task.id === taskId ? { ...task, ...updates } : task
-      ));
-
-      toast({
-        title: "Success",
-        description: "Task updated successfully",
-      });
+      setTasks(prev => prev.map(task => task.id === taskId ? { ...task, ...updates } : task));
+      toast({ title: "Success", description: "Task updated successfully" });
     } catch (error) {
       console.error('Error updating task:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update task",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to update task", variant: "destructive" });
     }
   };
 
-  const callTasks = tasks.filter(task => task.task_type === 'call');
-  const textTasks = tasks.filter(task => task.task_type === 'text');
+  const refreshTasks = () => loadTasksAndContacts();
 
   return {
-    tasks,
-    callTasks,
-    textTasks,
-    contacts,
+    callTasks: tasks.filter(t => t.task_type === 'call'),
+    textTasks: tasks.filter(t => t.task_type === 'text'),
     loading,
     generatingTasks,
     currentWeek,
     generateWeeklyTasks,
     updateTask,
-    refreshTasks: loadTasksAndContacts
+    refreshTasks
   };
 }
