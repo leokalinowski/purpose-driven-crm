@@ -128,7 +128,7 @@ serve(async (req) => {
       
       let emailContent = `Hi ${agentName},
 
-Here are your PO2 tasks for Week ${currentWeek}:
+Happy Monday, here are your PO2 tasks for Week ${currentWeek}!
 
 Here are some conversation starters you can use when reaching out to your contacts this week:
 
@@ -162,15 +162,13 @@ Real Estate Market: Discuss the current real estate market. For example: "I have
         emailContent += '\n';
       }
 
-      emailContent += `Total tasks: ${agentTasks.length}\n\nPlease reach out to these individuals this week. Remember, calling someone on the DNC list can be a risky proposition! Be sure you understand the rules before calling anyone on the list.\n\nBest regards,\nThe PO2 System`;
+      emailContent += `Total tasks: ${agentTasks.length}\n\nPlease reach out to these individuals this week. Remember, calling someone on the DNC list can be a risky proposition! Be sure you understand the rules before calling anyone on the list.\n\nBest regards,\nReal Estate on Purpose`;
 
       // HTML version
       let htmlContent = `
-        <h2>PO2 Tasks for Week ${currentWeek}</h2>
         <p>Hi ${agentName},</p>
-        <p>Here are your PO2 tasks for this week:</p>
+        <p>Happy Monday, here are your PO2 tasks for Week ${currentWeek}!</p>
         
-        <h3>Conversation Starters</h3>
         <p>Here are some conversation starters you can use when reaching out to your contacts this week:</p>
         <ul>
           <li><strong>FROG Call:</strong> Ask about their family, recreation, occupation, and goals. For example: "Hey, how's the family? What have you been doing for fun? How's work? Do you have any goals you're working on?"</li>
@@ -214,7 +212,7 @@ Real Estate Market: Discuss the current real estate market. For example: "I have
         <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin: 15px 0; border-radius: 5px;">
           <p><strong>Warning:</strong> Please reach out to these individuals this week. Remember, calling someone on the DNC list can be a risky proposition! Be sure you understand the rules before calling anyone on the list.</p>
         </div>
-        <p>Best regards,<br>The PO2 System</p>
+        <p>Best regards,<br>Real Estate on Purpose</p>
       `;
 
       try {
