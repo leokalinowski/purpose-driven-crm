@@ -8,6 +8,7 @@ import { Phone, MessageSquare, RefreshCw, Calendar, Users } from 'lucide-react';
 import { usePO2Tasks } from '@/hooks/usePO2Tasks';
 import { PO2TaskCard } from '@/components/po2/PO2TaskCard';
 import { useAuth } from '@/hooks/useAuth';
+import { useEffect } from 'react';
 
 export default function PO2Tasks() {
   const { user } = useAuth();
@@ -33,9 +34,11 @@ export default function PO2Tasks() {
   }
 
   // Auto-generate if no tasks
-  if (!loading && callTasks.length === 0 && textTasks.length === 0 && !generatingTasks) {
-    generateWeeklyTasks();
-  }
+  useEffect(() => {
+    if (!loading && callTasks.length === 0 && textTasks.length === 0 && !generatingTasks) {
+      generateWeeklyTasks();
+    }
+  }, [loading, callTasks.length, textTasks.length, generatingTasks, generateWeeklyTasks]);
 
   return (
     <Layout>
