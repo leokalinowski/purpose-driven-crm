@@ -710,6 +710,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_po2_tasks_lead_id"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "po2_tasks_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
