@@ -40,7 +40,7 @@ export function PO2TaskCard({ task, onUpdate }: PO2TaskCardProps) {
             <div className="flex items-center gap-2">
               <TaskIcon className="h-4 w-4 text-muted-foreground" />
               <CardTitle className="text-base">
-                {task.lead.name || `${task.lead.first_name || ''} ${task.lead.last_name}`.trim()}
+                {`${task.lead.first_name || ''} ${task.lead.last_name}`.trim()}
               </CardTitle>
             </div>
           </div>
@@ -61,7 +61,7 @@ export function PO2TaskCard({ task, onUpdate }: PO2TaskCardProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Phone className="h-3 w-3" />
-            <span>{task.lead.phone_number || 'No phone number'}</span>
+            <span>{task.lead.phone || 'No phone number'}</span>
           </div>
           <Button
             variant="outline"

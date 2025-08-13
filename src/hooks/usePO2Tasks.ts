@@ -4,13 +4,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { getCurrentWeekTasks } from '@/utils/po2Logic';
 import { useToast } from '@/hooks/use-toast';
 
-export interface Lead {
+export interface Contact {
   id: string;
-  name: string;
   first_name?: string;
   last_name: string;
-  phone_number?: string;
+  phone?: string;
   category: string;
+  agent_id: string;
 }
 
 export interface PO2Task {
@@ -19,27 +19,27 @@ export interface PO2Task {
   lead_id: string;
   completed: boolean;
   notes?: string;
-  lead: Lead;
+  lead: Contact;
 }
 
 export function usePO2Tasks() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [tasks, setTasks] = useState<PO2Task[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [generatingTasks, setGeneratingTasks] = useState(false);
 
   const currentWeek = getCurrentWeekTasks();
 
-  // Load existing tasks and leads
+  // Load existing tasks and contacts
   useEffect(() => {
     if (user) {
-      loadTasksAndLeads();
+      loadTasksAndContacts();
     }
   }, [user]);
 
-  const loadTasksAndLeads = useCallback(async () => {
+  const loadTasksAndContacts = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -50,7 +50,7 @@ export function usePO2Tasks() {
         .from('po2_tasks')
         .select(`
           *,
-          lead:leads(*)
+          lead:contacts(*)
         `)
         .eq('agent_id', user.id)
         .eq('week_number', currentWeek.weekNumber)
@@ -58,21 +58,26 @@ export function usePO2Tasks() {
 
       if (tasksError) throw tasksError;
 
-      // Load all leads for the agent
-      const { data: leadsData, error: leadsError } = await supabase
-        .from('leads')
+      // Load all contacts for the agent
+      const { data: contactsData, error: contactsError } = await supabase
+        .from('contacts')
         .select('*')
         .eq('agent_id', user.id);
 
-      if (leadsError) throw leadsError;
+      if (contactsError) throw contactsError;
 
-      setTasks((tasksData || []) as PO2Task[]);
-      setLeads(leadsData || []);
+      setTasks((tasksData || []) as unknown as PO2Task[]);
+      setContacts(contactsData || []);
+
+      // Auto-generate tasks if none exist for this week
+      if (!tasksData || tasksData.length === 0) {
+        await generateWeeklyTasksInternal(contactsData || []);
+      }
     } catch (error) {
-      console.error('Error loading tasks and leads:', error);
+      console.error('Error loading tasks and contacts:', error);
       toast({
         title: "Error",
-        description: "Failed to load tasks and leads",
+        description: "Failed to load tasks and contacts",
         variant: "destructive",
       });
     } finally {
@@ -80,35 +85,33 @@ export function usePO2Tasks() {
     }
   }, [user, currentWeek.weekNumber, toast]);
 
-  const generateWeeklyTasks = useCallback(async () => {
+  const generateWeeklyTasksInternal = async (contactsList: Contact[]) => {
     if (!user) return;
 
     try {
-      setGeneratingTasks(true);
-
-      // Get leads for call categories
-      const callLeads = leads.filter(lead => 
-        currentWeek.callCategories.includes(lead.category)
+      // Get contacts for call categories
+      const callContacts = contactsList.filter(contact => 
+        currentWeek.callCategories.includes(contact.category)
       );
 
-      // Get leads for text category
-      const textLeads = leads.filter(lead => 
-        lead.category === currentWeek.textCategory
+      // Get contacts for text category
+      const textContacts = contactsList.filter(contact => 
+        contact.category === currentWeek.textCategory
       );
 
       // Create call tasks
-      const callTasks = callLeads.map(lead => ({
+      const callTasks = callContacts.map(contact => ({
         task_type: 'call' as const,
-        lead_id: lead.id,
+        lead_id: contact.id,
         agent_id: user.id,
         week_number: currentWeek.weekNumber,
         year: new Date().getFullYear()
       }));
 
       // Create text tasks
-      const textTasks = textLeads.map(lead => ({
+      const textTasks = textContacts.map(contact => ({
         task_type: 'text' as const,
-        lead_id: lead.id,
+        lead_id: contact.id,
         agent_id: user.id,
         week_number: currentWeek.weekNumber,
         year: new Date().getFullYear()
@@ -130,14 +133,6 @@ export function usePO2Tasks() {
           title: "Success",
           description: `Generated ${allTasks.length} tasks for week ${currentWeek.weekNumber}`,
         });
-
-        // Reload tasks
-        await loadTasksAndLeads();
-      } else {
-        toast({
-          title: "No Tasks",
-          description: "No leads found for this week's categories",
-        });
       }
     } catch (error) {
       console.error('Error generating tasks:', error);
@@ -146,10 +141,15 @@ export function usePO2Tasks() {
         description: "Failed to generate weekly tasks",
         variant: "destructive",
       });
-    } finally {
-      setGeneratingTasks(false);
     }
-  }, [user, leads, currentWeek, toast, loadTasksAndLeads]);
+  };
+
+  const generateWeeklyTasks = useCallback(async () => {
+    setGeneratingTasks(true);
+    await generateWeeklyTasksInternal(contacts);
+    await loadTasksAndContacts();
+    setGeneratingTasks(false);
+  }, [contacts, loadTasksAndContacts]);
 
   const updateTask = async (taskId: string, updates: Partial<PO2Task>) => {
     try {
@@ -189,12 +189,12 @@ export function usePO2Tasks() {
     tasks,
     callTasks,
     textTasks,
-    leads,
+    contacts,
     loading,
     generatingTasks,
     currentWeek,
     generateWeeklyTasks,
     updateTask,
-    refreshTasks: loadTasksAndLeads
+    refreshTasks: loadTasksAndContacts
   };
 }
