@@ -1,3 +1,4 @@
+
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,14 @@ export default function PO2Tasks() {
     refreshTasks
   } = usePO2Tasks();
 
+  // Auto-generate if no tasks - this useEffect should always run
+  useEffect(() => {
+    if (user && !loading && callTasks.length === 0 && textTasks.length === 0 && !generatingTasks) {
+      generateWeeklyTasks();
+    }
+  }, [user, loading, callTasks.length, textTasks.length, generatingTasks]);
+
+  // Now we can do the conditional render after all hooks are called
   if (!user) {
     return (
       <Layout>
@@ -32,13 +41,6 @@ export default function PO2Tasks() {
       </Layout>
     );
   }
-
-  // Auto-generate if no tasks
-  useEffect(() => {
-    if (!loading && callTasks.length === 0 && textTasks.length === 0 && !generatingTasks) {
-      generateWeeklyTasks();
-    }
-  }, [loading, callTasks.length, textTasks.length, generatingTasks]);
 
   return (
     <Layout>
