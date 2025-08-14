@@ -11,6 +11,9 @@ interface TransactionChartsProps {
 
 export function TransactionCharts({ transactions, loading }: TransactionChartsProps) {
   const generateChartData = () => {
+    console.log('=== Chart Data Debug ===');
+    console.log('Total transactions for charts:', transactions.length);
+    
     const now = new Date();
     const sixMonthsAgo = subMonths(now, 5);
     const months = eachMonthOfInterval({ start: sixMonthsAgo, end: now });
@@ -19,22 +22,35 @@ export function TransactionCharts({ transactions, loading }: TransactionChartsPr
       const monthStart = startOfMonth(month);
       const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
       
-      const monthTransactions = transactions.filter(t => {
-        if (!t.closing_date) return false;
+      // For charts, show closed transactions by closing date
+      const closedTransactions = transactions.filter(t => {
+        if (!t.closing_date || t.transaction_stage !== 'closed') return false;
         const closeDate = new Date(t.closing_date);
-        return closeDate >= monthStart && closeDate <= monthEnd && t.transaction_stage === 'closed';
+        return closeDate >= monthStart && closeDate <= monthEnd;
       });
 
-      const totalSales = monthTransactions.reduce((sum, t) => sum + (t.sale_price || 0), 0);
-      const totalGCI = monthTransactions.reduce((sum, t) => sum + (t.gci || 0), 0);
-      const count = monthTransactions.length;
+      // Also show under contract transactions by contract date for pipeline view
+      const contractedTransactions = transactions.filter(t => {
+        if (!t.contract_date || t.transaction_stage !== 'under_contract') return false;
+        const contractDate = new Date(t.contract_date);
+        return contractDate >= monthStart && contractDate <= monthEnd;
+      });
 
-      return {
+      const totalSales = closedTransactions.reduce((sum, t) => sum + (t.sale_price || 0), 0);
+      const totalGCI = closedTransactions.reduce((sum, t) => sum + (t.gci || 0), 0);
+      const closedCount = closedTransactions.length;
+      const contractedCount = contractedTransactions.length;
+
+      const monthData = {
         month: format(month, 'MMM'),
         sales: totalSales,
         gci: totalGCI,
-        count,
+        count: closedCount,
+        contracted: contractedCount, // Add contracted transactions for additional insight
       };
+
+      console.log(`${format(month, 'MMM')} data:`, monthData);
+      return monthData;
     });
   };
 

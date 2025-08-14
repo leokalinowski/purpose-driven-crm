@@ -79,25 +79,44 @@ export function useTransactions() {
   };
 
   const calculateMetrics = (data: Transaction[]) => {
+    console.log('=== Transaction Metrics Debug ===');
+    console.log('Total transactions:', data.length);
+    console.log('Transaction stages:', [...new Set(data.map(t => t.transaction_stage))]);
+    console.log('Transaction statuses:', [...new Set(data.map(t => t.status))]);
+    
     const now = new Date();
     const yearStart = new Date(now.getFullYear(), 0, 1);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    // Filter closed transactions
-    const closedTransactions = data.filter(t => 
-      t.transaction_stage === 'closed' && t.closing_date
-    );
+    // Filter closed transactions (transactions that have actually closed)
+    const closedTransactions = data.filter(t => {
+      const isClosed = t.transaction_stage === 'closed' && t.closing_date;
+      return isClosed;
+    });
+    console.log('Closed transactions:', closedTransactions.length);
 
-    // Year metrics
+    // For year-to-date metrics, we need to look at closing_date for closed deals
+    // For under_contract deals, we use contract_date if available
+    const getRelevantDate = (transaction: Transaction) => {
+      if (transaction.transaction_stage === 'closed' && transaction.closing_date) {
+        return new Date(transaction.closing_date);
+      }
+      if (transaction.contract_date) {
+        return new Date(transaction.contract_date);
+      }
+      return new Date(transaction.created_at);
+    };
+
+    // Year metrics (closed transactions only)
     const yearTransactions = closedTransactions.filter(t => 
       new Date(t.closing_date!) >= yearStart
     );
     const totalSalesYear = yearTransactions.reduce((sum, t) => sum + (t.sale_price || 0), 0);
     const gciYear = yearTransactions.reduce((sum, t) => sum + (t.gci || 0), 0);
 
-    // Month metrics
+    // Month metrics (closed transactions only) 
     const monthTransactions = closedTransactions.filter(t => 
       new Date(t.closing_date!) >= monthStart
     );
@@ -114,22 +133,38 @@ export function useTransactions() {
     // Calculate monthly change
     const monthlyChange = lastMonthSales > 0 
       ? ((totalSalesMonth - lastMonthSales) / lastMonthSales) * 100 
-      : 0;
+      : totalSalesMonth > 0 ? 100 : 0; // If no last month sales but current month has sales, show 100% increase
 
-    // Ongoing transactions
+    // Ongoing transactions (under contract, pending, etc.)
     const ongoingTransactions = data.filter(t => 
-      t.status === 'ongoing' || t.transaction_stage === 'under_contract'
+      t.transaction_stage === 'under_contract' || 
+      t.transaction_stage === 'pending' ||
+      (t.status === 'ongoing' && t.transaction_stage !== 'closed')
     );
     const ongoing = ongoingTransactions.length;
     const pipelineValue = ongoingTransactions.reduce((sum, t) => sum + (t.sale_price || 0), 0);
 
-    // Closing rate
+    // Closing rate (closed transactions vs all transactions)
     const totalTransactions = data.length;
     const closedCount = closedTransactions.length;
     const closingRate = totalTransactions > 0 ? (closedCount / totalTransactions) * 100 : 0;
 
-    // Average deal value
+    // Average deal value (based on closed transactions only)
     const avgDealValue = closedCount > 0 ? totalSalesYear / closedCount : 0;
+
+    console.log('Metrics calculated:', {
+      totalSalesYear,
+      totalSalesMonth,
+      monthlyChange,
+      transactionsYear: yearTransactions.length,
+      transactionsMonth: monthTransactions.length,
+      gciYear,
+      gciMonth,
+      ongoing,
+      closingRate,
+      avgDealValue,
+      pipelineValue,
+    });
 
     setMetrics({
       totalSalesYear,
