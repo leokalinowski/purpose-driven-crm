@@ -2,11 +2,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
+import { getCurrentWeekNumber } from '@/utils/po2Logic';
 
 export interface CoachingSubmission {
   id: string;
   agent_id: string;
-  week_ending: string;
+  week_number: number;
+  year: number;
   leads_contacted: number;
   appointments_set: number;
   deals_closed: number;
@@ -17,7 +19,8 @@ export interface CoachingSubmission {
 }
 
 export interface CoachingFormData {
-  week_ending: Date;
+  week_number: number;
+  year: number;
   leads_contacted: number;
   appointments_set: number;
   deals_closed: number;
@@ -26,7 +29,8 @@ export interface CoachingFormData {
 }
 
 export interface WeeklyMetrics {
-  week_ending: string;
+  week_number: number;
+  year: number;
   leads_contacted: number;
   appointments_set: number;
   deals_closed: number;
@@ -37,15 +41,6 @@ export interface TeamAverages {
   avg_appointments_set: number;
   avg_deals_closed: number;
 }
-
-// Get the most recent Sunday for a given date
-export const getLastSunday = (date = new Date()): Date => {
-  const result = new Date(date);
-  const day = result.getDay();
-  const diff = day === 0 ? 0 : day; // If it's Sunday, use current date, otherwise go back to Sunday
-  result.setDate(result.getDate() - diff);
-  return result;
-};
 
 export const useCoachingSubmissions = () => {
   const { user } = useAuth();
@@ -58,7 +53,9 @@ export const useCoachingSubmissions = () => {
       const { data, error } = await supabase
         .from('coaching_submissions')
         .select('*')
-        .order('week_ending', { ascending: false });
+        .eq('agent_id', user.id)
+        .order('year', { ascending: false })
+        .order('week_number', { ascending: false });
 
       if (error) throw error;
       return data as CoachingSubmission[];
@@ -75,28 +72,58 @@ export const useSubmitCoachingForm = () => {
     mutationFn: async (formData: CoachingFormData) => {
       if (!user) throw new Error('User not authenticated');
 
-      const submission = {
-        agent_id: user.id,
-        week_ending: formData.week_ending.toISOString().split('T')[0],
-        leads_contacted: formData.leads_contacted,
-        appointments_set: formData.appointments_set,
-        deals_closed: formData.deals_closed,
-        challenges: formData.challenges || null,
-        tasks: formData.tasks || null,
-      };
-
-      const { data, error } = await supabase
+      // Check if submission already exists for this week
+      const { data: existingSubmission } = await supabase
         .from('coaching_submissions')
-        .insert(submission)
-        .select()
+        .select('id')
+        .eq('agent_id', user.id)
+        .eq('week_number', formData.week_number)
+        .eq('year', formData.year)
         .single();
 
-      if (error) throw error;
-      return data;
+      if (existingSubmission) {
+        // Update existing submission
+        const { data, error } = await supabase
+          .from('coaching_submissions')
+          .update({
+            leads_contacted: formData.leads_contacted,
+            appointments_set: formData.appointments_set,
+            deals_closed: formData.deals_closed,
+            challenges: formData.challenges || null,
+            tasks: formData.tasks || null,
+          })
+          .eq('id', existingSubmission.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data;
+      } else {
+        // Create new submission
+        const { data, error } = await supabase
+          .from('coaching_submissions')
+          .insert({
+            agent_id: user.id,
+            week_number: formData.week_number,
+            year: formData.year,
+            leads_contacted: formData.leads_contacted,
+            appointments_set: formData.appointments_set,
+            deals_closed: formData.deals_closed,
+            challenges: formData.challenges || null,
+            tasks: formData.tasks || null,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['coaching-submissions'] });
+      queryClient.invalidateQueries({ queryKey: ['personal-metrics'] });
       queryClient.invalidateQueries({ queryKey: ['team-averages'] });
+      queryClient.invalidateQueries({ queryKey: ['agent-current-metrics'] });
       toast({
         title: "Success",
         description: "Weekly performance submitted successfully!",
@@ -122,9 +149,10 @@ export const usePersonalMetrics = () => {
 
       const { data, error } = await supabase
         .from('coaching_submissions')
-        .select('week_ending, leads_contacted, appointments_set, deals_closed')
+        .select('week_number, year, leads_contacted, appointments_set, deals_closed')
         .eq('agent_id', user.id)
-        .order('week_ending', { ascending: true });
+        .order('year', { ascending: true })
+        .order('week_number', { ascending: true });
 
       if (error) throw error;
       return data as WeeklyMetrics[];
@@ -141,13 +169,15 @@ export const useTeamAverages = () => {
     queryFn: async () => {
       if (!user) throw new Error('User not authenticated');
 
-      // Get the current week ending (last Sunday)
-      const currentWeek = getLastSunday().toISOString().split('T')[0];
+      // Get the current week number and year
+      const currentWeekNumber = getCurrentWeekNumber();
+      const currentYear = new Date().getFullYear();
 
       const { data, error } = await supabase
         .from('coaching_submissions')
         .select('leads_contacted, appointments_set, deals_closed')
-        .eq('week_ending', currentWeek);
+        .eq('week_number', currentWeekNumber)
+        .eq('year', currentYear);
 
       if (error) throw error;
 
@@ -186,13 +216,16 @@ export const useAgentCurrentWeekMetrics = () => {
     queryFn: async () => {
       if (!user) throw new Error('User not authenticated');
 
-      const currentWeek = getLastSunday().toISOString().split('T')[0];
+      // Get the current week number and year
+      const currentWeekNumber = getCurrentWeekNumber();
+      const currentYear = new Date().getFullYear();
 
       const { data, error } = await supabase
         .from('coaching_submissions')
         .select('leads_contacted, appointments_set, deals_closed')
         .eq('agent_id', user.id)
-        .eq('week_ending', currentWeek)
+        .eq('week_number', currentWeekNumber)
+        .eq('year', currentYear)
         .single();
 
       if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "not found"

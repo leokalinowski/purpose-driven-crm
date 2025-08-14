@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { format } from 'date-fns';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { CalendarIcon } from 'lucide-react';
 import { 
   LineChart, 
   Line, 
@@ -22,8 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { useAuth } from '@/hooks/useAuth';
@@ -32,15 +29,13 @@ import {
   usePersonalMetrics, 
   useTeamAverages, 
   useAgentCurrentWeekMetrics,
-  getLastSunday,
   type CoachingFormData 
 } from '@/hooks/useCoaching';
-import { cn } from '@/lib/utils';
+import { getCurrentWeekNumber } from '@/utils/po2Logic';
 
 const formSchema = z.object({
-  week_ending: z.date({
-    required_error: "Please select a week ending date.",
-  }),
+  week_number: z.number().min(1, "Week must be between 1 and 52").max(52, "Week must be between 1 and 52"),
+  year: z.number().min(2020, "Year must be valid"),
   leads_contacted: z.number().min(0, "Must be 0 or greater"),
   appointments_set: z.number().min(0, "Must be 0 or greater"),
   deals_closed: z.number().min(0, "Must be 0 or greater"),
@@ -52,6 +47,9 @@ const Coaching = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("submit");
   
+  const currentWeekNumber = getCurrentWeekNumber();
+  const currentYear = new Date().getFullYear();
+  
   const submitMutation = useSubmitCoachingForm();
   const { data: personalMetrics, isLoading: personalLoading } = usePersonalMetrics();
   const { data: teamAverages, isLoading: teamLoading } = useTeamAverages();
@@ -60,7 +58,8 @@ const Coaching = () => {
   const form = useForm<CoachingFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      week_ending: getLastSunday(),
+      week_number: currentWeekNumber,
+      year: currentYear,
       leads_contacted: 0,
       appointments_set: 0,
       deals_closed: 0,
@@ -77,7 +76,7 @@ const Coaching = () => {
 
   // Prepare chart data for personal metrics
   const personalChartData = personalMetrics?.map(metric => ({
-    week: format(new Date(metric.week_ending), 'MMM dd'),
+    week: `Week ${metric.week_number}`,
     'Leads Contacted': metric.leads_contacted,
     'Appointments Set': metric.appointments_set,
     'Deals Closed': metric.deals_closed,
@@ -152,45 +151,51 @@ const Coaching = () => {
               <CardContent>
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <FormField
-                      control={form.control}
-                      name="week_ending"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                          <FormLabel>Week Ending</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="week_number"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Week Number</FormLabel>
+                            <Select onValueChange={(value) => field.onChange(parseInt(value))} defaultValue={field.value?.toString()}>
                               <FormControl>
-                                <Button
-                                  variant="outline"
-                                  className={cn(
-                                    "w-[240px] pl-3 text-left font-normal",
-                                    !field.value && "text-muted-foreground"
-                                  )}
-                                >
-                                  {field.value ? (
-                                    format(field.value, "PPP")
-                                  ) : (
-                                    <span>Pick a date</span>
-                                  )}
-                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select week" />
+                                </SelectTrigger>
                               </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={field.value}
-                                onSelect={field.onChange}
-                                initialFocus
-                                className="pointer-events-auto"
+                              <SelectContent>
+                                {Array.from({ length: 52 }, (_, i) => i + 1).map((week) => (
+                                  <SelectItem key={week} value={week.toString()}>
+                                    Week {week}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="year"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Year</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                min="2020" 
+                                max="2030" 
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value) || currentYear)}
                               />
-                            </PopoverContent>
-                          </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <FormField

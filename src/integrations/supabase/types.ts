@@ -237,6 +237,8 @@ export type Database = {
           tasks: string | null
           updated_at: string
           week_ending: string
+          week_number: number
+          year: number
         }
         Insert: {
           agent_id: string
@@ -249,6 +251,8 @@ export type Database = {
           tasks?: string | null
           updated_at?: string
           week_ending: string
+          week_number: number
+          year: number
         }
         Update: {
           agent_id?: string
@@ -261,6 +265,8 @@ export type Database = {
           tasks?: string | null
           updated_at?: string
           week_ending?: string
+          week_number?: number
+          year?: number
         }
         Relationships: [
           {
