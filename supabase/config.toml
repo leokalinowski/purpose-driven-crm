@@ -30,3 +30,9 @@ verify_jwt = false
 
 [functions.coaching-reminder]
 verify_jwt = false
+
+[functions.opentoclose-sync]
+verify_jwt = true
+
+[functions.opentoclose-webhook]
+verify_jwt = false

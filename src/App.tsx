@@ -14,6 +14,7 @@ import Events from "./pages/Events";
 import NotFound from "./pages/NotFound";
 import Newsletter from "./pages/Newsletter";
 import Coaching from "./pages/Coaching";
+import Transactions from "./pages/Transactions";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ const AppContent = () => (
     <Route path="/events" element={<Events />} />
     <Route path="/newsletter" element={<Newsletter />} />
     <Route path="/coaching" element={<Coaching />} />
+    <Route path="/transactions" element={<Transactions />} />
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />
   </Routes>

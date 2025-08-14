@@ -844,38 +844,50 @@ export type Database = {
       }
       transaction_coordination: {
         Row: {
+          client_name: string | null
           closing_date: string | null
           contract_date: string | null
           created_at: string
+          gci: number | null
           id: string
           lead_id: number | null
+          otc_deal_id: string | null
           property_address: string | null
           responsible_agent: string | null
           sale_price: number | null
+          status: string | null
           transaction_stage: string
           updated_at: string
         }
         Insert: {
+          client_name?: string | null
           closing_date?: string | null
           contract_date?: string | null
           created_at?: string
+          gci?: number | null
           id?: string
           lead_id?: number | null
+          otc_deal_id?: string | null
           property_address?: string | null
           responsible_agent?: string | null
           sale_price?: number | null
+          status?: string | null
           transaction_stage?: string
           updated_at?: string
         }
         Update: {
+          client_name?: string | null
           closing_date?: string | null
           contract_date?: string | null
           created_at?: string
+          gci?: number | null
           id?: string
           lead_id?: number | null
+          otc_deal_id?: string | null
           property_address?: string | null
           responsible_agent?: string | null
           sale_price?: number | null
+          status?: string | null
           transaction_stage?: string
           updated_at?: string
         }
