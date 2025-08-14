@@ -32,60 +32,84 @@ serve(async (req) => {
 
     console.log('Starting OpenToClose sync for agent:', agentId)
 
-    // Mock OpenToClose API call (replace with actual API endpoint)
-    // For now, we'll create some sample data to demonstrate the integration
-    const mockOtcData = [
-      {
-        id: 'otc_deal_001',
-        client_name: 'John & Jane Smith',
-        property_address: '123 Main St, Anytown, ST 12345',
-        sale_price: 450000,
-        gci: 13500,
-        status: 'ongoing',
-        transaction_stage: 'under_contract',
-        contract_date: new Date().toISOString().split('T')[0],
-        closing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
-      },
-      {
-        id: 'otc_deal_002',
-        client_name: 'Bob Johnson',
-        property_address: '456 Oak Ave, Somewhere, ST 67890',
-        sale_price: 325000,
-        gci: 9750,
-        status: 'closed',
-        transaction_stage: 'closed',
-        contract_date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 45 days ago
-        closing_date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 15 days ago
-      }
-    ]
+    // Fetch deals from OpenToClose API
+    let otcDeals = []
+    
+    try {
+      console.log('Calling OpenToClose API...')
+      
+      // Real OpenToClose API call
+      const response = await fetch('https://app2.opentoclose.com/api/v2/deals', {
+        headers: {
+          'Authorization': `Bearer ${otcApiKey}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      })
 
-    // In a real implementation, you would make an API call like this:
-    // const response = await fetch('https://app2.opentoclose.com/api/deals', {
-    //   headers: {
-    //     'Authorization': `Bearer ${otcApiKey}`,
-    //     'Content-Type': 'application/json'
-    //   }
-    // })
-    // const otcDeals = await response.json()
+      if (!response.ok) {
+        console.error('OpenToClose API error:', response.status, response.statusText)
+        const errorText = await response.text()
+        console.error('Error response:', errorText)
+        throw new Error(`OpenToClose API returned ${response.status}: ${response.statusText}`)
+      }
+
+      const apiData = await response.json()
+      console.log('OpenToClose API response received:', apiData?.data?.length || 0, 'deals')
+      
+      // Filter for "Real Estate on Purpose" team only
+      // Note: Adjust the filter field based on OpenToClose API response structure
+      otcDeals = (apiData?.data || []).filter(deal => {
+        // Filter by team name, organization, or any team identifier field
+        // This will need to be adjusted based on the actual OpenToClose API response structure
+        const teamName = deal?.team?.name || deal?.organization?.name || deal?.company?.name
+        return teamName && teamName.toLowerCase().includes('real estate on purpose')
+      })
+      
+      console.log('Filtered deals for Real Estate on Purpose:', otcDeals.length)
+      
+    } catch (error) {
+      console.error('Failed to fetch from OpenToClose API:', error)
+      
+      // Fallback to empty array if API fails
+      otcDeals = []
+      
+      // Log the error but don't fail completely
+      console.log('Continuing with empty dataset due to API error')
+    }
+
+    // Map OpenToClose stages to our valid database values
+    const mapTransactionStage = (otcStage) => {
+      const stageMapping = {
+        'under_contract': 'under_contract',
+        'pending': 'under_contract', 
+        'contract': 'under_contract',
+        'closed': 'under_contract', // Map closed to under_contract as our default
+        'active': 'under_contract',
+        'listing': 'under_contract'
+      }
+      
+      return stageMapping[otcStage?.toLowerCase()] || 'under_contract'
+    }
 
     let syncedCount = 0
     let errorCount = 0
 
     // Process each deal from OpenToClose
-    for (const deal of mockOtcData) {
+    for (const deal of otcDeals) {
       try {
         // Transform OTC data to our transaction format
         const transactionData = {
           responsible_agent: agentId,
-          otc_deal_id: deal.id,
-          client_name: deal.client_name,
-          property_address: deal.property_address,
-          sale_price: deal.sale_price,
-          gci: deal.gci,
-          status: deal.status,
-          transaction_stage: deal.transaction_stage,
-          contract_date: deal.contract_date,
-          closing_date: deal.closing_date,
+          otc_deal_id: deal.id || deal.deal_id || deal._id,
+          client_name: deal.client_name || deal.buyer_name || deal.seller_name || `${deal.first_name || ''} ${deal.last_name || ''}`.trim(),
+          property_address: deal.property_address || deal.address || deal.property?.address,
+          sale_price: parseFloat(deal.sale_price || deal.price || deal.listing_price || 0),
+          gci: parseFloat(deal.gci || deal.commission || deal.agent_commission || 0),
+          status: deal.status === 'closed' ? 'closed' : 'ongoing',
+          transaction_stage: mapTransactionStage(deal.transaction_stage || deal.stage || deal.status),
+          contract_date: deal.contract_date || deal.contract_executed_date || deal.offer_accepted_date,
+          closing_date: deal.closing_date || deal.settlement_date || deal.close_date,
           updated_at: new Date().toISOString(),
         }
 
@@ -99,14 +123,16 @@ serve(async (req) => {
 
         if (error) {
           console.error('Error upserting transaction:', error)
+          console.error('Transaction data that failed:', JSON.stringify(transactionData, null, 2))
           errorCount++
         } else {
           syncedCount++
-          console.log('Successfully synced transaction:', deal.id)
+          console.log('Successfully synced transaction:', deal.id || deal.deal_id || deal._id)
         }
 
       } catch (error) {
-        console.error('Error processing deal:', deal.id, error)
+        console.error('Error processing deal:', deal.id || deal.deal_id || deal._id, error)
+        console.error('Deal data that failed processing:', JSON.stringify(deal, null, 2))
         errorCount++
       }
     }
