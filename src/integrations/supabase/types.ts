@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "13.0.4"
@@ -219,6 +219,53 @@ export type Database = {
           {
             foreignKeyName: "coaching_sessions_coach_id_fkey"
             columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      coaching_submissions: {
+        Row: {
+          agent_id: string
+          appointments_set: number
+          challenges: string | null
+          created_at: string
+          deals_closed: number
+          id: string
+          leads_contacted: number
+          tasks: string | null
+          updated_at: string
+          week_ending: string
+        }
+        Insert: {
+          agent_id: string
+          appointments_set?: number
+          challenges?: string | null
+          created_at?: string
+          deals_closed?: number
+          id?: string
+          leads_contacted?: number
+          tasks?: string | null
+          updated_at?: string
+          week_ending: string
+        }
+        Update: {
+          agent_id?: string
+          appointments_set?: number
+          challenges?: string | null
+          created_at?: string
+          deals_closed?: number
+          id?: string
+          leads_contacted?: number
+          tasks?: string | null
+          updated_at?: string
+          week_ending?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coaching_submissions_agent_id_fkey"
+            columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
