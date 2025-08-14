@@ -327,19 +327,19 @@ const Coaching = () => {
                           <Line 
                             type="monotone" 
                             dataKey="Leads Contacted" 
-                            stroke="var(--color-leads-contacted)" 
+                            stroke="hsl(var(--chart-1))" 
                             strokeWidth={2}
                           />
                           <Line 
                             type="monotone" 
                             dataKey="Appointments Set" 
-                            stroke="var(--color-appointments-set)" 
+                            stroke="hsl(var(--chart-2))" 
                             strokeWidth={2}
                           />
                           <Line 
                             type="monotone" 
                             dataKey="Deals Closed" 
-                            stroke="var(--color-deals-closed)" 
+                            stroke="hsl(var(--chart-3))" 
                             strokeWidth={2}
                           />
                         </LineChart>
