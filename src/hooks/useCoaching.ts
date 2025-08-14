@@ -100,12 +100,18 @@ export const useSubmitCoachingForm = () => {
         return data;
       } else {
         // Create new submission
+        // Calculate week ending date from week number for backward compatibility
+        const startOfYear = new Date(formData.year, 0, 1);
+        const weekStart = new Date(startOfYear.getTime() + (formData.week_number - 1) * 7 * 24 * 60 * 60 * 1000);
+        const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+        
         const { data, error } = await supabase
           .from('coaching_submissions')
           .insert({
             agent_id: user.id,
             week_number: formData.week_number,
             year: formData.year,
+            week_ending: weekEnd.toISOString().split('T')[0], // Temporary for type compatibility
             leads_contacted: formData.leads_contacted,
             appointments_set: formData.appointments_set,
             deals_closed: formData.deals_closed,
