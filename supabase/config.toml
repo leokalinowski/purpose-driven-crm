@@ -27,3 +27,6 @@ verify_jwt = false
 
 [functions.po2-email-function]
 verify_jwt = false
+
+[functions.coaching-reminder]
+verify_jwt = false
