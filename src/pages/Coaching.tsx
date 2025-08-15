@@ -36,7 +36,6 @@ import { getCurrentWeekNumber } from '@/utils/po2Logic';
 const formSchema = z.object({
   week_number: z.number().min(1, "Week must be between 1 and 52").max(52, "Week must be between 1 and 52"),
   year: z.number().min(2020, "Year must be valid"),
-  week: z.string().optional(),
   database_size: z.number().min(0, "Must be 0 or greater"),
   dials_made: z.number().min(0, "Must be 0 or greater"),
   conversations: z.number().min(0, "Must be 0 or greater"),
@@ -69,7 +68,6 @@ const WeeklySuccessScoreboard = () => {
     defaultValues: {
       week_number: currentWeekNumber,
       year: currentYear,
-      week: "",
       database_size: 0,
       dials_made: 0,
       conversations: 0,
@@ -241,7 +239,7 @@ const WeeklySuccessScoreboard = () => {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="submit">Submit Weekly Scorecard</TabsTrigger>
+            <TabsTrigger value="submit">Success Scoreboard</TabsTrigger>
             <TabsTrigger value="dashboard">Performance Dashboard</TabsTrigger>
           </TabsList>
 
@@ -256,7 +254,7 @@ const WeeklySuccessScoreboard = () => {
               <CardContent>
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="week_number"
@@ -295,23 +293,6 @@ const WeeklySuccessScoreboard = () => {
                                 max="2030" 
                                 {...field}
                                 onChange={(e) => field.onChange(parseInt(e.target.value) || currentYear)}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="week"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Week Ending (Optional)</FormLabel>
-                            <FormControl>
-                              <Input 
-                                type="date" 
-                                {...field} 
                               />
                             </FormControl>
                             <FormMessage />
@@ -585,7 +566,7 @@ const WeeklySuccessScoreboard = () => {
 
           <TabsContent value="dashboard" className="space-y-6">
             {/* YTD Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Database Size</CardTitle>
@@ -648,7 +629,7 @@ const WeeklySuccessScoreboard = () => {
                       <p className="text-muted-foreground">Loading...</p>
                     </div>
                   ) : personalChartData.length > 0 ? (
-                    <ChartContainer config={chartConfig} className="h-64">
+                     <ChartContainer config={chartConfig} className="h-80">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={personalChartData}>
                           <CartesianGrid strokeDasharray="3 3" />
@@ -706,7 +687,7 @@ const WeeklySuccessScoreboard = () => {
                         <p className="text-muted-foreground">Loading...</p>
                       </div>
                     ) : comparisonChartData.length > 0 ? (
-                      <ChartContainer config={chartConfig} className="h-64">
+                      <ChartContainer config={chartConfig} className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={comparisonChartData}>
                             <CartesianGrid strokeDasharray="3 3" />

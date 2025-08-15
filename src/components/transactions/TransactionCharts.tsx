@@ -71,7 +71,7 @@ export function TransactionCharts({ transactions, loading }: TransactionChartsPr
 
   if (loading) {
     return (
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <Card className="animate-pulse">
           <CardHeader>
             <div className="h-5 bg-muted rounded w-32"></div>
@@ -95,13 +95,13 @@ export function TransactionCharts({ transactions, loading }: TransactionChartsPr
   const chartData = generateChartData();
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle>Sales Trend (6 Months)</CardTitle>
         </CardHeader>
         <CardContent>
-          <ChartContainer config={chartConfig} className="h-64">
+          <ChartContainer config={chartConfig} className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
                 <XAxis
@@ -149,7 +149,7 @@ export function TransactionCharts({ transactions, loading }: TransactionChartsPr
           <CardTitle>Transaction Count (6 Months)</CardTitle>
         </CardHeader>
         <CardContent>
-          <ChartContainer config={chartConfig} className="h-64">
+          <ChartContainer config={chartConfig} className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
                 <XAxis
