@@ -31,7 +31,7 @@ const menuItems = [
   { title: 'Database', url: '/database', icon: Users },
   { title: 'Events', url: '/events', icon: Calendar },
   { title: 'E-Newsletter', url: '/newsletter', icon: Mail },
-  { title: 'Coaching', url: '/coaching', icon: TrendingUp },
+  { title: 'Success Scoreboard', url: '/coaching', icon: TrendingUp },
   { title: 'Transaction Coordination', url: '/transactions', icon: FileBarChart },
 ];
 
