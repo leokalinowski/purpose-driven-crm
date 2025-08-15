@@ -81,15 +81,21 @@ serve(async (req) => {
       console.log('Updated transaction status:', deal_id)
 
     } else {
-      // Map agent from deal data (this would need to be customized based on your OTC setup)
-      // For now, we'll try to find the agent by email or other identifier
+    // Map agent from deal data - handle multiple possible agent field formats
       let agentId = null
       
-      if (deal_data.agent_email) {
+      // Try multiple possible agent email fields from OpenToClose
+      const agentEmail = deal_data.agent_email || 
+                        deal_data.listing_agent?.email || 
+                        deal_data.buyer_agent?.email ||
+                        deal_data.responsible_agent?.email ||
+                        deal_data.agent?.email;
+      
+      if (agentEmail) {
         const { data: profile } = await supabase
           .from('profiles')
           .select('user_id')
-          .eq('email', deal_data.agent_email)
+          .eq('email', agentEmail)
           .single()
         
         if (profile) {
@@ -97,27 +103,55 @@ serve(async (req) => {
         }
       }
 
+      // If no agent found by email, try to find by team association
       if (!agentId) {
-        console.warn('Could not find agent for deal:', deal_id)
-        // For demo purposes, we'll skip this record
+        const teamName = deal_data.team?.name || deal_data.organization?.name || 
+                        deal_data.office?.name || deal_data.brokerage?.name;
+        
+        if (teamName && (
+          teamName.toLowerCase().includes('real estate on purpose') ||
+          teamName.toLowerCase().includes('reop')
+        )) {
+          // For team deals without specific agent mapping, use the first admin agent
+          const { data: adminProfile } = await supabase
+            .from('profiles')
+            .select('user_id')
+            .eq('role', 'admin')
+            .single()
+          
+          if (adminProfile) {
+            agentId = adminProfile.user_id
+          }
+        }
+      }
+
+      if (!agentId) {
+        console.warn('Could not find agent for deal:', deal_id, 'agent_email:', agentEmail)
+        // For now, skip records without agent mapping
         return new Response(
-          JSON.stringify({ message: 'Agent not found for deal', deal_id }),
+          JSON.stringify({ message: 'Agent not found for deal', deal_id, agent_email: agentEmail }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
 
-      // Transform webhook data to our transaction format
+      // Transform webhook data to our transaction format with proper field mapping
       const transactionData = {
         responsible_agent: agentId,
         otc_deal_id: deal_id,
-        client_name: deal_data.client_name || null,
-        property_address: deal_data.property_address || null,
-        sale_price: deal_data.sale_price || null,
-        gci: deal_data.gci || null,
-        status: deal_data.status || 'ongoing',
-        transaction_stage: deal_data.stage || 'under_contract',
-        contract_date: deal_data.contract_date || null,
-        closing_date: deal_data.closing_date || null,
+        client_name: deal_data.client_name || deal_data.buyer_name || deal_data.seller_name || 
+                    `${deal_data.first_name || ''} ${deal_data.last_name || ''}`.trim() || null,
+        property_address: deal_data.property_address || deal_data.address || 
+                         deal_data.property?.address || deal_data.listing?.address || null,
+        sale_price: parseFloat(deal_data.sale_price || deal_data.sales_amount || 
+                              deal_data.price || deal_data.purchase_price || 0) || null,
+        gci: parseFloat(deal_data.gci || deal_data.commission || 
+                       deal_data.agent_commission || 0) || null,
+        status: (deal_data.status === 'closed' || deal_data.stage === 'closed') ? 'closed' : 'ongoing',
+        transaction_stage: (deal_data.status === 'closed' || deal_data.stage === 'closed') ? 'closed' : 'under_contract',
+        contract_date: deal_data.contract_date || deal_data.contract_executed_date || 
+                      deal_data.under_contract_date || null,
+        closing_date: deal_data.closing_date || deal_data.settlement_date || 
+                     deal_data.close_date || null,
         updated_at: new Date().toISOString(),
       }
 

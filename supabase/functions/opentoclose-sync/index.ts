@@ -38,10 +38,10 @@ serve(async (req) => {
     try {
       console.log('Calling OpenToClose API...')
       
-      // Real OpenToClose API call
-      const response = await fetch('https://app2.opentoclose.com/api/v2/deals', {
+      // Real OpenToClose API call with correct endpoint and authentication
+      const response = await fetch('https://api.opentoclose.com/v1/deals', {
         headers: {
-          'Authorization': `Bearer ${otcApiKey}`,
+          'X-API-Key': otcApiKey,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         }
