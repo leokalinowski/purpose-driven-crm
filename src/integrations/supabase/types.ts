@@ -228,42 +228,69 @@ export type Database = {
       coaching_submissions: {
         Row: {
           agent_id: string
+          agreements_signed: number | null
           appointments_set: number
           challenges: string | null
+          closings: number | null
+          coaching_notes: string | null
+          conversations: number | null
           created_at: string
+          database_size: number | null
           deals_closed: number
+          dials_made: number | null
           id: string
           leads_contacted: number
+          must_do_task: string | null
+          offers_made_accepted: number | null
           tasks: string | null
           updated_at: string
+          week: string | null
           week_ending: string
           week_number: number
           year: number
         }
         Insert: {
           agent_id: string
+          agreements_signed?: number | null
           appointments_set?: number
           challenges?: string | null
+          closings?: number | null
+          coaching_notes?: string | null
+          conversations?: number | null
           created_at?: string
+          database_size?: number | null
           deals_closed?: number
+          dials_made?: number | null
           id?: string
           leads_contacted?: number
+          must_do_task?: string | null
+          offers_made_accepted?: number | null
           tasks?: string | null
           updated_at?: string
+          week?: string | null
           week_ending: string
           week_number: number
           year: number
         }
         Update: {
           agent_id?: string
+          agreements_signed?: number | null
           appointments_set?: number
           challenges?: string | null
+          closings?: number | null
+          coaching_notes?: string | null
+          conversations?: number | null
           created_at?: string
+          database_size?: number | null
           deals_closed?: number
+          dials_made?: number | null
           id?: string
           leads_contacted?: number
+          must_do_task?: string | null
+          offers_made_accepted?: number | null
           tasks?: string | null
           updated_at?: string
+          week?: string | null
           week_ending?: string
           week_number?: number
           year?: number

@@ -36,14 +36,23 @@ import { getCurrentWeekNumber } from '@/utils/po2Logic';
 const formSchema = z.object({
   week_number: z.number().min(1, "Week must be between 1 and 52").max(52, "Week must be between 1 and 52"),
   year: z.number().min(2020, "Year must be valid"),
+  week: z.string().optional(),
+  database_size: z.number().min(0, "Must be 0 or greater"),
+  dials_made: z.number().min(0, "Must be 0 or greater"),
+  conversations: z.number().min(0, "Must be 0 or greater"),
   leads_contacted: z.number().min(0, "Must be 0 or greater"),
   appointments_set: z.number().min(0, "Must be 0 or greater"),
+  agreements_signed: z.number().min(0, "Must be 0 or greater"),
+  offers_made_accepted: z.number().min(0, "Must be 0 or greater"),
   deals_closed: z.number().min(0, "Must be 0 or greater"),
+  closings: z.number().min(0, "Must be 0 or greater"),
   challenges: z.string().optional(),
   tasks: z.string().optional(),
+  coaching_notes: z.string().optional(),
+  must_do_task: z.string().optional(),
 });
 
-const Coaching = () => {
+const WeeklySuccessScoreboard = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("submit");
   
@@ -60,11 +69,20 @@ const Coaching = () => {
     defaultValues: {
       week_number: currentWeekNumber,
       year: currentYear,
+      week: "",
+      database_size: 0,
+      dials_made: 0,
+      conversations: 0,
       leads_contacted: 0,
       appointments_set: 0,
+      agreements_signed: 0,
+      offers_made_accepted: 0,
       deals_closed: 0,
+      closings: 0,
       challenges: "",
       tasks: "",
+      coaching_notes: "",
+      must_do_task: "",
     },
   });
 
@@ -74,45 +92,105 @@ const Coaching = () => {
 
   const isAdmin = user?.email && ['admin@realestateonpurpose.com'].includes(user.email);
 
-  // Prepare chart data for personal metrics
+  // Prepare enhanced chart data for personal metrics
   const personalChartData = personalMetrics?.map(metric => ({
     week: `Week ${metric.week_number}`,
-    'Leads Contacted': metric.leads_contacted,
-    'Appointments Set': metric.appointments_set,
-    'Deals Closed': metric.deals_closed,
+    'Database Size': metric.database_size || 0,
+    'Dials Made': metric.dials_made || 0,
+    'Conversations': metric.conversations || 0,
+    'Leads Contacted': metric.leads_contacted || 0,
+    'Appointments Set': metric.appointments_set || 0,
+    'Agreements Signed': metric.agreements_signed || 0,
+    'Offers Made/Accepted': metric.offers_made_accepted || 0,
+    'Deals Closed': metric.deals_closed || 0,
+    'Closings': metric.closings || 0,
   })) || [];
 
   // Prepare chart data for team comparison (admin only)
   const comparisonChartData = isAdmin && teamAverages && agentCurrentMetrics ? [
     {
-      metric: 'Leads Contacted',
-      'Your Performance': agentCurrentMetrics.leads_contacted,
-      'Team Average': teamAverages.avg_leads_contacted,
+      metric: 'Database Size',
+      'Your Performance': agentCurrentMetrics.database_size || 0,
+      'Team Average': teamAverages.avg_database_size || 0,
     },
     {
-      metric: 'Appointments Set', 
-      'Your Performance': agentCurrentMetrics.appointments_set,
-      'Team Average': teamAverages.avg_appointments_set,
+      metric: 'Dials Made',
+      'Your Performance': agentCurrentMetrics.dials_made || 0,
+      'Team Average': teamAverages.avg_dials_made || 0,
+    },
+    {
+      metric: 'Conversations',
+      'Your Performance': agentCurrentMetrics.conversations || 0,
+      'Team Average': teamAverages.avg_conversations || 0,
+    },
+    {
+      metric: 'Leads Contacted',
+      'Your Performance': agentCurrentMetrics.leads_contacted || 0,
+      'Team Average': teamAverages.avg_leads_contacted || 0,
+    },
+    {
+      metric: 'Appointments Set',
+      'Your Performance': agentCurrentMetrics.appointments_set || 0,
+      'Team Average': teamAverages.avg_appointments_set || 0,
+    },
+    {
+      metric: 'Agreements Signed',
+      'Your Performance': agentCurrentMetrics.agreements_signed || 0,
+      'Team Average': teamAverages.avg_agreements_signed || 0,
+    },
+    {
+      metric: 'Offers Made/Accepted',
+      'Your Performance': agentCurrentMetrics.offers_made_accepted || 0,
+      'Team Average': teamAverages.avg_offers_made_accepted || 0,
     },
     {
       metric: 'Deals Closed',
-      'Your Performance': agentCurrentMetrics.deals_closed,
-      'Team Average': teamAverages.avg_deals_closed,
+      'Your Performance': agentCurrentMetrics.deals_closed || 0,
+      'Team Average': teamAverages.avg_deals_closed || 0,
+    },
+    {
+      metric: 'Closings',
+      'Your Performance': agentCurrentMetrics.closings || 0,
+      'Team Average': teamAverages.avg_closings || 0,
     },
   ] : [];
 
   const chartConfig = {
+    "Database Size": {
+      label: "Database Size",
+      color: "hsl(var(--chart-1))",
+    },
+    "Dials Made": {
+      label: "Dials Made",
+      color: "hsl(var(--chart-2))",
+    },
+    "Conversations": {
+      label: "Conversations",
+      color: "hsl(var(--chart-3))",
+    },
     "Leads Contacted": {
       label: "Leads Contacted",
-      color: "hsl(var(--chart-1))",
+      color: "hsl(var(--chart-4))",
     },
     "Appointments Set": {
       label: "Appointments Set", 
+      color: "hsl(var(--chart-5))",
+    },
+    "Agreements Signed": {
+      label: "Agreements Signed",
+      color: "hsl(var(--chart-1))",
+    },
+    "Offers Made/Accepted": {
+      label: "Offers Made/Accepted",
       color: "hsl(var(--chart-2))",
     },
     "Deals Closed": {
       label: "Deals Closed",
       color: "hsl(var(--chart-3))",
+    },
+    "Closings": {
+      label: "Closings",
+      color: "hsl(var(--chart-4))",
     },
     "Your Performance": {
       label: "Your Performance",
@@ -124,34 +202,61 @@ const Coaching = () => {
     },
   };
 
+  // Calculate YTD totals for dashboard cards
+  const currentYearMetrics = personalMetrics?.filter(m => m.year === currentYear) || [];
+  const ytdTotals = currentYearMetrics.reduce(
+    (acc, metric) => ({
+      database_size: Math.max(acc.database_size, metric.database_size || 0),
+      dials_made: acc.dials_made + (metric.dials_made || 0),
+      conversations: acc.conversations + (metric.conversations || 0),
+      leads_contacted: acc.leads_contacted + (metric.leads_contacted || 0),
+      appointments_set: acc.appointments_set + (metric.appointments_set || 0),
+      agreements_signed: acc.agreements_signed + (metric.agreements_signed || 0),
+      offers_made_accepted: acc.offers_made_accepted + (metric.offers_made_accepted || 0),
+      deals_closed: acc.deals_closed + (metric.deals_closed || 0),
+      closings: acc.closings + (metric.closings || 0),
+    }),
+    {
+      database_size: 0,
+      dials_made: 0,
+      conversations: 0,
+      leads_contacted: 0,
+      appointments_set: 0,
+      agreements_signed: 0,
+      offers_made_accepted: 0,
+      deals_closed: 0,
+      closings: 0,
+    }
+  );
+
   return (
     <Layout>
       <div className="container mx-auto p-6">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground">Coaching</h1>
+          <h1 className="text-3xl font-bold text-foreground">Weekly Success Scoreboard</h1>
           <p className="text-muted-foreground mt-2">
-            Submit your weekly performance and track your progress
+            Track your performance and prepare for Thursday coaching sessions
           </p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="submit">Submit Weekly Form</TabsTrigger>
+            <TabsTrigger value="submit">Submit Weekly Scorecard</TabsTrigger>
             <TabsTrigger value="dashboard">Performance Dashboard</TabsTrigger>
           </TabsList>
 
           <TabsContent value="submit" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Weekly Performance Submission</CardTitle>
+                <CardTitle>Weekly Success Scorecard</CardTitle>
                 <CardDescription>
-                  Submit your weekly performance metrics and reflections
+                  Submit your weekly metrics and prepare for Thursday coaching session
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <FormField
                         control={form.control}
                         name="week_number"
@@ -176,6 +281,7 @@ const Coaching = () => {
                           </FormItem>
                         )}
                       />
+                      
                       <FormField
                         control={form.control}
                         name="year"
@@ -195,56 +301,17 @@ const Coaching = () => {
                           </FormItem>
                         )}
                       />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="leads_contacted"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Leads Contacted</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                {...field}
-                                onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
 
                       <FormField
                         control={form.control}
-                        name="appointments_set"
+                        name="week"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Appointments Set</FormLabel>
+                            <FormLabel>Week Ending (Optional)</FormLabel>
                             <FormControl>
-                              <Input
-                                type="number"
-                                {...field}
-                                onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="deals_closed"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Deals Closed</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                {...field}
-                                onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                              <Input 
+                                type="date" 
+                                {...field} 
                               />
                             </FormControl>
                             <FormMessage />
@@ -253,46 +320,262 @@ const Coaching = () => {
                       />
                     </div>
 
-                    <FormField
-                      control={form.control}
-                      name="challenges"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Challenges Faced</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Describe any challenges you faced this week..."
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">Activity Metrics</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="database_size"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Database Size</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  {...field} 
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="dials_made"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Dials Made</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  {...field} 
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="conversations"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Real Estate Conversations</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  {...field} 
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
 
-                    <FormField
-                      control={form.control}
-                      name="tasks"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Actionable Tasks</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="List actionable tasks for next week..."
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">Pipeline Metrics</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="leads_contacted"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Leads Contacted</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  {...field} 
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="appointments_set"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Appointments Set</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  {...field} 
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="agreements_signed"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Agreements Signed</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  {...field} 
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">Transaction Metrics</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="offers_made_accepted"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Offers Made/Accepted</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  {...field} 
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="deals_closed"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Deals Closed</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  {...field} 
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="closings"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Closings</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  {...field} 
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">Coaching Notes & Goals</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="challenges"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Challenges Faced</FormLabel>
+                              <FormControl>
+                                <Textarea 
+                                  placeholder="Describe any challenges you faced this week..."
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="tasks"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Tasks for Next Week</FormLabel>
+                              <FormControl>
+                                <Textarea 
+                                  placeholder="List your tasks for next week..."
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="coaching_notes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Notes for Coaching</FormLabel>
+                              <FormControl>
+                                <Textarea 
+                                  placeholder="What do you want to discuss in coaching?"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="must_do_task"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>One Thing You MUST Do</FormLabel>
+                              <FormControl>
+                                <Textarea 
+                                  placeholder="What is the ONE critical thing you must accomplish?"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
 
                     <Button 
                       type="submit" 
                       disabled={submitMutation.isPending}
                       className="w-full"
                     >
-                      {submitMutation.isPending ? "Submitting..." : "Submit Performance"}
+                      {submitMutation.isPending ? "Submitting..." : "Submit Weekly Scorecard"}
                     </Button>
                   </form>
                 </Form>
@@ -301,6 +584,55 @@ const Coaching = () => {
           </TabsContent>
 
           <TabsContent value="dashboard" className="space-y-6">
+            {/* YTD Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Database Size</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{ytdTotals.database_size}</div>
+                  <p className="text-xs text-muted-foreground">Current</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Dials YTD</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{ytdTotals.dials_made}</div>
+                  <p className="text-xs text-muted-foreground">Year to date</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Conversations YTD</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{ytdTotals.conversations}</div>
+                  <p className="text-xs text-muted-foreground">Year to date</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Appointments YTD</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{ytdTotals.appointments_set}</div>
+                  <p className="text-xs text-muted-foreground">Year to date</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Closings YTD</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{ytdTotals.closings}</div>
+                  <p className="text-xs text-muted-foreground">Year to date</p>
+                </CardContent>
+              </Card>
+            </div>
+
             <div className="grid gap-6">
               {/* Personal Progress Chart */}
               <Card>
@@ -326,20 +658,26 @@ const Coaching = () => {
                           <Legend />
                           <Line 
                             type="monotone" 
-                            dataKey="Leads Contacted" 
+                            dataKey="Dials Made" 
                             stroke="hsl(var(--chart-1))" 
                             strokeWidth={2}
                           />
                           <Line 
                             type="monotone" 
-                            dataKey="Appointments Set" 
+                            dataKey="Conversations" 
                             stroke="hsl(var(--chart-2))" 
                             strokeWidth={2}
                           />
                           <Line 
                             type="monotone" 
-                            dataKey="Deals Closed" 
+                            dataKey="Appointments Set" 
                             stroke="hsl(var(--chart-3))" 
+                            strokeWidth={2}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="Deals Closed" 
+                            stroke="hsl(var(--chart-4))" 
                             strokeWidth={2}
                           />
                         </LineChart>
@@ -347,7 +685,7 @@ const Coaching = () => {
                     </ChartContainer>
                   ) : (
                     <div className="flex items-center justify-center h-64">
-                      <p className="text-muted-foreground">No data available. Submit your first weekly form to see your progress.</p>
+                      <p className="text-muted-foreground">No data available. Submit your first weekly scorecard to see your progress.</p>
                     </div>
                   )}
                 </CardContent>
@@ -359,7 +697,7 @@ const Coaching = () => {
                   <CardHeader>
                     <CardTitle>Team Performance Comparison</CardTitle>
                     <CardDescription>
-                      Compare your current week performance with team averages
+                      Compare your current week performance with team averages (anonymized)
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -403,4 +741,4 @@ const Coaching = () => {
   );
 };
 
-export default Coaching;
+export default WeeklySuccessScoreboard;

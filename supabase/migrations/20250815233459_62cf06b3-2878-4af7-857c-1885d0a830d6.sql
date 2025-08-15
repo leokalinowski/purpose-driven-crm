@@ -1,0 +1,11 @@
+-- Add new fields to coaching_submissions table for Weekly Success Scoreboard
+ALTER TABLE coaching_submissions 
+ADD COLUMN IF NOT EXISTS week DATE,
+ADD COLUMN IF NOT EXISTS database_size INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS dials_made INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS conversations INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS agreements_signed INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS offers_made_accepted INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS closings INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS coaching_notes TEXT,
+ADD COLUMN IF NOT EXISTS must_do_task TEXT;

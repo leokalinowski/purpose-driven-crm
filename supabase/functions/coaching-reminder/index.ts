@@ -109,15 +109,18 @@ serve(async (req) => {
             
             <p>Hi ${agent.first_name || 'there'},</p>
             
-            <p>This is a friendly reminder to submit your weekly performance data before tomorrow's Thursday Zoom meeting.</p>
+            <p>This is a friendly reminder to submit your Weekly Success Scoreboard before tomorrow's Thursday coaching Zoom session.</p>
             
             <div style="background-color: #f8fafc; border-left: 4px solid #2563eb; padding: 16px; margin: 20px 0;">
-              <p style="margin: 0; font-weight: 600;">What to submit:</p>
+              <p style="margin: 0; font-weight: 600;">What to submit in your scorecard:</p>
               <ul style="margin: 8px 0 0 16px;">
-                <li>Leads contacted this week</li>
-                <li>Appointments set</li>
-                <li>Deals closed</li>
-                <li>Weekly challenges and tasks</li>
+                <li>Database size and dials made</li>
+                <li>Real estate conversations</li>
+                <li>Leads contacted and appointments set</li>
+                <li>Agreements signed and offers made/accepted</li>
+                <li>Deals closed and closings</li>
+                <li>Challenges and coaching notes</li>
+                <li>Your ONE must-do task for next week</li>
               </ul>
             </div>
             

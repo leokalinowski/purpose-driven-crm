@@ -9,11 +9,20 @@ export interface CoachingSubmission {
   agent_id: string;
   week_number: number;
   year: number;
+  week?: string;
+  database_size: number;
+  dials_made: number;
+  conversations: number;
   leads_contacted: number;
   appointments_set: number;
+  agreements_signed: number;
+  offers_made_accepted: number;
   deals_closed: number;
+  closings: number;
   challenges?: string;
   tasks?: string;
+  coaching_notes?: string;
+  must_do_task?: string;
   created_at: string;
   updated_at: string;
 }
@@ -21,25 +30,46 @@ export interface CoachingSubmission {
 export interface CoachingFormData {
   week_number: number;
   year: number;
+  week?: string;
+  database_size: number;
+  dials_made: number;
+  conversations: number;
   leads_contacted: number;
   appointments_set: number;
+  agreements_signed: number;
+  offers_made_accepted: number;
   deals_closed: number;
+  closings: number;
   challenges?: string;
   tasks?: string;
+  coaching_notes?: string;
+  must_do_task?: string;
 }
 
 export interface WeeklyMetrics {
   week_number: number;
   year: number;
+  database_size: number;
+  dials_made: number;
+  conversations: number;
   leads_contacted: number;
   appointments_set: number;
+  agreements_signed: number;
+  offers_made_accepted: number;
   deals_closed: number;
+  closings: number;
 }
 
 export interface TeamAverages {
+  avg_database_size: number;
+  avg_dials_made: number;
+  avg_conversations: number;
   avg_leads_contacted: number;
   avg_appointments_set: number;
+  avg_agreements_signed: number;
+  avg_offers_made_accepted: number;
   avg_deals_closed: number;
+  avg_closings: number;
 }
 
 export const useCoachingSubmissions = () => {
@@ -86,11 +116,20 @@ export const useSubmitCoachingForm = () => {
         const { data, error } = await supabase
           .from('coaching_submissions')
           .update({
-            leads_contacted: formData.leads_contacted,
-            appointments_set: formData.appointments_set,
-            deals_closed: formData.deals_closed,
+            week: formData.week || null,
+            database_size: formData.database_size || 0,
+            dials_made: formData.dials_made || 0,
+            conversations: formData.conversations || 0,
+            leads_contacted: formData.leads_contacted || 0,
+            appointments_set: formData.appointments_set || 0,
+            agreements_signed: formData.agreements_signed || 0,
+            offers_made_accepted: formData.offers_made_accepted || 0,
+            deals_closed: formData.deals_closed || 0,
+            closings: formData.closings || 0,
             challenges: formData.challenges || null,
             tasks: formData.tasks || null,
+            coaching_notes: formData.coaching_notes || null,
+            must_do_task: formData.must_do_task || null,
           })
           .eq('id', existingSubmission.id)
           .select()
@@ -111,12 +150,21 @@ export const useSubmitCoachingForm = () => {
             agent_id: user.id,
             week_number: formData.week_number,
             year: formData.year,
+            week: formData.week || null,
             week_ending: weekEnd.toISOString().split('T')[0], // Temporary for type compatibility
-            leads_contacted: formData.leads_contacted,
-            appointments_set: formData.appointments_set,
-            deals_closed: formData.deals_closed,
+            database_size: formData.database_size || 0,
+            dials_made: formData.dials_made || 0,
+            conversations: formData.conversations || 0,
+            leads_contacted: formData.leads_contacted || 0,
+            appointments_set: formData.appointments_set || 0,
+            agreements_signed: formData.agreements_signed || 0,
+            offers_made_accepted: formData.offers_made_accepted || 0,
+            deals_closed: formData.deals_closed || 0,
+            closings: formData.closings || 0,
             challenges: formData.challenges || null,
             tasks: formData.tasks || null,
+            coaching_notes: formData.coaching_notes || null,
+            must_do_task: formData.must_do_task || null,
           })
           .select()
           .single();
@@ -155,7 +203,7 @@ export const usePersonalMetrics = () => {
 
       const { data, error } = await supabase
         .from('coaching_submissions')
-        .select('week_number, year, leads_contacted, appointments_set, deals_closed')
+        .select('week_number, year, database_size, dials_made, conversations, leads_contacted, appointments_set, agreements_signed, offers_made_accepted, deals_closed, closings')
         .eq('agent_id', user.id)
         .order('year', { ascending: true })
         .order('week_number', { ascending: true });
@@ -181,7 +229,7 @@ export const useTeamAverages = () => {
 
       const { data, error } = await supabase
         .from('coaching_submissions')
-        .select('leads_contacted, appointments_set, deals_closed')
+        .select('database_size, dials_made, conversations, leads_contacted, appointments_set, agreements_signed, offers_made_accepted, deals_closed, closings')
         .eq('week_number', currentWeekNumber)
         .eq('year', currentYear);
 
@@ -189,25 +237,43 @@ export const useTeamAverages = () => {
 
       if (data.length === 0) {
         return {
+          avg_database_size: 0,
+          avg_dials_made: 0,
+          avg_conversations: 0,
           avg_leads_contacted: 0,
           avg_appointments_set: 0,
+          avg_agreements_signed: 0,
+          avg_offers_made_accepted: 0,
           avg_deals_closed: 0,
+          avg_closings: 0,
         };
       }
 
       const totals = data.reduce(
         (acc, submission) => ({
-          leads_contacted: acc.leads_contacted + submission.leads_contacted,
-          appointments_set: acc.appointments_set + submission.appointments_set,
-          deals_closed: acc.deals_closed + submission.deals_closed,
+          database_size: acc.database_size + (submission.database_size || 0),
+          dials_made: acc.dials_made + (submission.dials_made || 0),
+          conversations: acc.conversations + (submission.conversations || 0),
+          leads_contacted: acc.leads_contacted + (submission.leads_contacted || 0),
+          appointments_set: acc.appointments_set + (submission.appointments_set || 0),
+          agreements_signed: acc.agreements_signed + (submission.agreements_signed || 0),
+          offers_made_accepted: acc.offers_made_accepted + (submission.offers_made_accepted || 0),
+          deals_closed: acc.deals_closed + (submission.deals_closed || 0),
+          closings: acc.closings + (submission.closings || 0),
         }),
-        { leads_contacted: 0, appointments_set: 0, deals_closed: 0 }
+        { database_size: 0, dials_made: 0, conversations: 0, leads_contacted: 0, appointments_set: 0, agreements_signed: 0, offers_made_accepted: 0, deals_closed: 0, closings: 0 }
       );
 
       return {
+        avg_database_size: Math.round(totals.database_size / data.length),
+        avg_dials_made: Math.round(totals.dials_made / data.length),
+        avg_conversations: Math.round(totals.conversations / data.length),
         avg_leads_contacted: Math.round(totals.leads_contacted / data.length),
         avg_appointments_set: Math.round(totals.appointments_set / data.length),
+        avg_agreements_signed: Math.round(totals.agreements_signed / data.length),
+        avg_offers_made_accepted: Math.round(totals.offers_made_accepted / data.length),
         avg_deals_closed: Math.round(totals.deals_closed / data.length),
+        avg_closings: Math.round(totals.closings / data.length),
       } as TeamAverages;
     },
     enabled: !!user,
@@ -228,7 +294,7 @@ export const useAgentCurrentWeekMetrics = () => {
 
       const { data, error } = await supabase
         .from('coaching_submissions')
-        .select('leads_contacted, appointments_set, deals_closed')
+        .select('database_size, dials_made, conversations, leads_contacted, appointments_set, agreements_signed, offers_made_accepted, deals_closed, closings')
         .eq('agent_id', user.id)
         .eq('week_number', currentWeekNumber)
         .eq('year', currentYear)
@@ -237,9 +303,15 @@ export const useAgentCurrentWeekMetrics = () => {
       if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "not found"
       
       return data || {
+        database_size: 0,
+        dials_made: 0,
+        conversations: 0,
         leads_contacted: 0,
         appointments_set: 0,
+        agreements_signed: 0,
+        offers_made_accepted: 0,
         deals_closed: 0,
+        closings: 0,
       };
     },
     enabled: !!user,
