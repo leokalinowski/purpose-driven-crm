@@ -57,13 +57,30 @@ serve(async (req) => {
       const apiData = await response.json()
       console.log('OpenToClose API response received:', apiData?.data?.length || 0, 'deals')
       
-      // Filter for "Real Estate on Purpose" team only
-      // Note: Adjust the filter field based on OpenToClose API response structure
+      // Log the full API response structure for debugging
+      console.log('Full API response structure:', JSON.stringify(apiData, null, 2))
+      
+      // Filter by team name, organization, or any team identifier field
       otcDeals = (apiData?.data || []).filter(deal => {
-        // Filter by team name, organization, or any team identifier field
-        // This will need to be adjusted based on the actual OpenToClose API response structure
-        const teamName = deal?.team?.name || deal?.organization?.name || deal?.company?.name
-        return teamName && teamName.toLowerCase().includes('real estate on purpose')
+        // Check multiple possible team/organization fields
+        const teamName = deal?.team?.name || deal?.organization?.name || deal?.company?.name || 
+                         deal?.agent?.team || deal?.listing_agent?.team || deal?.buyer_agent?.team ||
+                         deal?.office?.name || deal?.brokerage?.name
+        
+        console.log('Deal team info:', {
+          dealId: deal?.id,
+          teamName,
+          fullDeal: JSON.stringify(deal, null, 2)
+        })
+        
+        if (teamName) {
+          return teamName.toLowerCase().includes('real estate on purpose') || 
+                 teamName.toLowerCase().includes('reop') ||
+                 teamName.toLowerCase().includes('real estate on purpose')
+        }
+        
+        // If no team filtering available, return all deals for now
+        return true
       })
       
       console.log('Filtered deals for Real Estate on Purpose:', otcDeals.length)
@@ -79,14 +96,22 @@ serve(async (req) => {
     }
 
     // Map OpenToClose stages to our valid database values
-    const mapTransactionStage = (otcStage) => {
+    const mapTransactionStage = (otcStage, status) => {
       const stageMapping = {
         'under_contract': 'under_contract',
         'pending': 'under_contract', 
         'contract': 'under_contract',
-        'closed': 'under_contract', // Map closed to under_contract as our default
+        'closed': 'closed', // Properly map closed deals to closed status
         'active': 'under_contract',
-        'listing': 'under_contract'
+        'listing': 'under_contract',
+        'sold': 'closed',
+        'complete': 'closed',
+        'settlement': 'closed'
+      }
+      
+      // If status indicates closed, map to closed regardless of stage
+      if (status && status.toLowerCase() === 'closed') {
+        return 'closed'
       }
       
       return stageMapping[otcStage?.toLowerCase()] || 'under_contract'
@@ -98,20 +123,33 @@ serve(async (req) => {
     // Process each deal from OpenToClose
     for (const deal of otcDeals) {
       try {
+        // Log deal structure for debugging
+        console.log('Processing deal:', JSON.stringify(deal, null, 2))
+        
         // Transform OTC data to our transaction format
         const transactionData = {
           responsible_agent: agentId,
           otc_deal_id: deal.id || deal.deal_id || deal._id,
-          client_name: deal.client_name || deal.buyer_name || deal.seller_name || `${deal.first_name || ''} ${deal.last_name || ''}`.trim(),
-          property_address: deal.property_address || deal.address || deal.property?.address,
-          sale_price: parseFloat(deal.sale_price || deal.price || deal.listing_price || 0),
-          gci: parseFloat(deal.gci || deal.commission || deal.agent_commission || 0),
-          status: deal.status === 'closed' ? 'closed' : 'ongoing',
-          transaction_stage: mapTransactionStage(deal.transaction_stage || deal.stage || deal.status),
-          contract_date: deal.contract_date || deal.contract_executed_date || deal.offer_accepted_date,
-          closing_date: deal.closing_date || deal.settlement_date || deal.close_date,
+          client_name: deal.client_name || deal.buyer_name || deal.seller_name || 
+                      `${deal.first_name || ''} ${deal.last_name || ''}`.trim() ||
+                      `${deal.buyer?.first_name || ''} ${deal.buyer?.last_name || ''}`.trim() ||
+                      `${deal.seller?.first_name || ''} ${deal.seller?.last_name || ''}`.trim(),
+          property_address: deal.property_address || deal.address || deal.property?.address || 
+                           deal.listing?.address || deal.property?.street_address,
+          sale_price: parseFloat(deal.sale_price || deal.price || deal.listing_price || 
+                                deal.purchase_price || deal.contract_price || 0),
+          gci: parseFloat(deal.gci || deal.commission || deal.agent_commission || 
+                         deal.total_commission || deal.gross_commission || 0),
+          status: (deal.status === 'closed' || deal.stage === 'closed' || deal.transaction_stage === 'closed') ? 'closed' : 'ongoing',
+          transaction_stage: mapTransactionStage(deal.transaction_stage || deal.stage || deal.status, deal.status),
+          contract_date: deal.contract_date || deal.contract_executed_date || deal.offer_accepted_date ||
+                        deal.under_contract_date || deal.agreement_date,
+          closing_date: deal.closing_date || deal.settlement_date || deal.close_date ||
+                       deal.scheduled_closing_date || deal.actual_closing_date,
           updated_at: new Date().toISOString(),
         }
+        
+        console.log('Mapped transaction data:', JSON.stringify(transactionData, null, 2))
 
         // Upsert transaction (insert or update if exists)
         const { error } = await supabase
