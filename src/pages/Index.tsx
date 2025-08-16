@@ -61,7 +61,7 @@ const Index = () => {
           <DashboardCharts />
         </div>
         {/* Recent Activity */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <div className="w-full">
           <RecentActivity />
         </div>
       </div>

@@ -15,54 +15,66 @@ export function DashboardCharts() {
 
   return (
     <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Leads (last 6 months)</CardTitle>
         </CardHeader>
-        <CardContent>
-          <ChartContainer config={config}>
-            <LineChart data={data.charts.leadsTrend} margin={{ left: 12, right: 12 }}>
-              <CartesianGrid vertical={false} />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Line type="monotone" dataKey="value" stroke="var(--color-leads, currentColor)" dot={false} />
-            </LineChart>
-          </ChartContainer>
+        <CardContent className="p-4">
+          <div className="w-full h-80">
+            <ChartContainer config={config} className="w-full h-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={data.charts.leadsTrend} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                  <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Line type="monotone" dataKey="value" stroke="var(--color-leads, currentColor)" dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Completed Tasks (last 6 months)</CardTitle>
         </CardHeader>
-        <CardContent>
-          <ChartContainer config={config}>
-            <LineChart data={data.charts.tasksTrend} margin={{ left: 12, right: 12 }}>
-              <CartesianGrid vertical={false} />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Line type="monotone" dataKey="value" stroke="var(--color-tasks, currentColor)" dot={false} />
-            </LineChart>
-          </ChartContainer>
+        <CardContent className="p-4">
+          <div className="w-full h-80">
+            <ChartContainer config={config} className="w-full h-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={data.charts.tasksTrend} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                  <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Line type="monotone" dataKey="value" stroke="var(--color-tasks, currentColor)" dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Transactions (last 6 months)</CardTitle>
         </CardHeader>
-        <CardContent>
-          <ChartContainer config={config}>
-            <LineChart data={data.charts.transactionsTrend} margin={{ left: 12, right: 12 }}>
-              <CartesianGrid vertical={false} />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Line type="monotone" dataKey="value" stroke="var(--color-tx, currentColor)" dot={false} />
-            </LineChart>
-          </ChartContainer>
+        <CardContent className="p-4">
+          <div className="w-full h-80">
+            <ChartContainer config={config} className="w-full h-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={data.charts.transactionsTrend} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                  <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Line type="monotone" dataKey="value" stroke="var(--color-tx, currentColor)" dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </div>
         </CardContent>
       </Card>
     </div>
