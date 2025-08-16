@@ -100,7 +100,7 @@ const Auth = () => {
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <img 
-              src="/src/assets/reop-logo-full.png" 
+              src="https://cguoaokqwgqvzkqqezcq.supabase.co/storage/v1/object/public/assets/logos/reop-logo-full.png" 
               alt="Real Estate on Purpose Logo" 
               className="h-16 w-auto object-contain"
             />

@@ -50,7 +50,7 @@ export function AppSidebar() {
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3 mb-3">
           <img 
-            src="/src/assets/reop-logo-compact.png" 
+            src="https://cguoaokqwgqvzkqqezcq.supabase.co/storage/v1/object/public/assets/logos/reop-logo-compact.png" 
             alt="Real Estate on Purpose Logo" 
             className="h-8 w-auto object-contain"
           />
