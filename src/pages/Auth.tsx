@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { cleanupAuthState } from '@/utils/auth';
+import { Chrome } from 'lucide-react';
 import authBackground from '@/assets/auth-background.jpg';
 
 const Auth = () => {
@@ -17,7 +18,7 @@ const Auth = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, signInWithGoogle, user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -95,6 +96,37 @@ const Auth = () => {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    try {
+      cleanupAuthState();
+      try {
+        await supabase.auth.signOut({ scope: 'global' });
+      } catch (err) {
+        // Continue even if this fails
+      }
+
+      const { error } = await signInWithGoogle();
+      if (error) {
+        console.error('Google sign in error:', error);
+        toast({
+          title: "Error",
+          description: error.message || "Failed to sign in with Google",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div 
       className="min-h-screen flex items-center justify-center p-4 relative"
@@ -114,7 +146,7 @@ const Auth = () => {
       />
       
       {/* Glass Morphism Card */}
-      <Card className="w-full max-w-md backdrop-blur-lg bg-white/10 border-white/20 shadow-2xl animate-scale-in relative z-10">
+      <Card className="w-full max-w-md backdrop-blur-lg bg-white/90 border-white/30 shadow-2xl animate-scale-in relative z-10">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-6">
             <img 
@@ -123,46 +155,65 @@ const Auth = () => {
               className="h-20 w-auto object-contain filter drop-shadow-lg"
             />
           </div>
-          <CardDescription className="text-white/90 text-lg font-medium">
+          <CardDescription className="text-gray-600 text-lg font-medium">
             Sign in to access your professional CRM
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 bg-white/20 backdrop-blur-sm">
-              <TabsTrigger value="signin" className="data-[state=active]:bg-white/30 data-[state=active]:text-white text-white/80">Sign In</TabsTrigger>
-              <TabsTrigger value="signup" className="data-[state=active]:bg-white/30 data-[state=active]:text-white text-white/80">Sign Up</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 bg-gray-100 backdrop-blur-sm">
+              <TabsTrigger value="signin" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-700">Sign In</TabsTrigger>
+              <TabsTrigger value="signup" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-700">Sign Up</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
+              <Button 
+                onClick={handleGoogleSignIn}
+                variant="outline"
+                className="w-full border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 rounded-lg transition-all duration-300 mb-4"
+                disabled={loading}
+              >
+                <Chrome className="w-5 h-5 mr-2" />
+                {loading ? "Signing In..." : "Continue with Google"}
+              </Button>
+              
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-gray-300" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-gray-500">Or continue with email</span>
+                </div>
+              </div>
+
+              <form onSubmit={handleSignIn} className="space-y-4 mt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-white/90 font-medium">Email</Label>
+                  <Label htmlFor="email" className="text-gray-700 font-medium">Email</Label>
                   <Input
                     id="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="bg-white/20 border-white/30 text-white placeholder:text-white/60 focus:border-white/50 backdrop-blur-sm"
+                    className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
                     placeholder="Enter your email"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-white/90 font-medium">Password</Label>
+                  <Label htmlFor="password" className="text-gray-700 font-medium">Password</Label>
                   <Input
                     id="password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="bg-white/20 border-white/30 text-white placeholder:text-white/60 focus:border-white/50 backdrop-blur-sm"
+                    className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
                     placeholder="Enter your password"
                   />
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full bg-white/20 hover:bg-white/30 text-white border border-white/30 backdrop-blur-sm transition-all duration-300 hover:scale-105 font-semibold" 
+                  className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]" 
                   disabled={loading}
                 >
                   {loading ? 'Signing in...' : 'Sign In'}
@@ -171,56 +222,75 @@ const Auth = () => {
             </TabsContent>
             
             <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
+              <Button 
+                onClick={handleGoogleSignIn}
+                variant="outline"
+                className="w-full border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 rounded-lg transition-all duration-300 mb-4"
+                disabled={loading}
+              >
+                <Chrome className="w-5 h-5 mr-2" />
+                {loading ? "Signing Up..." : "Continue with Google"}
+              </Button>
+              
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-gray-300" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-gray-500">Or continue with email</span>
+                </div>
+              </div>
+
+              <form onSubmit={handleSignUp} className="space-y-4 mt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="firstName" className="text-white/90 font-medium">First Name</Label>
+                    <Label htmlFor="firstName" className="text-gray-700 font-medium">First Name</Label>
                     <Input
                       id="firstName"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
-                      className="bg-white/20 border-white/30 text-white placeholder:text-white/60 focus:border-white/50 backdrop-blur-sm"
+                      className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
                       placeholder="First name"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lastName" className="text-white/90 font-medium">Last Name</Label>
+                    <Label htmlFor="lastName" className="text-gray-700 font-medium">Last Name</Label>
                     <Input
                       id="lastName"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
-                      className="bg-white/20 border-white/30 text-white placeholder:text-white/60 focus:border-white/50 backdrop-blur-sm"
+                      className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
                       placeholder="Last name"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signupEmail" className="text-white/90 font-medium">Email</Label>
+                  <Label htmlFor="signupEmail" className="text-gray-700 font-medium">Email</Label>
                   <Input
                     id="signupEmail"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="bg-white/20 border-white/30 text-white placeholder:text-white/60 focus:border-white/50 backdrop-blur-sm"
+                    className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
                     placeholder="Enter your email"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signupPassword" className="text-white/90 font-medium">Password</Label>
+                  <Label htmlFor="signupPassword" className="text-gray-700 font-medium">Password</Label>
                   <Input
                     id="signupPassword"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="bg-white/20 border-white/30 text-white placeholder:text-white/60 focus:border-white/50 backdrop-blur-sm"
+                    className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
                     placeholder="Create a password"
                   />
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full bg-white/20 hover:bg-white/30 text-white border border-white/30 backdrop-blur-sm transition-all duration-300 hover:scale-105 font-semibold" 
+                  className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]" 
                   disabled={loading}
                 >
                   {loading ? 'Creating account...' : 'Create Account'}
