@@ -47,18 +47,20 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="p-4">
-        <div className="flex items-center gap-3 mb-2">
+      <SidebarHeader className="p-4 border-b border-sidebar-border">
+        <div className="flex items-center gap-3 mb-3">
           <img 
-            src="/lovable-uploads/logo-main.png" 
+            src="/src/assets/reop-logo.png" 
             alt="Real Estate on Purpose Logo" 
-            className="h-8 w-auto"
+            className="h-8 w-auto object-contain"
           />
-          <div>
-            <h2 className="text-lg font-semibold text-sidebar-foreground">Real Estate on Purpose</h2>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-semibold text-sidebar-foreground truncate">Real Estate on Purpose</h2>
           </div>
         </div>
-        <p className="text-sm text-sidebar-foreground/80">{user?.email}</p>
+        <div className="text-xs text-sidebar-foreground/70 truncate">
+          {user?.email}
+        </div>
       </SidebarHeader>
       
       <SidebarContent>

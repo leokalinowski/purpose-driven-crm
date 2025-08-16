@@ -100,9 +100,9 @@ const Auth = () => {
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <img 
-              src="/lovable-uploads/logo-main.png" 
+              src="/src/assets/reop-logo.png" 
               alt="Real Estate on Purpose Logo" 
-              className="h-16 w-auto"
+              className="h-16 w-auto object-contain"
             />
           </div>
           <CardTitle className="text-2xl font-bold text-primary">Real Estate on Purpose</CardTitle>
