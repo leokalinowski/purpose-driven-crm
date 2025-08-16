@@ -98,7 +98,14 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Real Estate on Purpose</CardTitle>
+          <div className="flex justify-center mb-4">
+            <img 
+              src="/lovable-uploads/logo-main.png" 
+              alt="Real Estate on Purpose Logo" 
+              className="h-16 w-auto"
+            />
+          </div>
+          <CardTitle className="text-2xl font-bold text-primary">Real Estate on Purpose</CardTitle>
           <CardDescription>Sign in to access your CRM</CardDescription>
         </CardHeader>
         <CardContent>
