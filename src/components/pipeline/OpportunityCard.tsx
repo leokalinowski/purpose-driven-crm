@@ -14,7 +14,7 @@ interface OpportunityCardProps {
 export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
   const [dragDistance, setDragDistance] = useState(0);
   const startPos = useRef({ x: 0, y: 0 });
-  
+
   const [{ isDragging }, drag] = useDrag({
     type: 'opportunity',
     item: { id: opportunity.id },
@@ -37,7 +37,7 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
   const handleMouseMove = (e: React.MouseEvent) => {
     if (startPos.current.x !== 0 || startPos.current.y !== 0) {
       const distance = Math.sqrt(
-        Math.pow(e.clientX - startPos.current.x, 2) + 
+        Math.pow(e.clientX - startPos.current.x, 2) +
         Math.pow(e.clientY - startPos.current.y, 2)
       );
       setDragDistance(distance);
@@ -70,9 +70,9 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
   };
 
   const dncStatus = getDNCStatus();
-  
+
   // Get display name with fallback
-  const displayName = opportunity.contact?.first_name || opportunity.contact?.last_name 
+  const displayName = opportunity.contact?.first_name || opportunity.contact?.last_name
     ? `${opportunity.contact?.first_name || ''} ${opportunity.contact?.last_name || ''}`.trim()
     : 'Unknown Contact';
 
@@ -87,12 +87,13 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
         cursor-pointer transition-all duration-200 hover:shadow-md hover:bg-accent/30 group
         ${isDragging ? 'opacity-50 scale-95' : 'opacity-100'}
         w-full border-l-4 border-l-primary/20 hover:border-l-primary/60
-        min-h-[140px] bg-card
+        min-h-[140px] bg-card sm:min-h-[160px] md:p-4 // Added responsive padding
       `}
     >
-      <CardContent className="p-3 h-full flex flex-col">
+      <CardContent className="p-3 h-full flex flex-col sm:flex-row sm:gap-4 md:flex-col // Responsive layout
+">
         {/* Header with name and stage */}
-        <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex items-start justify-between gap-2 mb-3 sm:mb-0 md:mb-3">
           <div className="flex-1 min-w-0">
             <h4 className="font-semibold text-sm text-foreground line-clamp-2 group-hover:text-primary transition-colors leading-tight">
               {displayName}
@@ -103,14 +104,13 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
               </p>
             )}
           </div>
-          <Badge 
-            variant="secondary" 
+          <Badge
+            variant="secondary"
             className={`text-xs flex-shrink-0 ${getStageColor(opportunity.stage)} capitalize px-2 py-1`}
           >
             {opportunity.stage}
           </Badge>
         </div>
-
         {/* Main content */}
         <div className="flex-1 space-y-2">
           {opportunity.deal_value && opportunity.deal_value > 0 && (
@@ -119,14 +119,12 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
               <span className="truncate">${opportunity.deal_value.toLocaleString()}</span>
             </div>
           )}
-
           {opportunity.expected_close_date && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
               <span className="truncate">{format(new Date(opportunity.expected_close_date), 'MMM dd')}</span>
             </div>
           )}
-
           {opportunity.contact?.phone && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <User className="h-3.5 w-3.5 flex-shrink-0" />
@@ -134,7 +132,6 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
             </div>
           )}
         </div>
-
         {/* Footer */}
         <div className="flex items-center justify-between pt-2 mt-auto border-t border-border">
           <div className="flex items-center gap-1">
@@ -143,7 +140,7 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
               {dncStatus.text}
             </span>
           </div>
-          
+         
           {opportunity.notes && (
             <MessageSquare className="h-3 w-3 text-muted-foreground" />
           )}
