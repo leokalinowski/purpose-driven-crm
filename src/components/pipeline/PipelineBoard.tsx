@@ -1,68 +1,46 @@
-import { useDrop } from 'react-dnd';
-import { Opportunity } from "@/hooks/usePipeline";
-import { OpportunityCard } from "./OpportunityCard";
-import { Badge } from "@/components/ui/badge";
 
-interface PipelineColumnProps {
-  stage: {
-    key: string;
-    label: string;
-    color: string;
-  };
+import { PipelineColumn } from "./PipelineColumn";
+import { Opportunity } from "@/hooks/usePipeline";
+
+const PIPELINE_STAGES = [
+  { key: 'lead', label: 'Lead', color: 'border-gray-300' },
+  { key: 'qualified', label: 'Qualified', color: 'border-blue-300' },
+  { key: 'appointment', label: 'Appointment', color: 'border-yellow-300' },
+  { key: 'contract', label: 'Contract', color: 'border-orange-300' },
+  { key: 'closed', label: 'Closed', color: 'border-green-300' }
+];
+
+interface PipelineBoardProps {
   opportunities: Opportunity[];
   onStageUpdate: (opportunityId: string, newStage: string) => Promise<void>;
   onEditOpportunity: (opportunity: Opportunity) => void;
+  loading: boolean;
 }
 
-export function PipelineColumn({ stage, opportunities, onStageUpdate, onEditOpportunity }: PipelineColumnProps) {
-  const [{ isOver }, drop] = useDrop({
-    accept: 'opportunity',
-    drop: (item: { id: string }) => {
-      if (item.id) {
-        onStageUpdate(item.id, stage.key);
-      }
-    },
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
-    }),
-  });
-
-  const totalValue = opportunities.reduce((sum, opp) => sum + (opp.deal_value || 0), 0);
+export function PipelineBoard({ opportunities, onStageUpdate, onEditOpportunity, loading }: PipelineBoardProps) {
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
-    <div
-      ref={drop}
-      className={`
-        min-h-[200px] p-2 sm:p-4 rounded-lg border-2 border-dashed transition-colors
-        ${isOver ? 'border-primary bg-primary/5' : stage.color}
-        w-full sm:w-auto // Full width on mobile
-      `}
-    >
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-2 sm:mb-4 gap-2">
-        <div>
-          <h3 className="font-semibold text-sm">{stage.label}</h3>
-          <Badge variant="secondary" className="text-xs mt-1">
-            {opportunities.length} deals
-          </Badge>
-        </div>
-        {totalValue > 0 && (
-          <div className="text-right">
-            <div className="text-sm font-medium">
-              ${totalValue.toLocaleString()}
-            </div>
-          </div>
-        )}
-      </div>
-     
-      <div className="space-y-2 sm:space-y-3">
-        {opportunities.map((opportunity) => (
-          <OpportunityCard
-            key={opportunity.id}
-            opportunity={opportunity}
-            onEdit={onEditOpportunity}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 overflow-x-auto">
+      {PIPELINE_STAGES.map((stage) => {
+        const stageOpportunities = opportunities.filter(opp => opp.stage === stage.key);
+        
+        return (
+          <PipelineColumn
+            key={stage.key}
+            stage={stage}
+            opportunities={stageOpportunities}
+            onStageUpdate={onStageUpdate}
+            onEditOpportunity={onEditOpportunity}
           />
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }
