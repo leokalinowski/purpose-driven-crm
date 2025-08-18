@@ -213,8 +213,22 @@ export type Database = {
             foreignKeyName: "coaching_sessions_agent_id_fkey"
             columns: ["agent_id"]
             isOneToOne: false
+            referencedRelation: "agent_performance_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "coaching_sessions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "coaching_sessions_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "agent_performance_summary"
+            referencedColumns: ["agent_id"]
           },
           {
             foreignKeyName: "coaching_sessions_coach_id_fkey"
@@ -296,6 +310,13 @@ export type Database = {
           year?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "coaching_submissions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_performance_summary"
+            referencedColumns: ["agent_id"]
+          },
           {
             foreignKeyName: "coaching_submissions_agent_id_fkey"
             columns: ["agent_id"]
@@ -434,6 +455,13 @@ export type Database = {
             foreignKeyName: "dtd2_tasks_agent_id_fkey"
             columns: ["agent_id"]
             isOneToOne: false
+            referencedRelation: "agent_performance_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "dtd2_tasks_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
@@ -565,10 +593,44 @@ export type Database = {
             foreignKeyName: "events_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "agent_performance_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
         ]
+      }
+      invitations: {
+        Row: {
+          code: string
+          created_at: string | null
+          email: string
+          expires_at: string | null
+          id: string
+          used: boolean | null
+        }
+        Insert: {
+          code?: string
+          created_at?: string | null
+          email: string
+          expires_at?: string | null
+          id?: string
+          used?: boolean | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          email?: string
+          expires_at?: string | null
+          id?: string
+          used?: boolean | null
+        }
+        Relationships: []
       }
       leads: {
         Row: {
@@ -675,6 +737,13 @@ export type Database = {
             foreignKeyName: "Leads Table [Agent's Name]_assigned_agent_id_fkey"
             columns: ["assigned_agent_id"]
             isOneToOne: false
+            referencedRelation: "agent_performance_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "Leads Table [Agent's Name]_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
@@ -772,6 +841,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "newsletter_campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "agent_performance_summary"
+            referencedColumns: ["agent_id"]
+          },
           {
             foreignKeyName: "newsletter_campaigns_created_by_fkey"
             columns: ["created_by"]
@@ -1073,6 +1149,13 @@ export type Database = {
             foreignKeyName: "social_media_analytics_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "agent_performance_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "social_media_analytics_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
@@ -1139,6 +1222,13 @@ export type Database = {
             foreignKeyName: "transaction_coordination_responsible_agent_fkey"
             columns: ["responsible_agent"]
             isOneToOne: false
+            referencedRelation: "agent_performance_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "transaction_coordination_responsible_agent_fkey"
+            columns: ["responsible_agent"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
@@ -1173,7 +1263,42 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      agent_performance_summary: {
+        Row: {
+          active_transactions: number | null
+          agent_id: string | null
+          agent_name: string | null
+          agent_since: string | null
+          coaching_sessions: number | null
+          completed_tasks: number | null
+          completion_rate: number | null
+          contacts_this_month: number | null
+          email: string | null
+          total_contacts: number | null
+          total_events: number | null
+          total_gci: number | null
+          total_tasks: number | null
+          total_transactions: number | null
+          upcoming_events: number | null
+        }
+        Relationships: []
+      }
+      monthly_business_metrics: {
+        Row: {
+          avg_attendance: number | null
+          avg_open_rate: number | null
+          events_held: number | null
+          monthly_gci: number | null
+          new_contacts: number | null
+          new_transactions: number | null
+          newsletters_sent: number | null
+          period: string | null
+          tasks_completed: number | null
+          tasks_created: number | null
+          total_contacts_cumulative: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_current_user_role: {

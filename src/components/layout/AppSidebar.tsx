@@ -98,6 +98,17 @@ export function AppSidebar() {
                 <SidebarMenuItem>
                   <SidebarMenuButton 
                     asChild
+                    isActive={location.pathname === '/admin/dashboard'}
+                  >
+                    <Link to="/admin/dashboard">
+                      <BarChart3 />
+                      <span>Admin Dashboard</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    asChild
                     isActive={location.pathname === '/admin/invitations'}
                   >
                     <Link to="/admin/invitations">

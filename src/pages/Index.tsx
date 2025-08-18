@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { Layout } from '@/components/layout/Layout';
 import { DashboardCards } from '@/components/dashboard/DashboardCards';
 import { RecentActivity } from '@/components/dashboard/RecentActivity';
@@ -10,17 +11,23 @@ import { DashboardCharts } from '@/components/dashboard/DashboardCharts';
 
 const Index = () => {
   const { user, loading } = useAuth();
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!loading && !user) {
       navigate('/auth');
-    } else if (user) {
-      document.title = 'Dashboard | Real Estate on Purpose';
+    } else if (user && !roleLoading) {
+      // Redirect admins to admin dashboard by default
+      if (isAdmin) {
+        navigate('/admin/dashboard');
+      } else {
+        document.title = 'Dashboard | Real Estate on Purpose';
+      }
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, isAdmin, roleLoading, navigate]);
 
-  if (loading) {
+  if (loading || roleLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
