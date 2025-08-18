@@ -6,6 +6,57 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function parseXMLResponse(xmlText: string): DNCApiResponse {
+  try {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+    
+    // Check for XML parsing errors
+    const parserError = xmlDoc.querySelector('parsererror');
+    if (parserError) {
+      return {
+        isOK: false,
+        isDNC: false,
+        error: 'Failed to parse XML response',
+        rawResponse: xmlText
+      };
+    }
+
+    const responseCode = xmlDoc.querySelector('RESPONSECODE')?.textContent?.trim();
+    
+    if (responseCode !== 'OK') {
+      const responseMsg = xmlDoc.querySelector('RESPONSEMSG')?.textContent?.trim() || 'Unknown error';
+      return {
+        isOK: false,
+        isDNC: false,
+        error: `API Response: ${responseCode} - ${responseMsg}`,
+        rawResponse: xmlText
+      };
+    }
+
+    // Check DNC flags - flag as DNC if ANY of these are "Y"
+    const nationalDNC = xmlDoc.querySelector('national_dnc')?.textContent?.trim() === 'Y';
+    const stateDNC = xmlDoc.querySelector('state_dnc')?.textContent?.trim() === 'Y';
+    const dma = xmlDoc.querySelector('dma')?.textContent?.trim() === 'Y';
+    const litigator = xmlDoc.querySelector('litigator')?.textContent?.trim() === 'Y';
+    
+    const isDNC = nationalDNC || stateDNC || dma || litigator;
+
+    return {
+      isOK: true,
+      isDNC,
+      rawResponse: xmlText
+    };
+  } catch (error) {
+    return {
+      isOK: false,
+      isDNC: false,
+      error: `XML parsing failed: ${error.message}`,
+      rawResponse: xmlText
+    };
+  }
+}
+
 interface Contact {
   id: string;
   phone: string | null;
@@ -13,8 +64,10 @@ interface Contact {
 }
 
 interface DNCApiResponse {
-  isDNC?: boolean;
+  isOK: boolean;
+  isDNC: boolean;
   error?: string;
+  rawResponse?: string;
 }
 
 serve(async (req) => {
@@ -111,12 +164,16 @@ serve(async (req) => {
               // Add small delay to avoid rate limiting
               await new Promise(resolve => setTimeout(resolve, 100));
 
-              // Note: This is a placeholder API endpoint - you'll need to adjust based on the actual DNC API
-              // The real DNC API might have different endpoints and response formats
-              const response = await fetch(`https://api.donotcall.gov/check?key=${dncApiKey}&phone=${contact.phone}`, {
+              // Validate phone number format (10 digits only)
+              const phoneDigits = contact.phone.replace(/\D/g, '');
+              if (phoneDigits.length !== 10) {
+                throw new Error(`Invalid phone format: ${contact.phone}`);
+              }
+
+              // Call RealValidation DNC API
+              const response = await fetch(`https://api.realvalidation.com/rpvWebService/DNCLookup.php?phone=${phoneDigits}&token=${dncApiKey}`, {
                 method: 'GET',
                 headers: {
-                  'Content-Type': 'application/json',
                   'User-Agent': 'Real Estate DNC Checker/1.0'
                 }
               });
@@ -125,8 +182,14 @@ serve(async (req) => {
                 throw new Error(`API returned ${response.status}: ${response.statusText}`);
               }
 
-              const result: DNCApiResponse = await response.json();
-              const isDNC = result.isDNC || false;
+              const xmlText = await response.text();
+              const result = parseXMLResponse(xmlText);
+              
+              if (!result.isOK) {
+                throw new Error(`API error: ${result.error || 'Unknown error'}`);
+              }
+
+              const isDNC = result.isDNC;
 
               // Update contact record
               const { error: updateError } = await supabase
