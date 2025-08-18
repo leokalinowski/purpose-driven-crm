@@ -11,9 +11,10 @@ interface PipelineColumnProps {
   };
   opportunities: Opportunity[];
   onStageUpdate: (opportunityId: string, newStage: string) => Promise<void>;
+  onEditOpportunity: (opportunity: Opportunity) => void;
 }
 
-export function PipelineColumn({ stage, opportunities, onStageUpdate }: PipelineColumnProps) {
+export function PipelineColumn({ stage, opportunities, onStageUpdate, onEditOpportunity }: PipelineColumnProps) {
   const [{ isOver }, drop] = useDrop({
     accept: 'opportunity',
     drop: (item: { id: string }) => {
@@ -57,6 +58,7 @@ export function PipelineColumn({ stage, opportunities, onStageUpdate }: Pipeline
           <OpportunityCard
             key={opportunity.id}
             opportunity={opportunity}
+            onEdit={onEditOpportunity}
           />
         ))}
       </div>

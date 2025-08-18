@@ -1,14 +1,23 @@
+import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Layout } from "@/components/layout/Layout";
 import { PipelineBoard } from "@/components/pipeline/PipelineBoard";
 import { PipelineMetrics } from "@/components/pipeline/PipelineMetrics";
 import { AddOpportunityDialog } from "@/components/pipeline/AddOpportunityDialog";
-import { usePipeline } from "@/hooks/usePipeline";
+import { EditOpportunityDialog } from "@/components/pipeline/EditOpportunityDialog";
+import { usePipeline, Opportunity } from "@/hooks/usePipeline";
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 
 export default function Pipeline() {
   const { opportunities, metrics, loading, updateStage, createOpportunity, refresh } = usePipeline();
+  const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  const handleEditOpportunity = (opportunity: Opportunity) => {
+    setEditingOpportunity(opportunity);
+    setEditDialogOpen(true);
+  };
 
   return (
     <>
@@ -35,7 +44,15 @@ export default function Pipeline() {
             <PipelineBoard 
               opportunities={opportunities}
               onStageUpdate={updateStage}
+              onEditOpportunity={handleEditOpportunity}
               loading={loading}
+            />
+            
+            <EditOpportunityDialog
+              opportunity={editingOpportunity}
+              open={editDialogOpen}
+              onOpenChange={setEditDialogOpen}
+              onOpportunityUpdated={refresh}
             />
           </div>
         </DndProvider>

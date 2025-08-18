@@ -4,12 +4,16 @@ import { Badge } from "@/components/ui/badge";
 import { Opportunity } from "@/hooks/usePipeline";
 import { Calendar, DollarSign, User } from "lucide-react";
 import { format } from "date-fns";
+import { useState } from "react";
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
+  onEdit: (opportunity: Opportunity) => void;
 }
 
-export function OpportunityCard({ opportunity }: OpportunityCardProps) {
+export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
+  const [isDragStart, setIsDragStart] = useState(false);
+  
   const [{ isDragging }, drag] = useDrag({
     type: 'opportunity',
     item: { id: opportunity.id },
@@ -17,6 +21,24 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
       isDragging: monitor.isDragging(),
     }),
   });
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Only trigger edit if this wasn't a drag operation
+    if (!isDragStart) {
+      onEdit(opportunity);
+    }
+  };
+
+  const handleMouseDown = () => {
+    setIsDragStart(false);
+    // Short delay to detect if this is a drag start
+    setTimeout(() => setIsDragStart(true), 100);
+  };
+
+  const handleMouseUp = () => {
+    // Reset drag state after a short delay
+    setTimeout(() => setIsDragStart(false), 200);
+  };
 
   const getStageColor = (stage: string) => {
     switch (stage) {
@@ -32,8 +54,11 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
   return (
     <Card
       ref={drag}
+      onClick={handleClick}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
       className={`
-        cursor-move transition-all duration-200 hover:shadow-md
+        cursor-pointer transition-all duration-200 hover:shadow-md hover:bg-accent/50
         ${isDragging ? 'opacity-50 scale-95' : 'opacity-100'}
       `}
     >

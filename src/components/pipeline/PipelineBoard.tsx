@@ -4,6 +4,7 @@ import { PipelineColumn } from "./PipelineColumn";
 interface PipelineBoardProps {
   opportunities: Opportunity[];
   onStageUpdate: (opportunityId: string, newStage: string) => Promise<void>;
+  onEditOpportunity: (opportunity: Opportunity) => void;
   loading: boolean;
 }
 
@@ -15,7 +16,7 @@ const STAGES = [
   { key: 'closed', label: 'Closed', color: 'bg-green-100 border-green-300' }
 ];
 
-export function PipelineBoard({ opportunities, onStageUpdate, loading }: PipelineBoardProps) {
+export function PipelineBoard({ opportunities, onStageUpdate, onEditOpportunity, loading }: PipelineBoardProps) {
   if (loading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -48,6 +49,7 @@ export function PipelineBoard({ opportunities, onStageUpdate, loading }: Pipelin
           stage={stage}
           opportunities={opportunitiesByStage[stage.key] || []}
           onStageUpdate={onStageUpdate}
+          onEditOpportunity={onEditOpportunity}
         />
       ))}
     </div>
