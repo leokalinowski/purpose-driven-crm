@@ -1,14 +1,5 @@
-
-import { PipelineColumn } from "./PipelineColumn";
 import { Opportunity } from "@/hooks/usePipeline";
-
-const PIPELINE_STAGES = [
-  { key: 'lead', label: 'Lead', color: 'border-gray-300' },
-  { key: 'qualified', label: 'Qualified', color: 'border-blue-300' },
-  { key: 'appointment', label: 'Appointment', color: 'border-yellow-300' },
-  { key: 'contract', label: 'Contract', color: 'border-orange-300' },
-  { key: 'closed', label: 'Closed', color: 'border-green-300' }
-];
+import { PipelineColumn } from "./PipelineColumn";
 
 interface PipelineBoardProps {
   opportunities: Opportunity[];
@@ -17,30 +8,50 @@ interface PipelineBoardProps {
   loading: boolean;
 }
 
+const STAGES = [
+  { key: 'lead', label: 'Lead', color: 'bg-slate-100 border-slate-300' },
+  { key: 'qualified', label: 'Qualified', color: 'bg-blue-100 border-blue-300' },
+  { key: 'appointment', label: 'Appointment', color: 'bg-yellow-100 border-yellow-300' },
+  { key: 'contract', label: 'Contract', color: 'bg-orange-100 border-orange-300' },
+  { key: 'closed', label: 'Closed', color: 'bg-green-100 border-green-300' }
+];
+
 export function PipelineBoard({ opportunities, onStageUpdate, onEditOpportunity, loading }: PipelineBoardProps) {
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        {STAGES.map((stage) => (
+          <div key={stage.key} className="space-y-4">
+            <div className="h-8 bg-muted animate-pulse rounded" />
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-32 bg-muted animate-pulse rounded-lg" />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
 
+  const opportunitiesByStage = opportunities.reduce((acc, opportunity) => {
+    const stage = opportunity.stage;
+    if (!acc[stage]) acc[stage] = [];
+    acc[stage].push(opportunity);
+    return acc;
+  }, {} as Record<string, Opportunity[]>);
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 overflow-x-auto">
-      {PIPELINE_STAGES.map((stage) => {
-        const stageOpportunities = opportunities.filter(opp => opp.stage === stage.key);
-        
-        return (
-          <PipelineColumn
-            key={stage.key}
-            stage={stage}
-            opportunities={stageOpportunities}
-            onStageUpdate={onStageUpdate}
-            onEditOpportunity={onEditOpportunity}
-          />
-        );
-      })}
+    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-x-auto">
+      {STAGES.map((stage) => (
+        <PipelineColumn
+          key={stage.key}
+          stage={stage}
+          opportunities={opportunitiesByStage[stage.key] || []}
+          onStageUpdate={onStageUpdate}
+          onEditOpportunity={onEditOpportunity}
+        />
+      ))}
     </div>
   );
 }
