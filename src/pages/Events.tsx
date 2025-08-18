@@ -10,8 +10,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Calendar } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { ClickUpTasks } from '@/components/events/ClickUpTasks';
-import { ClickUpConnect } from '@/components/events/ClickUpConnect';
 
 const Events = () => {
   const [showEventForm, setShowEventForm] = useState(false);
@@ -130,21 +128,6 @@ const Events = () => {
               />
             </div>
 
-            {!nextEvent.clickup_list_id && (
-              <div className="space-y-4">
-                <h3 className="text-xl font-semibold">Connect ClickUp</h3>
-                <p className="text-sm text-muted-foreground">Link your REOP HQ Action Items list to sync tasks tagged "event" and their subtasks.</p>
-                <ClickUpConnect teamId="9011620633" listId="901106742430" tag="event" eventId={nextEvent.id} />
-              </div>
-            )}
-
-            {nextEvent.clickup_list_id && (
-              <div className="space-y-4">
-                <h3 className="text-xl font-semibold">ClickUp Synced Tasks</h3>
-                <p className="text-sm text-muted-foreground">These tasks are synced from your ClickUp list and update in real-time.</p>
-                <ClickUpTasks eventId={nextEvent.id} />
-              </div>
-            )}
           </div>
         )}
 

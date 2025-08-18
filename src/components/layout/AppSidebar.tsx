@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserProfile } from '@/hooks/useUserProfile';
 
 const menuItems = [
   { title: 'Dashboard', url: '/', icon: Home },
@@ -37,6 +38,7 @@ const menuItems = [
 
 export function AppSidebar() {
   const { signOut, user } = useAuth();
+  const { getDisplayName } = useUserProfile();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -50,16 +52,13 @@ export function AppSidebar() {
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3 mb-3">
           <img 
-            src="https://cguoaokqwgqvzkqqezcq.supabase.co/storage/v1/object/public/assets/logos/reop-logo-compact.png" 
+            src="https://cguoaokqwgqvzkqqezcq.supabase.co/storage/v1/object/public/assets/logos/reop-logo-white.png" 
             alt="Real Estate on Purpose Logo" 
             className="h-8 w-auto object-contain"
           />
-          <div className="flex-1 min-w-0">
-            <h2 className="text-base font-semibold text-sidebar-foreground truncate">Real Estate on Purpose</h2>
-          </div>
         </div>
         <div className="text-xs text-sidebar-foreground/70 truncate">
-          {user?.email}
+          {getDisplayName()}
         </div>
       </SidebarHeader>
       
@@ -90,7 +89,7 @@ export function AppSidebar() {
         <Button
           variant="outline"
           onClick={handleSignOut}
-          className="w-full justify-start"
+          className="w-full justify-start text-sidebar-foreground hover:text-sidebar-foreground"
         >
           <LogOut className="mr-2 h-4 w-4" />
           Sign Out
