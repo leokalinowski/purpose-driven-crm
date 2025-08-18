@@ -88,6 +88,22 @@ export const useContacts = () => {
 
     if (error) throw error;
 
+    // Automatically check DNC if phone number exists
+    if (data && contactData.phone?.trim()) {
+      try {
+        await supabase.functions.invoke('dnc-single-check', {
+          body: { 
+            phone: contactData.phone.trim(),
+            contactId: data.id 
+          }
+        });
+        console.log('DNC check initiated for new contact');
+      } catch (error) {
+        console.error('Failed to initiate DNC check:', error);
+        // Don't fail the contact creation if DNC check fails
+      }
+    }
+
     fetchContacts();
     return data;
   };
@@ -138,6 +154,32 @@ export const useContacts = () => {
       .select();
 
     if (error) throw error;
+
+    // Automatically check DNC for all contacts with phone numbers
+    if (data && data.length > 0) {
+      const contactsWithPhones = data.filter(contact => contact.phone?.trim());
+      
+      if (contactsWithPhones.length > 0) {
+        console.log(`Initiating DNC checks for ${contactsWithPhones.length} contacts with phone numbers`);
+        
+        // Process DNC checks in small batches to avoid overwhelming the API
+        for (const contact of contactsWithPhones) {
+          try {
+            await supabase.functions.invoke('dnc-single-check', {
+              body: { 
+                phone: contact.phone.trim(),
+                contactId: contact.id 
+              }
+            });
+            // Small delay between requests to be respectful to the API
+            await new Promise(resolve => setTimeout(resolve, 200));
+          } catch (error) {
+            console.error(`Failed to initiate DNC check for contact ${contact.id}:`, error);
+            // Continue with other contacts even if one fails
+          }
+        }
+      }
+    }
 
     fetchContacts();
     return data;

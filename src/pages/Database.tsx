@@ -13,7 +13,7 @@ import { ContactTable } from '@/components/database/ContactTable';
 import { ContactForm } from '@/components/database/ContactForm';
 import { CSVUpload } from '@/components/database/CSVUpload';
 import { DNCStatsCard } from '@/components/database/DNCStatsCard';
-import { DNCCheckButton } from '@/components/database/DNCCheckButton';
+
 import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useDNCStats } from '@/hooks/useDNCStats';
 import { useToast } from '@/components/ui/use-toast';
@@ -40,9 +40,7 @@ const Database = () => {
   const {
     stats,
     loading: dncLoading,
-    checking: dncChecking,
     fetchDNCStats,
-    triggerDNCCheck,
   } = useDNCStats();
   
   const { toast } = useToast();
@@ -158,24 +156,6 @@ const Database = () => {
     setEditingContact(null);
   };
 
-  const handleDNCCheck = async (forceRecheck: boolean = false) => {
-    try {
-      const result = await triggerDNCCheck(forceRecheck);
-      toast({
-        title: "Success",
-        description: forceRecheck 
-          ? `Force DNC check completed: ${result?.stats?.totalChecked || 0} contacts checked`
-          : "DNC check completed successfully",
-      });
-      fetchContacts(); // Refresh contacts after DNC check
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to run DNC check",
-        variant: "destructive",
-      });
-    }
-  };
 
   // Fetch DNC stats when component mounts and when contacts change
   useEffect(() => {
@@ -209,10 +189,6 @@ const Database = () => {
           </div>
          
           <div className="flex gap-2">
-            <DNCCheckButton
-              onClick={handleDNCCheck}
-              loading={dncChecking}
-            />
             <Button
               onClick={() => setShowCSVUpload(true)}
               variant="outline"
