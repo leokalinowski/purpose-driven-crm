@@ -828,6 +828,135 @@ export type Database = {
           },
         ]
       }
+      opportunity_activities: {
+        Row: {
+          activity_date: string | null
+          activity_type: string
+          agent_id: string
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json | null
+          opportunity_id: string
+        }
+        Insert: {
+          activity_date?: string | null
+          activity_type: string
+          agent_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          opportunity_id: string
+        }
+        Update: {
+          activity_date?: string | null
+          activity_type?: string
+          agent_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          opportunity_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_activities_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_notes: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          note_text: string
+          note_type: string | null
+          opportunity_id: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          note_text: string
+          note_type?: string | null
+          opportunity_id: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          note_text?: string
+          note_type?: string | null
+          opportunity_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_notes_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_tasks: {
+        Row: {
+          agent_id: string
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          opportunity_id: string
+          priority: string | null
+          status: string | null
+          task_name: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          opportunity_id: string
+          priority?: string | null
+          status?: string | null
+          task_name: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          opportunity_id?: string
+          priority?: string | null
+          status?: string | null
+          task_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_tasks_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       po2_tasks: {
         Row: {
           agent_id: string
