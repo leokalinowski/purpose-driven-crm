@@ -12,6 +12,9 @@ interface DNCStatsCardProps {
 
 export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading }) => {
   const dncPercentage = stats.totalContacts > 0 ? (stats.dncContacts / stats.totalContacts) * 100 : 0;
+  const safePercentage = stats.totalContacts > 0 ? (stats.nonDncContacts / stats.totalContacts) * 100 : 0;
+  const uncheckedPercentage = stats.totalContacts > 0 ? (stats.neverChecked / stats.totalContacts) * 100 : 0;
+  
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Never';
     return new Date(dateString).toLocaleDateString();
@@ -49,42 +52,42 @@ export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading }) =>
             <div className="text-sm text-muted-foreground">Total Contacts</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-destructive">{stats.dncContacts}</div>
+            <div className="text-2xl font-bold text-destructive">{stats.dncContacts} {dncPercentage.toFixed(0)}%</div>
             <div className="text-sm text-muted-foreground">DNC Listed</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-primary">{stats.nonDncContacts}</div>
+            <div className="text-2xl font-bold text-primary">{stats.nonDncContacts} {safePercentage.toFixed(0)}%</div>
             <div className="text-sm text-muted-foreground">Safe to Call</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-warning">{stats.neverChecked}</div>
+            <div className="text-2xl font-bold text-warning">{stats.neverChecked} {uncheckedPercentage.toFixed(0)}%</div>
             <div className="text-sm text-muted-foreground">Unchecked</div>
           </div>
         </div>
 
-        {/* DNC Percentage Progress */}
+        {/* Safe to Call Percentage Progress */}
         <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <span className="text-sm font-medium">DNC Rate</span>
-            <span className="text-sm text-muted-foreground">{dncPercentage.toFixed(1)}%</span>
+            <span className="text-sm font-medium">Safe to Call Rate</span>
+            <span className="text-sm text-muted-foreground">{safePercentage.toFixed(1)}%</span>
           </div>
-          <Progress value={dncPercentage} className="h-2" />
+          <Progress value={safePercentage} className="h-2 [&>div]:bg-green-500" />
         </div>
 
         {/* Status Indicators */}
         <div className="flex flex-wrap gap-2">
           <Badge variant="destructive" className="flex items-center gap-1">
             <ShieldX className="h-3 w-3" />
-            {stats.dncContacts} DNC Listed
+            {stats.dncContacts} DNC Listed ({dncPercentage.toFixed(0)}%)
           </Badge>
           <Badge variant="default" className="flex items-center gap-1">
             <ShieldCheck className="h-3 w-3" />
-            {stats.nonDncContacts} Safe
+            {stats.nonDncContacts} Safe ({safePercentage.toFixed(0)}%)
           </Badge>
           {stats.neverChecked > 0 && (
             <Badge variant="secondary" className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              {stats.neverChecked} Never Checked
+              {stats.neverChecked} Never Checked ({uncheckedPercentage.toFixed(0)}%)
             </Badge>
           )}
           {stats.needsRecheck > 0 && (
