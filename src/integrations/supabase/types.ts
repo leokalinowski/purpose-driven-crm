@@ -314,6 +314,7 @@ export type Database = {
           city: string | null
           created_at: string
           dnc: boolean
+          dnc_last_checked: string | null
           email: string | null
           first_name: string | null
           id: string
@@ -333,6 +334,7 @@ export type Database = {
           city?: string | null
           created_at?: string
           dnc?: boolean
+          dnc_last_checked?: string | null
           email?: string | null
           first_name?: string | null
           id?: string
@@ -352,6 +354,7 @@ export type Database = {
           city?: string | null
           created_at?: string
           dnc?: boolean
+          dnc_last_checked?: string | null
           email?: string | null
           first_name?: string | null
           id?: string
@@ -362,6 +365,36 @@ export type Database = {
           tags?: string[] | null
           updated_at?: string
           zip_code?: string | null
+        }
+        Relationships: []
+      }
+      dnc_logs: {
+        Row: {
+          agent_id: string
+          checked_count: number
+          created_at: string
+          errors: string | null
+          flagged_count: number
+          id: string
+          run_date: string
+        }
+        Insert: {
+          agent_id: string
+          checked_count?: number
+          created_at?: string
+          errors?: string | null
+          flagged_count?: number
+          id?: string
+          run_date?: string
+        }
+        Update: {
+          agent_id?: string
+          checked_count?: number
+          created_at?: string
+          errors?: string | null
+          flagged_count?: number
+          id?: string
+          run_date?: string
         }
         Relationships: []
       }
