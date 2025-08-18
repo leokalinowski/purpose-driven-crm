@@ -32,13 +32,18 @@ export function AdminCharts() {
     events: metric.events_held,
   }));
 
-  // Agent comparison data for bar chart
-  const agentComparison = data.agentPerformance.slice(0, 8).map(agent => ({
-    name: agent.agent_name.split(' ')[0], // First name only for space
-    completionRate: Math.round(agent.completion_rate),
-    contacts: agent.total_contacts,
-    gci: Math.round(agent.total_gci / 1000), // Convert to thousands
-  }));
+  // Agent comparison data for bar chart - with safe null handling
+  const agentComparison = data.agentPerformance
+    .filter(agent => agent && agent.agent_name) // Filter out null/undefined agents
+    .slice(0, 8)
+    .map(agent => ({
+      name: agent.agent_name && typeof agent.agent_name === 'string' 
+        ? agent.agent_name.split(' ')[0] || agent.agent_name // First name only, fallback to full name
+        : 'Unknown', // Fallback for any remaining edge cases
+      completionRate: Math.round(agent.completion_rate || 0),
+      contacts: agent.total_contacts || 0,
+      gci: Math.round((agent.total_gci || 0) / 1000), // Convert to thousands
+    }));
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
