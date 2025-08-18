@@ -91,51 +91,55 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
       `}
     >
       <CardContent className="p-3 h-full flex flex-col">
-        {/* Name first with full space */}
-        <div className="flex-1">
-          <h4 className="font-semibold text-sm text-foreground line-clamp-2 group-hover:text-primary transition-colors leading-tight">
-            {displayName}
-          </h4>
-          {opportunity.contact?.email && (
-            <p className="text-xs text-muted-foreground truncate mt-1">
-              {opportunity.contact.email}
-            </p>
-          )}
-          <div className="mt-3 space-y-1">
-            {opportunity.deal_value && opportunity.deal_value > 0 && (
-              <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-                <DollarSign className="h-3.5 w-3.5 flex-shrink-0" />
-                <span className="truncate">${opportunity.deal_value.toLocaleString()}</span>
-              </div>
-            )}
-            {opportunity.expected_close_date && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
-                <span className="truncate">{format(new Date(opportunity.expected_close_date), 'MMM dd')}</span>
-              </div>
-            )}
-            {opportunity.contact?.phone && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <User className="h-3.5 w-3.5 flex-shrink-0" />
-                <span className="truncate">{opportunity.contact.phone}</span>
-              </div>
+        {/* Header with name and stage */}
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex-1 min-w-0">
+            <h4 className="font-semibold text-sm text-foreground line-clamp-2 group-hover:text-primary transition-colors leading-tight">
+              {displayName}
+            </h4>
+            {opportunity.contact?.email && (
+              <p className="text-xs text-muted-foreground truncate mt-1">
+                {opportunity.contact.email}
+              </p>
             )}
           </div>
-        </div>
-        {/* Footer with stage badge and DNC */}
-        <div className="flex items-center justify-between pt-2 mt-auto border-t border-border">
           <Badge
             variant="secondary"
             className={`text-xs flex-shrink-0 ${getStageColor(opportunity.stage)} capitalize px-2 py-1`}
           >
             {opportunity.stage}
           </Badge>
-          <div className="flex items-center gap-1">
+        </div>
+        {/* Main content */}
+        <div className="flex-1 space-y-1">
+          {opportunity.deal_value && opportunity.deal_value > 0 && (
+            <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+              <DollarSign className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="truncate">${opportunity.deal_value.toLocaleString()}</span>
+            </div>
+          )}
+          {opportunity.expected_close_date && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="truncate">{format(new Date(opportunity.expected_close_date), 'MMM dd')}</span>
+            </div>
+          )}
+          {opportunity.contact?.phone && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <User className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="truncate">{opportunity.contact.phone}</span>
+            </div>
+          )}
+          {/* DNC status under phone */}
+          <div className="flex items-center gap-1 text-xs mt-1">
             <dncStatus.icon className={`h-3 w-3 ${dncStatus.color}`} />
-            <span className={`text-xs ${dncStatus.color} font-medium`}>
+            <span className={`${dncStatus.color} font-medium`}>
               {dncStatus.text}
             </span>
           </div>
+        </div>
+        {/* Footer without dividing line */}
+        <div className="flex items-center justify-between mt-auto">
           {opportunity.notes && (
             <MessageSquare className="h-3 w-3 text-muted-foreground" />
           )}
