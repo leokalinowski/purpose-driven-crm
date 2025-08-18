@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { format } from 'date-fns';
 import { CalendarIcon, Plus, CheckCircle, Clock, MessageSquare, Target, User, Phone, Mail, MapPin, Tag, Shield, ShieldCheck } from 'lucide-react';
@@ -45,7 +44,7 @@ export function EditOpportunityDialog({
   
   // Opportunity form state
   const [formData, setFormData] = useState({
-    stage: 'lead' as const,
+    stage: 'lead' as 'lead' | 'qualified' | 'appointment' | 'contract' | 'closed',
     deal_value: 0,
     expected_close_date: '',
     notes: ''
