@@ -82,12 +82,13 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
       className={`
         cursor-pointer transition-all duration-200 hover:shadow-md hover:bg-accent/50
         ${isDragging ? 'opacity-50 scale-95' : 'opacity-100'}
+        w-full min-h-[180px]
       `}
     >
-      <CardContent className="p-4 space-y-2">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <h4 className="font-medium text-sm">
+      <CardContent className="p-3 sm:p-4 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <h4 className="font-medium text-sm truncate">
               {opportunity.contact?.first_name} {opportunity.contact?.last_name}
             </h4>
             {opportunity.contact?.email && (
@@ -96,43 +97,45 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
               </p>
             )}
             <div className="flex items-center gap-1 mt-1">
-              <dncStatus.icon className={`h-3 w-3 ${dncStatus.color}`} />
-              <span className={`text-xs ${dncStatus.color}`}>
+              <dncStatus.icon className={`h-3 w-3 flex-shrink-0 ${dncStatus.color}`} />
+              <span className={`text-xs ${dncStatus.color} truncate`}>
                 {dncStatus.text}
               </span>
             </div>
           </div>
           <Badge 
             variant="secondary" 
-            className={`text-xs text-white ${getStageColor(opportunity.stage)}`}
+            className={`text-xs text-white flex-shrink-0 ${getStageColor(opportunity.stage)}`}
           >
             {opportunity.stage}
           </Badge>
         </div>
 
-        {opportunity.deal_value && opportunity.deal_value > 0 && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <DollarSign className="h-3 w-3" />
-            ${opportunity.deal_value.toLocaleString()}
-          </div>
-        )}
+        <div className="space-y-1">
+          {opportunity.deal_value && opportunity.deal_value > 0 && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <DollarSign className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate">${opportunity.deal_value.toLocaleString()}</span>
+            </div>
+          )}
 
-        {opportunity.expected_close_date && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Calendar className="h-3 w-3" />
-            {format(new Date(opportunity.expected_close_date), 'MMM dd, yyyy')}
-          </div>
-        )}
+          {opportunity.expected_close_date && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Calendar className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate">{format(new Date(opportunity.expected_close_date), 'MMM dd, yyyy')}</span>
+            </div>
+          )}
 
-        {opportunity.contact?.phone && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <User className="h-3 w-3" />
-            {opportunity.contact.phone}
-          </div>
-        )}
+          {opportunity.contact?.phone && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <User className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate">{opportunity.contact.phone}</span>
+            </div>
+          )}
+        </div>
 
         {opportunity.notes && (
-          <p className="text-xs text-muted-foreground line-clamp-2">
+          <p className="text-xs text-muted-foreground line-clamp-2 break-words">
             {opportunity.notes}
           </p>
         )}

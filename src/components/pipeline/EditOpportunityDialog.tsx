@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePipeline, type Opportunity } from '@/hooks/usePipeline';
 import { useOpportunityNotes } from '@/hooks/useOpportunityNotes';
 import { useOpportunityActivities } from '@/hooks/useOpportunityActivities';
-import { useOpportunityTasks } from '@/hooks/useOpportunityTasks';
+
 
 interface EditOpportunityDialogProps {
   opportunity: Opportunity | null;
@@ -40,14 +40,13 @@ export function EditOpportunityDialog({
   const opportunityId = opportunity?.id || '';
   const { notes, addNote, updateNote, deleteNote } = useOpportunityNotes(opportunityId);
   const { activities } = useOpportunityActivities(opportunityId);
-  const { tasks, addTask, updateTask, completeTask } = useOpportunityTasks(opportunityId);
+  
   
   // Opportunity form state
   const [formData, setFormData] = useState({
     stage: 'lead' as 'lead' | 'qualified' | 'appointment' | 'contract' | 'closed',
     deal_value: 0,
-    expected_close_date: '',
-    notes: ''
+    expected_close_date: ''
   });
 
   // Contact form state
@@ -68,13 +67,6 @@ export function EditOpportunityDialog({
   // Note form state
   const [newNote, setNewNote] = useState({ text: '', type: 'general' });
   
-  // Task form state
-  const [newTask, setNewTask] = useState({
-    task_name: '',
-    description: '',
-    due_date: '',
-    priority: 'medium'
-  });
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [contactEdited, setContactEdited] = useState(false);
@@ -84,8 +76,7 @@ export function EditOpportunityDialog({
       setFormData({
         stage: opportunity.stage,
         deal_value: opportunity.deal_value || 0,
-        expected_close_date: opportunity.expected_close_date || '',
-        notes: opportunity.notes || ''
+        expected_close_date: opportunity.expected_close_date || ''
       });
       
       setContactData({
@@ -138,14 +129,6 @@ export function EditOpportunityDialog({
     }
   };
 
-  const handleAddTask = async () => {
-    if (!newTask.task_name.trim()) return;
-    
-    const success = await addTask(newTask);
-    if (success) {
-      setNewTask({ task_name: '', description: '', due_date: '', priority: 'medium' });
-    }
-  };
 
   const formatDate = (dateString: string) => {
     return format(new Date(dateString), 'MMM dd, yyyy');
@@ -165,47 +148,7 @@ export function EditOpportunityDialog({
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'destructive';
-      case 'medium': return 'secondary';
-      case 'low': return 'outline';
-      default: return 'secondary';
-    }
-  };
 
-  // Create unified activity timeline with proper typing
-  interface TimelineItem {
-    id: string;
-    type: 'activity' | 'note' | 'task';
-    activity_date: string;
-    title: string;
-    description: string;
-  }
-
-  const allActivities: TimelineItem[] = [
-    ...activities.map(a => ({
-      id: a.id,
-      type: 'activity' as const,
-      activity_date: a.activity_date,
-      title: a.activity_type,
-      description: a.description || ''
-    })),
-    ...notes.map(n => ({
-      id: n.id,
-      type: 'note' as const,
-      activity_date: n.created_at,
-      title: `${n.note_type} Note`,
-      description: n.note_text.substring(0, 100) + (n.note_text.length > 100 ? '...' : '')
-    })),
-    ...tasks.map(t => ({
-      id: t.id,
-      type: 'task' as const,
-      activity_date: t.created_at,
-      title: t.task_name,
-      description: t.description || ''
-    }))
-  ].sort((a, b) => new Date(b.activity_date).getTime() - new Date(a.activity_date).getTime());
 
   const getDNCStatus = () => {
     if (!opportunity.contact?.dnc_last_checked) {
@@ -286,16 +229,6 @@ export function EditOpportunityDialog({
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="notes">Opportunity Notes</Label>
-                <Textarea
-                  id="notes"
-                  placeholder="Add notes about discussions, follow-ups, or important details..."
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  rows={4}
-                />
-              </div>
 
               <div className="flex justify-end space-x-2">
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -312,10 +245,15 @@ export function EditOpportunityDialog({
             <form onSubmit={handleContactSubmit} className="space-y-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">Contact Information</h3>
-                {opportunity.contact?.dnc && <Badge variant="destructive">Do Not Call</Badge>}
+                <div className="flex items-center gap-2">
+                  <dncStatus.icon className={`h-4 w-4 ${dncStatus.color}`} />
+                  <Badge variant={opportunity.contact?.dnc ? "destructive" : "secondary"} className={dncStatus.color}>
+                    {dncStatus.text}
+                  </Badge>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="first_name">First Name</Label>
                   <Input
@@ -342,7 +280,7 @@ export function EditOpportunityDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
@@ -370,6 +308,116 @@ export function EditOpportunityDialog({
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="address_1">Address Line 1</Label>
+                <Input
+                  id="address_1"
+                  value={contactData.address_1}
+                  onChange={(e) => {
+                    setContactData({ ...contactData, address_1: e.target.value });
+                    setContactEdited(true);
+                  }}
+                  placeholder="Street address"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="address_2">Address Line 2</Label>
+                <Input
+                  id="address_2"
+                  value={contactData.address_2}
+                  onChange={(e) => {
+                    setContactData({ ...contactData, address_2: e.target.value });
+                    setContactEdited(true);
+                  }}
+                  placeholder="Apartment, suite, etc. (optional)"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="city">City</Label>
+                  <Input
+                    id="city"
+                    value={contactData.city}
+                    onChange={(e) => {
+                      setContactData({ ...contactData, city: e.target.value });
+                      setContactEdited(true);
+                    }}
+                    placeholder="City"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="state">State</Label>
+                  <Input
+                    id="state"
+                    value={contactData.state}
+                    onChange={(e) => {
+                      setContactData({ ...contactData, state: e.target.value });
+                      setContactEdited(true);
+                    }}
+                    placeholder="State"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="zip_code">Zip Code</Label>
+                  <Input
+                    id="zip_code"
+                    value={contactData.zip_code}
+                    onChange={(e) => {
+                      setContactData({ ...contactData, zip_code: e.target.value });
+                      setContactEdited(true);
+                    }}
+                    placeholder="Zip code"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tags">Tags</Label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {contactData.tags.map((tag, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+                <Input
+                  placeholder="Enter tags separated by commas"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const value = e.currentTarget.value.trim();
+                      if (value && !contactData.tags.includes(value)) {
+                        setContactData({ ...contactData, tags: [...contactData.tags, value] });
+                        setContactEdited(true);
+                        e.currentTarget.value = '';
+                      }
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="contact_notes">Contact Notes</Label>
+                <Textarea
+                  id="contact_notes"
+                  value={contactData.notes}
+                  onChange={(e) => {
+                    setContactData({ ...contactData, notes: e.target.value });
+                    setContactEdited(true);
+                  }}
+                  placeholder="Notes about this contact..."
+                  rows={3}
+                />
+              </div>
+
+              {opportunity.contact?.dnc_last_checked && (
+                <div className="text-xs text-muted-foreground">
+                  DNC last checked: {format(new Date(opportunity.contact.dnc_last_checked), 'MMM dd, yyyy HH:mm')}
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <Button type="submit" disabled={!contactEdited}>
                   Save Contact Changes
@@ -384,62 +432,79 @@ export function EditOpportunityDialog({
           <TabsContent value="activity" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">Add Task</CardTitle>
+                <CardTitle className="text-sm">Add Note</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Input
-                  value={newTask.task_name}
-                  onChange={(e) => setNewTask({ ...newTask, task_name: e.target.value })}
-                  placeholder="Task name"
+                <Textarea
+                  value={newNote.text}
+                  onChange={(e) => setNewNote({ ...newNote, text: e.target.value })}
+                  placeholder="Add a note about this opportunity..."
+                  rows={3}
                 />
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    type="date"
-                    value={newTask.due_date}
-                    onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
-                  />
-                  <Select value={newTask.priority} onValueChange={(value) => setNewTask({ ...newTask, priority: value })}>
-                    <SelectTrigger>
+                <div className="flex gap-2">
+                  <Select value={newNote.type} onValueChange={(value) => setNewNote({ ...newNote, type: value })}>
+                    <SelectTrigger className="w-32">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="general">General</SelectItem>
+                      <SelectItem value="call">Call</SelectItem>
+                      <SelectItem value="meeting">Meeting</SelectItem>
+                      <SelectItem value="follow_up">Follow Up</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Button onClick={handleAddNote} size="sm" className="flex-1">
+                    Add Note
+                  </Button>
                 </div>
-                <Button onClick={handleAddTask} size="sm" className="w-full">
-                  Add Task
-                </Button>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">Recent Activity</CardTitle>
+                <CardTitle className="text-sm">Notes & Activity History</CardTitle>
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-64">
                   <div className="space-y-4">
-                    {allActivities.slice(0, 10).map((item) => (
-                      <div key={`${item.type}-${item.id}`} className="flex items-start space-x-3">
-                        <div className="flex-shrink-0">
-                          {item.type === 'activity' && getActivityIcon(item.title)}
-                          {item.type === 'note' && <MessageSquare className="h-4 w-4" />}
-                          {item.type === 'task' && <CheckCircle className="h-4 w-4" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-muted-foreground">
-                            {formatDateTime(item.activity_date)}
-                          </p>
-                          <p className="text-sm font-medium">{item.title}</p>
-                          {item.description && (
-                            <p className="text-sm text-muted-foreground">{item.description}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                    {notes.length === 0 && activities.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">No activity yet</p>
+                    ) : (
+                      <>
+                        {notes.map((note) => (
+                          <div key={`note-${note.id}`} className="flex items-start space-x-3 p-3 rounded-lg bg-muted/30">
+                            <MessageSquare className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant="outline" className="text-xs">
+                                  {note.note_type}
+                                </Badge>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatDateTime(note.created_at)}
+                                </p>
+                              </div>
+                              <p className="text-sm break-words">{note.note_text}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {activities.map((activity) => (
+                          <div key={`activity-${activity.id}`} className="flex items-start space-x-3">
+                            <div className="flex-shrink-0">
+                              {getActivityIcon(activity.activity_type)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-muted-foreground">
+                                {formatDateTime(activity.activity_date)}
+                              </p>
+                              <p className="text-sm font-medium">{activity.activity_type.replace('_', ' ')}</p>
+                              {activity.description && (
+                                <p className="text-sm text-muted-foreground">{activity.description}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
                   </div>
                 </ScrollArea>
               </CardContent>
