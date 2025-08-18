@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { format } from 'date-fns';
 import { CalendarIcon, Plus, CheckCircle, Clock, MessageSquare, Target, User, Phone, Mail, MapPin, Tag, Shield, ShieldCheck } from 'lucide-react';
@@ -21,7 +22,7 @@ import { useOpportunityActivities } from '@/hooks/useOpportunityActivities';
 import { useOpportunityTasks } from '@/hooks/useOpportunityTasks';
 
 interface EditOpportunityDialogProps {
-  opportunity: Opportunity;
+  opportunity: Opportunity | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpportunityUpdated: () => void;
@@ -34,10 +35,17 @@ export function EditOpportunityDialog({
   onOpportunityUpdated
 }: EditOpportunityDialogProps) {
   const { updateOpportunity, updateContact } = usePipeline();
-  const { notes, addNote, updateNote, deleteNote } = useOpportunityNotes(opportunity.id);
-  const { activities } = useOpportunityActivities(opportunity.id);
-  const { tasks, addTask, updateTask, completeTask } = useOpportunityTasks(opportunity.id);
+  
+  // Only initialize hooks if opportunity exists
+  const { notes, addNote, updateNote, deleteNote } = useOpportunityNotes(opportunity?.id || '');
+  const { activities } = useOpportunityActivities(opportunity?.id || '');
+  const { tasks, addTask, updateTask, completeTask } = useOpportunityTasks(opportunity?.id || '');
   const { toast } = useToast();
+  
+  // Early return if no opportunity
+  if (!opportunity) {
+    return null;
+  }
   
   // Opportunity form state
   const [formData, setFormData] = useState({
@@ -77,26 +85,28 @@ export function EditOpportunityDialog({
   const [contactEdited, setContactEdited] = useState(false);
 
   useEffect(() => {
-    setFormData({
-      stage: opportunity.stage,
-      deal_value: opportunity.deal_value || 0,
-      expected_close_date: opportunity.expected_close_date || '',
-      notes: opportunity.notes || ''
-    });
-    
-    setContactData({
-      first_name: opportunity.contact?.first_name || '',
-      last_name: opportunity.contact?.last_name || '',
-      email: opportunity.contact?.email || '',
-      phone: opportunity.contact?.phone || '',
-      address_1: opportunity.contact?.address_1 || '',
-      address_2: opportunity.contact?.address_2 || '',
-      city: opportunity.contact?.city || '',
-      state: opportunity.contact?.state || '',
-      zip_code: opportunity.contact?.zip_code || '',
-      tags: opportunity.contact?.tags || [],
-      notes: opportunity.contact?.notes || ''
-    });
+    if (opportunity) {
+      setFormData({
+        stage: opportunity.stage,
+        deal_value: opportunity.deal_value || 0,
+        expected_close_date: opportunity.expected_close_date || '',
+        notes: opportunity.notes || ''
+      });
+      
+      setContactData({
+        first_name: opportunity.contact?.first_name || '',
+        last_name: opportunity.contact?.last_name || '',
+        email: opportunity.contact?.email || '',
+        phone: opportunity.contact?.phone || '',
+        address_1: opportunity.contact?.address_1 || '',
+        address_2: opportunity.contact?.address_2 || '',
+        city: opportunity.contact?.city || '',
+        state: opportunity.contact?.state || '',
+        zip_code: opportunity.contact?.zip_code || '',
+        tags: opportunity.contact?.tags || [],
+        notes: opportunity.contact?.notes || ''
+      });
+    }
   }, [opportunity]);
 
   const handleOpportunitySubmit = async (e: React.FormEvent) => {
@@ -164,10 +174,37 @@ export function EditOpportunityDialog({
     }
   };
 
-  const allActivities = [
-    ...activities.map(a => ({ ...a, type: 'activity' })),
-    ...notes.map(n => ({ ...n, type: 'note', activity_date: n.created_at })),
-    ...tasks.map(t => ({ ...t, type: 'task', activity_date: t.created_at }))
+  // Create unified activity timeline with proper typing
+  interface TimelineItem {
+    id: string;
+    type: 'activity' | 'note' | 'task';
+    activity_date: string;
+    title: string;
+    description: string;
+  }
+
+  const allActivities: TimelineItem[] = [
+    ...activities.map(a => ({
+      id: a.id,
+      type: 'activity' as const,
+      activity_date: a.activity_date,
+      title: a.activity_type,
+      description: a.description || ''
+    })),
+    ...notes.map(n => ({
+      id: n.id,
+      type: 'note' as const,
+      activity_date: n.created_at,
+      title: `${n.note_type} Note`,
+      description: n.note_text.substring(0, 100) + (n.note_text.length > 100 ? '...' : '')
+    })),
+    ...tasks.map(t => ({
+      id: t.id,
+      type: 'task' as const,
+      activity_date: t.created_at,
+      title: t.task_name,
+      description: t.description || ''
+    }))
   ].sort((a, b) => new Date(b.activity_date).getTime() - new Date(a.activity_date).getTime());
 
   const getDNCStatus = () => {
@@ -385,10 +422,10 @@ export function EditOpportunityDialog({
               <CardContent>
                 <ScrollArea className="h-64">
                   <div className="space-y-4">
-                    {allActivities.slice(0, 10).map((item, index) => (
-                      <div key={`${item.type}-${item.id}-${index}`} className="flex items-start space-x-3">
+                    {allActivities.slice(0, 10).map((item) => (
+                      <div key={`${item.type}-${item.id}`} className="flex items-start space-x-3">
                         <div className="flex-shrink-0">
-                          {item.type === 'activity' && getActivityIcon(item.activity_type)}
+                          {item.type === 'activity' && getActivityIcon(item.title)}
                           {item.type === 'note' && <MessageSquare className="h-4 w-4" />}
                           {item.type === 'task' && <CheckCircle className="h-4 w-4" />}
                         </div>
@@ -396,11 +433,10 @@ export function EditOpportunityDialog({
                           <p className="text-xs text-muted-foreground">
                             {formatDateTime(item.activity_date)}
                           </p>
-                          <p className="text-sm">
-                            {item.type === 'activity' && item.description}
-                            {item.type === 'note' && `Note: ${item.note_text?.substring(0, 50)}...`}
-                            {item.type === 'task' && `Task: ${item.task_name}`}
-                          </p>
+                          <p className="text-sm font-medium">{item.title}</p>
+                          {item.description && (
+                            <p className="text-sm text-muted-foreground">{item.description}</p>
+                          )}
                         </div>
                       </div>
                     ))}
