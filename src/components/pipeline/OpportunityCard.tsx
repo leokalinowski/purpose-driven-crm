@@ -2,9 +2,9 @@ import { useDrag } from 'react-dnd';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Opportunity } from "@/hooks/usePipeline";
-import { Calendar, DollarSign, User } from "lucide-react";
+import { Calendar, DollarSign, User, Shield, ShieldCheck } from "lucide-react";
 import { format } from "date-fns";
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
@@ -12,7 +12,8 @@ interface OpportunityCardProps {
 }
 
 export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
-  const [isDragStart, setIsDragStart] = useState(false);
+  const [dragDistance, setDragDistance] = useState(0);
+  const startPos = useRef({ x: 0, y: 0 });
   
   const [{ isDragging }, drag] = useDrag({
     type: 'opportunity',
@@ -23,21 +24,29 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
   });
 
   const handleClick = (e: React.MouseEvent) => {
-    // Only trigger edit if this wasn't a drag operation
-    if (!isDragStart) {
+    // Only trigger edit if drag distance is minimal (actual click, not drag)
+    if (dragDistance < 5) {
       onEdit(opportunity);
     }
   };
 
-  const handleMouseDown = () => {
-    setIsDragStart(false);
-    // Short delay to detect if this is a drag start
-    setTimeout(() => setIsDragStart(true), 100);
+  const handleMouseDown = (e: React.MouseEvent) => {
+    startPos.current = { x: e.clientX, y: e.clientY };
+    setDragDistance(0);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (startPos.current.x !== 0 || startPos.current.y !== 0) {
+      const distance = Math.sqrt(
+        Math.pow(e.clientX - startPos.current.x, 2) + 
+        Math.pow(e.clientY - startPos.current.y, 2)
+      );
+      setDragDistance(distance);
+    }
   };
 
   const handleMouseUp = () => {
-    // Reset drag state after a short delay
-    setTimeout(() => setIsDragStart(false), 200);
+    startPos.current = { x: 0, y: 0 };
   };
 
   const getStageColor = (stage: string) => {
@@ -51,11 +60,24 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
     }
   };
 
+  const getDNCStatus = () => {
+    if (!opportunity.contact?.dnc_last_checked) {
+      return { icon: Shield, color: 'text-yellow-500', text: 'Not Checked' };
+    }
+    if (opportunity.contact?.dnc) {
+      return { icon: Shield, color: 'text-red-500', text: 'Do Not Call' };
+    }
+    return { icon: ShieldCheck, color: 'text-green-500', text: 'Safe to Call' };
+  };
+
+  const dncStatus = getDNCStatus();
+
   return (
     <Card
       ref={drag}
       onClick={handleClick}
       onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       className={`
         cursor-pointer transition-all duration-200 hover:shadow-md hover:bg-accent/50
@@ -73,6 +95,12 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
                 {opportunity.contact.email}
               </p>
             )}
+            <div className="flex items-center gap-1 mt-1">
+              <dncStatus.icon className={`h-3 w-3 ${dncStatus.color}`} />
+              <span className={`text-xs ${dncStatus.color}`}>
+                {dncStatus.text}
+              </span>
+            </div>
           </div>
           <Badge 
             variant="secondary" 

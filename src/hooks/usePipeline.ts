@@ -19,6 +19,16 @@ export interface Opportunity {
     last_name: string;
     email: string;
     phone: string;
+    address_1: string;
+    address_2: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    dnc: boolean;
+    dnc_last_checked: string;
+    tags: string[];
+    notes: string;
+    category: string;
   };
 }
 
@@ -58,7 +68,17 @@ export function usePipeline() {
             first_name,
             last_name,
             email,
-            phone
+            phone,
+            address_1,
+            address_2,
+            city,
+            state,
+            zip_code,
+            dnc,
+            dnc_last_checked,
+            tags,
+            notes,
+            category
           )
         `)
         .eq('agent_id', user.id)
