@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +12,10 @@ import { Layout } from '@/components/layout/Layout';
 import { ContactTable } from '@/components/database/ContactTable';
 import { ContactForm } from '@/components/database/ContactForm';
 import { CSVUpload } from '@/components/database/CSVUpload';
+import { DNCStatsCard } from '@/components/database/DNCStatsCard';
+import { DNCCheckButton } from '@/components/database/DNCCheckButton';
 import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
+import { useDNCStats } from '@/hooks/useDNCStats';
 import { useToast } from '@/components/ui/use-toast';
 
 const Database = () => {
@@ -33,6 +36,15 @@ const Database = () => {
     goToPage,
     fetchContacts,
   } = useContacts();
+  
+  const {
+    stats,
+    loading: dncLoading,
+    checking: dncChecking,
+    fetchDNCStats,
+    triggerDNCCheck,
+  } = useDNCStats();
+  
   const { toast } = useToast();
  
   const [showContactForm, setShowContactForm] = useState(false);
@@ -146,6 +158,28 @@ const Database = () => {
     setEditingContact(null);
   };
 
+  const handleDNCCheck = async () => {
+    try {
+      await triggerDNCCheck();
+      toast({
+        title: "Success",
+        description: "DNC check completed successfully",
+      });
+      fetchContacts(); // Refresh contacts after DNC check
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to run DNC check",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Fetch DNC stats when component mounts and when contacts change
+  useEffect(() => {
+    fetchDNCStats();
+  }, [fetchDNCStats, contacts]);
+
   const generatePageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
@@ -173,6 +207,10 @@ const Database = () => {
           </div>
          
           <div className="flex gap-2">
+            <DNCCheckButton
+              onClick={handleDNCCheck}
+              loading={dncChecking}
+            />
             <Button
               onClick={() => setShowCSVUpload(true)}
               variant="outline"
@@ -186,6 +224,10 @@ const Database = () => {
             </Button>
           </div>
         </div>
+        
+        {/* DNC Statistics Dashboard */}
+        <DNCStatsCard stats={stats} loading={dncLoading} />
+        
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
