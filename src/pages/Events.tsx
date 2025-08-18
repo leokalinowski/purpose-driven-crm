@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEvents } from '@/hooks/useEvents';
 import { Layout } from '@/components/layout/Layout';
 import { EventCard } from '@/components/events/EventCard';
 import { TaskManagement } from '@/components/events/TaskManagement';
+import { EventForm } from '@/components/events/EventForm';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Calendar } from 'lucide-react';
@@ -13,6 +14,7 @@ import { ClickUpTasks } from '@/components/events/ClickUpTasks';
 import { ClickUpConnect } from '@/components/events/ClickUpConnect';
 
 const Events = () => {
+  const [showEventForm, setShowEventForm] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { 
@@ -58,7 +60,7 @@ const Events = () => {
               Manage your events and track preparation tasks.
             </p>
           </div>
-          <Button>
+          <Button onClick={() => setShowEventForm(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Event
           </Button>
@@ -106,7 +108,7 @@ const Events = () => {
                     <p className="text-muted-foreground">
                       No upcoming events scheduled.
                     </p>
-                    <Button className="mt-4">
+                    <Button className="mt-4" onClick={() => setShowEventForm(true)}>
                       <Plus className="h-4 w-4 mr-2" />
                       Schedule Event
                     </Button>
@@ -196,12 +198,17 @@ const Events = () => {
               <p className="text-muted-foreground text-center mb-4">
                 Start by creating your first event to track progress and manage tasks.
               </p>
-              <Button>
+              <Button onClick={() => setShowEventForm(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Your First Event
               </Button>
             </CardContent>
           </Card>
+        )}
+
+        {/* Event Form Modal */}
+        {showEventForm && (
+          <EventForm onClose={() => setShowEventForm(false)} />
         )}
       </div>
     </Layout>

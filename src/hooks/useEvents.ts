@@ -2,6 +2,38 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
+// Event task templates - 27 tasks for "Safe & Warm: Winter Ready Homes" event
+const EVENT_TASK_TEMPLATES = [
+  { task_name: "Secure venue (consider fire stations, community centers, or schools)", days_before: 75, responsible_person: "Event Coordinator" },
+  { task_name: "Book date and time (late September/early October)", days_before: 75, responsible_person: "Event Coordinator" },
+  { task_name: "Begin researching and contacting fire safety professionals, home security specialists, HVAC professionals, and winterization experts", days_before: 75, responsible_person: "Content Manager" },
+  { task_name: "Reach out to local fire departments about partnership opportunities", days_before: 75, responsible_person: "Partnership Manager" },
+  { task_name: "Finalize expert speakers/presenters", days_before: 60, responsible_person: "Content Manager" },
+  { task_name: "Determine smoke detector donation logistics or fundraising goals", days_before: 60, responsible_person: "Charity Coordinator" },
+  { task_name: "Create Eventbrite Placeholder - Provide Link", days_before: 60, responsible_person: "Marketing Manager" },
+  { task_name: "Create event branding/theme (e.g., 'Safe & Warm: Winter Ready Homes')", days_before: 60, responsible_person: "Design Team" },
+  { task_name: "Design digital invitations and printed materials", days_before: 45, responsible_person: "Design Team" },
+  { task_name: "Set up online registration system", days_before: 45, responsible_person: "Marketing Manager" },
+  { task_name: "Plan safety demonstration areas", days_before: 45, responsible_person: "Event Coordinator" },
+  { task_name: "Begin promoting the charitable component", days_before: 45, responsible_person: "Marketing Manager" },
+  { task_name: "Send initial announcement email from real estate agents", days_before: 30, responsible_person: "Marketing Manager" },
+  { task_name: "Provide agents with digital invitations to forward to their clients", days_before: 30, responsible_person: "Marketing Manager" },
+  { task_name: "Order smoke detectors for demonstration or giveaways", days_before: 30, responsible_person: "Charity Coordinator" },
+  { task_name: "Confirm sponsorship and refreshments", days_before: 30, responsible_person: "Partnership Manager" },
+  { task_name: "Send reminder emails to agents", days_before: 21, responsible_person: "Marketing Manager" },
+  { task_name: "Create presentation schedule and agenda", days_before: 21, responsible_person: "Content Manager" },
+  { task_name: "Finalize handout materials with speakers", days_before: 21, responsible_person: "Content Manager" },
+  { task_name: "Arrange for winter coat/blanket collection bins if doing this charity option", days_before: 21, responsible_person: "Charity Coordinator" },
+  { task_name: "Send final reminder emails to agents and registered attendees", days_before: 14, responsible_person: "Marketing Manager" },
+  { task_name: "Confirm all vendor arrangements", days_before: 14, responsible_person: "Event Coordinator" },
+  { task_name: "Prepare name tags and check-in materials", days_before: 14, responsible_person: "Event Coordinator" },
+  { task_name: "Finalize charity collection logistics", days_before: 14, responsible_person: "Charity Coordinator" },
+  { task_name: "Verify final headcount", days_before: 7, responsible_person: "Event Coordinator" },
+  { task_name: "Confirm refreshments order", days_before: 7, responsible_person: "Event Coordinator" },
+  { task_name: "Send final instructions to presenters", days_before: 7, responsible_person: "Content Manager" },
+  { task_name: "Walk through venue if possible", days_before: 7, responsible_person: "Event Coordinator" }
+];
+
 export interface Event {
   id: string;
   title: string;
@@ -19,6 +51,9 @@ export interface Event {
   event_type?: string;
   clickup_list_id?: string;
   agent_id: string;
+  charity_goal?: number;
+  charity_actual?: number;
+  feedback_score?: number;
 }
 
 export interface EventTask {
@@ -88,6 +123,29 @@ export const useEvents = () => {
         .single();
 
       if (error) throw error;
+
+      // Auto-generate tasks from template with calculated due dates
+      if (data) {
+        const eventDate = new Date(data.event_date);
+        const tasksToInsert = EVENT_TASK_TEMPLATES.map(template => ({
+          event_id: data.id,
+          task_name: template.task_name,
+          responsible_person: template.responsible_person,
+          due_date: new Date(eventDate.getTime() - (template.days_before * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
+          status: 'pending' as const,
+          agent_id: user.id
+        }));
+
+        const { error: tasksError } = await supabase
+          .from('event_tasks')
+          .insert(tasksToInsert);
+
+        if (tasksError) {
+          console.error('Error creating tasks:', tasksError);
+          // Don't throw error, event was created successfully
+        }
+      }
+
       setEvents(prev => [data, ...prev]);
       return data;
     } catch (error) {
