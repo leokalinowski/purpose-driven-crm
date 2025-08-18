@@ -261,6 +261,46 @@ export function usePipeline() {
     }
   };
 
+  const updateContact = async (contactId: string, contactData: any) => {
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .update({
+          ...contactData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', contactId);
+
+      if (error) throw error;
+      
+      // Trigger DNC check if phone number was updated
+      if (contactData.phone) {
+        try {
+          await supabase.functions.invoke('dnc-single-check', {
+            body: { contactId }
+          });
+        } catch (dncError) {
+          console.warn('DNC check failed:', dncError);
+        }
+      }
+      
+      await fetchOpportunities();
+      toast({
+        title: "Success",
+        description: "Contact updated successfully"
+      });
+      return true;
+    } catch (error: any) {
+      console.error('Contact update failed:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update contact",
+        variant: "destructive"
+      });
+      return false;
+    }
+  };
+
   useEffect(() => {
     fetchOpportunities();
   }, [user?.id]);
@@ -273,6 +313,7 @@ export function usePipeline() {
     createOpportunity,
     updateOpportunity,
     deleteOpportunity,
+    updateContact,
     refresh: fetchOpportunities
   };
 }
