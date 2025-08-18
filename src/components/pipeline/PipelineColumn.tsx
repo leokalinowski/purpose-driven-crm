@@ -33,32 +33,27 @@ export function PipelineColumn({ stage, opportunities, onStageUpdate, onEditOppo
     <div
       ref={drop}
       className={`
-        min-h-[500px] min-w-[280px] max-w-[320px] p-3 rounded-lg border-2 border-dashed transition-all duration-200
-        ${isOver ? 'border-primary bg-primary/5 scale-[1.02]' : 'border-border bg-muted/20'}
-        hover:bg-muted/30 flex flex-col
+        min-h-[400px] p-4 rounded-lg border-2 border-dashed transition-colors
+        ${isOver ? 'border-primary bg-primary/5' : stage.color}
       `}
     >
-      {/* Column Header */}
-      <div className="flex-shrink-0 mb-3 pb-3 border-b border-border">
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-sm text-foreground truncate">{stage.label}</h3>
-            <Badge variant="secondary" className="text-xs mt-1">
-              {opportunities.length} {opportunities.length === 1 ? 'deal' : 'deals'}
-            </Badge>
-          </div>
-          {totalValue > 0 && (
-            <div className="text-right flex-shrink-0 ml-2">
-              <div className="text-xs font-medium text-primary">
-                ${totalValue.toLocaleString()}
-              </div>
-            </div>
-          )}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="font-semibold text-sm">{stage.label}</h3>
+          <Badge variant="secondary" className="text-xs mt-1">
+            {opportunities.length} deals
+          </Badge>
         </div>
+        {totalValue > 0 && (
+          <div className="text-right">
+            <div className="text-sm font-medium">
+              ${totalValue.toLocaleString()}
+            </div>
+          </div>
+        )}
       </div>
       
-      {/* Scrollable Cards Container */}
-      <div className="flex-1 overflow-y-auto space-y-2">
+      <div className="space-y-3">
         {opportunities.map((opportunity) => (
           <OpportunityCard
             key={opportunity.id}
@@ -66,11 +61,6 @@ export function PipelineColumn({ stage, opportunities, onStageUpdate, onEditOppo
             onEdit={onEditOpportunity}
           />
         ))}
-        {opportunities.length === 0 && (
-          <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-            Drop opportunities here
-          </div>
-        )}
       </div>
     </div>
   );

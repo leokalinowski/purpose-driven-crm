@@ -66,7 +66,7 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
     if (opportunity.contact?.dnc) {
       return { icon: Shield, color: 'text-destructive', text: 'DNC' };
     }
-    return { icon: ShieldCheck, color: 'text-accent-foreground', text: 'OK' };
+    return { icon: ShieldCheck, color: 'text-green-600', text: 'OK' };
   };
 
   const dncStatus = getDNCStatus();
@@ -84,65 +84,58 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       className={`
-        relative cursor-pointer transition-all duration-200 hover:shadow-md hover:bg-accent/10 group
+        cursor-pointer transition-all duration-200 hover:shadow-md hover:bg-accent/30 group
         ${isDragging ? 'opacity-50 scale-95' : 'opacity-100'}
-        border-l-4 border-l-primary/30 hover:border-l-primary
-        bg-card hover:bg-card/80
+        w-full border-l-4 border-l-primary/20 hover:border-l-primary/60
+        min-h-[140px] bg-card
       `}
     >
-      {/* DNC Status Badge - Top Right Corner */}
-      <div className="absolute top-2 right-2 z-10">
-        <div className="flex items-center gap-1 bg-background/90 backdrop-blur-sm rounded-md px-1.5 py-0.5 border border-border/50">
-          <dncStatus.icon className={`h-3 w-3 ${dncStatus.color}`} />
-          <span className={`text-xs font-medium ${dncStatus.color}`}>
-            {dncStatus.text}
-          </span>
-        </div>
-      </div>
-
-      <CardContent className="p-3 h-full grid grid-rows-[auto_1fr_auto] min-h-[160px]">
-        {/* Header - Name and Email */}
-        <div className="space-y-1 pr-12">
+      <CardContent className="p-3 h-full flex flex-col">
+        {/* Name first with full space */}
+        <div className="flex-1">
           <h4 className="font-semibold text-sm text-foreground line-clamp-2 group-hover:text-primary transition-colors leading-tight">
             {displayName}
           </h4>
           {opportunity.contact?.email && (
-            <p className="text-xs text-muted-foreground truncate">
+            <p className="text-xs text-muted-foreground truncate mt-1">
               {opportunity.contact.email}
             </p>
           )}
+          <div className="mt-3 space-y-1">
+            {opportunity.deal_value && opportunity.deal_value > 0 && (
+              <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+                <DollarSign className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="truncate">${opportunity.deal_value.toLocaleString()}</span>
+              </div>
+            )}
+            {opportunity.expected_close_date && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="truncate">{format(new Date(opportunity.expected_close_date), 'MMM dd')}</span>
+              </div>
+            )}
+            {opportunity.contact?.phone && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <User className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="truncate">{opportunity.contact.phone}</span>
+              </div>
+            )}
+          </div>
         </div>
-
-        {/* Content - Deal Info */}
-        <div className="py-2 space-y-2">
-          {opportunity.deal_value && opportunity.deal_value > 0 && (
-            <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-              <DollarSign className="h-3.5 w-3.5 flex-shrink-0" />
-              <span className="truncate">${opportunity.deal_value.toLocaleString()}</span>
-            </div>
-          )}
-          {opportunity.expected_close_date && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
-              <span className="truncate">{format(new Date(opportunity.expected_close_date), 'MMM dd')}</span>
-            </div>
-          )}
-          {opportunity.contact?.phone && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <User className="h-3.5 w-3.5 flex-shrink-0" />
-              <span className="truncate">{opportunity.contact.phone}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Footer - Stage Badge and Notes */}
-        <div className="flex items-center justify-between pt-2 border-t border-border">
+        {/* Footer with stage badge and DNC */}
+        <div className="flex items-center justify-between pt-2 mt-auto border-t border-border">
           <Badge
             variant="secondary"
-            className={`text-xs ${getStageColor(opportunity.stage)} capitalize`}
+            className={`text-xs flex-shrink-0 ${getStageColor(opportunity.stage)} capitalize px-2 py-1`}
           >
             {opportunity.stage}
           </Badge>
+          <div className="flex items-center gap-1">
+            <dncStatus.icon className={`h-3 w-3 ${dncStatus.color}`} />
+            <span className={`text-xs ${dncStatus.color} font-medium`}>
+              {dncStatus.text}
+            </span>
+          </div>
           {opportunity.notes && (
             <MessageSquare className="h-3 w-3 text-muted-foreground" />
           )}
