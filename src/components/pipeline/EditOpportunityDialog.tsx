@@ -176,14 +176,29 @@ export function EditOpportunityDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="flex items-center gap-3 text-xl">
-            <User className="h-6 w-6 text-primary" />
-            <span>{opportunity.contact?.first_name} {opportunity.contact?.last_name}</span>
-            <Badge variant="outline" className={`${getStageColor(opportunity.stage)} capitalize ml-auto`}>
-              {opportunity.stage}
-            </Badge>
-          </DialogTitle>
+        <DialogHeader className="flex-shrink-0 pb-4 border-b border-border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <User className="h-6 w-6 text-primary" />
+              <DialogTitle className="text-xl">
+                {opportunity.contact?.first_name} {opportunity.contact?.last_name || 'Unknown Contact'}
+              </DialogTitle>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge 
+                variant="outline" 
+                className={`${getStageColor(opportunity.stage)} capitalize`}
+              >
+                {opportunity.stage}
+              </Badge>
+              <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted/50">
+                <dncStatus.icon className={`h-3 w-3 ${dncStatus.color}`} />
+                <span className={`text-xs ${dncStatus.color} font-medium`}>
+                  {dncStatus.text}
+                </span>
+              </div>
+            </div>
+          </div>
         </DialogHeader>
         
         <Tabs defaultValue="opportunity" className="flex-1 flex flex-col overflow-hidden">
@@ -257,14 +272,9 @@ export function EditOpportunityDialog({
 
           <TabsContent value="contact" className="flex-1 overflow-y-auto">
             <form onSubmit={handleContactSubmit} className="space-y-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-6">
                 <h3 className="text-lg font-semibold">Contact Information</h3>
-                <div className="flex items-center gap-2">
-                  <dncStatus.icon className={`h-4 w-4 ${dncStatus.color}`} />
-                  <Badge variant={opportunity.contact?.dnc ? "destructive" : "secondary"} className={dncStatus.color}>
-                    {dncStatus.text}
-                  </Badge>
-                </div>
+                <p className="text-sm text-muted-foreground mt-1">Update contact details and preferences</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

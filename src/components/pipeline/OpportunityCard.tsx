@@ -24,7 +24,6 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
   });
 
   const handleClick = (e: React.MouseEvent) => {
-    // Only trigger edit if drag distance is minimal (actual click, not drag)
     if (dragDistance < 5) {
       onEdit(opportunity);
     }
@@ -62,15 +61,20 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
 
   const getDNCStatus = () => {
     if (!opportunity.contact?.dnc_last_checked) {
-      return { icon: Shield, color: 'text-muted-foreground', text: 'Not Checked' };
+      return { icon: Shield, color: 'text-muted-foreground', text: 'NC' };
     }
     if (opportunity.contact?.dnc) {
       return { icon: Shield, color: 'text-destructive', text: 'DNC' };
     }
-    return { icon: ShieldCheck, color: 'text-primary', text: 'Safe' };
+    return { icon: ShieldCheck, color: 'text-green-600', text: 'OK' };
   };
 
   const dncStatus = getDNCStatus();
+  
+  // Get display name with fallback
+  const displayName = opportunity.contact?.first_name || opportunity.contact?.last_name 
+    ? `${opportunity.contact?.first_name || ''} ${opportunity.contact?.last_name || ''}`.trim()
+    : 'Unknown Contact';
 
   return (
     <Card
@@ -82,53 +86,57 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
       className={`
         cursor-pointer transition-all duration-200 hover:shadow-md hover:bg-accent/30 group
         ${isDragging ? 'opacity-50 scale-95' : 'opacity-100'}
-        w-full border-l-4 border-l-primary/20 hover:border-l-primary
+        w-full border-l-4 border-l-primary/20 hover:border-l-primary/60
+        min-h-[140px] bg-card
       `}
     >
-      <CardContent className="p-4 space-y-3">
-        <div className="flex items-start justify-between gap-3">
+      <CardContent className="p-3 h-full flex flex-col">
+        {/* Header with name and stage */}
+        <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex-1 min-w-0">
-            <h4 className="font-semibold text-base text-foreground truncate group-hover:text-primary transition-colors">
-              {opportunity.contact?.first_name} {opportunity.contact?.last_name}
+            <h4 className="font-semibold text-sm text-foreground line-clamp-2 group-hover:text-primary transition-colors leading-tight">
+              {displayName}
             </h4>
             {opportunity.contact?.email && (
-              <p className="text-sm text-muted-foreground truncate mt-1">
+              <p className="text-xs text-muted-foreground truncate mt-1">
                 {opportunity.contact.email}
               </p>
             )}
           </div>
           <Badge 
             variant="secondary" 
-            className={`text-xs flex-shrink-0 ${getStageColor(opportunity.stage)} capitalize`}
+            className={`text-xs flex-shrink-0 ${getStageColor(opportunity.stage)} capitalize px-2 py-1`}
           >
             {opportunity.stage}
           </Badge>
         </div>
 
-        <div className="grid grid-cols-1 gap-2">
+        {/* Main content */}
+        <div className="flex-1 space-y-2">
           {opportunity.deal_value && opportunity.deal_value > 0 && (
-            <div className="flex items-center gap-2 text-sm font-medium text-primary">
-              <DollarSign className="h-4 w-4 flex-shrink-0" />
+            <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+              <DollarSign className="h-3.5 w-3.5 flex-shrink-0" />
               <span className="truncate">${opportunity.deal_value.toLocaleString()}</span>
             </div>
           )}
 
           {opportunity.expected_close_date && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Calendar className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">{format(new Date(opportunity.expected_close_date), 'MMM dd, yyyy')}</span>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="truncate">{format(new Date(opportunity.expected_close_date), 'MMM dd')}</span>
             </div>
           )}
 
           {opportunity.contact?.phone && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <User className="h-4 w-4 flex-shrink-0" />
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <User className="h-3.5 w-3.5 flex-shrink-0" />
               <span className="truncate">{opportunity.contact.phone}</span>
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-between pt-2 border-t border-border">
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-2 mt-auto border-t border-border">
           <div className="flex items-center gap-1">
             <dncStatus.icon className={`h-3 w-3 ${dncStatus.color}`} />
             <span className={`text-xs ${dncStatus.color} font-medium`}>
