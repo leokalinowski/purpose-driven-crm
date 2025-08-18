@@ -207,15 +207,17 @@ const Database = () => {
               <div className="text-center py-8">Loading contacts...</div>
             ) : (
               <>
-                <ContactTable
-                  contacts={contacts}
-                  sortBy={sortBy}
-                  sortOrder={sortOrder}
-                  onSort={handleSort}
-                  onEdit={handleInlineSave}
-                  onOpenEdit={openEditForm}
-                  onDelete={setDeletingContact}
-                />
+                <div className="overflow-x-auto">
+                  <ContactTable
+                    contacts={contacts}
+                    sortBy={sortBy}
+                    sortOrder={sortOrder}
+                    onSort={handleSort}
+                    onEdit={handleInlineSave}
+                    onOpenEdit={openEditForm}
+                    onDelete={setDeletingContact}
+                  />
+                </div>
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-muted-foreground">

@@ -29,6 +29,7 @@ export function usePO2Tasks() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [generatingTasks, setGeneratingTasks] = useState(false);
+  const [generatedThisLoad, setGeneratedThisLoad] = useState(false);
   const [historicalStats, setHistoricalStats] = useState<{ weekNumber: number; year: number; completed: number; total: number }[]>([]);
   const currentWeek = getCurrentWeekTasks();
   const year = new Date().getFullYear();
@@ -98,8 +99,9 @@ export function usePO2Tasks() {
       const needsNewTasks = !tasksData || tasksData.length === 0 || 
         (tasksData.length > 0 && tasksData[0].week_number !== currentWeek.weekNumber);
       
-      if (needsNewTasks) {
+      if (needsNewTasks && !generatedThisLoad) {
         console.log(`Generating tasks for current week ${currentWeek.weekNumber} (previous week: ${tasksData?.[0]?.week_number || 'none'})`);
+        setGeneratedThisLoad(true);
         await generateWeeklyTasksInternal(updatedContacts);
       }
 
@@ -162,14 +164,31 @@ export function usePO2Tasks() {
           title: "Success", 
           description: `Generated ${parts.join(' and ')} for week ${currentWeek.weekNumber}` 
         });
+        
+        // Reload tasks to update the UI
+        const { data: newTasksData, error: tasksError } = await supabase
+          .from('po2_tasks')
+          .select(`
+            *,
+            lead:contacts(*)
+          `)
+          .eq('agent_id', user.id)
+          .eq('week_number', currentWeek.weekNumber)
+          .eq('year', year);
+
+        if (!tasksError && newTasksData) {
+          setTasks(newTasksData as unknown as PO2Task[]);
+        }
       } else {
-        console.log('No matching contacts found for this week\'s categories');
+        console.log(`Generation failed: no matching contacts for week ${currentWeek.weekNumber}`);
+        console.log(`- Required call categories: ${currentWeek.callCategories.join(', ')} (found: ${callContacts.length})`);
+        console.log(`- Required text category: ${currentWeek.textCategory} (found: ${textContacts.length})`);
         toast({ 
-          title: "Info", 
-          description: `No contacts found for week ${currentWeek.weekNumber} categories (calls: ${currentWeek.callCategories.join(', ')}, texts: ${currentWeek.textCategory})` 
+          title: "No matching contacts", 
+          description: "Add leads to database with matching categories to generate tasks",
+          variant: "default"
         });
       }
-      await loadTasksAndContacts();
     } catch (error) {
       console.error('Error generating tasks:', error);
       toast({ 

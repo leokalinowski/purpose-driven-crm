@@ -57,7 +57,7 @@ export function AppSidebar() {
             className="h-8 sm:h-10 md:h-12 lg:h-14 w-auto object-contain brightness-0 invert"
           />
         </div>
-        <div className="text-sm md:text-base text-sidebar-foreground/80 truncate text-left">
+        <div className="text-base md:text-lg font-medium text-sidebar-foreground truncate text-left">
           {getDisplayName()}
         </div>
       </SidebarHeader>
