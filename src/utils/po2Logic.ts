@@ -27,14 +27,23 @@ export const WEEKLY_TEXTS: Record<number, string> = {
 };
 
 /**
- * Calculate the current week number of the year (1-52)
+ * Calculate the current week number of the year (1-52) using ISO 8601 standard
  */
 export function getCurrentWeekNumber(): number {
   const now = new Date();
   const start = new Date(now.getFullYear(), 0, 1);
-  const diff = now.getTime() - start.getTime();
-  const oneWeek = 1000 * 60 * 60 * 24 * 7;
-  const weekNumber = Math.ceil(diff / oneWeek);
+  
+  // Get the day of the week for January 1st (0 = Sunday, 1 = Monday, etc.)
+  const startDay = start.getDay();
+  
+  // Calculate days since January 1st
+  const daysSinceStart = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  
+  // Adjust for the first week (ISO 8601: week starts on Monday)
+  const adjustedDays = daysSinceStart + (startDay === 0 ? 6 : startDay - 1);
+  
+  // Calculate week number
+  const weekNumber = Math.ceil((adjustedDays + 1) / 7);
   
   // Ensure we stay within 1-52 range
   return Math.min(Math.max(weekNumber, 1), 52);

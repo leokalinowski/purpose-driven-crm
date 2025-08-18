@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Phone, MessageSquare, RefreshCw, Calendar, Users } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Progress } from '@/components/ui/progress';
+import { Phone, MessageSquare, RefreshCw, Calendar, Users, TrendingUp, History } from 'lucide-react';
 import { usePO2Tasks } from '@/hooks/usePO2Tasks';
 import { PO2TaskCard } from '@/components/po2/PO2TaskCard';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,6 +21,7 @@ export default function PO2Tasks() {
     loading,
     generatingTasks,
     currentWeek,
+    historicalStats,
     generateWeeklyTasks,
     updateTask,
     refreshTasks
@@ -200,6 +203,51 @@ export default function PO2Tasks() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Historical Performance */}
+        {historicalStats.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Previous Weeks Performance
+              </CardTitle>
+              <CardDescription>
+                Historical completion rates for your PO2 tasks
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="historical-stats">
+                  <AccordionTrigger className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" />
+                    Last {historicalStats.length} Weeks Summary
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4">
+                      {historicalStats.map((stat) => {
+                        const completionRate = stat.total > 0 ? (stat.completed / stat.total) * 100 : 0;
+                        return (
+                          <div key={`${stat.year}-${stat.weekNumber}`} className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium">
+                                Week {stat.weekNumber}, {stat.year}
+                              </span>
+                              <span className="text-sm text-muted-foreground">
+                                {stat.completed}/{stat.total} tasks ({completionRate.toFixed(0)}%)
+                              </span>
+                            </div>
+                            <Progress value={completionRate} className="h-2" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </Layout>
   );

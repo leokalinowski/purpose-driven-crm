@@ -29,6 +29,7 @@ export function usePO2Tasks() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [generatingTasks, setGeneratingTasks] = useState(false);
+  const [historicalStats, setHistoricalStats] = useState<{ weekNumber: number; year: number; completed: number; total: number }[]>([]);
   const currentWeek = getCurrentWeekTasks();
   const year = new Date().getFullYear();
 
@@ -93,10 +94,17 @@ export function usePO2Tasks() {
 
       setTasks((tasksData || []) as unknown as PO2Task[]);
 
-      // Auto-generate if no tasks
-      if (!tasksData || tasksData.length === 0) {
+      // Auto-generate if no tasks or if tasks are for a different week
+      const needsNewTasks = !tasksData || tasksData.length === 0 || 
+        (tasksData.length > 0 && tasksData[0].week_number !== currentWeek.weekNumber);
+      
+      if (needsNewTasks) {
+        console.log(`Generating tasks for current week ${currentWeek.weekNumber} (previous week: ${tasksData?.[0]?.week_number || 'none'})`);
         await generateWeeklyTasksInternal(updatedContacts);
       }
+
+      // Load historical statistics
+      await loadHistoricalStats();
     } catch (error) {
       console.error('Error loading tasks and contacts:', error);
       toast({ 
@@ -199,6 +207,36 @@ export function usePO2Tasks() {
     }
   };
 
+  const loadHistoricalStats = async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('po2_tasks')
+        .select('week_number, year, completed')
+        .eq('agent_id', user.id)
+        .neq('week_number', currentWeek.weekNumber)
+        .order('year', { ascending: false })
+        .order('week_number', { ascending: false });
+
+      if (error) throw error;
+
+      // Group by week and calculate stats
+      const weekStats = data.reduce((acc, task) => {
+        const key = `${task.year}-${task.week_number}`;
+        if (!acc[key]) {
+          acc[key] = { weekNumber: task.week_number, year: task.year, completed: 0, total: 0 };
+        }
+        acc[key].total++;
+        if (task.completed) acc[key].completed++;
+        return acc;
+      }, {} as Record<string, { weekNumber: number; year: number; completed: number; total: number }>);
+
+      setHistoricalStats(Object.values(weekStats).slice(0, 10)); // Last 10 weeks
+    } catch (error) {
+      console.error('Error loading historical stats:', error);
+    }
+  };
+
   const refreshTasks = () => loadTasksAndContacts();
 
   return {
@@ -207,6 +245,7 @@ export function usePO2Tasks() {
     loading,
     generatingTasks,
     currentWeek,
+    historicalStats,
     generateWeeklyTasks,
     updateTask,
     refreshTasks
