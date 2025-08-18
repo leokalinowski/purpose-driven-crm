@@ -35,39 +35,35 @@ export function EditOpportunityDialog({
   onOpportunityUpdated
 }: EditOpportunityDialogProps) {
   const { updateOpportunity, updateContact } = usePipeline();
-  
-  // Only initialize hooks if opportunity exists
-  const { notes, addNote, updateNote, deleteNote } = useOpportunityNotes(opportunity?.id || '');
-  const { activities } = useOpportunityActivities(opportunity?.id || '');
-  const { tasks, addTask, updateTask, completeTask } = useOpportunityTasks(opportunity?.id || '');
   const { toast } = useToast();
   
-  // Early return if no opportunity
-  if (!opportunity) {
-    return null;
-  }
+  // Always call hooks - use empty string as fallback for opportunity ID
+  const opportunityId = opportunity?.id || '';
+  const { notes, addNote, updateNote, deleteNote } = useOpportunityNotes(opportunityId);
+  const { activities } = useOpportunityActivities(opportunityId);
+  const { tasks, addTask, updateTask, completeTask } = useOpportunityTasks(opportunityId);
   
   // Opportunity form state
   const [formData, setFormData] = useState({
-    stage: opportunity.stage,
-    deal_value: opportunity.deal_value || 0,
-    expected_close_date: opportunity.expected_close_date || '',
-    notes: opportunity.notes || ''
+    stage: 'lead' as const,
+    deal_value: 0,
+    expected_close_date: '',
+    notes: ''
   });
 
   // Contact form state
   const [contactData, setContactData] = useState({
-    first_name: opportunity.contact?.first_name || '',
-    last_name: opportunity.contact?.last_name || '',
-    email: opportunity.contact?.email || '',
-    phone: opportunity.contact?.phone || '',
-    address_1: opportunity.contact?.address_1 || '',
-    address_2: opportunity.contact?.address_2 || '',
-    city: opportunity.contact?.city || '',
-    state: opportunity.contact?.state || '',
-    zip_code: opportunity.contact?.zip_code || '',
-    tags: opportunity.contact?.tags || [],
-    notes: opportunity.contact?.notes || ''
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    address_1: '',
+    address_2: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    tags: [] as string[],
+    notes: ''
   });
 
   // Note form state
@@ -108,6 +104,11 @@ export function EditOpportunityDialog({
       });
     }
   }, [opportunity]);
+
+  // Early return AFTER all hooks have been called
+  if (!opportunity) {
+    return null;
+  }
 
   const handleOpportunitySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
