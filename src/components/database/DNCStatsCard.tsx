@@ -52,15 +52,15 @@ export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading }) =>
             <div className="text-sm text-muted-foreground">Total Contacts</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-destructive">{stats.dncContacts} {dncPercentage.toFixed(0)}%</div>
+            <div className="text-2xl font-bold text-destructive">{stats.dncContacts}</div>
             <div className="text-sm text-muted-foreground">DNC Listed</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-primary">{stats.nonDncContacts} {safePercentage.toFixed(0)}%</div>
+            <div className="text-2xl font-bold text-primary">{stats.nonDncContacts}</div>
             <div className="text-sm text-muted-foreground">Safe to Call</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-warning">{stats.neverChecked} {uncheckedPercentage.toFixed(0)}%</div>
+            <div className="text-2xl font-bold text-warning">{stats.neverChecked}</div>
             <div className="text-sm text-muted-foreground">Unchecked</div>
           </div>
         </div>
@@ -71,7 +71,7 @@ export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading }) =>
             <span className="text-sm font-medium">Safe to Call Rate</span>
             <span className="text-sm text-muted-foreground">{safePercentage.toFixed(1)}%</span>
           </div>
-          <Progress value={safePercentage} className="h-2 [&>div]:bg-green-500" />
+          <Progress value={safePercentage} className="h-2" />
         </div>
 
         {/* Status Indicators */}
