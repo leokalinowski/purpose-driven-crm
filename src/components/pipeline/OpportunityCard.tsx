@@ -71,7 +71,6 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
 
   const dncStatus = getDNCStatus();
 
-  // Get display name with fallback
   const displayName = opportunity.contact?.first_name || opportunity.contact?.last_name
     ? `${opportunity.contact?.first_name || ''} ${opportunity.contact?.last_name || ''}`.trim()
     : 'Unknown Contact';
@@ -87,13 +86,12 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
         cursor-pointer transition-all duration-200 hover:shadow-md hover:bg-accent/30 group
         ${isDragging ? 'opacity-50 scale-95' : 'opacity-100'}
         w-full border-l-4 border-l-primary/20 hover:border-l-primary/60
-        min-h-[140px] bg-card sm:min-h-[160px] md:p-4 // Added responsive padding
+        min-h-[140px] bg-card p-2 sm:p-3 md:p-4 // Responsive padding
       `}
     >
-      <CardContent className="p-3 h-full flex flex-col sm:flex-row sm:gap-4 md:flex-col // Responsive layout
-">
+      <CardContent className="p-0 h-full flex flex-col justify-between space-y-2 sm:space-y-3">
         {/* Header with name and stage */}
-        <div className="flex items-start justify-between gap-2 mb-3 sm:mb-0 md:mb-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-2">
           <div className="flex-1 min-w-0">
             <h4 className="font-semibold text-sm text-foreground line-clamp-2 group-hover:text-primary transition-colors leading-tight">
               {displayName}
@@ -106,37 +104,37 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
           </div>
           <Badge
             variant="secondary"
-            className={`text-xs flex-shrink-0 ${getStageColor(opportunity.stage)} capitalize px-2 py-1`}
+            className={`text-xs flex-shrink-0 ${getStageColor(opportunity.stage)} capitalize px-1.5 py-0.5 sm:px-2 sm:py-1`}
           >
             {opportunity.stage}
           </Badge>
         </div>
         {/* Main content */}
-        <div className="flex-1 space-y-2">
+        <div className="space-y-1 sm:space-y-2">
           {opportunity.deal_value && opportunity.deal_value > 0 && (
-            <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-              <DollarSign className="h-3.5 w-3.5 flex-shrink-0" />
+            <div className="flex items-center gap-1 sm:gap-2 text-sm font-semibold text-primary">
+              <DollarSign className="h-3 w-3 sm:h-3.5 sm:w-3.5 flex-shrink-0" />
               <span className="truncate">${opportunity.deal_value.toLocaleString()}</span>
             </div>
           )}
           {opportunity.expected_close_date && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+            <div className="flex items-center gap-1 sm:gap-2 text-xs text-muted-foreground">
+              <Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5 flex-shrink-0" />
               <span className="truncate">{format(new Date(opportunity.expected_close_date), 'MMM dd')}</span>
             </div>
           )}
           {opportunity.contact?.phone && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <User className="h-3.5 w-3.5 flex-shrink-0" />
+            <div className="flex items-center gap-1 sm:gap-2 text-xs text-muted-foreground">
+              <User className="h-3 w-3 sm:h-3.5 sm:w-3.5 flex-shrink-0" />
               <span className="truncate">{opportunity.contact.phone}</span>
             </div>
           )}
         </div>
         {/* Footer */}
-        <div className="flex items-center justify-between pt-2 mt-auto border-t border-border">
+        <div className="flex items-center justify-between pt-1 sm:pt-2 mt-auto border-t border-border text-xs">
           <div className="flex items-center gap-1">
             <dncStatus.icon className={`h-3 w-3 ${dncStatus.color}`} />
-            <span className={`text-xs ${dncStatus.color} font-medium`}>
+            <span className={`${dncStatus.color} font-medium`}>
               {dncStatus.text}
             </span>
           </div>
