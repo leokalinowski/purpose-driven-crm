@@ -17,6 +17,7 @@ const Auth = () => {
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn, signUp, signInWithGoogle, user } = useAuth();
   const navigate = useNavigate();
@@ -71,6 +72,25 @@ const Auth = () => {
       // Clear any existing session to avoid redirect conflicts
       await supabase.auth.signOut({ scope: 'global' }).catch(() => {});
 
+      // Validate invitation code first
+      const { data: invitation, error: inviteError } = await supabase
+        .from('invitations' as any)
+        .select('*')
+        .eq('code', inviteCode)
+        .eq('email', email)
+        .eq('used', false)
+        .gt('expires_at', new Date().toISOString())
+        .single();
+
+      if (inviteError || !invitation) {
+        toast({
+          title: 'Invalid invitation',
+          description: 'Invalid or expired invitation code. Please check your code and email.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       const { error } = await signUp(email, password, firstName, lastName);
 
       if (error) {
@@ -80,6 +100,12 @@ const Auth = () => {
           variant: 'destructive',
         });
       } else {
+        // Mark invitation as used
+        await supabase
+          .from('invitations' as any)
+          .update({ used: true })
+          .eq('id', (invitation as any).id);
+
         toast({
           title: 'Success',
           description: 'Account created! Please check your email to confirm your account.',
@@ -286,6 +312,18 @@ const Auth = () => {
                     required
                     className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
                     placeholder="Create a password"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="inviteCode" className="text-gray-700 font-medium">Invitation Code</Label>
+                  <Input
+                    id="inviteCode"
+                    type="text"
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value)}
+                    required
+                    className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                    placeholder="Enter invitation code"
                   />
                 </div>
                 <Button 

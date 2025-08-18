@@ -16,6 +16,7 @@ import Newsletter from "./pages/Newsletter";
 import Coaching from "./pages/Coaching";
 import Transactions from "./pages/Transactions";
 import Pipeline from "./pages/Pipeline";
+import AdminInvitations from "./pages/AdminInvitations";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ const AppContent = () => (
     <Route path="/coaching" element={<Coaching />} />
     <Route path="/transactions" element={<Transactions />} />
     <Route path="/pipeline" element={<Pipeline />} />
+    <Route path="/admin/invitations" element={<AdminInvitations />} />
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />
   </Routes>

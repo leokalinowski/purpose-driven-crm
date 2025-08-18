@@ -8,7 +8,9 @@ import {
   FileBarChart,
   Phone,
   LogOut,
-  BarChart3
+  BarChart3,
+  UserPlus,
+  Settings
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -26,6 +28,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserProfile } from '@/hooks/useUserProfile';
+import { useUserRole } from '@/hooks/useUserRole';
 
 const menuItems = [
   { title: 'Dashboard', url: '/', icon: Home },
@@ -41,6 +44,7 @@ const menuItems = [
 export function AppSidebar() {
   const { signOut, user } = useAuth();
   const { getDisplayName } = useUserProfile();
+  const { isAdmin } = useUserRole();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -85,6 +89,27 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Administration</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    asChild
+                    isActive={location.pathname === '/admin/invitations'}
+                  >
+                    <Link to="/admin/invitations">
+                      <UserPlus />
+                      <span>Team Invitations</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       
       <SidebarFooter className="p-4">
