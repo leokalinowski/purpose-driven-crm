@@ -18,7 +18,7 @@ export const EventForm = ({ onClose }: EventFormProps) => {
   const [description, setDescription] = useState('');
   const [theme, setTheme] = useState('');
   const [invitedCount, setInvitedCount] = useState<number>(0);
-  const [charityGoal, setCharityGoal] = useState<number>(0);
+  
   const [loading, setLoading] = useState(false);
   
   const { addEvent } = useEvents();
@@ -44,7 +44,7 @@ export const EventForm = ({ onClose }: EventFormProps) => {
         description: description.trim() || undefined,
         theme: theme.trim() || undefined,
         invited_count: invitedCount || 0,
-        charity_goal: charityGoal || undefined,
+        
         attendance_count: 0,
         leads_generated: 0
       });
@@ -129,30 +129,16 @@ export const EventForm = ({ onClose }: EventFormProps) => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="invitedCount">Expected Attendees</Label>
-              <Input
-                id="invitedCount"
-                type="number"
-                value={invitedCount || ''}
-                onChange={(e) => setInvitedCount(parseInt(e.target.value) || 0)}
-                placeholder="0"
-                min="0"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="charityGoal">Charity Goal (e.g., smoke detectors)</Label>
-              <Input
-                id="charityGoal"
-                type="number"
-                value={charityGoal || ''}
-                onChange={(e) => setCharityGoal(parseInt(e.target.value) || 0)}
-                placeholder="0"
-                min="0"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="invitedCount">Expected Attendees</Label>
+            <Input
+              id="invitedCount"
+              type="number"
+              value={invitedCount || ''}
+              onChange={(e) => setInvitedCount(parseInt(e.target.value) || 0)}
+              placeholder="0"
+              min="0"
+            />
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">
