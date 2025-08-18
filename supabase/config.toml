@@ -39,3 +39,6 @@ verify_jwt = false
 
 [functions.po2-generate-tasks]
 verify_jwt = false
+
+[functions.dnc-monthly-check]
+verify_jwt = false
