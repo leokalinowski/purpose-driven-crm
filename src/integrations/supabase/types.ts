@@ -781,6 +781,53 @@ export type Database = {
           },
         ]
       }
+      opportunities: {
+        Row: {
+          actual_close_date: string | null
+          agent_id: string
+          contact_id: string | null
+          created_at: string
+          deal_value: number | null
+          expected_close_date: string | null
+          id: string
+          notes: string | null
+          stage: string
+          updated_at: string
+        }
+        Insert: {
+          actual_close_date?: string | null
+          agent_id: string
+          contact_id?: string | null
+          created_at?: string
+          deal_value?: number | null
+          expected_close_date?: string | null
+          id?: string
+          notes?: string | null
+          stage: string
+          updated_at?: string
+        }
+        Update: {
+          actual_close_date?: string | null
+          agent_id?: string
+          contact_id?: string | null
+          created_at?: string
+          deal_value?: number | null
+          expected_close_date?: string | null
+          id?: string
+          notes?: string | null
+          stage?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       po2_tasks: {
         Row: {
           agent_id: string

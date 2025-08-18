@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 import Newsletter from "./pages/Newsletter";
 import Coaching from "./pages/Coaching";
 import Transactions from "./pages/Transactions";
+import Pipeline from "./pages/Pipeline";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const AppContent = () => (
     <Route path="/newsletter" element={<Newsletter />} />
     <Route path="/coaching" element={<Coaching />} />
     <Route path="/transactions" element={<Transactions />} />
+    <Route path="/pipeline" element={<Pipeline />} />
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />
   </Routes>

@@ -7,7 +7,8 @@ import {
   UserCheck,
   FileBarChart,
   Phone,
-  LogOut
+  LogOut,
+  BarChart3
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -30,6 +31,7 @@ const menuItems = [
   { title: 'Dashboard', url: '/', icon: Home },
   { title: 'PO2 Tasks', url: '/po2-tasks', icon: Phone },
   { title: 'Database', url: '/database', icon: Users },
+  { title: 'Pipeline', url: '/pipeline', icon: BarChart3 },
   { title: 'Events', url: '/events', icon: Calendar },
   { title: 'E-Newsletter', url: '/newsletter', icon: Mail },
   { title: 'Success Scoreboard', url: '/coaching', icon: TrendingUp },
