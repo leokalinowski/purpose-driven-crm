@@ -89,6 +89,30 @@ serve(async (req) => {
       throw new Error('DNC_API_KEY not configured');
     }
 
+    console.log(`Using DNC API Key: ${dncApiKey.substring(0, 8)}...${dncApiKey.substring(dncApiKey.length - 4)}`);
+    
+    // Test API with the provided phone number
+    console.log('Testing API with phone 4432201181...');
+    try {
+      const testResponse = await fetch(`https://api.realvalidation.com/rpvWebService/DNCLookup.php?phone=4432201181&token=${dncApiKey}`, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Real Estate DNC Checker/1.0'
+        }
+      });
+      
+      if (testResponse.ok) {
+        const testXml = await testResponse.text();
+        console.log('Test API Response:', testXml);
+        const testResult = parseXMLResponse(testXml);
+        console.log('Test API Parsed Result:', testResult);
+      } else {
+        console.error(`Test API call failed: ${testResponse.status} ${testResponse.statusText}`);
+      }
+    } catch (testError) {
+      console.error('Test API call error:', testError);
+    }
+
     // Get cutoff date (30 days ago)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -122,14 +146,16 @@ serve(async (req) => {
 
       try {
         // Get contacts that need DNC checking for this agent
+        // Include all contacts that have never been checked OR were last checked over 30 days ago
         const { data: contacts, error: contactsError } = await supabase
           .from('contacts')
-          .select('id, phone, agent_id')
+          .select('id, phone, agent_id, dnc, dnc_last_checked')
           .eq('agent_id', agent.user_id)
-          .eq('dnc', false)
           .or(`dnc_last_checked.is.null,dnc_last_checked.lt.${cutoffDate}`)
           .not('phone', 'is', null)
           .not('phone', 'eq', '');
+
+        console.log(`Query: contacts for agent ${agent.user_id} WHERE (dnc_last_checked IS NULL OR dnc_last_checked < '${cutoffDate}') AND phone IS NOT NULL AND phone != ''`);
 
         if (contactsError) {
           const errorMsg = `Failed to fetch contacts for agent ${agent.user_id}: ${contactsError.message}`;
