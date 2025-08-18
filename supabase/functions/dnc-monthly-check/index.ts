@@ -8,24 +8,20 @@ const corsHeaders = {
 
 function parseXMLResponse(xmlText: string): DNCApiResponse {
   try {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-    
-    // Check for XML parsing errors
-    const parserError = xmlDoc.querySelector('parsererror');
-    if (parserError) {
-      return {
-        isOK: false,
-        isDNC: false,
-        error: 'Failed to parse XML response',
-        rawResponse: xmlText
-      };
-    }
+    // Helper function to extract XML tag content using regex
+    const getTagContent = (tagName: string): string | null => {
+      const regex = new RegExp(`<${tagName}[^>]*>([^<]*)<\/${tagName}>`, 'i');
+      const match = xmlText.match(regex);
+      return match ? match[1].trim() : null;
+    };
 
-    const responseCode = xmlDoc.querySelector('RESPONSECODE')?.textContent?.trim();
+    // Log the raw response for debugging
+    console.log('DNC API Response:', xmlText);
+
+    const responseCode = getTagContent('RESPONSECODE');
     
     if (responseCode !== 'OK') {
-      const responseMsg = xmlDoc.querySelector('RESPONSEMSG')?.textContent?.trim() || 'Unknown error';
+      const responseMsg = getTagContent('RESPONSEMSG') || 'Unknown error';
       return {
         isOK: false,
         isDNC: false,
@@ -35,12 +31,14 @@ function parseXMLResponse(xmlText: string): DNCApiResponse {
     }
 
     // Check DNC flags - flag as DNC if ANY of these are "Y"
-    const nationalDNC = xmlDoc.querySelector('national_dnc')?.textContent?.trim() === 'Y';
-    const stateDNC = xmlDoc.querySelector('state_dnc')?.textContent?.trim() === 'Y';
-    const dma = xmlDoc.querySelector('dma')?.textContent?.trim() === 'Y';
-    const litigator = xmlDoc.querySelector('litigator')?.textContent?.trim() === 'Y';
+    const nationalDNC = getTagContent('national_dnc') === 'Y';
+    const stateDNC = getTagContent('state_dnc') === 'Y';
+    const dma = getTagContent('dma') === 'Y';
+    const litigator = getTagContent('litigator') === 'Y';
     
     const isDNC = nationalDNC || stateDNC || dma || litigator;
+
+    console.log(`DNC Check Result: nationalDNC=${nationalDNC}, stateDNC=${stateDNC}, dma=${dma}, litigator=${litigator}, isDNC=${isDNC}`);
 
     return {
       isOK: true,
@@ -48,6 +46,7 @@ function parseXMLResponse(xmlText: string): DNCApiResponse {
       rawResponse: xmlText
     };
   } catch (error) {
+    console.error('XML parsing error:', error);
     return {
       isOK: false,
       isDNC: false,
