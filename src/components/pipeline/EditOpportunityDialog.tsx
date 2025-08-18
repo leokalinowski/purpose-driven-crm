@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from 'date-fns';
-import { CalendarIcon, Plus, CheckCircle, Clock, MessageSquare, Target, User, Phone, Mail, MapPin, Tag, Shield, ShieldCheck } from 'lucide-react';
+import { CalendarIcon, Plus, CheckCircle, Clock, MessageSquare, Target, User, Phone, Mail, MapPin, Tag, Shield, ShieldCheck, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -150,37 +150,51 @@ export function EditOpportunityDialog({
 
 
 
+  const getStageColor = (stage: string) => {
+    switch (stage) {
+      case 'lead': return 'bg-muted text-muted-foreground';
+      case 'qualified': return 'bg-primary text-primary-foreground';
+      case 'appointment': return 'bg-secondary text-secondary-foreground';
+      case 'contract': return 'bg-accent text-accent-foreground';
+      case 'closed': return 'bg-primary text-primary-foreground';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
   const getDNCStatus = () => {
     if (!opportunity.contact?.dnc_last_checked) {
-      return { icon: Shield, color: 'text-yellow-500', bg: 'bg-yellow-100', text: 'Not Checked' };
+      return { icon: Shield, color: 'text-muted-foreground', bg: 'bg-muted', text: 'Not Checked' };
     }
     if (opportunity.contact?.dnc) {
-      return { icon: Shield, color: 'text-red-500', bg: 'bg-red-100', text: 'Do Not Call' };
+      return { icon: Shield, color: 'text-destructive', bg: 'bg-destructive/10', text: 'Do Not Call' };
     }
-    return { icon: ShieldCheck, color: 'text-green-500', bg: 'bg-green-100', text: 'Safe to Call' };
+    return { icon: ShieldCheck, color: 'text-primary', bg: 'bg-primary/10', text: 'Safe to Call' };
   };
 
   const dncStatus = getDNCStatus();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            {opportunity.contact?.first_name} {opportunity.contact?.last_name}
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0">
+          <DialogTitle className="flex items-center gap-3 text-xl">
+            <User className="h-6 w-6 text-primary" />
+            <span>{opportunity.contact?.first_name} {opportunity.contact?.last_name}</span>
+            <Badge variant="outline" className={`${getStageColor(opportunity.stage)} capitalize ml-auto`}>
+              {opportunity.stage}
+            </Badge>
           </DialogTitle>
         </DialogHeader>
         
-        <Tabs defaultValue="opportunity" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="opportunity">Opportunity</TabsTrigger>
-            <TabsTrigger value="contact">Contact Details</TabsTrigger>
-            <TabsTrigger value="activity">Activity</TabsTrigger>
+        <Tabs defaultValue="opportunity" className="flex-1 flex flex-col overflow-hidden">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="opportunity" className="text-sm">Opportunity</TabsTrigger>
+            <TabsTrigger value="contact" className="text-sm">Contact Details</TabsTrigger>
+            <TabsTrigger value="activity" className="text-sm">Activity</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="opportunity" className="space-y-4">
-            <form onSubmit={handleOpportunitySubmit} className="space-y-4">
+          <TabsContent value="opportunity" className="flex-1 overflow-y-auto">
+            <form onSubmit={handleOpportunitySubmit} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="stage">Stage</Label>
                 <Select
@@ -241,8 +255,8 @@ export function EditOpportunityDialog({
             </form>
           </TabsContent>
 
-          <TabsContent value="contact" className="space-y-4">
-            <form onSubmit={handleContactSubmit} className="space-y-4">
+          <TabsContent value="contact" className="flex-1 overflow-y-auto">
+            <form onSubmit={handleContactSubmit} className="space-y-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">Contact Information</h3>
                 <div className="flex items-center gap-2">
@@ -429,21 +443,25 @@ export function EditOpportunityDialog({
             </form>
           </TabsContent>
 
-          <TabsContent value="activity" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Add Note</CardTitle>
+          <TabsContent value="activity" className="flex-1 overflow-y-auto space-y-6">
+            <Card className="border-dashed">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  Add Note
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
                 <Textarea
                   value={newNote.text}
                   onChange={(e) => setNewNote({ ...newNote, text: e.target.value })}
                   placeholder="Add a note about this opportunity..."
                   rows={3}
+                  className="resize-none"
                 />
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <Select value={newNote.type} onValueChange={(value) => setNewNote({ ...newNote, type: value })}>
-                    <SelectTrigger className="w-32">
+                    <SelectTrigger className="w-40">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -453,7 +471,8 @@ export function EditOpportunityDialog({
                       <SelectItem value="follow_up">Follow Up</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button onClick={handleAddNote} size="sm" className="flex-1">
+                  <Button onClick={handleAddNote} size="default" className="flex-1">
+                    <Plus className="h-4 w-4 mr-2" />
                     Add Note
                   </Button>
                 </div>

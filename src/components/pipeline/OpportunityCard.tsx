@@ -2,7 +2,7 @@ import { useDrag } from 'react-dnd';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Opportunity } from "@/hooks/usePipeline";
-import { Calendar, DollarSign, User, Shield, ShieldCheck } from "lucide-react";
+import { Calendar, DollarSign, User, Shield, ShieldCheck, MessageSquare } from "lucide-react";
 import { format } from "date-fns";
 import { useState, useRef } from "react";
 
@@ -51,23 +51,23 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
 
   const getStageColor = (stage: string) => {
     switch (stage) {
-      case 'lead': return 'bg-slate-500';
-      case 'qualified': return 'bg-blue-500';
-      case 'appointment': return 'bg-yellow-500';
-      case 'contract': return 'bg-orange-500';
-      case 'closed': return 'bg-green-500';
-      default: return 'bg-gray-500';
+      case 'lead': return 'bg-muted text-muted-foreground';
+      case 'qualified': return 'bg-primary text-primary-foreground';
+      case 'appointment': return 'bg-secondary text-secondary-foreground';
+      case 'contract': return 'bg-accent text-accent-foreground';
+      case 'closed': return 'bg-primary text-primary-foreground';
+      default: return 'bg-muted text-muted-foreground';
     }
   };
 
   const getDNCStatus = () => {
     if (!opportunity.contact?.dnc_last_checked) {
-      return { icon: Shield, color: 'text-yellow-500', text: 'Not Checked' };
+      return { icon: Shield, color: 'text-muted-foreground', text: 'Not Checked' };
     }
     if (opportunity.contact?.dnc) {
-      return { icon: Shield, color: 'text-red-500', text: 'Do Not Call' };
+      return { icon: Shield, color: 'text-destructive', text: 'DNC' };
     }
-    return { icon: ShieldCheck, color: 'text-green-500', text: 'Safe to Call' };
+    return { icon: ShieldCheck, color: 'text-primary', text: 'Safe' };
   };
 
   const dncStatus = getDNCStatus();
@@ -80,65 +80,66 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       className={`
-        cursor-pointer transition-all duration-200 hover:shadow-md hover:bg-accent/50
+        cursor-pointer transition-all duration-200 hover:shadow-md hover:bg-accent/30 group
         ${isDragging ? 'opacity-50 scale-95' : 'opacity-100'}
-        w-full min-h-[180px]
+        w-full border-l-4 border-l-primary/20 hover:border-l-primary
       `}
     >
-      <CardContent className="p-3 sm:p-4 space-y-2">
-        <div className="flex items-start justify-between gap-2">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <h4 className="font-medium text-sm truncate">
+            <h4 className="font-semibold text-base text-foreground truncate group-hover:text-primary transition-colors">
               {opportunity.contact?.first_name} {opportunity.contact?.last_name}
             </h4>
             {opportunity.contact?.email && (
-              <p className="text-xs text-muted-foreground truncate">
+              <p className="text-sm text-muted-foreground truncate mt-1">
                 {opportunity.contact.email}
               </p>
             )}
-            <div className="flex items-center gap-1 mt-1">
-              <dncStatus.icon className={`h-3 w-3 flex-shrink-0 ${dncStatus.color}`} />
-              <span className={`text-xs ${dncStatus.color} truncate`}>
-                {dncStatus.text}
-              </span>
-            </div>
           </div>
           <Badge 
             variant="secondary" 
-            className={`text-xs text-white flex-shrink-0 ${getStageColor(opportunity.stage)}`}
+            className={`text-xs flex-shrink-0 ${getStageColor(opportunity.stage)} capitalize`}
           >
             {opportunity.stage}
           </Badge>
         </div>
 
-        <div className="space-y-1">
+        <div className="grid grid-cols-1 gap-2">
           {opportunity.deal_value && opportunity.deal_value > 0 && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <DollarSign className="h-3 w-3 flex-shrink-0" />
+            <div className="flex items-center gap-2 text-sm font-medium text-primary">
+              <DollarSign className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">${opportunity.deal_value.toLocaleString()}</span>
             </div>
           )}
 
           {opportunity.expected_close_date && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Calendar className="h-3 w-3 flex-shrink-0" />
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">{format(new Date(opportunity.expected_close_date), 'MMM dd, yyyy')}</span>
             </div>
           )}
 
           {opportunity.contact?.phone && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <User className="h-3 w-3 flex-shrink-0" />
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <User className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">{opportunity.contact.phone}</span>
             </div>
           )}
         </div>
 
-        {opportunity.notes && (
-          <p className="text-xs text-muted-foreground line-clamp-2 break-words">
-            {opportunity.notes}
-          </p>
-        )}
+        <div className="flex items-center justify-between pt-2 border-t border-border">
+          <div className="flex items-center gap-1">
+            <dncStatus.icon className={`h-3 w-3 ${dncStatus.color}`} />
+            <span className={`text-xs ${dncStatus.color} font-medium`}>
+              {dncStatus.text}
+            </span>
+          </div>
+          
+          {opportunity.notes && (
+            <MessageSquare className="h-3 w-3 text-muted-foreground" />
+          )}
+        </div>
       </CardContent>
     </Card>
   );
