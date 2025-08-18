@@ -75,7 +75,19 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  console.log('Starting DNC monthly check automation...');
+  // Parse request body to check for force recheck
+  let requestData = {};
+  try {
+    const body = await req.text();
+    if (body) {
+      requestData = JSON.parse(body);
+    }
+  } catch (error) {
+    console.log('No JSON body provided, using defaults');
+  }
+
+  const forceRecheck = (requestData as any)?.forceRecheck || false;
+  console.log(`Starting DNC check automation... Force recheck: ${forceRecheck}`);
 
   try {
     const supabase = createClient(
@@ -113,12 +125,16 @@ serve(async (req) => {
       console.error('Test API call error:', testError);
     }
 
-    // Get cutoff date (30 days ago)
+    // Get cutoff date (30 days ago) - only used if not forcing recheck
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const cutoffDate = thirtyDaysAgo.toISOString();
 
-    console.log(`Checking contacts not checked since: ${cutoffDate}`);
+    if (forceRecheck) {
+      console.log('Force recheck enabled: checking ALL contacts with phone numbers');
+    } else {
+      console.log(`Checking contacts not checked since: ${cutoffDate}`);
+    }
 
     // Get all agents
     const { data: agents, error: agentsError } = await supabase
@@ -146,16 +162,32 @@ serve(async (req) => {
 
       try {
         // Get contacts that need DNC checking for this agent
-        // Include all contacts that have never been checked OR were last checked over 30 days ago
-        const { data: contacts, error: contactsError } = await supabase
-          .from('contacts')
-          .select('id, phone, agent_id, dnc, dnc_last_checked')
-          .eq('agent_id', agent.user_id)
-          .or(`dnc_last_checked.is.null,dnc_last_checked.lt.${cutoffDate}`)
-          .not('phone', 'is', null)
-          .not('phone', 'eq', '');
-
-        console.log(`Query: contacts for agent ${agent.user_id} WHERE (dnc_last_checked IS NULL OR dnc_last_checked < '${cutoffDate}') AND phone IS NOT NULL AND phone != ''`);
+        let contacts, contactsError;
+        
+        if (forceRecheck) {
+          // Force recheck: get ALL contacts with phone numbers
+          const result = await supabase
+            .from('contacts')
+            .select('id, phone, agent_id, dnc, dnc_last_checked')
+            .eq('agent_id', agent.user_id)
+            .not('phone', 'is', null)
+            .not('phone', 'eq', '');
+          contacts = result.data;
+          contactsError = result.error;
+          console.log(`Query: ALL contacts for agent ${agent.user_id} WHERE phone IS NOT NULL AND phone != '' (FORCE RECHECK)`);
+        } else {
+          // Normal check: only contacts that haven't been checked or are older than 30 days
+          const result = await supabase
+            .from('contacts')
+            .select('id, phone, agent_id, dnc, dnc_last_checked')
+            .eq('agent_id', agent.user_id)
+            .or(`dnc_last_checked.is.null,dnc_last_checked.lt.${cutoffDate}`)
+            .not('phone', 'is', null)
+            .not('phone', 'eq', '');
+          contacts = result.data;
+          contactsError = result.error;
+          console.log(`Query: contacts for agent ${agent.user_id} WHERE (dnc_last_checked IS NULL OR dnc_last_checked < '${cutoffDate}') AND phone IS NOT NULL AND phone != ''`);
+        }
 
         if (contactsError) {
           const errorMsg = `Failed to fetch contacts for agent ${agent.user_id}: ${contactsError.message}`;

@@ -85,13 +85,16 @@ export const useDNCStats = () => {
     }
   }, [user]);
 
-  const triggerDNCCheck = useCallback(async () => {
+  const triggerDNCCheck = useCallback(async (forceRecheck: boolean = false) => {
     if (!user) throw new Error('User not authenticated');
 
     setChecking(true);
     try {
       const { data, error } = await supabase.functions.invoke('dnc-monthly-check', {
-        body: { manualTrigger: true }
+        body: { 
+          manualTrigger: true,
+          forceRecheck 
+        }
       });
 
       if (error) throw error;

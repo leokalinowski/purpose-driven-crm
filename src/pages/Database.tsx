@@ -158,12 +158,14 @@ const Database = () => {
     setEditingContact(null);
   };
 
-  const handleDNCCheck = async () => {
+  const handleDNCCheck = async (forceRecheck: boolean = false) => {
     try {
-      await triggerDNCCheck();
+      const result = await triggerDNCCheck(forceRecheck);
       toast({
         title: "Success",
-        description: "DNC check completed successfully",
+        description: forceRecheck 
+          ? `Force DNC check completed: ${result?.stats?.totalChecked || 0} contacts checked`
+          : "DNC check completed successfully",
       });
       fetchContacts(); // Refresh contacts after DNC check
     } catch (error) {
