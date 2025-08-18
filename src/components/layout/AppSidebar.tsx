@@ -50,22 +50,14 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="p-3 md:p-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-2 md:gap-3 mb-3">
+        <div className="flex flex-col items-center gap-3 mb-3">
           <img 
             src="https://cguoaokqwgqvzkqqezcq.supabase.co/storage/v1/object/public/assets/logos/reop-logo-full.png" 
             alt="Real Estate on Purpose Logo" 
-            className="h-6 w-auto sm:h-8 md:h-10 object-contain brightness-0 invert"
+            className="h-8 sm:h-10 md:h-12 lg:h-14 w-auto object-contain brightness-0 invert"
           />
-          <div className="flex flex-col">
-            <h1 className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-sidebar-foreground leading-tight">
-              Real Estate on Purpose
-            </h1>
-            <span className="text-xs md:text-sm text-sidebar-foreground/60 leading-tight">
-              CRM Platform
-            </span>
-          </div>
         </div>
-        <div className="text-xs text-sidebar-foreground/70 truncate">
+        <div className="text-sm md:text-base text-sidebar-foreground/80 truncate text-center">
           {getDisplayName()}
         </div>
       </SidebarHeader>
