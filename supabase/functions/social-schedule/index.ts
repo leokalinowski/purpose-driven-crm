@@ -75,59 +75,105 @@ const handler = async (req: Request): Promise<Response> => {
           continue;
         }
 
-        // In a real implementation, you would call Postiz API here
-        // For now, we'll create a mock Postiz post ID
-        const mockPostizId = `postiz_${platform}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-        // Save the scheduled post to database
-        const { data: post, error: insertError } = await supabaseClient
-          .from('social_posts')
-          .insert({
-            agent_id: actualAgentId,
-            platform,
-            content,
-            media_url,
-            schedule_time,
-            status: 'scheduled',
-            postiz_post_id: mockPostizId,
-          })
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error(`Database error for ${platform}:`, insertError);
+        // Call Postiz API to schedule the post
+        const postizBaseUrl = Deno.env.get('POSTIZ_BASE_URL');
+        const postizApiKey = Deno.env.get('POSTIZ_API_KEY');
+        
+        if (!postizBaseUrl || !postizApiKey) {
+          console.error('Postiz configuration missing');
           results.push({
             platform,
             success: false,
-            error: 'Failed to save post',
+            error: 'Postiz configuration missing',
           });
           continue;
         }
 
-        console.log(`Successfully scheduled ${platform} post:`, post.id);
-        results.push({
-          platform,
-          success: true,
-          post_id: post.id,
-          postiz_id: mockPostizId,
-        });
+        try {
+          // Prepare post data for Postiz
+          const postData = {
+            content,
+            datetime: schedule_time,
+            platforms: [platform],
+            ...(media_url && { media: [{ url: media_url }] }),
+          };
 
-        // Here you would make the actual API call to Postiz
-        // Example:
-        // const postizResponse = await fetch(`${POSTIZ_API_URL}/posts`, {
-        //   method: 'POST',
-        //   headers: {
-        //     'Authorization': `Bearer ${POSTIZ_API_KEY}`,
-        //     'Content-Type': 'application/json',
-        //   },
-        //   body: JSON.stringify({
-        //     content,
-        //     media_url,
-        //     schedule_time,
-        //     platform,
-        //     access_token: account.access_token,
-        //   }),
-        // });
+          // Call Postiz Public API
+          const postizResponse = await fetch(`${postizBaseUrl}/api/posts`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${postizApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(postData),
+          });
+
+          if (!postizResponse.ok) {
+            const errorData = await postizResponse.text();
+            console.error(`Postiz API error for ${platform}:`, errorData);
+            throw new Error(`Postiz API error: ${postizResponse.status}`);
+          }
+
+          const postizResult = await postizResponse.json();
+          const postizId = postizResult.id || `postiz_${Date.now()}`;
+
+          // Save the scheduled post to database
+          const { data: post, error: insertError } = await supabaseClient
+            .from('social_posts')
+            .insert({
+              agent_id: actualAgentId,
+              platform,
+              content,
+              media_url,
+              schedule_time,
+              status: 'scheduled',
+              postiz_post_id: postizId,
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error(`Database error for ${platform}:`, insertError);
+            results.push({
+              platform,
+              success: false,
+              error: 'Failed to save post',
+            });
+            continue;
+          }
+
+          console.log(`Successfully scheduled ${platform} post via Postiz:`, post.id);
+          results.push({
+            platform,
+            success: true,
+            post_id: post.id,
+            postiz_id: postizId,
+          });
+
+        } catch (postizError) {
+          console.error(`Postiz scheduling error for ${platform}:`, postizError);
+          // Fallback: save to database without Postiz
+          const { data: post, error: insertError } = await supabaseClient
+            .from('social_posts')
+            .insert({
+              agent_id: actualAgentId,
+              platform,
+              content,
+              media_url,
+              schedule_time,
+              status: 'pending',
+              error_message: postizError.message,
+            })
+            .select()
+            .single();
+
+          results.push({
+            platform,
+            success: false,
+            error: `Postiz error: ${postizError.message}`,
+            post_id: post?.id,
+          });
+        }
 
       } catch (platformError) {
         console.error(`Error scheduling ${platform} post:`, platformError);

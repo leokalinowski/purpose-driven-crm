@@ -13,14 +13,6 @@ interface OAuthRequest {
   state?: string;
 }
 
-interface PostizAccount {
-  id: string;
-  name: string;
-  username: string;
-  picture: string;
-  type: string;
-}
-
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -58,55 +50,71 @@ const handler = async (req: Request): Promise<Response> => {
       console.log(`Processing OAuth callback for ${platform}`);
       
       try {
-        // Use Postiz API to exchange the code for account information
-        const postizBaseUrl = Deno.env.get('POSTIZ_BASE_URL') || '';
-        const postizApiKey = Deno.env.get('POSTIZ_API_KEY') || '';
+        let tokenData;
         
-        if (!postizBaseUrl || !postizApiKey) {
-          throw new Error('Postiz configuration is missing');
-        }
+        if (platform === 'facebook') {
+          // Handle Facebook OAuth callback
+          const facebookAppId = Deno.env.get('FACEBOOK_APP_ID');
+          const facebookAppSecret = Deno.env.get('FACEBOOK_APP_SECRET');
+          const redirectUri = Deno.env.get('REDIRECT_URI');
+          
+          if (!facebookAppId || !facebookAppSecret || !redirectUri) {
+            throw new Error('Facebook OAuth configuration is missing');
+          }
 
-        // Call Postiz API to exchange authorization code for account access
-        const tokenResponse = await fetch(`${postizBaseUrl}/oauth/callback`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${postizApiKey}`,
-          },
-          body: JSON.stringify({
-            platform,
-            code,
-            state,
-          }),
-        });
-
-        if (!tokenResponse.ok) {
-          const errorData = await tokenResponse.text();
-          console.error('Postiz OAuth error:', errorData);
-          throw new Error('Failed to authenticate with social platform');
-        }
-
-        const accountData = await tokenResponse.json();
-        console.log('Postiz account data:', accountData);
-
-        // Store the account information in the database
-        const { error: insertError } = await supabaseClient
-          .from('social_accounts')
-          .upsert({
-            agent_id: actualAgentId,
-            platform,
-            access_token: accountData.access_token,
-            refresh_token: accountData.refresh_token || null,
-            expires_at: accountData.expires_at ? new Date(accountData.expires_at).toISOString() : null,
-            account_id: accountData.account_id || accountData.id,
-            account_name: accountData.account_name || accountData.name || accountData.username,
-          }, {
-            onConflict: 'agent_id,platform'
+          // Exchange code for access token
+          const tokenResponse = await fetch(`https://graph.facebook.com/v18.0/oauth/access_token`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              client_id: facebookAppId,
+              client_secret: facebookAppSecret,
+              code,
+              redirect_uri: redirectUri,
+            }),
           });
 
-        if (insertError) {
-          console.error('Database error:', insertError);
-          throw new Error('Failed to save account information');
+          if (!tokenResponse.ok) {
+            const errorData = await tokenResponse.text();
+            console.error('Facebook token error:', errorData);
+            throw new Error('Failed to get Facebook access token');
+          }
+
+          tokenData = await tokenResponse.json();
+          console.log('Facebook token data received');
+
+          // Get user profile data
+          const profileResponse = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${tokenData.access_token}&fields=id,name,email`);
+          const profileData = await profileResponse.json();
+
+          if (!profileResponse.ok) {
+            console.error('Facebook profile error:', profileData);
+            throw new Error('Failed to get Facebook profile data');
+          }
+
+          // Store the account information in the database
+          const { error: insertError } = await supabaseClient
+            .from('social_accounts')
+            .upsert({
+              agent_id: actualAgentId,
+              platform,
+              access_token: tokenData.access_token,
+              refresh_token: null,
+              expires_at: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null,
+              account_id: profileData.id,
+              account_name: profileData.name,
+            }, {
+              onConflict: 'agent_id,platform'
+            });
+
+          if (insertError) {
+            console.error('Database error:', insertError);
+            throw new Error('Failed to save Facebook account information');
+          }
+        } else {
+          throw new Error(`OAuth callback not implemented for platform: ${platform}`);
         }
 
         return new Response(
@@ -136,45 +144,39 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     // If no code, this is an initial OAuth request
-    // Get OAuth URL from Postiz
+    // Generate OAuth URL directly with the platform
     try {
-      const postizBaseUrl = Deno.env.get('POSTIZ_BASE_URL') || '';
-      const postizApiKey = Deno.env.get('POSTIZ_API_KEY') || '';
       const redirectUri = Deno.env.get('REDIRECT_URI') || '';
       
-      if (!postizBaseUrl || !postizApiKey || !redirectUri) {
-        throw new Error('Postiz configuration is missing');
+      if (!redirectUri) {
+        throw new Error('Redirect URI is missing');
       }
 
-      // Call Postiz API to get the OAuth URL
-      const oauthResponse = await fetch(`${postizBaseUrl}/oauth/url`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${postizApiKey}`,
-        },
-        body: JSON.stringify({
-          platform,
-          state: `${actualAgentId}_${platform}`,
-          redirect_uri: redirectUri,
-        }),
-      });
-
-      if (!oauthResponse.ok) {
-        const errorData = await oauthResponse.text();
-        console.error('Postiz OAuth URL error:', errorData);
-        throw new Error('Failed to get OAuth URL from Postiz');
-      }
-
-      const oauthData = await oauthResponse.json();
+      let oauthUrl: string;
       
-      if (!oauthData.oauth_url) {
-        throw new Error('No OAuth URL returned from Postiz');
+      if (platform === 'facebook') {
+        const facebookAppId = Deno.env.get('FACEBOOK_APP_ID');
+        
+        if (!facebookAppId) {
+          throw new Error('Facebook App ID is missing');
+        }
+
+        const scopes = 'pages_manage_posts,pages_read_engagement,pages_show_list,business_management';
+        const state = `${actualAgentId}_${platform}`;
+        
+        oauthUrl = `https://www.facebook.com/v18.0/dialog/oauth?` +
+          `client_id=${facebookAppId}&` +
+          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+          `scope=${encodeURIComponent(scopes)}&` +
+          `state=${encodeURIComponent(state)}&` +
+          `response_type=code`;
+      } else {
+        throw new Error(`OAuth URL generation not implemented for platform: ${platform}`);
       }
 
       return new Response(
         JSON.stringify({
-          oauth_url: oauthData.oauth_url,
+          oauth_url: oauthUrl,
           message: `Redirect to ${platform} OAuth`,
         }),
         {
