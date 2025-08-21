@@ -1116,6 +1116,99 @@ export type Database = {
         }
         Relationships: []
       }
+      social_accounts: {
+        Row: {
+          access_token: string
+          account_id: string | null
+          account_name: string | null
+          agent_id: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          platform: string
+          refresh_token: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          account_id?: string | null
+          account_name?: string | null
+          agent_id: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          platform: string
+          refresh_token?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          account_id?: string | null
+          account_name?: string | null
+          agent_id?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          platform?: string
+          refresh_token?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      social_analytics: {
+        Row: {
+          agent_id: string
+          clicks: number | null
+          comments: number | null
+          created_at: string
+          engagement_rate: number | null
+          followers: number | null
+          id: string
+          impressions: number | null
+          likes: number | null
+          metric_date: string
+          platform: string
+          post_id: string | null
+          reach: number | null
+          shares: number | null
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          clicks?: number | null
+          comments?: number | null
+          created_at?: string
+          engagement_rate?: number | null
+          followers?: number | null
+          id?: string
+          impressions?: number | null
+          likes?: number | null
+          metric_date: string
+          platform: string
+          post_id?: string | null
+          reach?: number | null
+          shares?: number | null
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          clicks?: number | null
+          comments?: number | null
+          created_at?: string
+          engagement_rate?: number | null
+          followers?: number | null
+          id?: string
+          impressions?: number | null
+          likes?: number | null
+          metric_date?: string
+          platform?: string
+          post_id?: string | null
+          reach?: number | null
+          shares?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       social_media_analytics: {
         Row: {
           created_at: string
@@ -1160,6 +1253,54 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
         ]
+      }
+      social_posts: {
+        Row: {
+          agent_id: string
+          content: string
+          created_at: string
+          error_message: string | null
+          id: string
+          media_type: string | null
+          media_url: string | null
+          platform: string
+          posted_at: string | null
+          postiz_post_id: string | null
+          schedule_time: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          content: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          platform: string
+          posted_at?: string | null
+          postiz_post_id?: string | null
+          schedule_time: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          content?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          platform?: string
+          posted_at?: string | null
+          postiz_post_id?: string | null
+          schedule_time?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       transaction_coordination: {
         Row: {
