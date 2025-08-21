@@ -42,3 +42,15 @@ verify_jwt = false
 
 [functions.dnc-monthly-check]
 verify_jwt = false
+
+[functions.social-oauth]
+verify_jwt = true
+
+[functions.social-schedule]
+verify_jwt = true
+
+[functions.social-analytics]
+verify_jwt = true
+
+[functions.social-csv-process]
+verify_jwt = true

@@ -27,13 +27,15 @@ const handler = async (req: Request): Promise<Response> => {
     );
 
     // Log environment variables (without values for security)
-    console.log('Environment check:', {
+    const envCheck = {
       hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
       hasSupabaseAnonKey: !!Deno.env.get('SUPABASE_ANON_KEY'),
       hasFacebookAppId: !!Deno.env.get('FACEBOOK_APP_ID'),
       hasFacebookAppSecret: !!Deno.env.get('FACEBOOK_APP_SECRET'),
       hasRedirectUri: !!Deno.env.get('REDIRECT_URI'),
-    });
+      allEnvVars: Object.keys(Deno.env.toObject()).filter(key => key.startsWith('FACEBOOK_') || key.includes('REDIRECT')),
+    };
+    console.log('Environment check:', envCheck);
 
     // Get the user from the Authorization header
     const authHeader = req.headers.get('Authorization');
