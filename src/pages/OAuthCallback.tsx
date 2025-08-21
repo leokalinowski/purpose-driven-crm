@@ -18,15 +18,24 @@ const OAuthCallback = () => {
       try {
         const code = searchParams.get('code');
         const state = searchParams.get('state');
-        const platform = searchParams.get('platform');
+        let platform = searchParams.get('platform');
         const error = searchParams.get('error');
 
         if (error) {
           throw new Error(error);
         }
 
+        // If platform is not directly in URL, extract from state parameter
+        // State format: ${agentId}_${platform}
+        if (!platform && state) {
+          const stateParts = state.split('_');
+          if (stateParts.length >= 2) {
+            platform = stateParts[stateParts.length - 1]; // Get last part as platform
+          }
+        }
+
         if (!code || !platform) {
-          throw new Error('Missing required parameters');
+          throw new Error('Missing required parameters (code or platform)');
         }
 
         if (!user) {
