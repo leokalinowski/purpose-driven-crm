@@ -126,11 +126,11 @@ export default function AdminSocialScheduler() {
             </SelectTrigger>
             <SelectContent>
               {agentsLoading ? (
-                <SelectItem value="" disabled>
+                <SelectItem value="loading" disabled>
                   Loading agents...
                 </SelectItem>
               ) : agents.length === 0 ? (
-                <SelectItem value="" disabled>
+                <SelectItem value="no-agents" disabled>
                   No agents found
                 </SelectItem>
               ) : (
