@@ -13,6 +13,14 @@ interface OAuthRequest {
   state?: string;
 }
 
+interface PostizAccount {
+  id: string;
+  name: string;
+  username: string;
+  picture: string;
+  type: string;
+}
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -49,74 +57,145 @@ const handler = async (req: Request): Promise<Response> => {
     if (code) {
       console.log(`Processing OAuth callback for ${platform}`);
       
-      // Here you would normally exchange the code for an access token
-      // This is a simplified implementation
-      const mockTokenResponse = {
-        access_token: `mock_access_token_${platform}_${Date.now()}`,
-        refresh_token: `mock_refresh_token_${platform}_${Date.now()}`,
-        expires_in: 3600,
-        account_id: `account_${platform}_${Date.now()}`,
-        account_name: `${platform.charAt(0).toUpperCase() + platform.slice(1)} Account`,
-      };
+      try {
+        // Use Postiz API to exchange the code for account information
+        const postizBaseUrl = Deno.env.get('POSTIZ_BASE_URL') || '';
+        const postizApiKey = Deno.env.get('POSTIZ_API_KEY') || '';
+        
+        if (!postizBaseUrl || !postizApiKey) {
+          throw new Error('Postiz configuration is missing');
+        }
 
-      // Store the tokens in the database
-      const { error: insertError } = await supabaseClient
-        .from('social_accounts')
-        .upsert({
-          agent_id: actualAgentId,
-          platform,
-          access_token: mockTokenResponse.access_token,
-          refresh_token: mockTokenResponse.refresh_token,
-          expires_at: new Date(Date.now() + mockTokenResponse.expires_in * 1000).toISOString(),
-          account_id: mockTokenResponse.account_id,
-          account_name: mockTokenResponse.account_name,
-        }, {
-          onConflict: 'agent_id,platform'
+        // Call Postiz API to exchange authorization code for account access
+        const tokenResponse = await fetch(`${postizBaseUrl}/oauth/callback`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${postizApiKey}`,
+          },
+          body: JSON.stringify({
+            platform,
+            code,
+            state,
+          }),
         });
 
-      if (insertError) {
-        console.error('Database error:', insertError);
-        throw new Error('Failed to save account');
+        if (!tokenResponse.ok) {
+          const errorData = await tokenResponse.text();
+          console.error('Postiz OAuth error:', errorData);
+          throw new Error('Failed to authenticate with social platform');
+        }
+
+        const accountData = await tokenResponse.json();
+        console.log('Postiz account data:', accountData);
+
+        // Store the account information in the database
+        const { error: insertError } = await supabaseClient
+          .from('social_accounts')
+          .upsert({
+            agent_id: actualAgentId,
+            platform,
+            access_token: accountData.access_token,
+            refresh_token: accountData.refresh_token || null,
+            expires_at: accountData.expires_at ? new Date(accountData.expires_at).toISOString() : null,
+            account_id: accountData.account_id || accountData.id,
+            account_name: accountData.account_name || accountData.name || accountData.username,
+          }, {
+            onConflict: 'agent_id,platform'
+          });
+
+        if (insertError) {
+          console.error('Database error:', insertError);
+          throw new Error('Failed to save account information');
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `${platform} account connected successfully`,
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+          }
+        );
+
+      } catch (error) {
+        console.error('OAuth callback error:', error);
+        return new Response(
+          JSON.stringify({
+            error: error instanceof Error ? error.message : 'OAuth callback failed',
+            message: 'Failed to connect account'
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500,
+          }
+        );
+      }
+    }
+
+    // If no code, this is an initial OAuth request
+    // Get OAuth URL from Postiz
+    try {
+      const postizBaseUrl = Deno.env.get('POSTIZ_BASE_URL') || '';
+      const postizApiKey = Deno.env.get('POSTIZ_API_KEY') || '';
+      const redirectUri = Deno.env.get('REDIRECT_URI') || '';
+      
+      if (!postizBaseUrl || !postizApiKey || !redirectUri) {
+        throw new Error('Postiz configuration is missing');
+      }
+
+      // Call Postiz API to get the OAuth URL
+      const oauthResponse = await fetch(`${postizBaseUrl}/oauth/url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${postizApiKey}`,
+        },
+        body: JSON.stringify({
+          platform,
+          state: `${actualAgentId}_${platform}`,
+          redirect_uri: redirectUri,
+        }),
+      });
+
+      if (!oauthResponse.ok) {
+        const errorData = await oauthResponse.text();
+        console.error('Postiz OAuth URL error:', errorData);
+        throw new Error('Failed to get OAuth URL from Postiz');
+      }
+
+      const oauthData = await oauthResponse.json();
+      
+      if (!oauthData.oauth_url) {
+        throw new Error('No OAuth URL returned from Postiz');
       }
 
       return new Response(
         JSON.stringify({
-          success: true,
-          message: `${platform} account connected successfully`,
+          oauth_url: oauthData.oauth_url,
+          message: `Redirect to ${platform} OAuth`,
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 200,
         }
       );
+
+    } catch (error) {
+      console.error('OAuth URL generation error:', error);
+      return new Response(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : 'Failed to generate OAuth URL',
+          message: 'OAuth initialization failed'
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500,
+        }
+      );
     }
-
-    // If no code, this is an initial OAuth request
-    // Return the OAuth URL for the platform
-    const platformUrls = {
-      facebook: `https://www.facebook.com/v18.0/dialog/oauth?client_id=YOUR_FB_CLIENT_ID&redirect_uri=${encodeURIComponent('YOUR_REDIRECT_URI')}&scope=pages_manage_posts,pages_read_engagement&state=${actualAgentId}_facebook`,
-      instagram: `https://api.instagram.com/oauth/authorize?client_id=YOUR_IG_CLIENT_ID&redirect_uri=${encodeURIComponent('YOUR_REDIRECT_URI')}&scope=user_profile,user_media&response_type=code&state=${actualAgentId}_instagram`,
-      linkedin: `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=YOUR_LI_CLIENT_ID&redirect_uri=${encodeURIComponent('YOUR_REDIRECT_URI')}&scope=w_member_social&state=${actualAgentId}_linkedin`,
-      twitter: `https://twitter.com/i/oauth2/authorize?response_type=code&client_id=YOUR_TW_CLIENT_ID&redirect_uri=${encodeURIComponent('YOUR_REDIRECT_URI')}&scope=tweet.read%20tweet.write%20users.read&state=${actualAgentId}_twitter`,
-      tiktok: `https://www.tiktok.com/auth/authorize/?client_key=YOUR_TT_CLIENT_KEY&response_type=code&scope=user.info.basic,video.list&redirect_uri=${encodeURIComponent('YOUR_REDIRECT_URI')}&state=${actualAgentId}_tiktok`,
-    };
-
-    const oauthUrl = platformUrls[platform as keyof typeof platformUrls];
-    
-    if (!oauthUrl) {
-      throw new Error(`Unsupported platform: ${platform}`);
-    }
-
-    return new Response(
-      JSON.stringify({
-        oauth_url: oauthUrl,
-        message: `Redirect to ${platform} OAuth`,
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
-    );
 
   } catch (error) {
     console.error('OAuth error:', error);
