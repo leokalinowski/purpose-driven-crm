@@ -13,40 +13,26 @@ interface OAuthRequest {
   state?: string;
 }
 
-// Enhanced environment variable getter with comprehensive logging
-const getEnvWithLogging = (name: string): string => {
-  const value = Deno.env.get(name);
-  console.log(`ENV[${name}]: ${value ? 'FOUND' : 'MISSING'} (length: ${value?.length || 0})`);
-  return value || '';
-};
-
-// Log all environment variables for debugging
-const logEnvironmentState = () => {
-  console.log('=== ENVIRONMENT DEBUG START ===');
-  
-  const allEnv = Deno.env.toObject();
-  const allKeys = Object.keys(allEnv);
-  
-  console.log(`Total environment variables: ${allKeys.length}`);
-  
-  // Log Facebook and Redirect specific variables
-  const facebookKeys = allKeys.filter(key => key.includes('FACEBOOK'));
-  const redirectKeys = allKeys.filter(key => key.includes('REDIRECT'));
-  const supabaseKeys = allKeys.filter(key => key.includes('SUPABASE'));
-  
-  console.log(`Facebook keys found: ${facebookKeys}`);
-  console.log(`Redirect keys found: ${redirectKeys}`);
-  console.log(`Supabase keys found: ${supabaseKeys.length}`);
-  
-  // Test specific required variables
-  const requiredVars = ['FACEBOOK_APP_ID', 'FACEBOOK_APP_SECRET', 'REDIRECT_URI', 'SUPABASE_URL', 'SUPABASE_ANON_KEY'];
-  console.log('Required variables check:');
-  requiredVars.forEach(varName => {
-    const value = Deno.env.get(varName);
-    console.log(`  ${varName}: ${value ? 'SET (' + value.substring(0, 8) + '...)' : 'NOT SET'}`);
-  });
-  
-  console.log('=== ENVIRONMENT DEBUG END ===');
+// Get secrets from Supabase vault using service role
+const getSecretFromVault = async (secretName: string, supabaseServiceClient: any): Promise<string> => {
+  try {
+    const { data, error } = await supabaseServiceClient
+      .from('vault')
+      .select('decrypted_secret')
+      .eq('name', secretName)
+      .single();
+    
+    if (error) {
+      console.error(`❌ Failed to retrieve secret ${secretName}:`, error);
+      return '';
+    }
+    
+    console.log(`✅ Retrieved secret ${secretName} from vault`);
+    return data?.decrypted_secret || '';
+  } catch (error) {
+    console.error(`❌ Error accessing vault for ${secretName}:`, error);
+    return '';
+  }
 };
 
 const handler = async (req: Request): Promise<Response> => {
@@ -57,15 +43,10 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     console.log('🚀 Social OAuth Handler Started');
     
-    // Comprehensive environment logging
-    logEnvironmentState();
-    
-    // Get environment variables with detailed logging
-    const supabaseUrl = getEnvWithLogging('SUPABASE_URL');
-    const supabaseAnonKey = getEnvWithLogging('SUPABASE_ANON_KEY');
-    const facebookAppId = getEnvWithLogging('FACEBOOK_APP_ID');
-    const facebookAppSecret = getEnvWithLogging('FACEBOOK_APP_SECRET');
-    const redirectUri = getEnvWithLogging('REDIRECT_URI');
+    // Get basic environment variables
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
     // Critical validation with detailed error messages
     if (!supabaseUrl || !supabaseAnonKey) {
@@ -84,6 +65,7 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+    const supabaseServiceClient = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
     console.log('✅ Supabase client created successfully');
 
     // Authenticate user
@@ -108,6 +90,35 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     console.log('✅ User authenticated:', user.id);
+
+    // Retrieve Facebook credentials from vault or environment
+    console.log('🔍 Retrieving Facebook credentials...');
+    let facebookAppId = Deno.env.get('FACEBOOK_APP_ID') || '';
+    let facebookAppSecret = Deno.env.get('FACEBOOK_APP_SECRET') || '';
+    let redirectUri = Deno.env.get('REDIRECT_URI') || '';
+    
+    // Try to get missing credentials from vault if service client is available
+    if (supabaseServiceClient) {
+      if (!facebookAppId) {
+        console.log('🔍 Retrieving FACEBOOK_APP_ID from vault...');
+        facebookAppId = await getSecretFromVault('FACEBOOK_APP_ID', supabaseServiceClient);
+      }
+      if (!facebookAppSecret) {
+        console.log('🔍 Retrieving FACEBOOK_APP_SECRET from vault...');
+        facebookAppSecret = await getSecretFromVault('FACEBOOK_APP_SECRET', supabaseServiceClient);
+      }
+      if (!redirectUri) {
+        console.log('🔍 Retrieving REDIRECT_URI from vault...');
+        redirectUri = await getSecretFromVault('REDIRECT_URI', supabaseServiceClient);
+      }
+    }
+
+    console.log('📋 Credentials status:', {
+      facebookAppId: !!facebookAppId,
+      facebookAppSecret: !!facebookAppSecret,
+      redirectUri: !!redirectUri,
+      serviceClientAvailable: !!supabaseServiceClient
+    });
 
     const { platform, agent_id, code, state }: OAuthRequest = await req.json();
     const actualAgentId = agent_id || user.id;
