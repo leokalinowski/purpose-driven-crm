@@ -10,7 +10,8 @@ import {
   LogOut,
   BarChart3,
   UserPlus,
-  Settings
+  Settings,
+  Share
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -37,6 +38,7 @@ const menuItems = [
   { title: 'Pipeline', url: '/pipeline', icon: BarChart3 },
   { title: 'Events', url: '/events', icon: Calendar },
   { title: 'E-Newsletter', url: '/newsletter', icon: Mail },
+  { title: 'Social Media', url: '/social-scheduler', icon: Share },
   { title: 'Success Scoreboard', url: '/coaching', icon: TrendingUp },
   { title: 'Transaction Coordination', url: '/transactions', icon: FileBarChart },
 ];
@@ -114,6 +116,17 @@ export function AppSidebar() {
                     <Link to="/admin/invitations">
                       <UserPlus />
                       <span>Team Invitations</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    asChild
+                    isActive={location.pathname === '/admin/social-scheduler'}
+                  >
+                    <Link to="/admin/social-scheduler">
+                      <Share />
+                      <span>Social Media</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
