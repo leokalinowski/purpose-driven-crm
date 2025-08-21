@@ -39,7 +39,7 @@ const AppContent = () => (
     <Route path="/admin/invitations" element={<AdminInvitations />} />
     <Route path="/social-scheduler" element={<SocialScheduler />} />
     <Route path="/admin/social-scheduler" element={<AdminSocialScheduler />} />
-    <Route path="/auth/callback" element={<OAuthCallback />} />
+    <Route path="/oauth-callback" element={<OAuthCallback />} />
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />
   </Routes>
