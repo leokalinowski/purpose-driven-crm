@@ -4,10 +4,12 @@ import { Plus, Calendar, BarChart3, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Layout } from '@/components/layout/Layout';
 import { SocialPostForm } from '@/components/social/SocialPostForm';
 import { SocialCalendar } from '@/components/social/SocialCalendar';
 import { SocialAnalytics } from '@/components/social/SocialAnalytics';
 import { SocialCSVUpload } from '@/components/social/SocialCSVUpload';
+import { ConnectSocialAccounts } from '@/components/social/ConnectSocialAccounts';
 import { useSocialAccounts } from '@/hooks/useSocialScheduler';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -23,7 +25,8 @@ export default function SocialScheduler() {
   };
 
   return (
-    <div className="container mx-auto py-6 px-4 space-y-6">
+    <Layout>
+      <div className="container mx-auto py-6 px-4 space-y-6">
       <Helmet>
         <title>Social Media Scheduler | Real Estate on Purpose</title>
         <meta
@@ -74,24 +77,7 @@ export default function SocialScheduler() {
       </div>
 
       {accounts.length === 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-start space-x-3">
-            <div className="flex-shrink-0">
-              <div className="w-6 h-6 bg-yellow-100 rounded-full flex items-center justify-center">
-                <span className="text-yellow-600 text-sm">!</span>
-              </div>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-yellow-800">
-                No Social Media Accounts Connected
-              </h3>
-              <p className="text-sm text-yellow-700 mt-1">
-                Connect your social media accounts to start scheduling posts and viewing analytics.
-                Contact your administrator to set up platform integrations.
-              </p>
-            </div>
-          </div>
-        </div>
+        <ConnectSocialAccounts connectedAccounts={accounts} />
       )}
 
       <Tabs defaultValue="calendar" className="space-y-4">
@@ -119,44 +105,10 @@ export default function SocialScheduler() {
         </TabsContent>
 
         <TabsContent value="accounts">
-          <div className="grid gap-4">
-            {accounts.length > 0 ? (
-              accounts.map((account) => (
-                <div
-                  key={account.id}
-                  className="flex items-center justify-between p-4 border rounded-lg"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                      <span className="text-sm font-medium capitalize">
-                        {account.platform[0]}
-                      </span>
-                    </div>
-                    <div>
-                      <div className="font-medium capitalize">{account.platform}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {account.account_name || 'Connected'}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Connected on {new Date(account.created_at).toLocaleDateString()}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-8">
-                <div className="text-muted-foreground">
-                  No social media accounts connected yet.
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Contact your administrator to set up social media integrations.
-                </p>
-              </div>
-            )}
-          </div>
+          <ConnectSocialAccounts connectedAccounts={accounts} />
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </Layout>
   );
 }
