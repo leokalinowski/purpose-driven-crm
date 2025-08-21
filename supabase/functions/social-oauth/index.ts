@@ -19,10 +19,21 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    console.log('Social OAuth request received');
+    
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     );
+
+    // Log environment variables (without values for security)
+    console.log('Environment check:', {
+      hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
+      hasSupabaseAnonKey: !!Deno.env.get('SUPABASE_ANON_KEY'),
+      hasFacebookAppId: !!Deno.env.get('FACEBOOK_APP_ID'),
+      hasFacebookAppSecret: !!Deno.env.get('FACEBOOK_APP_SECRET'),
+      hasRedirectUri: !!Deno.env.get('REDIRECT_URI'),
+    });
 
     // Get the user from the Authorization header
     const authHeader = req.headers.get('Authorization');
@@ -38,12 +49,22 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     const { platform, agent_id, code, state }: OAuthRequest = await req.json();
+    
+    console.log('Request payload:', { 
+      platform, 
+      hasAgentId: !!agent_id, 
+      hasCode: !!code, 
+      hasState: !!state,
+      userId: user.id 
+    });
 
     if (!platform) {
+      console.error('Platform is required but not provided');
       throw new Error('Platform is required');
     }
 
     const actualAgentId = agent_id || user.id;
+    console.log('Using agent ID:', actualAgentId);
 
     // If code is provided, this is a callback from OAuth
     if (code) {
@@ -58,8 +79,21 @@ const handler = async (req: Request): Promise<Response> => {
           const facebookAppSecret = Deno.env.get('FACEBOOK_APP_SECRET');
           const redirectUri = Deno.env.get('REDIRECT_URI');
           
+          console.log('Facebook OAuth config check:', {
+            hasAppId: !!facebookAppId,
+            hasAppSecret: !!facebookAppSecret,
+            hasRedirectUri: !!redirectUri,
+            redirectUri: redirectUri // Safe to log redirect URI
+          });
+          
           if (!facebookAppId || !facebookAppSecret || !redirectUri) {
-            throw new Error('Facebook OAuth configuration is missing');
+            const missingConfigs = [];
+            if (!facebookAppId) missingConfigs.push('FACEBOOK_APP_ID');
+            if (!facebookAppSecret) missingConfigs.push('FACEBOOK_APP_SECRET');
+            if (!redirectUri) missingConfigs.push('REDIRECT_URI');
+            
+            console.error('Missing Facebook OAuth configuration:', missingConfigs);
+            throw new Error(`Facebook OAuth configuration is missing: ${missingConfigs.join(', ')}`);
           }
 
           // Exchange code for access token
@@ -78,8 +112,12 @@ const handler = async (req: Request): Promise<Response> => {
 
           if (!tokenResponse.ok) {
             const errorData = await tokenResponse.text();
-            console.error('Facebook token error:', errorData);
-            throw new Error('Failed to get Facebook access token');
+            console.error('Facebook token error:', {
+              status: tokenResponse.status,
+              statusText: tokenResponse.statusText,
+              errorData
+            });
+            throw new Error(`Failed to get Facebook access token: ${tokenResponse.status} ${tokenResponse.statusText}`);
           }
 
           tokenData = await tokenResponse.json();
@@ -90,9 +128,19 @@ const handler = async (req: Request): Promise<Response> => {
           const profileData = await profileResponse.json();
 
           if (!profileResponse.ok) {
-            console.error('Facebook profile error:', profileData);
-            throw new Error('Failed to get Facebook profile data');
+            console.error('Facebook profile error:', {
+              status: profileResponse.status,
+              statusText: profileResponse.statusText,
+              profileData
+            });
+            throw new Error(`Failed to get Facebook profile data: ${profileResponse.status} ${profileResponse.statusText}`);
           }
+          
+          console.log('Facebook profile retrieved successfully:', {
+            profileId: profileData.id,
+            profileName: profileData.name,
+            hasEmail: !!profileData.email
+          });
 
           // Store the account information in the database
           const { error: insertError } = await supabaseClient
@@ -110,9 +158,16 @@ const handler = async (req: Request): Promise<Response> => {
             });
 
           if (insertError) {
-            console.error('Database error:', insertError);
-            throw new Error('Failed to save Facebook account information');
+            console.error('Database error:', {
+              code: insertError.code,
+              message: insertError.message,
+              details: insertError.details,
+              hint: insertError.hint
+            });
+            throw new Error(`Failed to save Facebook account information: ${insertError.message}`);
           }
+          
+          console.log('Facebook account connected successfully for agent:', actualAgentId);
         } else {
           throw new Error(`OAuth callback not implemented for platform: ${platform}`);
         }
