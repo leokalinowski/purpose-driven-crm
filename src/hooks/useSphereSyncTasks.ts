@@ -11,6 +11,7 @@ export interface Contact {
   phone?: string;
   category: string;
   agent_id: string;
+  dnc: boolean;
 }
 
 export interface SphereSyncTask {
@@ -58,7 +59,7 @@ export function useSphereSyncTasks() {
       // Load contacts
       const { data: contactsData, error: contactsError } = await supabase
         .from('contacts')
-        .select('*')
+        .select('id, first_name, last_name, phone, category, agent_id, dnc')
         .eq('agent_id', user.id)
         .order('last_name');
 
@@ -108,7 +109,8 @@ export function useSphereSyncTasks() {
             id: task.lead_id || '',
             last_name: 'Unknown Contact',
             category: 'A',
-            agent_id: user.id
+            agent_id: user.id,
+            dnc: false
           }
         };
       }) || [];

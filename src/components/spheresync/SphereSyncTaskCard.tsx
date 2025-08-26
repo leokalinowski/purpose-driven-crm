@@ -48,6 +48,11 @@ export function SphereSyncTaskCard({ task, onUpdate }: SphereSyncTaskCardProps) 
             <span className="text-xs bg-muted px-2 py-1 rounded">
               Category: {task.lead.category}
             </span>
+            {task.lead.dnc && (
+              <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded font-medium">
+                ⚠ DNC Listed
+              </span>
+            )}
             {task.completed && (
               <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
                 ✓ Complete
