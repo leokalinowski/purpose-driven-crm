@@ -8,7 +8,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
-import PO2Tasks from "./pages/PO2Tasks";
+import SphereSyncTasks from "./pages/SphereSyncTasks";
 import Database from "./pages/Database";
 import Events from "./pages/Events";
 import NotFound from "./pages/NotFound";
@@ -28,7 +28,7 @@ const AppContent = () => (
   <Routes>
     <Route path="/" element={<Index />} />
     <Route path="/auth" element={<Auth />} />
-    <Route path="/po2-tasks" element={<PO2Tasks />} />
+    <Route path="/spheresync-tasks" element={<SphereSyncTasks />} />
     <Route path="/database" element={<Database />} />
     <Route path="/events" element={<Events />} />
     <Route path="/newsletter" element={<Newsletter />} />

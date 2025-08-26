@@ -4,14 +4,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Phone, MessageSquare, User } from 'lucide-react';
-import { PO2Task } from '@/hooks/usePO2Tasks';
+import { SphereSyncTask } from '@/hooks/useSphereSyncTasks';
 
-interface PO2TaskCardProps {
-  task: PO2Task;
-  onUpdate: (taskId: string, updates: Partial<PO2Task>) => void;
+interface SphereSyncTaskCardProps {
+  task: SphereSyncTask;
+  onUpdate: (taskId: string, updates: Partial<SphereSyncTask>) => void;
 }
 
-export function PO2TaskCard({ task, onUpdate }: PO2TaskCardProps) {
+export function SphereSyncTaskCard({ task, onUpdate }: SphereSyncTaskCardProps) {
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState(task.notes || '');
 

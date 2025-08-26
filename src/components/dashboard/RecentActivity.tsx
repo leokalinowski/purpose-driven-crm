@@ -25,7 +25,7 @@ export function RecentActivity() {
       try {
         const [contacts, tasks, events, newsletters, sessions, txs] = await Promise.all([
           supabase.from('contacts').select('id, first_name, last_name, created_at').eq('agent_id', user.id).order('created_at', { ascending: false }).limit(5),
-          supabase.from('po2_tasks').select('id, completed_at, task_type').eq('agent_id', user.id).order('completed_at', { ascending: false }).limit(5),
+          supabase.from('spheresync_tasks').select('id, completed_at, task_type').eq('agent_id', user.id).order('completed_at', { ascending: false }).limit(5),
           supabase.from('events').select('id, title, created_at').eq('agent_id', user.id).order('created_at', { ascending: false }).limit(5),
           supabase.from('newsletter_campaigns').select('id, campaign_name, created_at').eq('created_by', user.id).order('created_at', { ascending: false }).limit(5),
           supabase.from('coaching_sessions').select('id, session_date, topics_covered').eq('agent_id', user.id).order('session_date', { ascending: false }).limit(5),
@@ -37,7 +37,7 @@ export function RecentActivity() {
           arr.push({ id: `c-${c.id}`, action: 'New lead added', description: `${c.first_name || ''} ${c.last_name}`.trim(), time: c.created_at, status: 'new', link: '/database' });
         }
         for (const t of tasks.data || []) {
-          if (t.completed_at) arr.push({ id: `t-${t.id}`, action: 'PO2 task completed', description: t.task_type, time: t.completed_at, status: 'completed', link: '/po2-tasks' });
+          if (t.completed_at) arr.push({ id: `t-${t.id}`, action: 'SphereSync task completed', description: t.task_type, time: t.completed_at, status: 'completed', link: '/spheresync-tasks' });
         }
         for (const e of events.data || []) {
           arr.push({ id: `e-${e.id}`, action: 'Event created', description: e.title, time: e.created_at, status: 'event', link: '/events' });
@@ -65,7 +65,7 @@ export function RecentActivity() {
     const channel = supabase
       .channel('activity-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'contacts' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'po2_tasks' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'spheresync_tasks' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'newsletter_campaigns' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'coaching_sessions' }, load)
