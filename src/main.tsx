@@ -9,7 +9,9 @@ import './index.css';
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <HelmetProvider>
-      <App />
+      <SessionContextProvider supabaseClient={supabase}>
+        <App />
+      </SessionContextProvider>
     </HelmetProvider>
   </React.StrictMode>
 );
