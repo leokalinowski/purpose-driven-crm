@@ -27,6 +27,7 @@ import {
   SidebarHeader,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -135,7 +136,10 @@ export function AppSidebar() {
         )}
       </SidebarContent>
       
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-4 space-y-2">
+        <div className="flex justify-center">
+          <ThemeToggle />
+        </div>
         <Button
           variant="secondary"
           onClick={handleSignOut}
