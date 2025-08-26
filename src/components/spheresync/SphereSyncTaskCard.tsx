@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { Phone, MessageSquare, User } from 'lucide-react';
 import { SphereSyncTask } from '@/hooks/useSphereSyncTasks';
 
@@ -16,6 +17,7 @@ export function SphereSyncTaskCard({ task, onUpdate }: SphereSyncTaskCardProps) 
   const [notes, setNotes] = useState(task.notes || '');
 
   const handleCompletionChange = (completed: boolean) => {
+    console.log('Checkbox clicked:', { taskId: task.id, completed, currentStatus: task.completed });
     onUpdate(task.id, { completed });
   };
 
@@ -45,13 +47,13 @@ export function SphereSyncTaskCard({ task, onUpdate }: SphereSyncTaskCardProps) 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs bg-muted px-2 py-1 rounded">
+            <Badge variant="secondary" className="text-xs">
               Category: {task.lead.category}
-            </span>
+            </Badge>
             {task.lead.dnc && (
-              <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded font-medium">
-                ⚠ DNC Listed
-              </span>
+              <Badge variant="destructive" className="text-xs">
+                DNC
+              </Badge>
             )}
             {task.completed && (
               <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
