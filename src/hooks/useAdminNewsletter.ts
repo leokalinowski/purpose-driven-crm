@@ -38,14 +38,14 @@ export function useAdminNewsletter() {
   const queryClient = useQueryClient();
   const [isDryRun, setIsDryRun] = useState(true);
 
-  // Fetch all agents
+  // Fetch all agents (including admin users for testing)
   const { data: agents = [], isLoading: agentsLoading } = useQuery({
     queryKey: ['admin-agents'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
         .select('user_id, first_name, last_name, email')
-        .eq('role', 'agent');
+        .in('role', ['agent', 'admin']);
       
       if (error) throw error;
       return data as AgentProfile[];
