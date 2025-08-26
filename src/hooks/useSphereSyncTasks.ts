@@ -87,13 +87,10 @@ export function useSphereSyncTasks() {
 
       setContacts(updatedContacts);
 
-      // Load tasks
+      // Load tasks (without join first, then match contacts manually)
       const { data: tasksData, error: tasksError } = await supabase
         .from('spheresync_tasks')
-        .select(`
-          *,
-          lead:contacts(*)
-        `)
+        .select('*')
         .eq('agent_id', user.id)
         .eq('week_number', currentWeek.weekNumber)
         .eq('year', new Date().getFullYear())
@@ -101,10 +98,20 @@ export function useSphereSyncTasks() {
 
       if (tasksError) throw tasksError;
 
-      const tasksWithLeads = tasksData?.map(task => ({
-        ...task,
-        lead: task.lead as Contact
-      })) || [];
+      // Match tasks with contacts manually
+      const tasksWithLeads = tasksData?.map(task => {
+        const matchingContact = updatedContacts.find(contact => contact.id === task.lead_id);
+        return {
+          ...task,
+          task_type: task.task_type as 'call' | 'text', // Type cast for proper typing
+          lead: matchingContact || {
+            id: task.lead_id || '',
+            last_name: 'Unknown Contact',
+            category: 'A',
+            agent_id: user.id
+          }
+        };
+      }) || [];
 
       setTasks(tasksWithLeads);
 

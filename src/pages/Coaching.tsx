@@ -31,7 +31,7 @@ import {
   useAgentCurrentWeekMetrics,
   type CoachingFormData 
 } from '@/hooks/useCoaching';
-import { getCurrentWeekNumber } from '@/utils/po2Logic';
+import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
 
 const formSchema = z.object({
   week_number: z.number().min(1, "Week must be between 1 and 52").max(52, "Week must be between 1 and 52"),

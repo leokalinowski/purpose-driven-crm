@@ -82,9 +82,9 @@ export function useDashboardMetrics() {
 
         // PO2 completion rate this month
         const [tasksCreatedCurrRes, tasksCompletedCurrRes, tasksCompletedPrevRes] = await Promise.all([
-          supabase.from('po2_tasks').select('id', { count: 'exact', head: true }).eq('agent_id', user.id).gte('created_at', currentStart).lt('created_at', nextStart),
-          supabase.from('po2_tasks').select('id', { count: 'exact', head: true }).eq('agent_id', user.id).eq('completed', true).gte('completed_at', currentStart).lt('completed_at', nextStart),
-          supabase.from('po2_tasks').select('id', { count: 'exact', head: true }).eq('agent_id', user.id).eq('completed', true).gte('completed_at', prevStart).lt('completed_at', currentStart),
+          supabase.from('spheresync_tasks').select('id', { count: 'exact', head: true }).eq('agent_id', user.id).gte('created_at', currentStart).lt('created_at', nextStart),
+          supabase.from('spheresync_tasks').select('id', { count: 'exact', head: true }).eq('agent_id', user.id).eq('completed', true).gte('completed_at', currentStart).lt('completed_at', nextStart),
+          supabase.from('spheresync_tasks').select('id', { count: 'exact', head: true }).eq('agent_id', user.id).eq('completed', true).gte('completed_at', prevStart).lt('completed_at', currentStart),
         ]);
 
         const tasksCreatedCurr = tasksCreatedCurrRes.count || 0;
@@ -134,7 +134,7 @@ export function useDashboardMetrics() {
         const sinceISO = sixMonthsAgoUTC.toISOString();
         const [contactsSince, tasksSince, txSince] = await Promise.all([
           supabase.from('contacts').select('id, created_at').eq('agent_id', user.id).gte('created_at', sinceISO),
-          supabase.from('po2_tasks').select('id, completed_at').eq('agent_id', user.id).not('completed_at', 'is', null).gte('completed_at', sinceISO),
+          supabase.from('spheresync_tasks').select('id, completed_at').eq('agent_id', user.id).not('completed_at', 'is', null).gte('completed_at', sinceISO),
           supabase.from('transaction_coordination').select('id, created_at').eq('responsible_agent', user.id).gte('created_at', sinceISO),
         ]);
 
@@ -171,7 +171,7 @@ export function useDashboardMetrics() {
               subtext: 'From last month',
             },
             po2CompletionRate: {
-              label: 'PO2 Completion Rate',
+              label: 'SphereSync Completion Rate',
               value: `${Math.round(completionRate)}%`,
               deltaPct: pctChange(completionRate, completionRatePrev),
               subtext: 'This month',
@@ -218,7 +218,7 @@ export function useDashboardMetrics() {
     const channel = supabase
       .channel('dashboard-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'contacts' }, () => fetchAll())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'po2_tasks' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'spheresync_tasks' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'newsletter_campaigns' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transaction_coordination' }, () => fetchAll())
