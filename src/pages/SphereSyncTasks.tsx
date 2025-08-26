@@ -6,6 +6,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { SphereSyncTaskCard } from '@/components/spheresync/SphereSyncTaskCard';
 import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
 import { useAuth } from '@/hooks/useAuth';
+import { Layout } from '@/components/layout/Layout';
 import { Phone, MessageSquare, Calendar, BarChart3 } from 'lucide-react';
 
 export default function SphereSyncTasks() {
@@ -21,13 +22,13 @@ export default function SphereSyncTasks() {
 
   if (!user) {
     return (
-      <div className="container mx-auto p-6">
+      <Layout>
         <Card>
           <CardContent className="p-6">
             <p>Please sign in to access SphereSync tasks.</p>
           </CardContent>
         </Card>
-      </div>
+      </Layout>
     );
   }
 
@@ -36,11 +37,12 @@ export default function SphereSyncTasks() {
   const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <Layout>
+      <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-3xl font-bold">SphereSync Tasks</h1>
+          <h1 className="text-3xl font-bold">SphereSync</h1>
           <p className="text-muted-foreground">
             Balanced contact assignment system based on surname frequency analysis
           </p>
@@ -212,6 +214,7 @@ export default function SphereSyncTasks() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </Layout>
   );
 }
