@@ -220,13 +220,20 @@ export function useSphereSyncTasks() {
   };
 
   const updateTask = async (taskId: string, updates: Partial<SphereSyncTask>) => {
+    console.log('updateTask called:', { taskId, updates });
     try {
-      const { error } = await supabase
+      const { error, data } = await supabase
         .from('spheresync_tasks')
         .update(updates)
-        .eq('id', taskId);
+        .eq('id', taskId)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error updating task:', error);
+        throw error;
+      }
+
+      console.log('Task update successful:', data);
 
       setTasks(prev => prev.map(task => 
         task.id === taskId ? { ...task, ...updates } : task
