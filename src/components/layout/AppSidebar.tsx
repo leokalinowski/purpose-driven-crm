@@ -33,9 +33,8 @@ import { useUserRole } from '@/hooks/useUserRole';
 
 const menuItems = [
   { title: 'Dashboard', url: '/', icon: Home },
-  { title: 'SphereSync Tasks', url: '/spheresync-tasks', icon: Phone },
+  { title: 'SphereSync', url: '/spheresync-tasks', icon: Phone },
   { title: 'Database', url: '/database', icon: Users },
-  { title: 'Pipeline', url: '/pipeline', icon: BarChart3 },
   { title: 'Events', url: '/events', icon: Calendar },
   { title: 'E-Newsletter', url: '/newsletter', icon: Mail },
   { title: 'Social Media', url: '/social-scheduler', icon: Share },
