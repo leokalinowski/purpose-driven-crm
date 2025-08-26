@@ -1198,48 +1198,56 @@ export type Database = {
       }
       spheresync_tasks: {
         Row: {
-          agent_id: string | null
-          completed: boolean | null
+          agent_id: string
+          completed: boolean
           completed_at: string | null
-          created_at: string | null
+          created_at: string
           dnc_status: boolean | null
-          id: string | null
+          id: string
           lead_id: string | null
           notes: string | null
-          task_type: string | null
-          updated_at: string | null
+          task_type: string
+          updated_at: string
           week_number: number | null
           year: number | null
         }
         Insert: {
-          agent_id?: string | null
-          completed?: boolean | null
+          agent_id: string
+          completed?: boolean
           completed_at?: string | null
-          created_at?: string | null
+          created_at?: string
           dnc_status?: boolean | null
-          id?: string | null
+          id?: string
           lead_id?: string | null
           notes?: string | null
-          task_type?: string | null
-          updated_at?: string | null
+          task_type: string
+          updated_at?: string
           week_number?: number | null
           year?: number | null
         }
         Update: {
-          agent_id?: string | null
-          completed?: boolean | null
+          agent_id?: string
+          completed?: boolean
           completed_at?: string | null
-          created_at?: string | null
+          created_at?: string
           dnc_status?: boolean | null
-          id?: string | null
+          id?: string
           lead_id?: string | null
           notes?: string | null
-          task_type?: string | null
-          updated_at?: string | null
+          task_type?: string
+          updated_at?: string
           week_number?: number | null
           year?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "spheresync_tasks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transaction_coordination: {
         Row: {
