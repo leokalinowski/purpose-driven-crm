@@ -16,9 +16,11 @@ export function SphereSyncTaskCard({ task, onUpdate }: SphereSyncTaskCardProps) 
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState(task.notes || '');
 
-  const handleCompletionChange = (completed: boolean) => {
-    console.log('Checkbox clicked:', { taskId: task.id, completed, currentStatus: task.completed });
-    onUpdate(task.id, { completed });
+  const handleCompletionChange = (completed: boolean | string) => {
+    // Ensure we always have a boolean value
+    const isCompleted = completed === true || completed === "true";
+    console.log('Checkbox clicked:', { taskId: task.id, completed: isCompleted, currentStatus: task.completed, originalValue: completed });
+    onUpdate(task.id, { completed: isCompleted });
   };
 
   const handleNotesUpdate = () => {
