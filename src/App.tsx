@@ -19,6 +19,7 @@ import Transactions from "./pages/Transactions";
 import Pipeline from "./pages/Pipeline";
 import AdminInvitations from "./pages/AdminInvitations";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminNewsletter from "./pages/AdminNewsletter";
 import SocialScheduler from "./pages/SocialScheduler";
 import AdminSocialScheduler from "./pages/AdminSocialScheduler";
 import OAuthCallback from "./pages/OAuthCallback";
@@ -38,6 +39,7 @@ const AppContent = () => (
     <Route path="/pipeline" element={<Pipeline />} />
     <Route path="/admin/dashboard" element={<AdminDashboard />} />
     <Route path="/admin/invitations" element={<AdminInvitations />} />
+    <Route path="/admin/newsletter" element={<AdminNewsletter />} />
     <Route path="/social-scheduler" element={<SocialScheduler />} />
     <Route path="/admin/social-scheduler" element={<AdminSocialScheduler />} />
     <Route path="/oauth-callback" element={<OAuthCallback />} />

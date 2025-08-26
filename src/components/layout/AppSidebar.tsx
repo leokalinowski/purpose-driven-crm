@@ -122,6 +122,17 @@ export function AppSidebar() {
                 <SidebarMenuItem>
                   <SidebarMenuButton 
                     asChild
+                    isActive={location.pathname === '/admin/newsletter'}
+                  >
+                    <Link to="/admin/newsletter">
+                      <Mail />
+                      <span>Newsletter Management</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    asChild
                     isActive={location.pathname === '/admin/social-scheduler'}
                   >
                     <Link to="/admin/social-scheduler">

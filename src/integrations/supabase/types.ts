@@ -758,6 +758,57 @@ export type Database = {
         }
         Relationships: []
       }
+      monthly_runs: {
+        Row: {
+          agent_id: string
+          contacts_processed: number
+          created_at: string
+          dry_run: boolean
+          emails_sent: number
+          error: string | null
+          finished_at: string | null
+          id: string
+          run_date: string
+          started_at: string | null
+          status: string
+          triggered_by: string | null
+          updated_at: string
+          zip_codes_processed: number
+        }
+        Insert: {
+          agent_id: string
+          contacts_processed?: number
+          created_at?: string
+          dry_run?: boolean
+          emails_sent?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          run_date: string
+          started_at?: string | null
+          status?: string
+          triggered_by?: string | null
+          updated_at?: string
+          zip_codes_processed?: number
+        }
+        Update: {
+          agent_id?: string
+          contacts_processed?: number
+          created_at?: string
+          dry_run?: boolean
+          emails_sent?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          run_date?: string
+          started_at?: string | null
+          status?: string
+          triggered_by?: string | null
+          updated_at?: string
+          zip_codes_processed?: number
+        }
+        Relationships: []
+      }
       newsletter_campaigns: {
         Row: {
           campaign_name: string
@@ -807,6 +858,36 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
         ]
+      }
+      newsletter_settings: {
+        Row: {
+          agent_id: string
+          created_at: string
+          enabled: boolean
+          id: string
+          schedule_day: number | null
+          schedule_hour: number | null
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          schedule_day?: number | null
+          schedule_hour?: number | null
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          schedule_day?: number | null
+          schedule_hour?: number | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       opportunities: {
         Row: {
