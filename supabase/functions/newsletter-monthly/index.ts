@@ -285,19 +285,43 @@ function buildEmailHTML(zip: string, periodMonth: string, metrics: Metrics, agen
 }
 
 // Data sources
-async function fetchTransactionsViaFunction(supabase: SupabaseClient, zip: string, currentMonth: string) {
-  // Call existing edge function 'fetch-zip-transactions' if available
+async function fetchTransactionsViaFunction(supabase: SupabaseClient, zip: string, currentMonth: string): Promise<Transaction[] | null> {
+  // Call existing edge function 'fetch-zip-transactions' with correct parameters
   try {
+    const actorId = Deno.env.get('APIFY_ACTOR_ID');
+    if (!actorId) {
+      console.error("fetchTransactionsViaFunction: APIFY_ACTOR_ID not configured", { zip });
+      return null;
+    }
+
+    console.log(`fetchTransactionsViaFunction: Calling fetch-zip-transactions for zip ${zip} with actor ${actorId}`);
+    
     const { data, error } = await supabase.functions.invoke("fetch-zip-transactions", {
-      body: { zip_code: zip, month: currentMonth.slice(0, 7) },
+      body: { 
+        zip_code: zip, 
+        limit: 10,
+        apify: { 
+          actorId: actorId 
+        }
+      },
     });
-    if (error) throw error;
+    
+    if (error) {
+      console.error("fetchTransactionsViaFunction: Edge function error", { zip, error });
+      return null; // signal fallback
+    }
+    
     // Expect data to have { transactions: Transaction[] } or an array directly
     const txs = Array.isArray(data) ? data : (data?.transactions ?? []);
-    if (!Array.isArray(txs)) return [];
+    if (!Array.isArray(txs)) {
+      console.error("fetchTransactionsViaFunction: Invalid data format", { zip, data });
+      return null;
+    }
+    
+    console.log(`fetchTransactionsViaFunction: Retrieved ${txs.length} transactions for zip ${zip}`);
     return txs as Transaction[];
   } catch (e) {
-    console.error("fetch-zip-transactions invoke failed", { zip, error: String(e) });
+    console.error("fetchTransactionsViaFunction: Exception occurred", { zip, error: String(e) });
     return null; // signal fallback
   }
 }
@@ -492,6 +516,44 @@ async function markRun(admin: SupabaseClient, reportMonth: string, status: "succ
     if (error) throw error;
   } catch (e) {
     console.error("Failed to upsert monthly_runs", { error: String(e) });
+  }
+}
+
+async function createAgentRun(admin: SupabaseClient, agentId: string, reportMonth: string, stats: Pick<Stats, "zipsProcessed" | "emailsSent" | "errors">, dryRun: boolean, status: "success" | "error" | "pending"): Promise<void> {
+  try {
+    const runDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    const { error } = await admin
+      .from("monthly_runs")
+      .upsert(
+        {
+          agent_id: agentId,
+          run_date: runDate,
+          status,
+          zip_codes_processed: stats.zipsProcessed,
+          emails_sent: stats.emailsSent,
+          dry_run: dryRun,
+          started_at: new Date().toISOString(),
+          finished_at: status !== "pending" ? new Date().toISOString() : null,
+          error: stats.errors.length > 0 ? stats.errors.join("; ") : null,
+        },
+        { onConflict: "agent_id,run_date" },
+      );
+    
+    if (error) {
+      console.error("Failed to create/update agent run record", { agentId, error });
+      throw error;
+    }
+    
+    console.log(`Created/updated monthly_runs record for agent ${agentId}`, { 
+      status, 
+      zipsProcessed: stats.zipsProcessed, 
+      emailsSent: stats.emailsSent,
+      dryRun 
+    });
+  } catch (e) {
+    console.error("Failed to create agent run record", { agentId, error: String(e) });
+    throw e;
   }
 }
 
@@ -832,12 +894,31 @@ serve(async (req: Request) => {
     } else {
       // User mode: single agent
       const agentId = currentUser!.id;
+      
+      // Create initial agent run record
+      try {
+        await createAgentRun(admin, agentId, reportMonth, { zipsProcessed: 0, emailsSent: 0, errors: [] }, dryRun, "pending");
+      } catch (e) {
+        console.error("Failed to create initial agent run record", { agentId, error: String(e) });
+      }
+      
       const res = await processAgent(client, admin, agentId, reportMonth, { dryRun });
       stats.agentsProcessed = 1;
       stats.zipsProcessed = res.zipsProcessed;
       stats.emailsSent = res.emailsSent;
       stats.cacheHits = res.cacheHits;
       if (res.errors.length) stats.errors.push(...res.errors);
+      
+      // Update agent run record with final results
+      try {
+        await createAgentRun(admin, agentId, reportMonth, { 
+          zipsProcessed: res.zipsProcessed, 
+          emailsSent: res.emailsSent, 
+          errors: res.errors 
+        }, dryRun, res.errors.length > 0 ? "error" : "success");
+      } catch (e) {
+        console.error("Failed to update agent run record", { agentId, error: String(e) });
+      }
     }
   } catch (e) {
     const msg = `Unhandled error in newsletter-monthly: ${String(e)}`;
