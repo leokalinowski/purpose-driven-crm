@@ -285,43 +285,32 @@ function buildEmailHTML(zip: string, periodMonth: string, metrics: Metrics, agen
 }
 
 // Data sources
-async function fetchTransactionsViaFunction(supabase: SupabaseClient, zip: string, currentMonth: string): Promise<Transaction[] | null> {
-  // Call existing edge function 'fetch-zip-transactions' with correct parameters
+async function fetchMarketDataViaGrok(supabase: SupabaseClient, zip: string, currentMonth: string): Promise<any | null> {
+  // Call new edge function 'fetch-market-data-grok' 
   try {
-    const actorId = Deno.env.get('APIFY_ACTOR_ID');
-    if (!actorId) {
-      console.error("fetchTransactionsViaFunction: APIFY_ACTOR_ID not configured", { zip });
-      return null;
-    }
-
-    console.log(`fetchTransactionsViaFunction: Calling fetch-zip-transactions for zip ${zip} with actor ${actorId}`);
+    console.log(`fetchMarketDataViaGrok: Calling fetch-market-data-grok for zip ${zip}`);
     
-    const { data, error } = await supabase.functions.invoke("fetch-zip-transactions", {
+    const { data, error } = await supabase.functions.invoke("fetch-market-data-grok", {
       body: { 
         zip_code: zip, 
-        limit: 10,
-        apify: { 
-          actorId: actorId 
-        }
+        period_month: currentMonth.slice(0, 7) // Convert to YYYY-MM format
       },
     });
     
     if (error) {
-      console.error("fetchTransactionsViaFunction: Edge function error", { zip, error });
+      console.error("fetchMarketDataViaGrok: Edge function error", { zip, error });
       return null; // signal fallback
     }
     
-    // Expect data to have { transactions: Transaction[] } or an array directly
-    const txs = Array.isArray(data) ? data : (data?.transactions ?? []);
-    if (!Array.isArray(txs)) {
-      console.error("fetchTransactionsViaFunction: Invalid data format", { zip, data });
+    if (!data || !data.success || !data.data) {
+      console.error("fetchMarketDataViaGrok: Invalid data format", { zip, data });
       return null;
     }
     
-    console.log(`fetchTransactionsViaFunction: Retrieved ${txs.length} transactions for zip ${zip}`);
-    return txs as Transaction[];
+    console.log(`fetchMarketDataViaGrok: Retrieved market data for zip ${zip}`);
+    return data.data;
   } catch (e) {
-    console.error("fetchTransactionsViaFunction: Exception occurred", { zip, error: String(e) });
+    console.error("fetchMarketDataViaGrok: Exception occurred", { zip, error: String(e) });
     return null; // signal fallback
   }
 }
@@ -677,23 +666,36 @@ async function processAgent(
       // Cache check
       let cache = await getCache(admin, zip, reportMonth);
       if (!cache) {
-        // Data fetch
-        let transactions = await fetchTransactionsViaFunction(admin, zip, reportMonth);
-        if (transactions === null) {
-          // fallback
-          transactions = await fetchTransactionsViaApifyFallback(zip, reportMonth);
+        // Fetch market data using Grok API
+        let marketData = await fetchMarketDataViaGrok(admin, zip, reportMonth);
+        if (marketData === null) {
+          // If Grok fails, create fallback data
+          marketData = {
+            zip_code: zip,
+            period_month: reportMonth.slice(0, 7),
+            median_sale_price: null,
+            median_list_price: null,
+            homes_sold: null,
+            new_listings: null,
+            inventory: null,
+            median_dom: null,
+            avg_price_per_sqft: null,
+            market_insights: {
+              key_takeaways: ['Market data temporarily unavailable. Please check back later.']
+            },
+            transactions_sample: []
+          };
         }
-        // Throttle Apify/remote calls
+        // Throttle API calls
         await sleep(1000);
 
-        if (!transactions || transactions.length === 0) {
-          // Skip zips with no transactions
+        // Skip zips with no data unless it's a dry run
+        if (!marketData || (!marketData.median_sale_price && !marketData.homes_sold && marketData.market_insights?.key_takeaways?.[0]?.includes('unavailable'))) {
           continue;
         }
 
-        // Compute metrics and historical compare
-        const metrics = computeMetrics(transactions);
-        let prevMetrics: Metrics | null = null;
+        // Get previous month's data for comparison (if available)
+        let prevMetrics: any = null;
         try {
           const prevCache = await getCache(admin, zip, prevMonth);
           prevMetrics = prevCache?.metrics ?? null;
@@ -702,17 +704,15 @@ async function processAgent(
           await logError(admin, "Failed to get previous month cache for comparison", { zip, prevMonth, error: String(e) }, agentId);
         }
 
-        const comparison = compareMetrics(metrics, prevMetrics);
-
         // Build HTML with agent personalization and unsubscribe link
         const unsubscribeURL = await buildUnsubscribeURL(zip, agentId);
-        const html = buildEmailHTML(zip, reportMonth, metrics, agentProfile, unsubscribeURL);
+        const html = buildEmailHTML(zip, reportMonth, marketData, agentProfile, unsubscribeURL);
 
         cache = {
           zip_code: zip,
           period_month: reportMonth,
-          metrics,
-          prev_comparison: comparison,
+          metrics: marketData, // Store the full Grok data as metrics
+          prev_comparison: prevMetrics ? compareMetrics(marketData, prevMetrics) : undefined,
           html,
         };
 

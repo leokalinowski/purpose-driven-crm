@@ -52,5 +52,8 @@ verify_jwt = true
 [functions.social-analytics]
 verify_jwt = true
 
-[functions.social-csv-process]
-verify_jwt = true
+[functions.spheresync-generate-tasks]
+verify_jwt = false
+
+[functions.fetch-market-data-grok]
+verify_jwt = false
