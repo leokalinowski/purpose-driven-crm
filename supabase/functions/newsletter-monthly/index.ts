@@ -154,229 +154,119 @@ function buildEmailHTML(zip: string, periodMonth: string, metrics: any, agent?: 
   const month = monthLabel(periodMonth);
   const agentName = [agent?.first_name, agent?.last_name].filter(Boolean).join(" ").trim() || "Your Agent";
   const agentEmail = agent?.email || "";
+  
+  // Extract enhanced market data from Grok
+  const currentData = metrics?.current || metrics || {};
+  const prevData = metrics?.previous || {};
+  const insights = metrics?.market_insights || {};
+  const transactions = metrics?.transactions_sample || [];
+  const neighborhoods = metrics?.neighborhoods || [];
+  const economicFactors = metrics?.economic_factors || {};
+  const riskFactors = metrics?.risk_factors || {};
+  const comparisons = metrics?.nearby_comparisons || [];
+
+  // Calculate year-over-year changes
+  const calculateYoyChange = (current: number, previous: number) => {
+    if (!current || !previous) return { value: 0, direction: "→", color: "#64748b" };
+    const change = ((current - previous) / previous) * 100;
+    return {
+      value: change,
+      direction: change > 0 ? "↗" : change < 0 ? "↘" : "→",
+      color: change > 0 ? "#16a34a" : change < 0 ? "#dc2626" : "#64748b"
+    };
+  };
+
+  const medianSaleChange = calculateYoyChange(currentData.median_sale_price, prevData.median_sale_price);
+  const medianListChange = calculateYoyChange(currentData.median_list_price, prevData.median_list_price);
+  const homessoldChange = calculateYoyChange(currentData.homes_sold, prevData.homes_sold);
+  const pricePerSqftChange = calculateYoyChange(currentData.avg_price_per_sqft, prevData.avg_price_per_sqft);
+
+  // Market heat calculation
+  const marketHeat = insights.heat_index || 58;
+  const heatLabel = marketHeat >= 80 ? "Extremely Competitive" : 
+                   marketHeat >= 70 ? "Very Competitive" : 
+                   marketHeat >= 60 ? "Somewhat Competitive" : 
+                   marketHeat >= 40 ? "Balanced" : "Buyer Friendly";
+
+  // Generate unsubscribe link
   const unsubscribeLine = unsubscribeURL
     ? `<p style="margin:16px 0 0 0; font-size:12px; color:#64748b;">To stop receiving these updates, <a href="${unsubscribeURL}">unsubscribe here</a>.</p>`
     : "";
 
-  // Extract market insights and transactions from Grok data structure
-  const insights = metrics?.market_insights || {};
-  const transactions = metrics?.transactions_sample || [];
-  const heatIndex = insights.heat_index || 60;
-  const yoyChange = insights.yoy_price_change || 0;
-  const marketType = insights.buyer_seller_market || "balanced";
-  const inventoryTrend = insights.inventory_trend || "stable";
-  const keyTakeaways = insights.key_takeaways || [];
+  // Format neighborhoods for display
+  const neighborhoodList = neighborhoods.length > 0 
+    ? neighborhoods.slice(0, 3).join(", ")
+    : "various neighborhoods";
 
-  // Generate heat index color
-  const heatColor = heatIndex >= 80 ? "#dc2626" : heatIndex >= 60 ? "#ea580c" : heatIndex >= 40 ? "#ca8a04" : "#16a34a";
-  const heatLabel = heatIndex >= 80 ? "Very Hot" : heatIndex >= 60 ? "Hot" : heatIndex >= 40 ? "Warm" : "Cool";
-
-  // Generate YoY change styling
-  const yoyColor = yoyChange > 0 ? "#16a34a" : yoyChange < 0 ? "#dc2626" : "#64748b";
-  const yoyIcon = yoyChange > 0 ? "↗" : yoyChange < 0 ? "↘" : "→";
-
-  // Market type styling
-  const marketColor = marketType === "seller" ? "#dc2626" : marketType === "buyer" ? "#16a34a" : "#ca8a04";
-  
+  // Format calendar link placeholder
+  const calendarLink = "[Your Calendar Link]"; // This could be made dynamic per agent
   return `
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>${zip} Monthly Real Estate Newsletter — ${month}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body style="font-family:ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#0f172a; background:#f8fafc; margin:0; padding:20px;">
-    
-    <!-- Main Container -->
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 25px rgba(0,0,0,0.1);">
-      
-      <!-- Header Section -->
-      <tr>
-        <td style="background:linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color:white; padding:32px 24px; text-align:center;">
-          <h1 style="margin:0 0 8px 0;font-size:28px;font-weight:700;letter-spacing:-0.5px;">${zip} Market Report</h1>
-          <p style="margin:0;font-size:16px;opacity:0.9;">${month} • ${agentName}</p>
-        </td>
-      </tr>
+Subject: Your Monthly Real Estate Market Update for ZIP Code ${zip} - ${month}
 
-      <!-- Agent Introduction -->
-      <tr>
-        <td style="padding:24px;">
-          <div style="background:#f8fafc;border-left:4px solid #3b82f6;padding:16px;border-radius:8px;margin-bottom:24px;">
-            <p style="margin:0;font-size:16px;color:#374151;line-height:1.6;">
-              <strong>Hello from ${agentName}!</strong><br>
-              Your local real estate market continues to evolve. Here's your personalized ${month} market analysis for ${zip}, including insights powered by the latest market data and AI analysis.
-            </p>
-          </div>
-        </td>
-      </tr>
+Dear Homeowner,
 
-      <!-- Market Heat Index -->
-      <tr>
-        <td style="padding:0 24px 24px 24px;">
-          <div style="background:${heatColor}15;border:2px solid ${heatColor}30;border-radius:12px;padding:20px;text-align:center;">
-            <h3 style="margin:0 0 8px 0;color:${heatColor};font-size:18px;font-weight:700;">Market Heat Index</h3>
-            <div style="font-size:36px;font-weight:800;color:${heatColor};margin:8px 0;">${heatIndex}/100</div>
-            <p style="margin:0;color:#374151;font-weight:600;">${heatLabel} Market</p>
-          </div>
-        </td>
-      </tr>
+I hope this email finds you well. As your trusted real estate advisor, I'm excited to share this month's market report tailored specifically to ZIP Code ${zip}. This update draws from the latest data available as of ${new Date().toLocaleDateString()}, sourced from reliable platforms like Zillow, Redfin, and Realtor.com. Whether you're considering selling, buying, or just staying informed about your neighborhood's trends, these insights can help you make confident decisions.
 
-      <!-- Key Metrics Table -->
-      <tr>
-        <td style="padding:0 24px 24px 24px;">
-          <h3 style="margin:0 0 16px 0;font-size:20px;font-weight:700;color:#111827;">📊 Key Market Metrics</h3>
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
-            <tr style="background:#f9fafb;">
-              <td style="padding:16px;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;">Metric</td>
-              <td style="padding:16px;font-weight:600;color:#374151;text-align:right;border-bottom:1px solid #e5e7eb;">Value</td>
-            </tr>
-            <tr>
-              <td style="padding:16px;border-bottom:1px solid #f3f4f6;">Median Sale Price</td>
-              <td style="padding:16px;text-align:right;font-weight:600;color:#059669;border-bottom:1px solid #f3f4f6;">${fmtUSD(metrics.median_sale_price)}</td>
-            </tr>
-            <tr>
-              <td style="padding:16px;border-bottom:1px solid #f3f4f6;">Median List Price</td>
-              <td style="padding:16px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">${fmtUSD(metrics.median_list_price)}</td>
-            </tr>
-            <tr>
-              <td style="padding:16px;border-bottom:1px solid #f3f4f6;">Homes Sold</td>
-              <td style="padding:16px;text-align:right;font-weight:600;color:#dc2626;border-bottom:1px solid #f3f4f6;">${fmtInt(metrics.homes_sold)}</td>
-            </tr>
-            <tr>
-              <td style="padding:16px;border-bottom:1px solid #f3f4f6;">New Listings</td>
-              <td style="padding:16px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">${fmtInt(metrics.new_listings)}</td>
-            </tr>
-            <tr>
-              <td style="padding:16px;border-bottom:1px solid #f3f4f6;">Median Days on Market</td>
-              <td style="padding:16px;text-align:right;font-weight:600;color:#7c3aed;border-bottom:1px solid #f3f4f6;">${fmtInt(metrics.median_dom)} days</td>
-            </tr>
-            <tr>
-              <td style="padding:16px;border-bottom:1px solid #f3f4f6;">Price per Sq Ft</td>
-              <td style="padding:16px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">${fmtUSD(metrics.avg_price_per_sqft)}</td>
-            </tr>
-            <tr>
-              <td style="padding:16px;">Current Inventory</td>
-              <td style="padding:16px;text-align:right;font-weight:600;color:#ea580c;">${fmtInt(metrics.inventory)} homes</td>
-            </tr>
-          </table>
-        </td>
-      </tr>
+Below, you'll find key metrics including median prices, recent transactions, inventory levels, and other relevant factors. I've formatted the data for easy reading, with actionable takeaways to highlight opportunities or considerations for homeowners like you in areas such as ${neighborhoodList}.
 
-      <!-- Market Analysis -->
-      <tr>
-        <td style="padding:0 24px 24px 24px;">
-          <h3 style="margin:0 0 16px 0;font-size:20px;font-weight:700;color:#111827;">📈 Market Analysis</h3>
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-            <tr>
-              <td style="width:33%;padding-right:8px;">
-                <div style="background:#f0f9ff;border:1px solid #0ea5e9;border-radius:8px;padding:16px;text-align:center;">
-                  <div style="font-size:14px;color:#0369a1;font-weight:600;margin-bottom:4px;">YoY Price Change</div>
-                  <div style="font-size:20px;font-weight:800;color:${yoyColor};">${yoyIcon} ${yoyChange > 0 ? '+' : ''}${yoyChange.toFixed(1)}%</div>
-                </div>
-              </td>
-              <td style="width:33%;padding:0 4px;">
-                <div style="background:#f0fdf4;border:1px solid #22c55e;border-radius:8px;padding:16px;text-align:center;">
-                  <div style="font-size:14px;color:#15803d;font-weight:600;margin-bottom:4px;">Market Type</div>
-                  <div style="font-size:20px;font-weight:800;color:${marketColor};text-transform:capitalize;">${marketType}</div>
-                </div>
-              </td>
-              <td style="width:33%;padding-left:8px;">
-                <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:16px;text-align:center;">
-                  <div style="font-size:14px;color:#92400e;font-weight:600;margin-bottom:4px;">Inventory</div>
-                  <div style="font-size:20px;font-weight:800;color:#d97706;text-transform:capitalize;">${inventoryTrend}</div>
-                </div>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
+### Median Prices
+Home values in ${zip} ${medianSaleChange.value > 0 ? 'continue to show strength' : 'reflect market adjustments'}. Here's a snapshot:
 
-      <!-- Recent Transactions -->
-      ${transactions.length > 0 ? `
-      <tr>
-        <td style="padding:0 24px 24px 24px;">
-          <h3 style="margin:0 0 16px 0;font-size:20px;font-weight:700;color:#111827;">🏠 Recent Sales Examples</h3>
-          <div style="background:#f9fafb;border-radius:8px;padding:16px;">
-            ${transactions.slice(0, 4).map((t: any) => `
-              <div style="padding:12px 0;border-bottom:1px solid #e5e7eb;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                  <tr>
-                    <td>
-                      <div style="font-weight:600;color:#111827;">${fmtUSD(t.price)}</div>
-                      <div style="font-size:14px;color:#6b7280;">${t.beds} bed, ${t.baths} bath • ${fmtInt(t.sqft)} sq ft</div>
-                    </td>
-                    <td style="text-align:right;">
-                      <div style="font-size:14px;color:#6b7280;">${t.dom} days</div>
-                      <div style="font-size:12px;color:#9ca3af;">on market</div>
-                    </td>
-                  </tr>
-                </table>
-              </div>
-            `).join('')}
-          </div>
-        </td>
-      </tr>
-      ` : ''}
+| Metric                  | Value          | Year-over-Year Change | Notes |
+|-------------------------|----------------|-----------------------|-------|
+| Median Listing Price   | ${fmtUSD(currentData.median_list_price)} | ${medianListChange.direction} ${medianListChange.value.toFixed(1)}% | ${medianListChange.value > 0 ? 'Rising listing prices indicate seller confidence.' : medianListChange.value < -5 ? 'Declining prices may present buying opportunities.' : 'Stable pricing ideal for market timing.'} |
+| Median Sale Price      | ${fmtUSD(currentData.median_sale_price)} | ${medianSaleChange.direction} ${medianSaleChange.value.toFixed(1)}% | ${medianSaleChange.value > 2 ? 'Strong appreciation signals a healthy market.' : medianSaleChange.value < 0 ? 'Price softening may benefit buyers.' : 'Stable prices reflect market balance.'} |
+| Price per Square Foot  | ${fmtUSD(currentData.avg_price_per_sqft)} | ${pricePerSqftChange.direction} ${pricePerSqftChange.value.toFixed(1)}% | ${pricePerSqftChange.value < 0 ? 'Declining per-sqft costs offer value opportunities.' : 'Rising per-sqft prices indicate strong demand.'} |
+| Market Heat Index      | ${marketHeat}/100 | N/A | ${heatLabel} market - ${marketHeat >= 70 ? 'act quickly on listings' : marketHeat >= 50 ? 'moderate competition expected' : 'buyers have negotiation power'}. |
 
-      <!-- Key Insights -->
-      ${keyTakeaways.length > 0 ? `
-      <tr>
-        <td style="padding:0 24px 24px 24px;">
-          <h3 style="margin:0 0 16px 0;font-size:20px;font-weight:700;color:#111827;">💡 Key Market Insights</h3>
-          <div style="background:#fef7ff;border:1px solid #d946ef;border-radius:8px;padding:20px;">
-            ${keyTakeaways.slice(0, 4).map((takeaway: string) => `
-              <div style="margin-bottom:12px;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                  <tr>
-                    <td style="width:20px;vertical-align:top;padding-right:12px;">
-                      <div style="background:#d946ef;color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;">•</div>
-                    </td>
-                    <td style="vertical-align:top;">
-                      <p style="margin:0;color:#374151;line-height:1.5;">${takeaway}</p>
-                    </td>
-                  </tr>
-                </table>
-              </div>
-            `).join('')}
-          </div>
-        </td>
-      </tr>
-      ` : ''}
+**Takeaway for Homeowners:** ${medianSaleChange.value > 0 && marketHeat >= 60 ? 'With rising prices and competitive conditions, this could be an excellent time to list if your property is move-in ready.' : medianSaleChange.value < 0 && marketHeat < 50 ? 'Market conditions favor buyers with more inventory and pricing flexibility.' : 'Balanced market conditions provide opportunities for both buyers and sellers with proper strategy.'}
 
-      <!-- Call to Action -->
-      <tr>
-        <td style="padding:0 24px 32px 24px;">
-          <div style="background:linear-gradient(135deg, #059669 0%, #10b981 100%);border-radius:12px;padding:24px;text-align:center;color:white;">
-            <h3 style="margin:0 0 8px 0;font-size:20px;font-weight:700;">Thinking of Buying or Selling?</h3>
-            <p style="margin:0 0 16px 0;font-size:16px;opacity:0.9;">Get a personalized market analysis and expert guidance from ${agentName}</p>
-            ${agentEmail ? `
-            <a href="mailto:${agentEmail}?subject=Market Analysis Request for ${zip}" style="display:inline-block;background:white;color:#059669;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">Contact Me Today</a>
-            ` : ''}
-          </div>
-        </td>
-      </tr>
+### Latest Transactions
+${transactions.length > 0 ? `Activity in ${zip} continues with a mix of property types closing deals. In recent months, ${currentData.homes_sold || 'several'} homes sold, contributing to ongoing market activity.
 
-      <!-- Footer -->
-      <tr>
-        <td style="padding:20px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;">
-          <div style="text-align:center;">
-            <p style="margin:0 0 8px 0;font-size:14px;color:#6b7280;font-weight:600;">${agentName}</p>
-            ${agentEmail ? `<p style="margin:0 0 16px 0;font-size:14px;color:#6b7280;">📧 ${agentEmail}</p>` : ''}
-            <p style="margin:0 0 8px 0;font-size:12px;color:#9ca3af;">
-              Market data powered by AI analysis • Report generated ${new Date().toLocaleDateString()}
-            </p>
-            <p style="margin:0;font-size:12px;color:#9ca3af;">
-              You're receiving this because you're in our database for ${zip}. 
-              ${Deno.env.get("COMPANY_PHYSICAL_ADDRESS") ? `Business address: ${Deno.env.get("COMPANY_PHYSICAL_ADDRESS")}` : ''}
-            </p>
-            ${unsubscribeLine}
-          </div>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>
+**Recent Examples (Anonymized for Privacy):** ${transactions.slice(0, 3).map(t => 
+  `A ${t.beds || 'multi'}-bedroom property sold for approximately ${fmtUSD(t.price)} after ${t.dom || 'several'} days on market`
+).join(', ')}.
+
+**Median Days on Market:** ${currentData.median_dom || 'N/A'} days.
+
+**Takeaway for Homeowners:** ${currentData.homes_sold && homessoldChange.value < -10 ? 'Sales volume is down, but quality properties are still moving—emphasize unique features to stand out.' : 'Active transaction volume suggests healthy buyer interest in the area.'}` : 'Transaction data is currently being compiled for this area.'}
+
+### Inventory Metrics
+Inventory levels provide insight into market balance and negotiation leverage.
+
+| Metric              | Value                  | Notes |
+|---------------------|------------------------|-------|
+| Current Inventory   | ${currentData.inventory ? `${fmtInt(currentData.inventory)} homes` : 'Updating'} | ${insights.inventory_trend === 'increasing' ? 'Rising inventory provides more options for buyers.' : insights.inventory_trend === 'decreasing' ? 'Limited inventory favors sellers.' : 'Stable inventory indicates market balance.'} |
+| Market Type         | ${insights.buyer_seller_market || 'Balanced'} Market | ${insights.buyer_seller_market === 'seller' ? 'Sellers hold advantage with multiple offers common.' : insights.buyer_seller_market === 'buyer' ? 'Buyers have more negotiation power and selection.' : 'Neither buyers nor sellers have significant advantage.'} |
+| New Listings        | ${fmtInt(currentData.new_listings)} | ${currentData.new_listings && currentData.new_listings > (prevData.new_listings || 0) ? 'Increasing supply provides more choices.' : 'Limited new supply maintains competition.'} |
+
+**Takeaway for Homeowners:** ${insights.buyer_seller_market === 'seller' ? 'In this seller\'s market, pricing competitively and preparing your home well can lead to quick sales above asking price.' : insights.buyer_seller_market === 'buyer' ? 'Buyers should take advantage of increased inventory and negotiation opportunities.' : 'Balanced conditions reward both buyers and sellers who are well-prepared and realistic.'}
+
+### Other Relevant Insights
+${insights.key_takeaways && insights.key_takeaways.length > 0 ? insights.key_takeaways.map((takeaway, index) => 
+  `- **${['Market Velocity', 'Economic Factors', 'Buyer/Seller Trends', 'Local Dynamics'][index] || 'Market Insight'}:** ${takeaway}`
+).join('\n') : `- **Market Conditions:** The ${zip} area shows ${marketHeat >= 60 ? 'competitive' : 'balanced'} conditions with ${insights.buyer_seller_market || 'mixed'} market dynamics.
+- **Economic Factors:** Local market trends suggest ${medianSaleChange.value > 0 ? 'continued appreciation' : 'price stability'} in the near term.
+- **Investment Considerations:** Current conditions ${marketHeat >= 70 ? 'favor sellers with high demand' : marketHeat >= 40 ? 'provide opportunities for both buyers and sellers' : 'offer advantages for patient buyers'}.`}
+
+**Takeaway for Homeowners:** ${marketHeat >= 70 ? 'Strong market conditions offer excellent selling opportunities, while buyers should be prepared to act quickly on desired properties.' : marketHeat >= 40 ? 'Moderate market conditions provide good opportunities for both buying and selling with proper strategy.' : 'Current market dynamics favor buyers with more negotiation leverage and selection options.'}
+
+${economicFactors.forecast ? `### Market Forecast
+Based on current trends and economic indicators: ${economicFactors.forecast}` : ''}
+
+If you'd like a personalized valuation for your property or advice on how these trends impact your situation, reply to this email or schedule a quick call at ${calendarLink}. I'm here to help you navigate the market with confidence.
+
+Best regards,  
+${agentName}  
+Real Estate Agent  
+${agentEmail ? `${agentEmail} | ` : ''}[Your Phone Number] | [Your Website]  
+P.S. For more tools and insights, check out our Purpose-Driven CRM platform for real-time market tracking!
+
+${unsubscribeLine}
+
+---
+*This email contains market data and insights powered by AI analysis. Market conditions can change rapidly; please consult with ${agentName} for the most current information and personalized advice.*
 `.trim();
 }
 

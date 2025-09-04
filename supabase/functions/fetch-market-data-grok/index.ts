@@ -43,42 +43,65 @@ async function callGrokAPI(zipCode: string, periodMonth: string): Promise<Market
     throw new Error('XAI_API_KEY not configured');
   }
 
-  // Enhanced prompt with web search capabilities
-  const prompt = `As a real estate market analyst, search the web for current real estate data for ZIP code ${zipCode} for ${periodMonth}. 
+  // Enhanced comprehensive prompt for narrative-driven market intelligence
+  const prompt = `As a real estate market analyst with access to comprehensive market data, research and analyze ZIP code ${zipCode} for ${periodMonth}. 
 
-Research recent sales data from Zillow, Redfin, Realtor.com and other real estate sources for ZIP ${zipCode}. 
-
-Generate a comprehensive market report with ONLY valid JSON output:
+Generate a comprehensive market intelligence report with ONLY valid JSON output that includes:
 
 {
   "zip_code": "${zipCode}",
   "period_month": "${periodMonth}",
-  "median_sale_price": [search for actual median sale price data],
-  "median_list_price": [search for actual median listing price data],
-  "homes_sold": [search for actual number of homes sold],
-  "new_listings": [search for actual new listings count],
-  "inventory": [search for current inventory/active listings],
-  "median_dom": [search for actual days on market data],
-  "avg_price_per_sqft": [calculate based on actual sales data],
+  "median_sale_price": [actual median sale price from market data],
+  "median_list_price": [actual median listing price from market data],
+  "homes_sold": [actual number of homes sold],
+  "new_listings": [actual new listings count],
+  "inventory": [current active inventory/listings],
+  "median_dom": [actual median days on market],
+  "avg_price_per_sqft": [calculated from recent sales data],
   "market_insights": {
-    "heat_index": [calculate 0-100 based on supply/demand],
-    "yoy_price_change": [calculate year-over-year price change %],
+    "heat_index": [calculate 0-100 based on supply/demand balance, competition level],
+    "yoy_price_change": [year-over-year median price change percentage],
     "inventory_trend": ["increasing" | "decreasing" | "stable"],
     "buyer_seller_market": ["buyer" | "seller" | "balanced"],
     "key_takeaways": [
-      "3-5 specific insights based on actual market conditions",
-      "Include inventory trends and price movements",
-      "Mention market velocity and buyer/seller dynamics",
-      "Reference local economic factors if relevant"
+      "Comprehensive market velocity analysis with specific data points",
+      "Economic factors impacting the local market including interest rates, employment",
+      "Buyer and seller trends with actionable insights",
+      "Investment considerations and timing recommendations",
+      "Neighborhood-specific factors affecting property values"
     ]
   },
   "transactions_sample": [
-    {"price": [actual recent sale], "beds": X, "baths": X, "sqft": XXXX, "dom": XX},
-    [4-6 representative recent transactions from public records]
+    {"price": [recent sale price], "beds": X, "baths": X.5, "sqft": XXXX, "dom": XX},
+    [Include 5-8 representative recent transactions from public records]
+  ],
+  "neighborhoods": [
+    "List 3-5 specific neighborhood names within or near this ZIP code"
+  ],
+  "economic_factors": {
+    "employment_trends": "Brief analysis of local employment impact",
+    "interest_rate_impact": "How current rates affect this market",
+    "seasonal_patterns": "Month-specific market patterns",
+    "forecast": "3-6 month outlook based on current trends"
+  },
+  "risk_factors": {
+    "flood_risk_percent": [percentage of properties at flood risk],
+    "heat_risk_percent": [percentage at high heat/climate risk],
+    "market_volatility": ["low" | "moderate" | "high"]
+  },
+  "nearby_comparisons": [
+    {"zip": "nearby ZIP", "median_price": XXXXX, "market_type": "buyer/seller/balanced"}
   ]
 }
 
-Search thoroughly and use the most current, accurate data available. If exact data isn't available, use realistic estimates based on comparable markets and trends.`;
+Search thoroughly using current market data from MLS, Zillow, Redfin, Realtor.com, and local sources. Focus on providing actionable insights that help homeowners make informed decisions. If exact current data isn't available, use realistic estimates based on comparable markets and recent trends, but clearly indicate estimates vs. confirmed data.
+
+Make the key takeaways specific and actionable, focusing on:
+1. Market timing for buyers/sellers
+2. Pricing strategies based on current conditions  
+3. Inventory and competition levels
+4. Economic factors affecting decisions
+5. Neighborhood-specific opportunities or challenges`;
 
   try {
     console.log(`Calling Grok API for ZIP ${zipCode}, period ${periodMonth}`);
@@ -93,7 +116,7 @@ Search thoroughly and use the most current, accurate data available. If exact da
         messages: [
           {
             role: 'system',
-            content: 'You are a real estate analyst with web search capabilities. Search for current market data and return ONLY valid JSON. Use your web search to find actual real estate data from MLS, Zillow, Redfin, and other sources. If you cannot find exact data, make realistic estimates based on market trends.'
+            content: 'You are a comprehensive real estate market analyst with access to live market data. Research current conditions using all available sources including MLS data, Zillow, Redfin, Realtor.com, economic reports, and local market intelligence. Return ONLY valid JSON with comprehensive market analysis that provides actionable insights for homeowners.'
           },
           {
             role: 'user',
@@ -102,7 +125,7 @@ Search thoroughly and use the most current, accurate data available. If exact da
         ],
         model: 'grok-beta',
         stream: false,
-        max_tokens: 1500,
+        max_tokens: 2000,
       }),
     });
 
