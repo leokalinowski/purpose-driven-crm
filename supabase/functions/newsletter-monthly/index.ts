@@ -1,39 +1,16 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient, SupabaseClient, User } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 
-/**
- * Supabase Edge Function: newsletter-monthly
- *
- * Monthly real estate newsletter automation with:
- * - Supabase auth via incoming Authorization header (user mode) or service role token (global mode)
- * - Global mode batching per agent with idempotency (public.monthly_runs)
- * - Per-agent ZIP discovery from contacts, caching with zip_reports
- * - Historical comparison vs previous month's cache
- * - Apify fallback if fetch-zip-transactions fails
- * - Dry-run support
- * - Batched email sending via SendGrid (100 recipients per batch, BCC)
- * - Error logging into public.logs
- *
- * Notes:
- * - This function uses two Supabase clients:
- *   - "client": anon key + incoming Authorization (respects RLS for user mode)
- *   - "admin": service role key (bypasses RLS; used for caches, logs, idempotency, global mode)
- *
- * - No console.log is used except console.error for errors.
- */
-
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient, SupabaseClient, User } from "npm:@supabase/supabase-js@2";
-
-// CORS
-const corsHeaders: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Content-Type": "application/json",
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Types
 interface RequestBody {
   dryRun?: boolean;
+  mode?: 'user' | 'global'; // unused but kept for compatibility
+  user_id?: string; // unused but kept for compatibility
 }
 
 interface AgentProfile {
@@ -44,42 +21,48 @@ interface AgentProfile {
 }
 
 interface Contact {
-  email: string | null;
-  zip_code: string | null;
+  email: string;
 }
 
 interface Transaction {
-  // Shape is flexible; we compute metrics defensively
-  sold_price?: number | null;
-  list_price?: number | null;
-  dom?: number | null;
-  price_per_sqft?: number | null;
-  // Additional fields may exist
+  price: number;
+  date: string;
+  address?: string;
+  beds?: number;
+  baths?: number;
+  sqft?: number;
 }
 
 interface Metrics {
   median_sale_price: number | null;
   median_list_price: number | null;
-  homes_sold: number;
-  new_listings: number;
+  homes_sold: number | null;
+  new_listings: number | null;
+  inventory: number | null;
   median_dom: number | null;
   avg_price_per_sqft: number | null;
-  inventory: number | null;
+  // Enhanced Grok data structure
+  market_insights?: {
+    heat_index?: number;
+    yoy_price_change?: number;
+    inventory_trend?: string;
+    buyer_seller_market?: string;
+    key_takeaways: string[];
+  };
+  transactions_sample?: Array<{
+    price: number;
+    beds: number;
+    baths: number;
+    sqft: number;
+    dom: number;
+  }>;
 }
 
 interface CacheData {
   zip_code: string;
-  period_month: string; // YYYY-MM-01
+  period_month: string;
   metrics: Metrics;
-  prev_comparison?: {
-    median_sale_price_delta?: number | null;
-    median_list_price_delta?: number | null;
-    homes_sold_delta?: number | null;
-    new_listings_delta?: number | null;
-    median_dom_delta?: number | null;
-    avg_price_per_sqft_delta?: number | null;
-    inventory_delta?: number | null;
-  };
+  prev_comparison?: any;
   html: string;
 }
 
@@ -92,111 +75,67 @@ interface Stats {
   skipped?: boolean;
 }
 
-type Json = Record<string, unknown> | unknown[] | string | number | boolean | null;
+// Utility functions
+function toMonthStart(input?: string): string {
+  const d = input ? new Date(input) : new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`;
+}
 
-// Helpers
-function toMonthStart(date: Date = new Date()): string {
-  const y = date.getUTCFullYear();
-  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
-  return `${y}-${m}-01`;
-}
-function toPrevMonthStart(currentStart: string): string {
-  // currentStart is YYYY-MM-01
-  const d = new Date(currentStart);
-  if (isNaN(d.getTime())) {
-    const parts = currentStart.split("-");
-    const y = Number(parts[0]) || new Date().getUTCFullYear();
-    const m = Number(parts[1]) || (new Date().getUTCMonth() + 1);
-    const date = new Date(Date.UTC(y, m - 1, 1));
-    date.setUTCMonth(date.getUTCMonth() - 1);
-    return toMonthStart(date);
-  }
+function toPrevMonthStart(monthStart: string): string {
+  const d = new Date(monthStart);
   d.setUTCMonth(d.getUTCMonth() - 1);
-  return toMonthStart(d);
+  return toMonthStart(d.toISOString());
 }
-function monthLabel(periodMonth: string) {
-  const d = new Date(periodMonth);
-  if (isNaN(d.getTime())) return periodMonth.slice(0, 7);
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "long" });
-}
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-function chunkArray<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
-function median(nums: number[]): number | null {
-  const n = nums.filter((v) => typeof v === "number" && !isNaN(v)).sort((a, b) => a - b);
-  if (!n.length) return null;
-  const mid = Math.floor(n.length / 2);
-  return n.length % 2 === 0 ? (n[mid - 1] + n[mid]) / 2 : n[mid];
-}
-function average(nums: number[]): number | null {
-  const n = nums.filter((v) => typeof v === "number" && !isNaN(v));
-  if (!n.length) return null;
-  return n.reduce((a, b) => a + b, 0) / n.length;
-}
-function safeNumber(n: unknown): number | null {
-  const v = typeof n === "number" ? n : Number(n);
-  return isFinite(v) && !isNaN(v) ? v : null;
-}
+
 function fmtUSD(n?: number | null): string {
-  if (typeof n !== "number" || isNaN(n)) return "—";
-  return n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  if (typeof n !== 'number') return 'N/A';
+  return `$${n.toLocaleString()}`;
 }
+
 function fmtInt(n?: number | null): string {
-  if (typeof n !== "number" || isNaN(n)) return "—";
+  if (typeof n !== 'number') return 'N/A';
   return n.toLocaleString();
 }
-async function hmacHexSHA256(message: string, secret: string): Promise<string> {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(message));
-  const bytes = new Uint8Array(sigBuf);
-  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
 
-// Core computations
-function computeMetrics(txs: Transaction[]): Metrics {
-  const salePrices: number[] = [];
-  const listPrices: number[] = [];
-  const doms: number[] = [];
-  const ppsqfts: number[] = [];
-
-  for (const t of txs) {
-    const sp = safeNumber(t.sold_price);
-    const lp = safeNumber(t.list_price);
-    const dom = safeNumber(t.dom);
-    const ppsf = safeNumber(t.price_per_sqft);
-
-    if (sp != null) salePrices.push(sp);
-    if (lp != null) listPrices.push(lp);
-    if (dom != null) doms.push(dom);
-    if (ppsf != null) ppsqfts.push(ppsf);
+function chunkArray<T>(array: T[], chunkSize: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += chunkSize) {
+    chunks.push(array.slice(i, i + chunkSize));
   }
-
-  const metrics: Metrics = {
-    median_sale_price: median(salePrices),
-    median_list_price: median(listPrices),
-    homes_sold: salePrices.length,
-    new_listings: listPrices.length,
-    median_dom: median(doms),
-    avg_price_per_sqft: average(ppsqfts),
-    inventory: null, // unknown without active listings snapshot; keep null
-  };
-  return metrics;
+  return chunks;
 }
 
-function compareMetrics(curr: Metrics, prev?: Metrics | null) {
-  if (!prev) return undefined;
+function monthLabel(periodMonth: string): string {
+  const d = new Date(periodMonth);
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function median(nums: number[]): number {
+  if (!nums.length) return 0;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function average(nums: number[]): number {
+  if (!nums.length) return 0;
+  return nums.reduce((sum, n) => sum + n, 0) / nums.length;
+}
+
+async function hmacHexSHA256(data: string, key: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(key);
+  const cryptoKey = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(data));
+  const hashArray = Array.from(new Uint8Array(signature));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function compareMetrics(curr: Metrics, prev: Metrics) {
   const delta = (a: number | null, b: number | null) =>
     typeof a === "number" && typeof b === "number" ? a - b : null;
 
@@ -211,7 +150,7 @@ function compareMetrics(curr: Metrics, prev?: Metrics | null) {
   };
 }
 
-function buildEmailHTML(zip: string, periodMonth: string, metrics: Metrics, agent?: AgentProfile | null, unsubscribeURL?: string) {
+function buildEmailHTML(zip: string, periodMonth: string, metrics: any, agent?: AgentProfile | null, unsubscribeURL?: string) {
   const month = monthLabel(periodMonth);
   const agentName = [agent?.first_name, agent?.last_name].filter(Boolean).join(" ").trim() || "Your Agent";
   const agentEmail = agent?.email || "";
@@ -219,6 +158,26 @@ function buildEmailHTML(zip: string, periodMonth: string, metrics: Metrics, agen
     ? `<p style="margin:16px 0 0 0; font-size:12px; color:#64748b;">To stop receiving these updates, <a href="${unsubscribeURL}">unsubscribe here</a>.</p>`
     : "";
 
+  // Extract market insights and transactions from Grok data structure
+  const insights = metrics?.market_insights || {};
+  const transactions = metrics?.transactions_sample || [];
+  const heatIndex = insights.heat_index || 60;
+  const yoyChange = insights.yoy_price_change || 0;
+  const marketType = insights.buyer_seller_market || "balanced";
+  const inventoryTrend = insights.inventory_trend || "stable";
+  const keyTakeaways = insights.key_takeaways || [];
+
+  // Generate heat index color
+  const heatColor = heatIndex >= 80 ? "#dc2626" : heatIndex >= 60 ? "#ea580c" : heatIndex >= 40 ? "#ca8a04" : "#16a34a";
+  const heatLabel = heatIndex >= 80 ? "Very Hot" : heatIndex >= 60 ? "Hot" : heatIndex >= 40 ? "Warm" : "Cool";
+
+  // Generate YoY change styling
+  const yoyColor = yoyChange > 0 ? "#16a34a" : yoyChange < 0 ? "#dc2626" : "#64748b";
+  const yoyIcon = yoyChange > 0 ? "↗" : yoyChange < 0 ? "↘" : "→";
+
+  // Market type styling
+  const marketColor = marketType === "seller" ? "#dc2626" : marketType === "buyer" ? "#16a34a" : "#ca8a04";
+  
   return `
 <!doctype html>
 <html>
@@ -227,55 +186,192 @@ function buildEmailHTML(zip: string, periodMonth: string, metrics: Metrics, agen
     <title>${zip} Monthly Real Estate Newsletter — ${month}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
   </head>
-  <body style="font-family:ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji; color:#0f172a; background:#ffffff; padding:24px;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+  <body style="font-family:ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#0f172a; background:#f8fafc; margin:0; padding:20px;">
+    
+    <!-- Main Container -->
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 25px rgba(0,0,0,0.1);">
+      
+      <!-- Header Section -->
       <tr>
-        <td style="background:hsl(222 47% 11%); color:white; padding:24px;">
-          <h1 style="margin:0;font-size:20px;">${zip} Monthly Real Estate Newsletter</h1>
-          <p style="margin:8px 0 0 0;opacity:.9;">${month}</p>
+        <td style="background:linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color:white; padding:32px 24px; text-align:center;">
+          <h1 style="margin:0 0 8px 0;font-size:28px;font-weight:700;letter-spacing:-0.5px;">${zip} Market Report</h1>
+          <p style="margin:0;font-size:16px;opacity:0.9;">${month} • ${agentName}</p>
         </td>
       </tr>
+
+      <!-- Agent Introduction -->
       <tr>
         <td style="padding:24px;">
-          <p style="margin:0 0 12px 0;">Hi there,</p>
-          <p style="margin:0 0 16px 0;">Here’s your quick snapshot of the local market for <strong>${zip}</strong>.</p>
-
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-top:8px;">
-            <tr>
-              <td style="padding:12px;border-bottom:1px solid #e5e7eb;">Median Sale Price</td>
-              <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;">${fmtUSD(metrics.median_sale_price)}</td>
-            </tr>
-            <tr>
-              <td style="padding:12px;border-bottom:1px solid #e5e7eb;">Median List Price</td>
-              <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;">${fmtUSD(metrics.median_list_price)}</td>
-            </tr>
-            <tr>
-              <td style="padding:12px;border-bottom:1px solid #e5e7eb;">Homes Sold</td>
-              <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;">${fmtInt(metrics.homes_sold)}</td>
-            </tr>
-            <tr>
-              <td style="padding:12px;border-bottom:1px solid #e5e7eb;">New Listings</td>
-              <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;">${fmtInt(metrics.new_listings)}</td>
-            </tr>
-            <tr>
-              <td style="padding:12px;border-bottom:1px solid #e5e7eb;">Median Days on Market</td>
-              <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;">${fmtInt(metrics.median_dom)}</td>
-            </tr>
-            <tr>
-              <td style="padding:12px;">Avg. Price per Sq Ft</td>
-              <td style="padding:12px;text-align:right;font-weight:600;">${fmtUSD(metrics.avg_price_per_sqft)}</td>
-            </tr>
-          </table>
-
-          <p style="margin:24px 0 0 0; font-size:14px; color:#475569;">
-            Questions about this market update? Reply directly to this email to reach ${agentName}${agentEmail ? ` at ${agentEmail}` : ""}.
-          </p>
-          ${unsubscribeLine}
+          <div style="background:#f8fafc;border-left:4px solid #3b82f6;padding:16px;border-radius:8px;margin-bottom:24px;">
+            <p style="margin:0;font-size:16px;color:#374151;line-height:1.6;">
+              <strong>Hello from ${agentName}!</strong><br>
+              Your local real estate market continues to evolve. Here's your personalized ${month} market analysis for ${zip}, including insights powered by the latest market data and AI analysis.
+            </p>
+          </div>
         </td>
       </tr>
+
+      <!-- Market Heat Index -->
       <tr>
-        <td style="padding:16px 24px; background:#f8fafc; font-size:12px; color:#64748b;">
-          You’re receiving this because you’re in our database for ${zip}. Our business address is ${Deno.env.get("COMPANY_PHYSICAL_ADDRESS") || "our office"}.
+        <td style="padding:0 24px 24px 24px;">
+          <div style="background:${heatColor}15;border:2px solid ${heatColor}30;border-radius:12px;padding:20px;text-align:center;">
+            <h3 style="margin:0 0 8px 0;color:${heatColor};font-size:18px;font-weight:700;">Market Heat Index</h3>
+            <div style="font-size:36px;font-weight:800;color:${heatColor};margin:8px 0;">${heatIndex}/100</div>
+            <p style="margin:0;color:#374151;font-weight:600;">${heatLabel} Market</p>
+          </div>
+        </td>
+      </tr>
+
+      <!-- Key Metrics Table -->
+      <tr>
+        <td style="padding:0 24px 24px 24px;">
+          <h3 style="margin:0 0 16px 0;font-size:20px;font-weight:700;color:#111827;">📊 Key Market Metrics</h3>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+            <tr style="background:#f9fafb;">
+              <td style="padding:16px;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;">Metric</td>
+              <td style="padding:16px;font-weight:600;color:#374151;text-align:right;border-bottom:1px solid #e5e7eb;">Value</td>
+            </tr>
+            <tr>
+              <td style="padding:16px;border-bottom:1px solid #f3f4f6;">Median Sale Price</td>
+              <td style="padding:16px;text-align:right;font-weight:600;color:#059669;border-bottom:1px solid #f3f4f6;">${fmtUSD(metrics.median_sale_price)}</td>
+            </tr>
+            <tr>
+              <td style="padding:16px;border-bottom:1px solid #f3f4f6;">Median List Price</td>
+              <td style="padding:16px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">${fmtUSD(metrics.median_list_price)}</td>
+            </tr>
+            <tr>
+              <td style="padding:16px;border-bottom:1px solid #f3f4f6;">Homes Sold</td>
+              <td style="padding:16px;text-align:right;font-weight:600;color:#dc2626;border-bottom:1px solid #f3f4f6;">${fmtInt(metrics.homes_sold)}</td>
+            </tr>
+            <tr>
+              <td style="padding:16px;border-bottom:1px solid #f3f4f6;">New Listings</td>
+              <td style="padding:16px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">${fmtInt(metrics.new_listings)}</td>
+            </tr>
+            <tr>
+              <td style="padding:16px;border-bottom:1px solid #f3f4f6;">Median Days on Market</td>
+              <td style="padding:16px;text-align:right;font-weight:600;color:#7c3aed;border-bottom:1px solid #f3f4f6;">${fmtInt(metrics.median_dom)} days</td>
+            </tr>
+            <tr>
+              <td style="padding:16px;border-bottom:1px solid #f3f4f6;">Price per Sq Ft</td>
+              <td style="padding:16px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">${fmtUSD(metrics.avg_price_per_sqft)}</td>
+            </tr>
+            <tr>
+              <td style="padding:16px;">Current Inventory</td>
+              <td style="padding:16px;text-align:right;font-weight:600;color:#ea580c;">${fmtInt(metrics.inventory)} homes</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- Market Analysis -->
+      <tr>
+        <td style="padding:0 24px 24px 24px;">
+          <h3 style="margin:0 0 16px 0;font-size:20px;font-weight:700;color:#111827;">📈 Market Analysis</h3>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+            <tr>
+              <td style="width:33%;padding-right:8px;">
+                <div style="background:#f0f9ff;border:1px solid #0ea5e9;border-radius:8px;padding:16px;text-align:center;">
+                  <div style="font-size:14px;color:#0369a1;font-weight:600;margin-bottom:4px;">YoY Price Change</div>
+                  <div style="font-size:20px;font-weight:800;color:${yoyColor};">${yoyIcon} ${yoyChange > 0 ? '+' : ''}${yoyChange.toFixed(1)}%</div>
+                </div>
+              </td>
+              <td style="width:33%;padding:0 4px;">
+                <div style="background:#f0fdf4;border:1px solid #22c55e;border-radius:8px;padding:16px;text-align:center;">
+                  <div style="font-size:14px;color:#15803d;font-weight:600;margin-bottom:4px;">Market Type</div>
+                  <div style="font-size:20px;font-weight:800;color:${marketColor};text-transform:capitalize;">${marketType}</div>
+                </div>
+              </td>
+              <td style="width:33%;padding-left:8px;">
+                <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:16px;text-align:center;">
+                  <div style="font-size:14px;color:#92400e;font-weight:600;margin-bottom:4px;">Inventory</div>
+                  <div style="font-size:20px;font-weight:800;color:#d97706;text-transform:capitalize;">${inventoryTrend}</div>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- Recent Transactions -->
+      ${transactions.length > 0 ? `
+      <tr>
+        <td style="padding:0 24px 24px 24px;">
+          <h3 style="margin:0 0 16px 0;font-size:20px;font-weight:700;color:#111827;">🏠 Recent Sales Examples</h3>
+          <div style="background:#f9fafb;border-radius:8px;padding:16px;">
+            ${transactions.slice(0, 4).map((t: any) => `
+              <div style="padding:12px 0;border-bottom:1px solid #e5e7eb;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td>
+                      <div style="font-weight:600;color:#111827;">${fmtUSD(t.price)}</div>
+                      <div style="font-size:14px;color:#6b7280;">${t.beds} bed, ${t.baths} bath • ${fmtInt(t.sqft)} sq ft</div>
+                    </td>
+                    <td style="text-align:right;">
+                      <div style="font-size:14px;color:#6b7280;">${t.dom} days</div>
+                      <div style="font-size:12px;color:#9ca3af;">on market</div>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            `).join('')}
+          </div>
+        </td>
+      </tr>
+      ` : ''}
+
+      <!-- Key Insights -->
+      ${keyTakeaways.length > 0 ? `
+      <tr>
+        <td style="padding:0 24px 24px 24px;">
+          <h3 style="margin:0 0 16px 0;font-size:20px;font-weight:700;color:#111827;">💡 Key Market Insights</h3>
+          <div style="background:#fef7ff;border:1px solid #d946ef;border-radius:8px;padding:20px;">
+            ${keyTakeaways.slice(0, 4).map((takeaway: string) => `
+              <div style="margin-bottom:12px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="width:20px;vertical-align:top;padding-right:12px;">
+                      <div style="background:#d946ef;color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;">•</div>
+                    </td>
+                    <td style="vertical-align:top;">
+                      <p style="margin:0;color:#374151;line-height:1.5;">${takeaway}</p>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            `).join('')}
+          </div>
+        </td>
+      </tr>
+      ` : ''}
+
+      <!-- Call to Action -->
+      <tr>
+        <td style="padding:0 24px 32px 24px;">
+          <div style="background:linear-gradient(135deg, #059669 0%, #10b981 100%);border-radius:12px;padding:24px;text-align:center;color:white;">
+            <h3 style="margin:0 0 8px 0;font-size:20px;font-weight:700;">Thinking of Buying or Selling?</h3>
+            <p style="margin:0 0 16px 0;font-size:16px;opacity:0.9;">Get a personalized market analysis and expert guidance from ${agentName}</p>
+            ${agentEmail ? `
+            <a href="mailto:${agentEmail}?subject=Market Analysis Request for ${zip}" style="display:inline-block;background:white;color:#059669;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">Contact Me Today</a>
+            ` : ''}
+          </div>
+        </td>
+      </tr>
+
+      <!-- Footer -->
+      <tr>
+        <td style="padding:20px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;">
+          <div style="text-align:center;">
+            <p style="margin:0 0 8px 0;font-size:14px;color:#6b7280;font-weight:600;">${agentName}</p>
+            ${agentEmail ? `<p style="margin:0 0 16px 0;font-size:14px;color:#6b7280;">📧 ${agentEmail}</p>` : ''}
+            <p style="margin:0 0 8px 0;font-size:12px;color:#9ca3af;">
+              Market data powered by AI analysis • Report generated ${new Date().toLocaleDateString()}
+            </p>
+            <p style="margin:0;font-size:12px;color:#9ca3af;">
+              You're receiving this because you're in our database for ${zip}. 
+              ${Deno.env.get("COMPANY_PHYSICAL_ADDRESS") ? `Business address: ${Deno.env.get("COMPANY_PHYSICAL_ADDRESS")}` : ''}
+            </p>
+            ${unsubscribeLine}
+          </div>
         </td>
       </tr>
     </table>
@@ -320,233 +416,207 @@ async function fetchTransactionsViaApifyFallback(zip: string, currentMonth: stri
   // Tries APIFY_TASK_ID first, then APIFY_ACTOR_ID
   const token = Deno.env.get("APIFY_API_TOKEN");
   if (!token) {
-    console.error("APIFY_API_TOKEN not set; cannot use Apify fallback", { zip });
-    return [] as Transaction[];
-  }
-
-  try {
-    const taskId = Deno.env.get("APIFY_TASK_ID");
-    const actorId = Deno.env.get("APIFY_ACTOR_ID");
-    const input = {
-      zip_code: zip,
-      month: currentMonth.slice(0, 7),
-    };
-
-    if (taskId) {
-      const url = `https://api.apify.com/v2/actor-tasks/${taskId}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      if (!resp.ok) {
-        console.error("Apify task fallback HTTP error", { zip, status: resp.status, statusText: resp.statusText });
-        return [];
-      }
-      const json = await resp.json();
-      return Array.isArray(json) ? (json as Transaction[]) : [];
-    }
-
-    if (actorId) {
-      const url = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      if (!resp.ok) {
-        console.error("Apify actor fallback HTTP error", { zip, status: resp.status, statusText: resp.statusText });
-        return [];
-      }
-      const json = await resp.json();
-      return Array.isArray(json) ? (json as Transaction[]) : [];
-    }
-
-    console.error("No APIFY_TASK_ID or APIFY_ACTOR_ID configured; cannot run Apify fallback", { zip });
-    return [];
-  } catch (e) {
-    console.error("Apify fallback failed", { zip, error: String(e) });
+    console.log("No APIFY_API_TOKEN configured, skipping Apify fallback");
     return [];
   }
-}
 
-// Database ops
-async function getAgentProfiles(admin: SupabaseClient): Promise<AgentProfile[]> {
-  const { data, error } = await admin
-    .from("profiles")
-    .select("user_id, first_name, last_name, email");
-  if (error) throw error;
-  return (data || []) as AgentProfile[];
-}
-
-async function getAgentProfile(admin: SupabaseClient, agentId: string): Promise<AgentProfile | null> {
-  const { data, error } = await admin
-    .from("profiles")
-    .select("user_id, first_name, last_name, email")
-    .eq("user_id", agentId)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as AgentProfile) ?? null;
-}
-
-async function getAgentZipsForUser(client: SupabaseClient, agentId: string): Promise<string[]> {
-  // User mode: client respects RLS; Global mode: admin client bypasses RLS
-  const { data, error } = await client
-    .from("contacts")
-    .select("zip_code, email")
-    .eq("agent_id", agentId)
-    .is("dnc", false)
-    .not("email", "is", null);
-
-  if (error) throw error;
-  const zips = new Set<string>();
-  for (const row of (data || []) as Contact[]) {
-    const z = (row.zip_code || "").trim();
-    if (/^\d{5}$/.test(z)) zips.add(z);
+  const taskId = Deno.env.get("APIFY_TASK_ID");
+  const actorId = Deno.env.get("APIFY_ACTOR_ID");
+  if (!taskId && !actorId) {
+    console.log("No APIFY_TASK_ID or APIFY_ACTOR_ID configured, skipping Apify fallback");
+    return [];
   }
-  return Array.from(zips);
-}
 
-async function getContactsForZip(client: SupabaseClient, agentId: string, zip: string): Promise<string[]> {
-  const { data, error } = await client
-    .from("contacts")
-    .select("email")
-    .eq("agent_id", agentId)
-    .eq("zip_code", zip)
-    .is("dnc", false)
-    .not("email", "is", null);
-  if (error) throw error;
-  const emails = (data || []).map((r: { email: string | null }) => (r.email || "").trim()).filter(Boolean);
-  // Deduplicate
-  return Array.from(new Set(emails));
-}
+  console.log(`Fallback: trying Apify for ${zip} via ${taskId ? 'task' : 'actor'}`);
 
-async function getCache(admin: SupabaseClient, zip: string, periodMonth: string): Promise<CacheData | null> {
-  const { data, error } = await admin
-    .from("zip_reports")
-    .select("data")
-    .eq("zip_code", zip)
-    .eq("report_month", periodMonth)
-    .maybeSingle();
+  let runUrl: string;
+  if (taskId) {
+    runUrl = `https://api.apify.com/v2/actor-tasks/${taskId}/run-sync?token=${token}`;
+  } else {
+    runUrl = `https://api.apify.com/v2/acts/${actorId}/run-sync?token=${token}`;
+  }
 
-  if (error) throw error;
-  const d = data?.data as Json | undefined;
-  if (!d || typeof d !== "object" || d === null) return null;
-  return d as CacheData;
-}
+  const input = {
+    location: zip,
+    maxItems: 50,
+    type: 'sold'
+  };
 
-async function upsertCache(admin: SupabaseClient, zip: string, periodMonth: string, cache: CacheData) {
-  const { error } = await admin
-    .from("zip_reports")
-    .upsert(
-      {
-        zip_code: zip,
-        report_month: periodMonth,
-        data: cache as unknown as Json,
-      },
-      { onConflict: "zip_code,report_month" },
-    );
-  if (error) throw error;
-}
-
-async function logError(admin: SupabaseClient, message: string, context?: Record<string, unknown>, agentId?: string) {
-  // Fire-and-forget with protective try/catch
   try {
-    await admin.from("logs").insert({
-      level: "error",
-      source: "newsletter-monthly",
-      message,
-      context: context ? (context as Json) : null,
-      agent_id: agentId ?? null,
+    const response = await fetch(runUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
     });
-  } catch (e) {
-    console.error("Failed to insert into logs", { message, insertError: String(e) });
-  }
-}
 
-async function checkIdempotency(admin: SupabaseClient, reportMonth: string): Promise<"skip" | "proceed"> {
-  try {
-    const { data, error } = await admin
-      .from("monthly_runs")
-      .select("id, last_run")
-      .eq("run_type", "newsletter")
-      .eq("report_month", reportMonth)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (data?.last_run) {
-      const last = new Date(data.last_run);
-      const now = new Date();
-      const diffMs = now.getTime() - last.getTime();
-      if (diffMs < 24 * 60 * 60 * 1000) return "skip";
+    if (!response.ok) {
+      console.error(`Apify run failed: ${response.statusText}`);
+      return [];
     }
-    return "proceed";
-  } catch (e) {
-    console.error("Idempotency check failed", { error: String(e) });
-    return "proceed"; // don't block run on error
-  }
-}
 
-async function markRun(admin: SupabaseClient, reportMonth: string, status: "success" | "skipped" | "error", details?: Record<string, unknown>) {
-  try {
-    // Upsert unique (run_type, report_month)
-    const { error } = await admin
-      .from("monthly_runs")
-      .upsert(
-        {
-          run_type: "newsletter",
-          report_month: reportMonth,
-          last_run: new Date().toISOString(),
-          status,
-          details: details ? (details as Json) : null,
-        },
-        { onConflict: "run_type,report_month" },
-      );
-    if (error) throw error;
-  } catch (e) {
-    console.error("Failed to upsert monthly_runs", { error: String(e) });
-  }
-}
-
-async function createAgentRun(admin: SupabaseClient, agentId: string, reportMonth: string, stats: Pick<Stats, "zipsProcessed" | "emailsSent" | "errors">, dryRun: boolean, status: "success" | "error" | "pending"): Promise<void> {
-  try {
-    const runDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    const result = await response.json();
+    const items = result.items || [];
     
-    const { error } = await admin
-      .from("monthly_runs")
-      .upsert(
-        {
-          agent_id: agentId,
-          run_date: runDate,
-          status,
-          zip_codes_processed: stats.zipsProcessed,
-          emails_sent: stats.emailsSent,
-          dry_run: dryRun,
-          started_at: new Date().toISOString(),
-          finished_at: status !== "pending" ? new Date().toISOString() : null,
-          error: stats.errors.length > 0 ? stats.errors.join("; ") : null,
-        },
-        { onConflict: "agent_id,run_date" },
-      );
+    console.log(`Apify returned ${items.length} items for ${zip}`);
+    return items;
+  } catch (error) {
+    console.error("Apify fallback error:", error);
+    return [];
+  }
+}
+
+// Database operations
+async function getAgentProfiles(supabase: SupabaseClient): Promise<AgentProfile[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('user_id, first_name, last_name, email')
+    .in('role', ['agent', 'admin']);
+  
+  if (error) throw error;
+  return data || [];
+}
+
+async function getAgentProfile(supabase: SupabaseClient, userId: string): Promise<AgentProfile | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('user_id, first_name, last_name, email')
+    .eq('user_id', userId)
+    .maybeSingle();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function getAgentZipsForUser(supabase: SupabaseClient, userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('contacts')
+    .select('zip_code')
+    .eq('agent_id', userId)
+    .not('zip_code', 'is', null);
+  
+  if (error) throw error;
+  
+  const zipSet = new Set(data?.map(row => row.zip_code?.trim()).filter(Boolean));
+  return Array.from(zipSet);
+}
+
+async function getContactsForZip(supabase: SupabaseClient, agentId: string, zip: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('contacts')
+    .select('email')
+    .eq('agent_id', agentId)
+    .eq('zip_code', zip)
+    .not('email', 'is', null)
+    .eq('dnc', false); // Exclude DNC contacts
+  
+  if (error) throw error;
+  
+  return data?.map(row => row.email).filter(Boolean) || [];
+}
+
+async function getCache(supabase: SupabaseClient, zip: string, periodMonth: string): Promise<CacheData | null> {
+  const { data, error } = await supabase
+    .from('zip_reports')
+    .select('*')
+    .eq('zip_code', zip)
+    .eq('report_month', new Date(periodMonth).toISOString().substring(0, 10))
+    .maybeSingle();
+  
+  if (error) throw error;
+  if (!data?.data) return null;
+  
+  return {
+    zip_code: zip,
+    period_month: periodMonth,
+    metrics: data.data,
+    html: '', // Will be regenerated with current agent data
+  };
+}
+
+async function upsertCache(supabase: SupabaseClient, zip: string, periodMonth: string, cache: CacheData) {
+  const { error } = await supabase
+    .from('zip_reports')
+    .upsert({
+      zip_code: zip,
+      report_month: new Date(periodMonth).toISOString().substring(0, 10),
+      data: cache.metrics,
+    }, {
+      onConflict: 'zip_code,report_month'
+    });
+  
+  if (error) throw error;
+}
+
+async function logError(supabase: SupabaseClient, message: string, metadata?: any, agentId?: string) {
+  // Simple console logging since we don't have a logs table defined
+  console.error("Newsletter error:", { message, metadata, agentId });
+}
+
+async function checkIdempotency(supabase: SupabaseClient, reportMonth: string): Promise<'run' | 'skip'> {
+  const { data, error } = await supabase
+    .from('monthly_runs')
+    .select('*')
+    .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+    .eq('run_date', new Date(reportMonth).toISOString().substring(0, 10))
+    .eq('status', 'success')
+    .maybeSingle();
+  
+  if (error) {
+    console.error("Error checking idempotency:", error);
+    return 'run'; // Default to run on error
+  }
+  
+  return data ? 'skip' : 'run';
+}
+
+async function markRun(supabase: SupabaseClient, reportMonth: string, status: string, metadata?: any) {
+  const { error } = await supabase
+    .from('monthly_runs')
+    .insert({
+      run_date: new Date(reportMonth).toISOString().substring(0, 10),
+      status,
+      agent_id: '00000000-0000-0000-0000-000000000000', // Global run
+      zip_codes_processed: metadata?.zipsProcessed || 0,
+      emails_sent: metadata?.emailsSent || 0,
+      contacts_processed: 0,
+      dry_run: metadata?.dryRun || false,
+      started_at: new Date().toISOString(),
+      finished_at: new Date().toISOString(),
+    });
+  
+  if (error) {
+    console.error("Error marking run:", error);
+  }
+}
+
+async function createAgentRun(supabase: SupabaseClient, agentId: string, reportMonth: string, stats: any, dryRun: boolean, status: string) {
+  try {
+    const { error } = await supabase
+      .from('monthly_runs')
+      .upsert({
+        agent_id: agentId,
+        run_date: new Date(reportMonth).toISOString().substring(0, 10),
+        status,
+        zip_codes_processed: stats.zipsProcessed || 0,
+        emails_sent: stats.emailsSent || 0,
+        contacts_processed: 0,
+        dry_run: dryRun,
+        started_at: new Date().toISOString(),
+        finished_at: status !== 'pending' ? new Date().toISOString() : null,
+        error: stats.errors?.length > 0 ? stats.errors[0] : null,
+      }, {
+        onConflict: 'agent_id,run_date'
+      });
     
     if (error) {
       console.error("Failed to create/update agent run record", { agentId, error });
-      throw error;
     }
-    
-    console.log(`Created/updated monthly_runs record for agent ${agentId}`, { 
-      status, 
-      zipsProcessed: stats.zipsProcessed, 
-      emailsSent: stats.emailsSent,
-      dryRun 
-    });
   } catch (e) {
     console.error("Failed to create agent run record", { agentId, error: String(e) });
-    throw e;
   }
 }
 
-// Email via SendGrid
+// Email sending
 async function sendEmailBatch(bcc: string[], subject: string, html: string, agent?: AgentProfile | null) {
   const apiKey = Deno.env.get("SENDGRID_API_KEY");
   const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL");
