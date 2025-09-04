@@ -587,7 +587,7 @@ async function processAgent(
   admin: SupabaseClient,
   agentId: string,
   reportMonth: string,
-  opts: { dryRun: boolean },
+  opts: { dryRun: boolean, triggeredByUserId?: string },
 ): Promise<Pick<Stats, "zipsProcessed" | "emailsSent" | "cacheHits" | "errors">> {
   const out: Pick<Stats, "zipsProcessed" | "emailsSent" | "cacheHits" | "errors"> = {
     zipsProcessed: 0,
@@ -605,6 +605,18 @@ async function processAgent(
     await logError(admin, msg, { agentId }, agentId);
   }
 
+  // Get admin profile for test mode emails
+  let adminProfile: AgentProfile | null = null;
+  if (opts.dryRun && opts.triggeredByUserId) {
+    try {
+      adminProfile = await getAgentProfile(admin, opts.triggeredByUserId);
+    } catch (e) {
+      const msg = `Failed to fetch admin profile for test mode: ${String(e)}`;
+      out.errors.push(msg);
+      await logError(admin, msg, { agentId }, agentId);
+    }
+  }
+
   let zips: string[] = [];
   try {
     zips = await getAgentZipsForUser(authedClient, agentId);
@@ -617,6 +629,12 @@ async function processAgent(
 
   if (!zips.length) {
     return out;
+  }
+
+  // In test mode, process only first ZIP code
+  if (opts.dryRun && zips.length > 0) {
+    zips = [zips[0]];
+    console.log(`Test mode: processing only first ZIP code ${zips[0]} for agent ${agentId}`);
   }
 
   const prevMonth = toPrevMonthStart(reportMonth);
@@ -682,26 +700,38 @@ async function processAgent(
       }
 
       // Send emails
-      const recipients = await getContactsForZip(authedClient, agentId, zip);
-      if (!recipients.length) {
-        // skip zips with no contacts
-        continue;
+      let recipients: string[] = [];
+      
+      if (opts.dryRun) {
+        // Test mode: send only to admin who triggered the test
+        if (adminProfile?.email) {
+          recipients = [adminProfile.email];
+          console.log(`Test mode: sending email to admin ${adminProfile.email} instead of real contacts`);
+        } else {
+          await logError(admin, "Test mode: no admin email found for test recipient", { agentId, zip }, agentId);
+          continue;
+        }
+      } else {
+        // Production mode: send to all contacts for this ZIP
+        recipients = await getContactsForZip(authedClient, agentId, zip);
+        if (!recipients.length) {
+          // skip zips with no contacts
+          continue;
+        }
       }
 
-      const subject = `${zip} Monthly Real Estate Newsletter – ${new Date().toLocaleDateString()}`;
-      if (opts.dryRun) {
-        await logError(admin, "Dry run: skipping send", { agentId, zip, recipients: recipients.length }, agentId);
-      } else {
-        const batches = chunkArray(recipients, 100);
-        for (const batch of batches) {
-          const res = await sendEmailBatch(batch, subject, cache.html, agentProfile);
-          if (res.error) {
-            const msg = `Failed to send batch for ${zip}: ${res.error}`;
-            out.errors.push(msg);
-            await logError(admin, msg, { agentId, zip }, agentId);
-          } else {
-            out.emailsSent += res.sent;
-          }
+      const baseSubject = `${zip} Monthly Real Estate Newsletter – ${new Date().toLocaleDateString()}`;
+      const subject = opts.dryRun ? `[TEST] ${baseSubject}` : baseSubject;
+      
+      const batches = chunkArray(recipients, 100);
+      for (const batch of batches) {
+        const res = await sendEmailBatch(batch, subject, cache.html, agentProfile);
+        if (res.error) {
+          const msg = `Failed to send batch for ${zip}: ${res.error}`;
+          out.errors.push(msg);
+          await logError(admin, msg, { agentId, zip }, agentId);
+        } else {
+          out.emailsSent += res.sent;
         }
       }
 
@@ -862,7 +892,7 @@ serve(async (req: Request) => {
         console.error("Failed to create initial agent run record", { agentId, error: String(e) });
       }
       
-      const res = await processAgent(client, admin, agentId, reportMonth, { dryRun });
+      const res = await processAgent(client, admin, agentId, reportMonth, { dryRun, triggeredByUserId: currentUser!.id });
       stats.agentsProcessed = 1;
       stats.zipsProcessed = res.zipsProcessed;
       stats.emailsSent = res.emailsSent;

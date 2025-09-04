@@ -128,7 +128,7 @@ export default function AdminNewsletter() {
                     <span className="font-medium">Test Mode Active</span>
                   </div>
                   <p className="text-sm text-warning/80 mt-1">
-                    All newsletter triggers will run in test mode and only send to admin email.
+                    Test mode processes one ZIP code with full Grok research and sends only to your admin email with [TEST] prefix.
                   </p>
                 </CardContent>
               </Card>
@@ -168,7 +168,7 @@ export default function AdminNewsletter() {
                                 </AlertDialogTitle>
                                 <AlertDialogDescription>
                                   {isDryRun 
-                                    ? `This will run a test newsletter for ${displayName}. Test emails will only be sent to the admin email address.`
+                                    ? `This will run a test newsletter for ${displayName}. It processes only one ZIP code, makes full Grok API calls for research, generates the complete HTML email, and sends it only to you (the admin) with a [TEST] prefix.`
                                     : `This will send the monthly newsletter to all contacts for ${displayName}. This action cannot be undone.`
                                   }
                                 </AlertDialogDescription>
