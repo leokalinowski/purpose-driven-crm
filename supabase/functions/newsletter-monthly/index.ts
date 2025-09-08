@@ -156,6 +156,8 @@ function buildEmailHTML(zip: string, periodMonth: string, metrics: any, agent?: 
   const agentName = [agent?.first_name, agent?.last_name].filter(Boolean).join(" ").trim() || "Your Agent";
   const agentEmail = agent?.email || "";
   
+  console.log(`buildEmailHTML called for ${zip}, metrics:`, JSON.stringify(metrics, null, 2));
+  
   // Ensure we always have valid data - provide fallbacks for missing content
   if (!metrics || typeof metrics !== 'object') {
     console.log(`buildEmailHTML: No metrics data for ${zip}, using fallback content`);
@@ -281,6 +283,46 @@ ${unsubscribeLine}
 ---
 *This email contains market data and insights powered by AI analysis. Market conditions can change rapidly; please consult with ${agentName} for the most current information and personalized advice.*
 `.trim();
+}
+
+// Generate fallback email content when market data is unavailable
+function generateFallbackEmailContent(zip: string, month: string, agentName: string, agentEmail: string, unsubscribeURL?: string) {
+  const unsubscribeLine = unsubscribeURL
+    ? `<p style="margin:16px 0 0 0; font-size:12px; color:#64748b;">To stop receiving these updates, <a href="${unsubscribeURL}">unsubscribe here</a>.</p>`
+    : "";
+  
+  return `
+    <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+      <h1 style="color: #2563eb; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px;">
+        ${month} Real Estate Update for ${zip}
+      </h1>
+      
+      <p>Dear Valued Client,</p>
+      
+      <p>I hope this message finds you well. I'm reaching out with your monthly real estate market update for ZIP code ${zip}.</p>
+      
+      <p><strong>Market Data Update:</strong><br>
+      We're currently compiling the latest market data for your area. While we gather this information, I wanted to ensure you know that I'm actively monitoring market conditions in ${zip} to provide you with the most accurate insights.</p>
+      
+      <p><strong>What This Means for You:</strong><br>
+      • Market conditions continue to evolve in your area<br>
+      • I'm tracking new listings, sales activity, and price trends<br>
+      • Your property value and investment remain important priorities</p>
+      
+      <p>If you have any questions about your property, the local market, or are considering buying or selling, please don't hesitate to reach out. I'm here to help you make informed decisions about your real estate needs.</p>
+      
+      <p>Best regards,<br>
+      <strong>${agentName}</strong><br>
+      ${agentEmail ? `<a href="mailto:${agentEmail}">${agentEmail}</a>` : 'Your Real Estate Professional'}
+      </p>
+      
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+      <p style="font-size: 12px; color: #64748b;">
+        This market update is provided as a service to keep you informed about real estate trends in your area.
+      </p>
+      ${unsubscribeLine}
+    </div>
+  `;
 }
 
 // Fallback content generator for when market data is missing
@@ -574,6 +616,15 @@ async function sendEmailBatch(recipients: string[], subject: string, html: strin
   let fromEmail = Deno.env.get("RESEND_FROM_EMAIL");
   const fromName = Deno.env.get("RESEND_FROM_NAME") || "Newsletter";
 
+  // Debug environment variables
+  console.log("Environment check:", {
+    hasApiKey: !!apiKey,
+    apiKeyPrefix: apiKey?.substring(0, 5) || 'none',
+    fromEmail: fromEmail || 'not set',
+    fromName,
+    agentName: agent ? `${agent.first_name} ${agent.last_name}` : 'none'
+  });
+
   // Fallback to Resend's test domain if no from email is configured
   if (!fromEmail) {
     fromEmail = "onboarding@resend.dev";
@@ -593,7 +644,11 @@ async function sendEmailBatch(recipients: string[], subject: string, html: strin
   }
 
   if (!html || html.trim().length === 0) {
-    console.error("Empty email content provided");
+    console.error("Empty email content provided", { 
+      htmlExists: !!html, 
+      htmlLength: html?.length || 0,
+      htmlPreview: html?.substring(0, 100) || 'none'
+    });
     return { sent: 0, error: "empty_content" };
   }
 
@@ -797,10 +852,22 @@ async function processAgent(
         // Throttle API calls
         await sleep(1000);
 
-        // Skip zips with no data unless it's a dry run
-        if (!marketData || (!marketData.median_sale_price && !marketData.homes_sold && marketData.market_insights?.key_takeaways?.[0]?.includes('unavailable'))) {
+        // Skip zips with no data unless it's a dry run - allow fallback data to proceed
+        if (!marketData) {
+          console.log(`Skipping ${zip}: no market data available`);
           continue;
         }
+        
+        // Check if this is completely empty data (not just fallback data)
+        const hasAnyData = marketData.median_sale_price || marketData.homes_sold || marketData.median_list_price || marketData.new_listings;
+        const isFallbackData = marketData.market_insights?.key_takeaways?.[0]?.includes('unavailable');
+        
+        if (!hasAnyData && !isFallbackData && !opts.dryRun) {
+          console.log(`Skipping ${zip}: no meaningful data and not in test mode`);
+          continue;
+        }
+        
+        console.log(`Processing ${zip}: hasData=${hasAnyData}, isFallback=${isFallbackData}, dryRun=${opts.dryRun}`);
 
         // Get previous month's data for comparison (if available)
         let prevMetrics: any = null;
@@ -814,7 +881,9 @@ async function processAgent(
 
         // Build HTML with agent personalization and unsubscribe link
         const unsubscribeURL = await buildUnsubscribeURL(zip, agentId);
+        console.log(`Building email for ${zip}, marketData available:`, !!marketData, 'keys:', marketData ? Object.keys(marketData) : 'none');
         const html = buildEmailHTML(zip, reportMonth, marketData, agentProfile, unsubscribeURL);
+        console.log(`Generated HTML length: ${html?.length || 0} characters for ${zip}`);
 
         cache = {
           zip_code: zip,
@@ -928,6 +997,22 @@ serve(async (req: Request) => {
     // ignore
   }
   const dryRun = Boolean(body?.dryRun);
+
+  console.log(`Newsletter function called:`, { 
+    method: req.method, 
+    dryRun,
+    mode: body?.mode,
+    user_id: body?.user_id?.substring(0, 8) || 'none'
+  });
+
+  // Validate critical environment variables
+  const requiredSecrets = ['RESEND_API_KEY', 'RESEND_FROM_EMAIL', 'RESEND_FROM_NAME'];
+  const missingSecrets = requiredSecrets.filter(secret => !Deno.env.get(secret));
+  if (missingSecrets.length > 0) {
+    console.error('Missing required environment variables:', missingSecrets);
+  } else {
+    console.log('All required Resend environment variables are configured');
+  }
 
   // Global mode if token equals service role key
   const isGlobal = token && token === SUPABASE_SERVICE_ROLE_KEY;
