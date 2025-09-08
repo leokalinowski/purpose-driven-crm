@@ -127,7 +127,7 @@ serve(async (req) => {
             <p>Please log in to the coaching system and submit your weekly data at your earliest convenience.</p>
             
             <div style="margin: 24px 0;">
-              <a href="${supabaseUrl.replace('https://cguoaokqwgqvzkqqezcq.supabase.co', window?.location?.origin || 'https://your-app-domain.com')}/coaching" 
+              <a href="https://cguoaokqwgqvzkqqezcq.supabase.co/coaching" 
                  style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
                 Submit Weekly Data
               </a>

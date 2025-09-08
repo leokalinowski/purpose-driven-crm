@@ -68,8 +68,8 @@ serve(async (req) => {
   }
 
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-  const FROM_EMAIL = Deno.env.get("SENDGRID_FROM_EMAIL") || "onboarding@resend.dev";
-  const FROM_NAME = Deno.env.get("SENDGRID_FROM_NAME") ?? "Your Real Estate Team";
+  const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev";
+  const FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "Your Real Estate Team";
 
   if (!RESEND_API_KEY) {
     console.error("Missing required Resend API key.");

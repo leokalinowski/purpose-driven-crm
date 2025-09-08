@@ -33,13 +33,20 @@ function formatLeadName(lead: any): string {
  */
 async function sendEmail({ to, subject, html, text }: { to: string; subject: string; html: string; text: string }): Promise<void> {
   const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-  const FROM_EMAIL = Deno.env.get('SENDGRID_FROM_EMAIL') || 'onboarding@resend.dev';
-  const FROM_NAME = Deno.env.get('SENDGRID_FROM_NAME') || 'SphereSync System';
+  const FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'onboarding@resend.dev';
+  const FROM_NAME = Deno.env.get('RESEND_FROM_NAME') || 'SphereSync System';
 
   if (!RESEND_API_KEY) {
-    throw new Error('Resend API key missing');
+    console.error('Missing RESEND_API_KEY environment variable');
+    throw new Error('Resend API key missing - check environment configuration');
   }
 
+  if (!FROM_EMAIL || FROM_EMAIL === 'onboarding@resend.dev') {
+    console.warn('Using default Resend email - consider setting RESEND_FROM_EMAIL to your verified domain');
+  }
+
+  console.log(`Sending email via Resend: ${FROM_NAME} <${FROM_EMAIL}> -> ${to}`);
+  
   const resend = new Resend(RESEND_API_KEY);
 
   const { data, error } = await resend.emails.send({
@@ -51,11 +58,16 @@ async function sendEmail({ to, subject, html, text }: { to: string; subject: str
   });
 
   if (error) {
-    console.error('Resend error:', error);
+    console.error('Resend API error details:', {
+      error,
+      recipient: to,
+      from: `${FROM_NAME} <${FROM_EMAIL}>`,
+      subject: subject.substring(0, 50) + '...'
+    });
     throw new Error(`Resend API error: ${JSON.stringify(error)}`);
   }
 
-  console.log('Email sent successfully via Resend:', data?.id);
+  console.log('Email sent successfully via Resend:', { id: data?.id, to, subject: subject.substring(0, 50) + '...' });
 }
 
 const handler = async (req: Request): Promise<Response> => {
