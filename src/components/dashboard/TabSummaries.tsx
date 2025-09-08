@@ -18,13 +18,13 @@ export function TabSummaries() {
     <div className="grid gap-4 lg:grid-cols-3">
       <Card>
         <CardHeader>
-          <CardTitle>PO2 Tasks</CardTitle>
+          <CardTitle>SphereSync Tasks</CardTitle>
           <CardDescription>This month's completion progress</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          <Progress value={Number(String((data?.kpis.po2CompletionRate.value || '0').toString().replace('%','')))} />
+          <Progress value={Number(String((data?.kpis.sphereSyncCompletionRate.value || '0').toString().replace('%','')))} />
           <div className="text-sm text-muted-foreground">Completion rate this month</div>
-          <Link to="/po2-tasks" className="text-sm underline">Go to PO2 Tasks</Link>
+          <Link to="/spheresync-tasks" className="text-sm underline">Go to SphereSync Tasks</Link>
         </CardContent>
       </Card>
 

@@ -21,7 +21,7 @@ export type MonthlyPoint = { month: string; value: number };
 export type DashboardData = {
   kpis: {
     totalContacts: KPI;
-    po2CompletionRate: KPI;
+    sphereSyncCompletionRate: KPI;
     upcomingEvents: KPI;
     newsletterOpenRate: KPI;
     activeTransactions: KPI;
@@ -170,7 +170,7 @@ export function useDashboardMetrics() {
               deltaPct: pctChange((contactsCurr || 0), (contactsPrev || 0)),
               subtext: 'From last month',
             },
-            po2CompletionRate: {
+            sphereSyncCompletionRate: {
               label: 'SphereSync Completion Rate',
               value: `${Math.round(completionRate)}%`,
               deltaPct: pctChange(completionRate, completionRatePrev),

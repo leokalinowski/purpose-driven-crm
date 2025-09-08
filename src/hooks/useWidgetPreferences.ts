@@ -4,7 +4,7 @@ const PREF_KEY = 'dashboard.pinnedKpis';
 
 type KpiKey =
   | 'totalContacts'
-  | 'po2CompletionRate'
+  | 'sphereSyncCompletionRate'
   | 'upcomingEvents'
   | 'newsletterOpenRate'
   | 'activeTransactions'

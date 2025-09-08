@@ -12,7 +12,7 @@ const KPI_ORDER: Array<{
   link: string;
 }> = [
   { key: 'totalContacts', title: 'Total Leads', icon: Users, link: '/database' },
-  { key: 'po2CompletionRate', title: 'PO2 Completion Rate', icon: CheckCircle, link: '/po2-tasks' },
+  { key: 'sphereSyncCompletionRate', title: 'SphereSync Completion', icon: CheckCircle, link: '/spheresync-tasks' },
   { key: 'upcomingEvents', title: 'Upcoming Events', icon: Calendar, link: '/events' },
   { key: 'newsletterOpenRate', title: 'Newsletter Open Rate', icon: Mail, link: '/newsletter' },
   { key: 'activeTransactions', title: 'Active Transactions', icon: Briefcase, link: '/transactions' },

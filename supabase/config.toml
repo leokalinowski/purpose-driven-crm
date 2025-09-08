@@ -25,7 +25,7 @@ verify_jwt = false
 [functions.newsletter-monthly]
 verify_jwt = false
 
-[functions.po2-email-function]
+[functions.spheresync-email-function]
 verify_jwt = false
 
 [functions.coaching-reminder]
@@ -37,7 +37,7 @@ verify_jwt = true
 [functions.opentoclose-webhook]
 verify_jwt = false
 
-[functions.po2-generate-tasks]
+[functions.spheresync-generate-tasks]
 verify_jwt = false
 
 [functions.dnc-monthly-check]
@@ -51,9 +51,6 @@ verify_jwt = true
 
 [functions.social-analytics]
 verify_jwt = true
-
-[functions.spheresync-generate-tasks]
-verify_jwt = false
 
 [functions.fetch-market-data-grok]
 verify_jwt = false

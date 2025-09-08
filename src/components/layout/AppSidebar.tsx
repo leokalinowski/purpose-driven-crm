@@ -37,6 +37,7 @@ const menuItems = [
   { title: 'SphereSync', url: '/spheresync-tasks', icon: Phone },
   { title: 'Database', url: '/database', icon: Users },
   { title: 'Events', url: '/events', icon: Calendar },
+  { title: 'Pipeline', url: '/pipeline', icon: TrendingUp },
   { title: 'E-Newsletter', url: '/newsletter', icon: Mail },
   { title: 'Social Media', url: '/social-scheduler', icon: Share },
   { title: 'Success Scoreboard', url: '/coaching', icon: TrendingUp },
