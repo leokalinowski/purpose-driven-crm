@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Layout } from '@/components/layout/Layout';
+import { CompanyMetricsCards } from '@/components/admin/CompanyMetricsCards';
+import { TeamManagementWidget } from '@/components/admin/TeamManagementWidget';
+import { CompanyAnalyticsCharts } from '@/components/admin/CompanyAnalyticsCharts';
 import { AgentPerformanceTable } from '@/components/admin/AgentPerformanceTable';
-import { AdminMetricsCards } from '@/components/admin/AdminMetricsCards';
-import { AdminCharts } from '@/components/admin/AdminCharts';
 import { RefreshButton } from '@/components/admin/RefreshButton';
 
 const AdminDashboard = () => {
@@ -44,7 +45,7 @@ const AdminDashboard = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
             <p className="text-muted-foreground">
-              Company-wide analytics and agent performance tracking.
+              Company-wide analytics, team performance, and strategic insights.
             </p>
           </div>
           <RefreshButton />
@@ -52,15 +53,20 @@ const AdminDashboard = () => {
 
         {/* Company-wide KPI cards */}
         <div>
-          <AdminMetricsCards />
+          <CompanyMetricsCards />
         </div>
 
-        {/* Business trends charts */}
+        {/* Team management insights */}
         <div>
-          <AdminCharts />
+          <TeamManagementWidget />
         </div>
 
-        {/* Agent performance comparison table */}
+        {/* Advanced analytics charts */}
+        <div>
+          <CompanyAnalyticsCharts />
+        </div>
+
+        {/* Detailed agent performance table */}
         <div>
           <AgentPerformanceTable />
         </div>

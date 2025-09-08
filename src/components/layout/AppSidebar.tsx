@@ -33,7 +33,7 @@ import { useUserProfile } from '@/hooks/useUserProfile';
 import { useUserRole } from '@/hooks/useUserRole';
 
 const menuItems = [
-  { title: 'Dashboard', url: '/', icon: Home },
+  { title: 'Agent Dashboard', url: '/', icon: Home },
   { title: 'SphereSync', url: '/spheresync-tasks', icon: Phone },
   { title: 'Database', url: '/database', icon: Users },
   { title: 'Events', url: '/events', icon: Calendar },

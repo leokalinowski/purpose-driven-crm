@@ -1,33 +1,25 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useUserRole } from '@/hooks/useUserRole';
 import { Layout } from '@/components/layout/Layout';
-import { DashboardCards } from '@/components/dashboard/DashboardCards';
-import { RecentActivity } from '@/components/dashboard/RecentActivity';
+import { AgentMetricsCards } from '@/components/agent/AgentMetricsCards';
+import { AgentActivityWidget } from '@/components/agent/AgentActivityWidget';
+import { AgentPerformanceCharts } from '@/components/agent/AgentPerformanceCharts';
 import { ExportButtons } from '@/components/dashboard/ExportButtons';
-import { TabSummaries } from '@/components/dashboard/TabSummaries';
-import { DashboardCharts } from '@/components/dashboard/DashboardCharts';
 
 const Index = () => {
   const { user, loading } = useAuth();
-  const { isAdmin, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!loading && !user) {
       navigate('/auth');
-    } else if (user && !roleLoading) {
-      // Redirect admins to admin dashboard by default
-      if (isAdmin) {
-        navigate('/admin/dashboard');
-      } else {
-        document.title = 'Dashboard | Real Estate on Purpose';
-      }
+    } else if (user && !loading) {
+      document.title = 'Agent Dashboard | Real Estate on Purpose';
     }
-  }, [user, loading, isAdmin, roleLoading, navigate]);
+  }, [user, loading, navigate]);
 
-  if (loading || roleLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -43,33 +35,32 @@ const Index = () => {
 
   return (
     <Layout>
-      <div id="dashboard-root" className="space-y-6">
+      <div id="agent-dashboard-root" className="space-y-6">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Agent Dashboard</h1>
             <p className="text-muted-foreground">
-              Welcome back! Here's an overview of your real estate business.
+              Your personal performance hub - track goals, manage tasks, and grow your business.
             </p>
           </div>
           <div>
             <ExportButtons />
           </div>
         </div>
-        {/* KPI cards with pinning and links */}
-        <div id="kpi-data">
-          <DashboardCards />
-        </div>
-        {/* Tab summaries */}
+
+        {/* Personal KPI Cards */}
         <div>
-          <TabSummaries />
+          <AgentMetricsCards />
         </div>
-        {/* Charts */}
+
+        {/* Today's Focus & Priority Tasks */}
         <div>
-          <DashboardCharts />
+          <AgentActivityWidget />
         </div>
-        {/* Recent Activity */}
-        <div className="w-full">
-          <RecentActivity />
+
+        {/* Performance Charts */}
+        <div>
+          <AgentPerformanceCharts />
         </div>
       </div>
     </Layout>
