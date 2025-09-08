@@ -5,20 +5,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface MarketDataRequest {
+interface EmailRequest {
   zip_code: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  address: string;
+  agent_name: string;
+  agent_info: string;
 }
 
-interface MarketDataResponse {
+interface EmailResponse {
   zip_code: string;
-  market_summary: string;
-  median_home_price: string;
-  price_trend: string;
-  inventory_levels: string;
-  days_on_market: string;
-  market_temperature: string;
-  buyer_seller_tips: string[];
-  local_highlights: string[];
+  html_email: string;
 }
 
 serve(async (req) => {
@@ -27,13 +26,21 @@ serve(async (req) => {
   }
 
   try {
-    const { zip_code }: MarketDataRequest = await req.json();
-    
-    if (!zip_code) {
-      throw new Error('ZIP code is required');
+    const {
+      zip_code,
+      first_name,
+      last_name,
+      email,
+      address,
+      agent_name,
+      agent_info
+    }: EmailRequest = await req.json();
+
+    if (!zip_code || !first_name || !last_name || !email || !address || !agent_name || !agent_info) {
+      throw new Error('All personalization fields and ZIP code are required');
     }
 
-    console.log(`Generating market data for ZIP: ${zip_code}`);
+    console.log(`Generating personalized market report email for ZIP: ${zip_code} and recipient: ${first_name} ${last_name}`);
 
     const grokResponse = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
@@ -46,26 +53,32 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `You are a real estate market analyst creating personalized market reports for ZIP code areas. Generate realistic, professional market data that sounds authentic and valuable. Return ONLY valid JSON in this exact format:
-{
-  "zip_code": "string",
-  "market_summary": "2-3 sentence overview of current market conditions",
-  "median_home_price": "formatted price like $425,000",
-  "price_trend": "Up 3.2% from last month" or similar,
-  "inventory_levels": "Low/Moderate/High with brief explanation", 
-  "days_on_market": "average number like 28 days",
-  "market_temperature": "Hot/Warm/Balanced/Cool/Cold with brief reason",
-  "buyer_seller_tips": ["tip1", "tip2", "tip3"],
-  "local_highlights": ["highlight1", "highlight2"]
-}`
+            content: `You are a professional real estate market analyst specializing in creating personalized, insightful monthly newsletters for homeowners. Your goal is to provide valuable, data-driven content that helps recipients understand their local market, spot trends, and make informed decisions. ALWAYS use real-time data fetched via web searches and page browsing from reliable sources like Zillow, Redfin, Homes.com, and official MLS sites. NEVER simulate, estimate, guess, or use placeholder data—only include verifiable facts from online research. If specific data is unavailable, state "Data not available at this time" without fabricating.
+
+Output ONLY a single string containing the full, mobile-responsive HTML for the email body (no JSON, no extra text). Use inline CSS for compatibility with email clients (e.g., tables for layout, sans-serif fonts). Make the content engaging, professional, and concise (800-1200 words max).
+
+Structure the HTML email as follows, with flexibility to customize based on discovered data (e.g., add subsections for emerging trends or local events if relevant):
+- <html><body> wrapper with basic styles (e.g., font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;).
+- Subject line suggestion as a comment at the top (e.g., <!-- Subject: Your September 2025 Market Update for ZIP ${zip_code} -->).
+- Introduction: Personalized greeting (e.g., "Dear ${first_name} ${last_name},") followed by 2-3 sentences overviewing the market in ${zip_code} (include city/state from research), referencing the recipient's address (${address}) and how trends might affect their property.
+- Data Tables: Use <table> for key metrics, e.g.:
+  - Median Prices: Columns for Metric (e.g., Median Listing Price, Median Sale Price, Price per Sq Ft), Value, YoY Change, Notes.
+  - Inventory Metrics: Active Listings, Months of Supply, New/Pending Listings.
+  - Averages: Average Days on Market, Absorption Rate.
+  - Recent Transactions: Bullet list or table of anonymized examples (e.g., "2-bed condo sold for $500K in August").
+- Analysis/Trends: 3-4 paragraphs narrating trends (e.g., YoY price changes, buyer/seller balance, economic factors like interest rates or local developments). Compare to nearby ZIPs if data shows value. Highlight any new important info (e.g., new infrastructure or market shifts).
+- Takeaways: Bullet list of 4-6 actionable insights for buyers/sellers (e.g., "With inventory rising, negotiate aggressively if buying.").
+- Call to Action: Encourage response (e.g., "Reply or schedule a call at [agent's link] for a free valuation of your home at ${address}.").
+- Footer: Sign off with agent's name and info (${agent_name}, ${agent_info}). Include unsubscribe note and privacy compliance.
+
+Ensure the email is unique based on real data and personalization, adding value like "Based on recent Redfin data, your area in ${zip_code} is seeing increased demand due to [specific trend]."`
           },
           {
             role: 'user',
-            content: `Generate a comprehensive real estate market report for ZIP code ${zip_code}. Make it specific and valuable for both buyers and sellers in this area. Include current trends, pricing, and actionable insights.`
+            content: `Generate a personalized real estate market report email for ZIP code ${zip_code}. Recipient: ${first_name} ${last_name}, Email: ${email}, Address: ${address}. Agent: ${agent_name}, Agent Info: ${agent_info}. Use real-time data from Zillow, Redfin, Homes.com, and MLS—perform web searches and browse pages as needed to fetch current metrics, trends, and insights.`
           }
         ],
-        max_completion_tokens: 1000,
-        temperature: 0.7
+        max_completion_tokens: 2000
       }),
     });
 
@@ -81,36 +94,15 @@ serve(async (req) => {
       throw new Error('No content received from Grok API');
     }
 
-    // Parse the JSON response from Grok
-    let marketData: MarketDataResponse;
-    try {
-      marketData = JSON.parse(content);
-    } catch (parseError) {
-      console.error('Failed to parse Grok response:', content);
-      // Fallback data if parsing fails
-      marketData = {
-        zip_code,
-        market_summary: `The ${zip_code} market is experiencing moderate activity with steady pricing trends and balanced inventory levels.`,
-        median_home_price: '$389,000',
-        price_trend: 'Up 2.1% from last month',
-        inventory_levels: 'Moderate - Healthy selection of homes available',
-        days_on_market: '32 days',
-        market_temperature: 'Warm - Good activity for both buyers and sellers',
-        buyer_seller_tips: [
-          'Consider making competitive offers in this active market',
-          'Get pre-approved to move quickly on desired properties',
-          'Price strategically to attract serious buyers'
-        ],
-        local_highlights: [
-          'New shopping center development announced',
-          'School district ratings remain strong'
-        ]
-      };
-    }
+    // Since output is pure HTML string, no parsing needed
+    const emailData: EmailResponse = {
+      zip_code,
+      html_email: content
+    };
 
-    console.log(`Successfully generated market data for ZIP: ${zip_code}`);
+    console.log(`Successfully generated personalized email for ZIP: ${zip_code}`);
     
-    return new Response(JSON.stringify(marketData), {
+    return new Response(JSON.stringify(emailData), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
@@ -118,7 +110,7 @@ serve(async (req) => {
     console.error('Error in market-data-grok function:', error);
     return new Response(
       JSON.stringify({ 
-        error: 'Failed to generate market data',
+        error: 'Failed to generate market report email',
         details: error.message 
       }),
       {
