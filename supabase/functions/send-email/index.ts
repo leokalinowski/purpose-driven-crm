@@ -1,6 +1,6 @@
 
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -67,17 +67,19 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const SENDGRID_API_KEY = Deno.env.get("SENDGRID_API_KEY");
-  const FROM_EMAIL = Deno.env.get("SENDGRID_FROM_EMAIL");
-  const FROM_NAME = Deno.env.get("SENDGRID_FROM_NAME") ?? undefined;
+  const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+  const FROM_EMAIL = Deno.env.get("SENDGRID_FROM_EMAIL") || "onboarding@resend.dev";
+  const FROM_NAME = Deno.env.get("SENDGRID_FROM_NAME") ?? "Your Real Estate Team";
 
-  if (!SENDGRID_API_KEY || !FROM_EMAIL) {
-    console.error("Missing required SendGrid env vars.");
+  if (!RESEND_API_KEY) {
+    console.error("Missing required Resend API key.");
     return new Response(
-      JSON.stringify({ error: "Server not configured for email (missing env vars)." }),
+      JSON.stringify({ error: "Server not configured for email (missing API key)." }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
+
+  const resend = new Resend(RESEND_API_KEY);
 
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -114,52 +116,57 @@ serve(async (req) => {
 
   const bodyHtml = buildHtml(payload.html, payload.text);
 
-  const personalizations: any = [
-    {
-      to: toList,
-      ...(payload.cc ? { cc: normalizeRecipients(payload.cc) } : {}),
-      ...(payload.bcc ? { bcc: normalizeRecipients(payload.bcc) } : {}),
-      ...(payload.categories ? { categories: payload.categories } : {}),
-      subject: payload.subject,
-    },
-  ];
-
-  const sendgridBody = {
-    personalizations,
-    from: { email: FROM_EMAIL, ...(FROM_NAME ? { name: FROM_NAME } : {}) },
-    ...(payload.reply_to ? { reply_to: payload.reply_to } : {}),
-    content: [
-      ...(payload.text ? [{ type: "text/plain", value: payload.text }] : []),
-      { type: "text/html", value: bodyHtml },
-    ],
-  };
+  // Convert recipients to simple email format for Resend
+  const toEmails = toList.map(r => r.email);
+  const ccEmails = payload.cc ? normalizeRecipients(payload.cc).map(r => r.email) : undefined;
+  const bccEmails = payload.bcc ? normalizeRecipients(payload.bcc).map(r => r.email) : undefined;
 
   try {
-    const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${SENDGRID_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(sendgridBody),
+    const emailData: any = {
+      from: FROM_NAME ? `${FROM_NAME} <${FROM_EMAIL}>` : FROM_EMAIL,
+      to: toEmails,
+      subject: payload.subject,
+      html: bodyHtml,
+    };
+
+    if (payload.text) {
+      emailData.text = payload.text;
+    }
+
+    if (ccEmails && ccEmails.length > 0) {
+      emailData.cc = ccEmails;
+    }
+
+    if (bccEmails && bccEmails.length > 0) {
+      emailData.bcc = bccEmails;
+    }
+
+    if (payload.reply_to) {
+      emailData.reply_to = payload.reply_to.email;
+    }
+
+    console.log("Sending email via Resend:", { 
+      to: toEmails.length, 
+      cc: ccEmails?.length || 0, 
+      bcc: bccEmails?.length || 0 
     });
 
-    const ok = res.status === 202;
-    const respText = await res.text();
-    console.log("SendGrid response:", res.status, respText);
+    const { data, error } = await resend.emails.send(emailData);
 
-    if (!ok) {
+    if (error) {
+      console.error("Resend error:", error);
       return new Response(
         JSON.stringify({
-          error: "SendGrid request failed",
-          status: res.status,
-          body: respText,
+          error: "Email sending failed",
+          details: error,
         }),
         { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
-    return new Response(JSON.stringify({ ok: true, status: res.status }), {
+    console.log("Email sent successfully via Resend:", data?.id);
+
+    return new Response(JSON.stringify({ ok: true, id: data?.id }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });

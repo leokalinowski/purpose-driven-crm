@@ -155,6 +155,12 @@ function buildEmailHTML(zip: string, periodMonth: string, metrics: any, agent?: 
   const agentName = [agent?.first_name, agent?.last_name].filter(Boolean).join(" ").trim() || "Your Agent";
   const agentEmail = agent?.email || "";
   
+  // Ensure we always have valid data - provide fallbacks for missing content
+  if (!metrics || typeof metrics !== 'object') {
+    console.log(`buildEmailHTML: No metrics data for ${zip}, using fallback content`);
+    return generateFallbackEmailContent(zip, month, agentName, agentEmail, unsubscribeURL);
+  }
+  
   // Extract enhanced market data from Grok
   const currentData = metrics?.current || metrics || {};
   const prevData = metrics?.previous || {};
@@ -164,6 +170,12 @@ function buildEmailHTML(zip: string, periodMonth: string, metrics: any, agent?: 
   const economicFactors = metrics?.economic_factors || {};
   const riskFactors = metrics?.risk_factors || {};
   const comparisons = metrics?.nearby_comparisons || [];
+
+  // If we have completely empty data, use fallback
+  if (!currentData.median_sale_price && !currentData.homes_sold && transactions.length === 0) {
+    console.log(`buildEmailHTML: Empty market data for ${zip}, using fallback content`);
+    return generateFallbackEmailContent(zip, month, agentName, agentEmail, unsubscribeURL);
+  }
 
   // Calculate year-over-year changes
   const calculateYoyChange = (current: number, previous: number) => {
@@ -267,6 +279,55 @@ ${unsubscribeLine}
 
 ---
 *This email contains market data and insights powered by AI analysis. Market conditions can change rapidly; please consult with ${agentName} for the most current information and personalized advice.*
+`.trim();
+}
+
+// Fallback content generator for when market data is missing
+function generateFallbackEmailContent(zip: string, month: string, agentName: string, agentEmail: string, unsubscribeURL?: string): string {
+  const unsubscribeLine = unsubscribeURL
+    ? `<p style="margin:16px 0 0 0; font-size:12px; color:#64748b;">To stop receiving these updates, <a href="${unsubscribeURL}">unsubscribe here</a>.</p>`
+    : "";
+
+  return `
+Subject: Your Monthly Real Estate Market Update for ZIP Code ${zip} - ${month}
+
+Dear Homeowner,
+
+I hope this email finds you well. As your trusted real estate advisor, I wanted to reach out with your monthly market update for ZIP Code ${zip}.
+
+While we're currently updating our data sources to provide you with the most accurate and comprehensive market insights, I wanted to ensure you stayed connected with the latest in real estate.
+
+### What We're Working On
+We're enhancing our market analysis capabilities to bring you:
+- Real-time pricing data and trends
+- Recent transaction details and patterns  
+- Inventory levels and market velocity
+- Economic factors affecting your local market
+- Personalized insights for your neighborhood
+
+### In the Meantime
+If you're considering buying, selling, or have questions about your property value, I'm here to help. The real estate market continues to evolve, and having a trusted advisor can make all the difference in your decision-making process.
+
+### Let's Connect
+I'd love to discuss your real estate goals and provide personalized insights about your specific situation. Whether you're:
+- Thinking about selling your current home
+- Looking to purchase in the area
+- Curious about your home's current value
+- Interested in investment opportunities
+
+I'm here to help you navigate these decisions with confidence.
+
+Feel free to reply to this email or give me a call to schedule a consultation. I look forward to helping you achieve your real estate goals.
+
+Best regards,  
+${agentName}  
+Real Estate Agent  
+${agentEmail ? `${agentEmail} | ` : ''}[Your Phone Number] | [Your Website]
+
+${unsubscribeLine}
+
+---
+*Your trusted real estate advisor, providing personalized service and market expertise.*
 `.trim();
 }
 

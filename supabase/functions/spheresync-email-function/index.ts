@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
+import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,50 +29,33 @@ function formatLeadName(lead: any): string {
 }
 
 /**
- * Send email using SendGrid
+ * Send email using Resend
  */
 async function sendEmail({ to, subject, html, text }: { to: string; subject: string; html: string; text: string }): Promise<void> {
-  const SENDGRID_API_KEY = Deno.env.get('SENDGRID_API_KEY');
-  const SENDGRID_FROM_EMAIL = Deno.env.get('SENDGRID_FROM_EMAIL');
-  const SENDGRID_FROM_NAME = Deno.env.get('SENDGRID_FROM_NAME');
+  const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+  const FROM_EMAIL = Deno.env.get('SENDGRID_FROM_EMAIL') || 'onboarding@resend.dev';
+  const FROM_NAME = Deno.env.get('SENDGRID_FROM_NAME') || 'SphereSync System';
 
-  if (!SENDGRID_API_KEY || !SENDGRID_FROM_EMAIL) {
-    throw new Error('SendGrid configuration missing');
+  if (!RESEND_API_KEY) {
+    throw new Error('Resend API key missing');
   }
 
-  const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${SENDGRID_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      personalizations: [{
-        to: [{ email: to }],
-        subject: subject,
-      }],
-      from: {
-        email: SENDGRID_FROM_EMAIL,
-        name: SENDGRID_FROM_NAME || 'SphereSync System',
-      },
-      content: [
-        {
-          type: 'text/plain',
-          value: text,
-        },
-        {
-          type: 'text/html',
-          value: html,
-        },
-      ],
-    }),
+  const resend = new Resend(RESEND_API_KEY);
+
+  const { data, error } = await resend.emails.send({
+    from: `${FROM_NAME} <${FROM_EMAIL}>`,
+    to: [to],
+    subject: subject,
+    html: html,
+    text: text,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('SendGrid error:', response.status, errorText);
-    throw new Error(`SendGrid API error: ${response.status} - ${errorText}`);
+  if (error) {
+    console.error('Resend error:', error);
+    throw new Error(`Resend API error: ${JSON.stringify(error)}`);
   }
+
+  console.log('Email sent successfully via Resend:', data?.id);
 }
 
 const handler = async (req: Request): Promise<Response> => {
