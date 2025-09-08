@@ -57,12 +57,12 @@ export function AgentSelector({ selectedAgentId, onAgentSelect }: AgentSelectorP
   };
 
   return (
-    <Select value={selectedAgentId || ''} onValueChange={(value) => onAgentSelect(value || null)}>
+    <Select value={selectedAgentId || 'all'} onValueChange={(value) => onAgentSelect(value === 'all' ? null : value)}>
       <SelectTrigger className="w-64">
         <SelectValue placeholder="Select an agent to analyze" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="">All Agents</SelectItem>
+        <SelectItem value="all">All Agents</SelectItem>
         {agents.map((agent) => (
           <SelectItem key={agent.user_id} value={agent.user_id}>
             {getAgentDisplayName(agent)}
