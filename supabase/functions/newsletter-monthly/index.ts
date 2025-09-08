@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient, User } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
+import { Resend } from 'npm:resend@4.0.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -568,23 +569,22 @@ async function createAgentRun(supabase: SupabaseClient, agentId: string, reportM
 }
 
 // Email sending
-async function sendEmailBatch(bcc: string[], subject: string, html: string, agent?: AgentProfile | null) {
+async function sendEmailBatch(recipients: string[], subject: string, html: string, agent?: AgentProfile | null) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
-  const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") || Deno.env.get("RESEND_FROM_EMAIL");
-  const fromName = Deno.env.get("SENDGRID_FROM_NAME") || Deno.env.get("RESEND_FROM_NAME") || "Newsletter";
+  const fromEmail = Deno.env.get("RESEND_FROM_EMAIL");
+  const fromName = Deno.env.get("RESEND_FROM_NAME") || "Newsletter";
 
   console.log("Email config check:", { 
     hasApiKey: !!apiKey, 
     hasFromEmail: !!fromEmail, 
     fromName,
-    bccCount: bcc.length 
+    recipientCount: recipients.length 
   });
 
   if (!apiKey || !fromEmail) {
     console.error("Resend configuration missing", { 
-      hasResendKey: !!Deno.env.get("RESEND_API_KEY"),
+      hasResendKey: !!apiKey,
       hasFromEmail: !!fromEmail,
-      availableEnvVars: Object.keys(Deno.env.toObject()).filter(k => k.includes('EMAIL') || k.includes('RESEND') || k.includes('SENDGRID'))
     });
     return { sent: 0, error: "missing_resend_config" };
   }
@@ -594,34 +594,38 @@ async function sendEmailBatch(bcc: string[], subject: string, html: string, agen
     return { sent: 0, error: "empty_content" };
   }
 
+  if (!recipients.length) {
+    console.log("No recipients to send to");
+    return { sent: 0, error: "no_recipients" };
+  }
+
   try {
-    // Use Resend API
-    const resend = new (await import("npm:resend@4.0.0")).Resend(apiKey);
+    const resend = new Resend(apiKey);
     
-    console.log("Sending email via Resend:", { 
+    console.log("Sending emails via Resend batch:", { 
       from: `${fromName} <${fromEmail}>`, 
-      bccCount: bcc.length, 
+      recipientCount: recipients.length, 
       subject: subject.substring(0, 50) + "...",
       htmlLength: html.length
     });
 
-    const emailData = {
+    // Use Resend's batch.send() for multiple recipients
+    const emails = recipients.map(email => ({
       from: `${fromName} <${fromEmail}>`,
-      to: [agent?.email || fromEmail],
-      bcc: bcc,
+      to: [email],
       subject,
       html,
-    };
+    }));
 
-    const result = await resend.emails.send(emailData);
+    const result = await resend.batch.send(emails);
 
     if (result.error) {
-      console.error("Resend send failed", result.error);
+      console.error("Resend batch send failed", result.error);
       return { sent: 0, error: `resend_error: ${result.error.message}` };
     }
 
-    console.log("Email sent successfully via Resend:", result.data?.id);
-    return { sent: bcc.length };
+    console.log("Batch emails sent successfully via Resend:", result.data?.map(d => d.id));
+    return { sent: recipients.length };
 
   } catch (error) {
     console.error("Email sending error:", error);
@@ -631,8 +635,8 @@ async function sendEmailBatch(bcc: string[], subject: string, html: string, agen
 
 async function sendAdminErrorEmail(summary: string) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
-  const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") || Deno.env.get("RESEND_FROM_EMAIL");
-  const fromName = Deno.env.get("SENDGRID_FROM_NAME") || Deno.env.get("RESEND_FROM_NAME") || "Newsletter";
+  const fromEmail = Deno.env.get("RESEND_FROM_EMAIL");
+  const fromName = Deno.env.get("RESEND_FROM_NAME") || "Newsletter";
   const adminEmail = Deno.env.get("ADMIN_EMAIL");
 
   if (!apiKey || !fromEmail || !adminEmail) {
@@ -641,7 +645,7 @@ async function sendAdminErrorEmail(summary: string) {
   }
 
   try {
-    const resend = new (await import("npm:resend@4.0.0")).Resend(apiKey);
+    const resend = new Resend(apiKey);
     
     await resend.emails.send({
       from: `${fromName} <${fromEmail}>`,
@@ -796,7 +800,8 @@ async function processAgent(
       const baseSubject = `${zip} Monthly Real Estate Newsletter – ${new Date().toLocaleDateString()}`;
       const subject = opts.dryRun ? `[TEST] ${baseSubject}` : baseSubject;
       
-      const batches = chunkArray(recipients, 100);
+      // Send emails in batches (Resend handles this internally, but we chunk for rate limiting)
+      const batches = chunkArray(recipients, 50); // Smaller batches for better rate limiting
       for (const batch of batches) {
         const res = await sendEmailBatch(batch, subject, cache.html, agentProfile);
         if (res.error) {
