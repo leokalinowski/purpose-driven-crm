@@ -786,6 +786,16 @@ async function processAgent(
 
   for (const zip of zips) {
     try {
+      // Enhanced debugging for zip processing
+      console.log(`Processing zip ${zip} for agent ${agentId}`);
+      console.log(`Zip processing details:`, {
+        zipCode: zip,
+        agentId,
+        agentName: agentProfile ? `${agentProfile.first_name} ${agentProfile.last_name}` : 'unknown',
+        contactFetchStep: "starting",
+        dryRun: opts.dryRun
+      });
+
       // Cache check
       let cache = await getCache(admin, zip, reportMonth);
       if (!cache) {
@@ -923,6 +933,8 @@ async function buildUnsubscribeURL(zip: string, agentId: string): Promise<string
 
 // Main handler
 serve(async (req: Request) => {
+  console.log("Newsletter function invoked");
+  
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -932,6 +944,17 @@ serve(async (req: Request) => {
       headers: corsHeaders,
     });
   }
+
+  // Environment check at startup
+  const envCheck = {
+    hasApiKey: !!Deno.env.get("RESEND_API_KEY"),
+    apiKeyPrefix: Deno.env.get("RESEND_API_KEY")?.substring(0, 5) || "none",
+    fromEmail: Deno.env.get("FROM_EMAIL") || "not set",
+    fromName: Deno.env.get("FROM_NAME") || "Newsletter",
+    supabaseUrl: !!Deno.env.get("SUPABASE_URL"),
+    serviceKey: !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+  };
+  console.log("Environment check:", envCheck);
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
