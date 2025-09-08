@@ -193,7 +193,7 @@ function buildEmailHTML(zip: string, periodMonth: string, metrics: any, agent?: 
 
   const medianSaleChange = calculateYoyChange(currentData.median_sale_price, prevData.median_sale_price);
   const medianListChange = calculateYoyChange(currentData.median_list_price, prevData.median_list_price);
-  const homessoldChange = calculateYoyChange(currentData.homes_sold, prevData.homes_sold);
+  const homesSoldChange = calculateYoyChange(currentData.homes_sold, prevData.homes_sold);
   const pricePerSqftChange = calculateYoyChange(currentData.avg_price_per_sqft, prevData.avg_price_per_sqft);
 
   // Market heat calculation
@@ -245,7 +245,7 @@ ${transactions.length > 0 ? `Activity in ${zip} continues with a mix of property
 
 **Median Days on Market:** ${currentData.median_dom || 'N/A'} days.
 
-**Takeaway for Homeowners:** ${currentData.homes_sold && homessoldChange.value < -10 ? 'Sales volume is down, but quality properties are still moving—emphasize unique features to stand out.' : 'Active transaction volume suggests healthy buyer interest in the area.'}` : 'Transaction data is currently being compiled for this area.'}
+**Takeaway for Homeowners:** ${currentData.homes_sold && homesSoldChange.value < -10 ? 'Sales volume is down, but quality properties are still moving—emphasize unique features to stand out.' : 'Active transaction volume suggests healthy buyer interest in the area.'}` : 'Transaction data is currently being compiled for this area.'}
 
 ### Inventory Metrics
 Inventory levels provide insight into market balance and negotiation leverage.
@@ -286,46 +286,6 @@ ${unsubscribeLine}
 }
 
 // Generate fallback email content when market data is unavailable
-function generateFallbackEmailContent(zip: string, month: string, agentName: string, agentEmail: string, unsubscribeURL?: string) {
-  const unsubscribeLine = unsubscribeURL
-    ? `<p style="margin:16px 0 0 0; font-size:12px; color:#64748b;">To stop receiving these updates, <a href="${unsubscribeURL}">unsubscribe here</a>.</p>`
-    : "";
-  
-  return `
-    <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-      <h1 style="color: #2563eb; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px;">
-        ${month} Real Estate Update for ${zip}
-      </h1>
-      
-      <p>Dear Valued Client,</p>
-      
-      <p>I hope this message finds you well. I'm reaching out with your monthly real estate market update for ZIP code ${zip}.</p>
-      
-      <p><strong>Market Data Update:</strong><br>
-      We're currently compiling the latest market data for your area. While we gather this information, I wanted to ensure you know that I'm actively monitoring market conditions in ${zip} to provide you with the most accurate insights.</p>
-      
-      <p><strong>What This Means for You:</strong><br>
-      • Market conditions continue to evolve in your area<br>
-      • I'm tracking new listings, sales activity, and price trends<br>
-      • Your property value and investment remain important priorities</p>
-      
-      <p>If you have any questions about your property, the local market, or are considering buying or selling, please don't hesitate to reach out. I'm here to help you make informed decisions about your real estate needs.</p>
-      
-      <p>Best regards,<br>
-      <strong>${agentName}</strong><br>
-      ${agentEmail ? `<a href="mailto:${agentEmail}">${agentEmail}</a>` : 'Your Real Estate Professional'}
-      </p>
-      
-      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-      <p style="font-size: 12px; color: #64748b;">
-        This market update is provided as a service to keep you informed about real estate trends in your area.
-      </p>
-      ${unsubscribeLine}
-    </div>
-  `;
-}
-
-// Fallback content generator for when market data is missing
 function generateFallbackEmailContent(zip: string, month: string, agentName: string, agentEmail: string, unsubscribeURL?: string): string {
   const unsubscribeLine = unsubscribeURL
     ? `<p style="margin:16px 0 0 0; font-size:12px; color:#64748b;">To stop receiving these updates, <a href="${unsubscribeURL}">unsubscribe here</a>.</p>`
