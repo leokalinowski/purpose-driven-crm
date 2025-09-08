@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient, User } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { Resend } from 'npm:resend@4.0.0';
+import { Resend } from 'npm:resend@3.2.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -568,25 +568,28 @@ async function createAgentRun(supabase: SupabaseClient, agentId: string, reportM
   }
 }
 
-// Email sending
+// Email sending function with proper Resend implementation
 async function sendEmailBatch(recipients: string[], subject: string, html: string, agent?: AgentProfile | null) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
-  const fromEmail = Deno.env.get("RESEND_FROM_EMAIL");
+  let fromEmail = Deno.env.get("RESEND_FROM_EMAIL");
   const fromName = Deno.env.get("RESEND_FROM_NAME") || "Newsletter";
+
+  // Fallback to Resend's test domain if no from email is configured
+  if (!fromEmail) {
+    fromEmail = "onboarding@resend.dev";
+    console.log("Using Resend test domain as fallback");
+  }
 
   console.log("Email config check:", { 
     hasApiKey: !!apiKey, 
-    hasFromEmail: !!fromEmail, 
+    fromEmail,
     fromName,
     recipientCount: recipients.length 
   });
 
-  if (!apiKey || !fromEmail) {
-    console.error("Resend configuration missing", { 
-      hasResendKey: !!apiKey,
-      hasFromEmail: !!fromEmail,
-    });
-    return { sent: 0, error: "missing_resend_config" };
+  if (!apiKey) {
+    console.error("RESEND_API_KEY is required");
+    return { sent: 0, error: "missing_api_key" };
   }
 
   if (!html || html.trim().length === 0) {
@@ -599,60 +602,110 @@ async function sendEmailBatch(recipients: string[], subject: string, html: strin
     return { sent: 0, error: "no_recipients" };
   }
 
+  // Validate email addresses
+  const validRecipients = recipients.filter(email => {
+    const isValid = email && email.includes('@') && email.includes('.');
+    if (!isValid) {
+      console.warn(`Invalid email address: ${email}`);
+    }
+    return isValid;
+  });
+
+  if (!validRecipients.length) {
+    console.error("No valid email addresses found");
+    return { sent: 0, error: "no_valid_emails" };
+  }
+
+  console.log(`Sending ${validRecipients.length} emails via Resend:`, { 
+    from: `${fromName} <${fromEmail}>`, 
+    subject: subject.substring(0, 50) + "...",
+    htmlLength: html.length
+  });
+
+  let sentCount = 0;
+  const errors: string[] = [];
+  
   try {
     const resend = new Resend(apiKey);
     
-    console.log("Sending emails via Resend batch:", { 
-      from: `${fromName} <${fromEmail}>`, 
-      recipientCount: recipients.length, 
-      subject: subject.substring(0, 50) + "...",
-      htmlLength: html.length
-    });
+    // Send emails individually (Resend's recommended approach)
+    for (let i = 0; i < validRecipients.length; i++) {
+      const email = validRecipients[i];
+      
+      try {
+        const result = await resend.emails.send({
+          from: `${fromName} <${fromEmail}>`,
+          to: [email],
+          subject,
+          html,
+        });
 
-    // Use Resend's batch.send() for multiple recipients
-    const emails = recipients.map(email => ({
-      from: `${fromName} <${fromEmail}>`,
-      to: [email],
-      subject,
-      html,
-    }));
+        if (result.error) {
+          console.error(`Failed to send email to ${email}:`, result.error);
+          errors.push(`${email}: ${result.error.message}`);
+        } else {
+          console.log(`Email sent successfully to ${email}:`, result.data?.id);
+          sentCount++;
+        }
+      } catch (emailError) {
+        console.error(`Exception sending email to ${email}:`, emailError);
+        errors.push(`${email}: ${String(emailError)}`);
+      }
 
-    const result = await resend.batch.send(emails);
-
-    if (result.error) {
-      console.error("Resend batch send failed", result.error);
-      return { sent: 0, error: `resend_error: ${result.error.message}` };
+      // Add delay between sends to respect rate limits (Resend allows 10/sec for free tier)
+      if (i < validRecipients.length - 1) {
+        await sleep(150); // 150ms delay = ~6.7 emails per second
+      }
     }
 
-    console.log("Batch emails sent successfully via Resend:", result.data?.map(d => d.id));
-    return { sent: recipients.length };
+    console.log(`Email batch complete: ${sentCount}/${validRecipients.length} sent successfully`);
+    
+    if (errors.length > 0) {
+      console.error(`Email errors (${errors.length}):`, errors.slice(0, 5)); // Log first 5 errors
+    }
+
+    return { 
+      sent: sentCount, 
+      error: errors.length > 0 ? `partial_failure: ${errors.length} errors` : undefined 
+    };
 
   } catch (error) {
     console.error("Email sending error:", error);
-    return { sent: 0, error: `resend_exception: ${String(error)}` };
+    return { sent: sentCount, error: `resend_exception: ${String(error)}` };
   }
 }
 
 async function sendAdminErrorEmail(summary: string) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
-  const fromEmail = Deno.env.get("RESEND_FROM_EMAIL");
+  let fromEmail = Deno.env.get("RESEND_FROM_EMAIL");
   const fromName = Deno.env.get("RESEND_FROM_NAME") || "Newsletter";
   const adminEmail = Deno.env.get("ADMIN_EMAIL");
 
-  if (!apiKey || !fromEmail || !adminEmail) {
-    console.error("Cannot send admin error email; missing RESEND config or ADMIN_EMAIL");
+  // Fallback to Resend's test domain if no from email is configured
+  if (!fromEmail) {
+    fromEmail = "onboarding@resend.dev";
+  }
+
+  if (!apiKey || !adminEmail) {
+    console.error("Cannot send admin error email; missing RESEND_API_KEY or ADMIN_EMAIL");
     return;
   }
 
   try {
     const resend = new Resend(apiKey);
     
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: `${fromName} <${fromEmail}>`,
       to: [adminEmail],
       subject: "Newsletter Monthly Errors",
       html: `<h2>Newsletter Monthly Errors</h2><pre>${summary}</pre>`,
     });
+
+    if (result.error) {
+      console.error("Failed to send admin error email:", result.error);
+    } else {
+      console.log("Admin error email sent successfully:", result.data?.id);
+    }
   } catch (error) {
     console.error("Failed to send admin error email:", error);
   }
