@@ -60,48 +60,6 @@ All colors MUST be HSL.
     --chart-3: 180 60% 45%;
   }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 180 100% 35%;
-    --primary-foreground: 240 10% 3.9%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 180 100% 80%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 180 100% 70%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 180 100% 20%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 180 100% 35%;
-    --sidebar-primary-foreground: 240 10% 3.9%;
-    --sidebar-accent: 180 100% 25%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 180 100% 25%;
-    --sidebar-ring: 180 100% 40%;
-
-    /* Chart colors */
-    --chart-1: 180 100% 35%;
-    --chart-2: 180 80% 45%;
-    --chart-3: 180 60% 55%;
-  }
 }
 
 @layer base {

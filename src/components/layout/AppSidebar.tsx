@@ -27,7 +27,7 @@ import {
   SidebarHeader,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
+
 import { useAuth } from '@/hooks/useAuth';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -37,7 +37,6 @@ const menuItems = [
   { title: 'SphereSync', url: '/spheresync-tasks', icon: Phone },
   { title: 'Database', url: '/database', icon: Users },
   { title: 'Events', url: '/events', icon: Calendar },
-  { title: 'Pipeline', url: '/pipeline', icon: TrendingUp },
   { title: 'E-Newsletter', url: '/newsletter', icon: Mail },
   { title: 'Social Media', url: '/social-scheduler', icon: Share },
   { title: 'Success Scoreboard', url: '/coaching', icon: TrendingUp },
@@ -148,10 +147,7 @@ export function AppSidebar() {
         )}
       </SidebarContent>
       
-      <SidebarFooter className="p-4 space-y-2">
-        <div className="flex justify-center">
-          <ThemeToggle />
-        </div>
+      <SidebarFooter className="p-4">
         <Button
           variant="secondary"
           onClick={handleSignOut}
