@@ -10,7 +10,10 @@ verify_jwt = false
 [functions.test-email]
 verify_jwt = false
 
-[functions.newsletter-monthly]
+[functions.newsletter-send]
+verify_jwt = false
+
+[functions.market-data-grok]
 verify_jwt = false
 
 [functions.spheresync-email-function]
@@ -39,6 +42,3 @@ verify_jwt = true
 
 [functions.social-analytics]
 verify_jwt = true
-
-[functions.fetch-market-data-grok]
-verify_jwt = false

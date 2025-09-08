@@ -128,10 +128,9 @@ export function useAdminNewsletter() {
   // Manual trigger mutation
   const triggerNewsletterMutation = useMutation({
     mutationFn: async ({ agentId }: { agentId: string }) => {
-      const { data, error } = await supabase.functions.invoke('newsletter-monthly', {
+      const { data, error } = await supabase.functions.invoke('newsletter-send', {
         body: {
-          mode: 'user',
-          user_id: agentId,
+          agent_id: agentId,
           dry_run: isDryRun,
         },
       });
