@@ -17,6 +17,27 @@ export interface Transaction {
   status: string;
   created_at: string;
   updated_at: string;
+  
+  // Enhanced fields from Phase 1
+  listing_agent_id?: string | null;
+  buyer_agent_id?: string | null;
+  property_type?: string | null;
+  square_footage?: number | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  listing_date?: string | null;
+  days_on_market?: number | null;
+  price_per_sqft?: number | null;
+  commission_rate?: number | null;
+  brokerage_split?: number | null;
+  transaction_type?: string | null;
+  lead_source?: string | null;
+  referral_source?: string | null;
+  milestone_dates?: any;
+  risk_factors?: string[];
+  raw_api_data?: any;
+  last_synced_at?: string | null;
+  sync_errors?: string[];
 }
 
 export interface TransactionMetrics {
@@ -31,6 +52,15 @@ export interface TransactionMetrics {
   closingRate: number;
   avgDealValue: number;
   pipelineValue: number;
+  
+  // Enhanced metrics from Phase 1
+  avgDaysOnMarket: number;
+  avgPricePerSqft: number;
+  avgCommissionRate: number;
+  propertyTypeBreakdown: Record<string, number>;
+  leadSourceBreakdown: Record<string, number>;
+  riskFactorCount: number;
+  dealVelocity: number; // avg days from contract to close
 }
 
 export function useTransactions() {
@@ -49,6 +79,13 @@ export function useTransactions() {
     closingRate: 0,
     avgDealValue: 0,
     pipelineValue: 0,
+    avgDaysOnMarket: 0,
+    avgPricePerSqft: 0,
+    avgCommissionRate: 0,
+    propertyTypeBreakdown: {},
+    leadSourceBreakdown: {},
+    riskFactorCount: 0,
+    dealVelocity: 0,
   });
   const [loading, setLoading] = useState(false);
 
@@ -152,7 +189,47 @@ export function useTransactions() {
     // Average deal value (based on closed transactions only)
     const avgDealValue = closedCount > 0 ? totalSalesYear / closedCount : 0;
 
-    console.log('Metrics calculated:', {
+    // Enhanced metrics calculations
+    const avgDaysOnMarket = closedTransactions.length > 0 
+      ? closedTransactions.reduce((sum, t) => sum + (t.days_on_market || 0), 0) / closedTransactions.length 
+      : 0;
+
+    const avgPricePerSqft = closedTransactions
+      .filter(t => t.price_per_sqft && t.price_per_sqft > 0)
+      .reduce((sum, t, _, arr) => sum + (t.price_per_sqft! / arr.length), 0);
+
+    const avgCommissionRate = closedTransactions
+      .filter(t => t.commission_rate && t.commission_rate > 0)
+      .reduce((sum, t, _, arr) => sum + (t.commission_rate! / arr.length), 0);
+
+    // Property type breakdown
+    const propertyTypeBreakdown = data.reduce((acc: Record<string, number>, t) => {
+      const type = t.property_type || 'Unknown';
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Lead source breakdown
+    const leadSourceBreakdown = data.reduce((acc: Record<string, number>, t) => {
+      const source = t.lead_source || 'Unknown';
+      acc[source] = (acc[source] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Risk factor count
+    const riskFactorCount = data.reduce((sum, t) => sum + (t.risk_factors?.length || 0), 0);
+
+    // Deal velocity (avg days from contract to close)
+    const dealVelocity = closedTransactions
+      .filter(t => t.contract_date && t.closing_date)
+      .reduce((sum, t, _, arr) => {
+        const contractDate = new Date(t.contract_date!);
+        const closeDate = new Date(t.closing_date!);
+        const days = Math.max(0, (closeDate.getTime() - contractDate.getTime()) / (1000 * 60 * 60 * 24));
+        return sum + (days / arr.length);
+      }, 0);
+
+    console.log('Enhanced metrics calculated:', {
       totalSalesYear,
       totalSalesMonth,
       monthlyChange,
@@ -164,6 +241,13 @@ export function useTransactions() {
       closingRate,
       avgDealValue,
       pipelineValue,
+      avgDaysOnMarket,
+      avgPricePerSqft,
+      avgCommissionRate,
+      propertyTypeBreakdown,
+      leadSourceBreakdown,
+      riskFactorCount,
+      dealVelocity,
     });
 
     setMetrics({
@@ -178,6 +262,13 @@ export function useTransactions() {
       closingRate,
       avgDealValue,
       pipelineValue,
+      avgDaysOnMarket,
+      avgPricePerSqft,
+      avgCommissionRate,
+      propertyTypeBreakdown,
+      leadSourceBreakdown,
+      riskFactorCount,
+      dealVelocity,
     });
   };
 

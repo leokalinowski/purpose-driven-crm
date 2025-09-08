@@ -1332,51 +1332,108 @@ export type Database = {
       }
       transaction_coordination: {
         Row: {
+          bathrooms: number | null
+          bedrooms: number | null
+          brokerage_split: number | null
+          buyer_agent_id: string | null
           client_name: string | null
           closing_date: string | null
+          commission_rate: number | null
           contract_date: string | null
           created_at: string
+          days_on_market: number | null
           gci: number | null
           id: string
+          last_synced_at: string | null
           lead_id: number | null
+          lead_source: string | null
+          listing_agent_id: string | null
+          listing_date: string | null
+          milestone_dates: Json | null
           otc_deal_id: string | null
+          price_per_sqft: number | null
           property_address: string | null
+          property_type: string | null
+          raw_api_data: Json | null
+          referral_source: string | null
           responsible_agent: string | null
+          risk_factors: string[] | null
           sale_price: number | null
+          square_footage: number | null
           status: string | null
+          sync_errors: string[] | null
           transaction_stage: string
+          transaction_type: string | null
           updated_at: string
         }
         Insert: {
+          bathrooms?: number | null
+          bedrooms?: number | null
+          brokerage_split?: number | null
+          buyer_agent_id?: string | null
           client_name?: string | null
           closing_date?: string | null
+          commission_rate?: number | null
           contract_date?: string | null
           created_at?: string
+          days_on_market?: number | null
           gci?: number | null
           id?: string
+          last_synced_at?: string | null
           lead_id?: number | null
+          lead_source?: string | null
+          listing_agent_id?: string | null
+          listing_date?: string | null
+          milestone_dates?: Json | null
           otc_deal_id?: string | null
+          price_per_sqft?: number | null
           property_address?: string | null
+          property_type?: string | null
+          raw_api_data?: Json | null
+          referral_source?: string | null
           responsible_agent?: string | null
+          risk_factors?: string[] | null
           sale_price?: number | null
+          square_footage?: number | null
           status?: string | null
+          sync_errors?: string[] | null
           transaction_stage?: string
+          transaction_type?: string | null
           updated_at?: string
         }
         Update: {
+          bathrooms?: number | null
+          bedrooms?: number | null
+          brokerage_split?: number | null
+          buyer_agent_id?: string | null
           client_name?: string | null
           closing_date?: string | null
+          commission_rate?: number | null
           contract_date?: string | null
           created_at?: string
+          days_on_market?: number | null
           gci?: number | null
           id?: string
+          last_synced_at?: string | null
           lead_id?: number | null
+          lead_source?: string | null
+          listing_agent_id?: string | null
+          listing_date?: string | null
+          milestone_dates?: Json | null
           otc_deal_id?: string | null
+          price_per_sqft?: number | null
           property_address?: string | null
+          property_type?: string | null
+          raw_api_data?: Json | null
+          referral_source?: string | null
           responsible_agent?: string | null
+          risk_factors?: string[] | null
           sale_price?: number | null
+          square_footage?: number | null
           status?: string | null
+          sync_errors?: string[] | null
           transaction_stage?: string
+          transaction_type?: string | null
           updated_at?: string
         }
         Relationships: [

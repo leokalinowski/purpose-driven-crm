@@ -1,10 +1,12 @@
 import { Helmet } from "react-helmet-async";
 import { Layout } from "@/components/layout/Layout";
 import { TransactionMetrics } from "@/components/transactions/TransactionMetrics";
+import { EnhancedTransactionMetrics } from "@/components/transactions/EnhancedTransactionMetrics";
 import { TransactionTable } from "@/components/transactions/TransactionTable";
 import { TransactionCharts } from "@/components/transactions/TransactionCharts";
 import { SyncButton } from "@/components/transactions/SyncButton";
 import { useTransactions } from "@/hooks/useTransactions";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Transactions() {
   const { transactions, metrics, loading, syncWithOpenToClose } = useTransactions();
@@ -28,11 +30,24 @@ export default function Transactions() {
             <SyncButton onSync={syncWithOpenToClose} loading={loading} />
           </div>
 
-          <TransactionMetrics metrics={metrics} loading={loading} />
-          
-          <TransactionCharts transactions={transactions} loading={loading} />
-          
-          <TransactionTable transactions={transactions} loading={loading} />
+          <Tabs defaultValue="enhanced" className="space-y-6">
+            <TabsList>
+              <TabsTrigger value="enhanced">Enhanced Analytics</TabsTrigger>
+              <TabsTrigger value="basic">Basic Metrics</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="enhanced" className="space-y-6">
+              <EnhancedTransactionMetrics metrics={metrics} loading={loading} />
+              <TransactionCharts transactions={transactions} loading={loading} />
+              <TransactionTable transactions={transactions} loading={loading} />
+            </TabsContent>
+            
+            <TabsContent value="basic" className="space-y-6">
+              <TransactionMetrics metrics={metrics} loading={loading} />
+              <TransactionCharts transactions={transactions} loading={loading} />
+              <TransactionTable transactions={transactions} loading={loading} />
+            </TabsContent>
+          </Tabs>
         </div>
       </Layout>
     </>

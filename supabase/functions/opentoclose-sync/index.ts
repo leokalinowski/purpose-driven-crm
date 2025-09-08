@@ -126,7 +126,7 @@ serve(async (req) => {
         // Log deal structure for debugging
         console.log('Processing deal:', JSON.stringify(deal, null, 2))
         
-        // Transform OTC data to our transaction format
+        // Transform OTC data to our enhanced transaction format
         const transactionData = {
           responsible_agent: agentId,
           otc_deal_id: deal.id || deal.deal_id || deal._id,
@@ -146,6 +146,51 @@ serve(async (req) => {
                         deal.under_contract_date || deal.agreement_date,
           closing_date: deal.closing_date || deal.settlement_date || deal.close_date ||
                        deal.scheduled_closing_date || deal.actual_closing_date,
+          
+          // Enhanced data collection
+          listing_agent_id: deal.listing_agent?.id || deal.listing_agent_id,
+          buyer_agent_id: deal.buyer_agent?.id || deal.buying_agent?.id || deal.buyer_agent_id,
+          property_type: deal.property_type || deal.property?.type || deal.listing?.property_type,
+          square_footage: parseInt(deal.square_footage || deal.property?.square_feet || deal.sqft || 0) || null,
+          bedrooms: parseInt(deal.bedrooms || deal.property?.bedrooms || deal.beds || 0) || null,
+          bathrooms: parseFloat(deal.bathrooms || deal.property?.bathrooms || deal.baths || 0) || null,
+          listing_date: deal.listing_date || deal.list_date || deal.date_listed,
+          days_on_market: parseInt(deal.days_on_market || deal.dom || 0) || null,
+          price_per_sqft: deal.price_per_sqft || deal.price_per_square_foot || 
+                         (deal.sale_price && deal.square_footage ? 
+                          parseFloat(deal.sale_price) / parseInt(deal.square_footage) : null),
+          commission_rate: parseFloat(deal.commission_rate || deal.commission_percentage || 0) || null,
+          brokerage_split: parseFloat(deal.brokerage_split || deal.split_percentage || 0) || null,
+          transaction_type: deal.transaction_type || deal.side || 
+                           (deal.listing_agent?.id === agentId ? 'sell' : 
+                            deal.buyer_agent?.id === agentId ? 'buy' : 'both'),
+          lead_source: deal.lead_source || deal.source || deal.referral_source,
+          referral_source: deal.referral_source || deal.referred_by,
+          
+          // Milestone tracking
+          milestone_dates: {
+            inspection_date: deal.inspection_date,
+            appraisal_date: deal.appraisal_date,
+            financing_contingency_date: deal.financing_contingency_date,
+            title_search_date: deal.title_search_date,
+            final_walkthrough_date: deal.final_walkthrough_date,
+            settlement_date: deal.settlement_date || deal.closing_date,
+            ...(deal.milestone_dates || {})
+          },
+          
+          // Risk factors
+          risk_factors: [
+            ...(deal.financing_contingency ? ['financing_contingency'] : []),
+            ...(deal.inspection_contingency ? ['inspection_contingency'] : []),
+            ...(deal.appraisal_contingency ? ['appraisal_contingency'] : []),
+            ...(deal.sale_of_home_contingency ? ['sale_of_home_contingency'] : []),
+            ...(deal.risk_factors || [])
+          ],
+          
+          // Store raw API data for debugging and future enhancements
+          raw_api_data: deal,
+          last_synced_at: new Date().toISOString(),
+          sync_errors: [], // Reset errors on successful sync
           updated_at: new Date().toISOString(),
         }
         
