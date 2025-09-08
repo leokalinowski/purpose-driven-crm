@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -8,11 +8,15 @@ import { TeamManagementWidget } from '@/components/admin/TeamManagementWidget';
 import { CompanyAnalyticsCharts } from '@/components/admin/CompanyAnalyticsCharts';
 import { AgentPerformanceTable } from '@/components/admin/AgentPerformanceTable';
 import { RefreshButton } from '@/components/admin/RefreshButton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AgentSelector } from '@/components/admin/AgentSelector';
+import { AgentSpecificDashboard } from '@/components/admin/AgentSpecificDashboard';
 
 const AdminDashboard = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -51,25 +55,43 @@ const AdminDashboard = () => {
           <RefreshButton />
         </div>
 
-        {/* Company-wide KPI cards */}
-        <div>
-          <CompanyMetricsCards />
-        </div>
+        <Tabs defaultValue="company" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="company">Company Overview</TabsTrigger>
+            <TabsTrigger value="agent">Agent Performance</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="company" className="space-y-6">
+            {/* Company-wide KPI cards */}
+            <CompanyMetricsCards />
 
-        {/* Team management insights */}
-        <div>
-          <TeamManagementWidget />
-        </div>
+            {/* Team management insights */}
+            <TeamManagementWidget />
 
-        {/* Advanced analytics charts */}
-        <div>
-          <CompanyAnalyticsCharts />
-        </div>
+            {/* Advanced analytics charts */}
+            <CompanyAnalyticsCharts />
 
-        {/* Detailed agent performance table */}
-        <div>
-          <AgentPerformanceTable />
-        </div>
+            {/* Detailed agent performance table */}
+            <AgentPerformanceTable />
+          </TabsContent>
+          
+          <TabsContent value="agent" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight">Individual Agent Performance</h2>
+                <p className="text-muted-foreground">
+                  Deep dive into specific agent metrics and performance trends.
+                </p>
+              </div>
+              <AgentSelector 
+                selectedAgentId={selectedAgentId}
+                onAgentSelect={setSelectedAgentId}
+              />
+            </div>
+            
+            <AgentSpecificDashboard selectedAgentId={selectedAgentId} />
+          </TabsContent>
+        </Tabs>
       </div>
     </Layout>
   );
