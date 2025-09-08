@@ -10,6 +10,7 @@ const corsHeaders = {
 
 interface RequestBody {
   dryRun?: boolean;
+  dry_run?: boolean; // Support both camelCase and snake_case
   mode?: 'user' | 'global'; // unused but kept for compatibility
   user_id?: string; // unused but kept for compatibility
 }
@@ -949,8 +950,8 @@ serve(async (req: Request) => {
   const envCheck = {
     hasApiKey: !!Deno.env.get("RESEND_API_KEY"),
     apiKeyPrefix: Deno.env.get("RESEND_API_KEY")?.substring(0, 5) || "none",
-    fromEmail: Deno.env.get("FROM_EMAIL") || "not set",
-    fromName: Deno.env.get("FROM_NAME") || "Newsletter",
+    fromEmail: Deno.env.get("RESEND_FROM_EMAIL") || "not set",
+    fromName: Deno.env.get("RESEND_FROM_NAME") || "Newsletter",
     supabaseUrl: !!Deno.env.get("SUPABASE_URL"),
     serviceKey: !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
   };
@@ -979,7 +980,8 @@ serve(async (req: Request) => {
   } catch {
     // ignore
   }
-  const dryRun = Boolean(body?.dryRun);
+  // Support both camelCase and snake_case for dry run
+  const dryRun = Boolean(body?.dryRun || body?.dry_run);
 
   console.log(`Newsletter function called:`, { 
     method: req.method, 
