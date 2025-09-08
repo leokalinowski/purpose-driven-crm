@@ -569,76 +569,88 @@ async function createAgentRun(supabase: SupabaseClient, agentId: string, reportM
 
 // Email sending
 async function sendEmailBatch(bcc: string[], subject: string, html: string, agent?: AgentProfile | null) {
-  const apiKey = Deno.env.get("SENDGRID_API_KEY");
-  const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL");
-  const fromName = Deno.env.get("SENDGRID_FROM_NAME") || "Newsletter";
+  const apiKey = Deno.env.get("RESEND_API_KEY");
+  const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") || Deno.env.get("RESEND_FROM_EMAIL");
+  const fromName = Deno.env.get("SENDGRID_FROM_NAME") || Deno.env.get("RESEND_FROM_NAME") || "Newsletter";
 
-  if (!apiKey || !fromEmail) {
-    console.error("SendGrid configuration missing (SENDGRID_API_KEY or SENDGRID_FROM_EMAIL)");
-    return { sent: 0, error: "missing_sendgrid_config" };
-  }
-
-  const toEmail = agent?.email || fromEmail;
-
-  const payload = {
-    personalizations: [
-      {
-        to: [{ email: toEmail }],
-        bcc: bcc.map((email) => ({ email })),
-        subject,
-      },
-    ],
-    from: { email: fromEmail, name: fromName },
-    content: [{ type: "text/html", value: html }],
-  };
-
-  const resp = await fetch("https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
+  console.log("Email config check:", { 
+    hasApiKey: !!apiKey, 
+    hasFromEmail: !!fromEmail, 
+    fromName,
+    bccCount: bcc.length 
   });
 
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
-    console.error("SendGrid send failed", { status: resp.status, text });
-    return { sent: 0, error: `sendgrid_${resp.status}` };
+  if (!apiKey || !fromEmail) {
+    console.error("Resend configuration missing", { 
+      hasResendKey: !!Deno.env.get("RESEND_API_KEY"),
+      hasFromEmail: !!fromEmail,
+      availableEnvVars: Object.keys(Deno.env.toObject()).filter(k => k.includes('EMAIL') || k.includes('RESEND') || k.includes('SENDGRID'))
+    });
+    return { sent: 0, error: "missing_resend_config" };
   }
 
-  return { sent: bcc.length };
+  if (!html || html.trim().length === 0) {
+    console.error("Empty email content provided");
+    return { sent: 0, error: "empty_content" };
+  }
+
+  try {
+    // Use Resend API
+    const resend = new (await import("npm:resend@4.0.0")).Resend(apiKey);
+    
+    console.log("Sending email via Resend:", { 
+      from: `${fromName} <${fromEmail}>`, 
+      bccCount: bcc.length, 
+      subject: subject.substring(0, 50) + "...",
+      htmlLength: html.length
+    });
+
+    const emailData = {
+      from: `${fromName} <${fromEmail}>`,
+      to: [agent?.email || fromEmail],
+      bcc: bcc,
+      subject,
+      html,
+    };
+
+    const result = await resend.emails.send(emailData);
+
+    if (result.error) {
+      console.error("Resend send failed", result.error);
+      return { sent: 0, error: `resend_error: ${result.error.message}` };
+    }
+
+    console.log("Email sent successfully via Resend:", result.data?.id);
+    return { sent: bcc.length };
+
+  } catch (error) {
+    console.error("Email sending error:", error);
+    return { sent: 0, error: `resend_exception: ${String(error)}` };
+  }
 }
 
 async function sendAdminErrorEmail(summary: string) {
-  const apiKey = Deno.env.get("SENDGRID_API_KEY");
-  const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL");
-  const fromName = Deno.env.get("SENDGRID_FROM_NAME") || "Newsletter";
+  const apiKey = Deno.env.get("RESEND_API_KEY");
+  const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") || Deno.env.get("RESEND_FROM_EMAIL");
+  const fromName = Deno.env.get("SENDGRID_FROM_NAME") || Deno.env.get("RESEND_FROM_NAME") || "Newsletter";
   const adminEmail = Deno.env.get("ADMIN_EMAIL");
 
   if (!apiKey || !fromEmail || !adminEmail) {
-    console.error("Cannot send admin error email; missing SENDGRID or ADMIN_EMAIL");
+    console.error("Cannot send admin error email; missing RESEND config or ADMIN_EMAIL");
     return;
   }
 
-  const payload = {
-    personalizations: [{ to: [{ email: adminEmail }], subject: "Newsletter Monthly Errors" }],
-    from: { email: fromEmail, name: fromName },
-    content: [{ type: "text/plain", value: summary }],
-  };
-
-  const resp = await fetch("https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
-    console.error("Failed to send admin error email", { status: resp.status, text });
+  try {
+    const resend = new (await import("npm:resend@4.0.0")).Resend(apiKey);
+    
+    await resend.emails.send({
+      from: `${fromName} <${fromEmail}>`,
+      to: [adminEmail],
+      subject: "Newsletter Monthly Errors",
+      html: `<h2>Newsletter Monthly Errors</h2><pre>${summary}</pre>`,
+    });
+  } catch (error) {
+    console.error("Failed to send admin error email:", error);
   }
 }
 
