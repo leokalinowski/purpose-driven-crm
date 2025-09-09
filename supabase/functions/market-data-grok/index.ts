@@ -34,7 +34,7 @@ interface ErrorResponse {
   retryable: boolean;
 }
 
-const GROK_MODELS = ['grok-code-fast-1', 'grok-2-1212', 'grok-beta', 'grok-2'];
+const GROK_MODELS = ['grok-code-fast-1', 'grok-3-mini', 'grok-beta', 'grok-2'];
 
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
