@@ -127,50 +127,48 @@ function generateStandardFooter(agent: AgentProfile): string {
   const agentEmail = agent.email || '';
   
   return `
-    <div style="margin-top: 30px; padding: 20px; border-top: 2px solid #e5e5e5; background-color: #f9f9f9; font-family: Arial, sans-serif;">
-      <table style="width: 100%; max-width: 600px;">
-        <tr>
-          <td style="text-align: center;">
-            <h3 style="color: #2c3e50; margin: 0 0 15px 0; font-size: 20px;">Ready to Make Your Next Move?</h3>
-            <p style="color: #34495e; margin: 0 0 20px 0; font-size: 16px;">
-              As your local real estate expert, I'm here to help with all your property needs.
-            </p>
-          </td>
-        </tr>
-        <tr>
-          <td style="text-align: center; padding: 20px; background-color: white; border-radius: 8px;">
-            <div style="margin-bottom: 15px;">
-              <strong style="color: #2c3e50; font-size: 18px; display: block;">${agentName}</strong>
-              <span style="color: #7f8c8d; font-size: 14px;">Licensed Real Estate Agent</span>
-            </div>
-            <div style="margin: 15px 0;">
-              <p style="margin: 5px 0; color: #34495e;">
-                📧 <a href="mailto:${agentEmail}" style="color: #3498db; text-decoration: none;">${agentEmail}</a>
-              </p>
-            </div>
-            <div style="margin-top: 20px; padding: 15px; background-color: #3498db; border-radius: 5px;">
-              <p style="margin: 0; color: white; font-weight: bold; font-size: 16px;">
-                📞 Call me today for a free market analysis of your property!
-              </p>
-            </div>
-          </td>
-        </tr>
-        <tr>
-          <td style="text-align: center; padding-top: 20px;">
-            <div style="font-size: 12px; color: #95a5a6; line-height: 1.4;">
-              <p style="margin: 5px 0;">
-                This email was sent by ${agentName}. You are receiving this because you are a valued client.
-              </p>
-              <p style="margin: 5px 0;">
-                To unsubscribe from future market updates, please reply with "UNSUBSCRIBE" in the subject line.
-              </p>
-              <p style="margin: 5px 0;">
-                © ${new Date().getFullYear()} ${agentName}. All rights reserved.
-              </p>
-            </div>
-          </td>
-        </tr>
-      </table>
+    <div style="padding: 30px 20px; margin-top: 30px; border-top: 1px solid #e5e5e5; font-family: Arial, sans-serif;">
+      <div style="text-align: center; max-width: 600px; margin: 0 auto;">
+        <p style="color: #333; margin: 0 0 5px 0; font-size: 16px; font-weight: bold;">
+          ${agentName} - REALTOR®
+        </p>
+        <p style="color: #666; margin: 0 0 15px 0; font-size: 14px; line-height: 1.4;">
+          Blue Jay Properties Group | Keller Williams Capital Properties<br>
+          1 Church St, Suite 101 Rockville MD 20850<br>
+          Associate Broker Licensed in MD and DC<br>
+          Salesperson Licensed in VA
+        </p>
+        
+        <p style="color: #333; margin: 3px 0; font-size: 14px;">
+          📱 Cell/Text: <a href="tel:3014045803" style="color: #333; text-decoration: none;">301.404.5803</a>
+        </p>
+        <p style="color: #333; margin: 3px 0; font-size: 14px;">
+          ☎️ Office: <a href="tel:3012511221" style="color: #333; text-decoration: none;">301.251.1221</a>
+        </p>
+        <p style="color: #333; margin: 3px 0; font-size: 14px;">
+          📧 <a href="mailto:${agentEmail}" style="color: #333; text-decoration: none;">${agentEmail}</a>
+        </p>
+        <p style="color: #333; margin: 3px 0; font-size: 14px;">
+          🌐 <a href="https://www.bjpg.kw.com" style="color: #333; text-decoration: none;">www.bjpg.kw.com</a>
+        </p>
+        
+        <p style="color: #333; margin: 15px 0 5px 0; font-size: 14px;">
+          <a href="https://www.bjpg.kw.com/download-app" style="color: #333; text-decoration: none;">Download My Mobile App Click Here</a>
+        </p>
+        
+        <div style="font-size: 12px; color: #999; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+          <p style="margin: 3px 0;">
+            This email was sent because you are a valued contact in our database.
+          </p>
+          <p style="margin: 3px 0;">
+            If you no longer wish to receive these market updates, you can 
+            <a href="mailto:${agentEmail}?subject=Unsubscribe%20Request" style="color: #999;">unsubscribe here</a>.
+          </p>
+          <p style="margin: 3px 0;">
+            © ${new Date().getFullYear()} ${agentName}. All rights reserved.
+          </p>
+        </div>
+      </div>
     </div>
   `;
 }
