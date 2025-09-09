@@ -160,7 +160,7 @@ function generateStandardFooter(agent: AgentProfile): string {
       ${agentEmail ? `<p style="color: #333; margin: 3px 0; font-size: 14px;">📧 <a href="mailto:${agentEmail}" style="color: #333; text-decoration: none;">${agentEmail}</a></p>` : ''}
       ${website ? `<p style="color: #333; margin: 3px 0; font-size: 14px;">🌐 <a href="${website.startsWith('http') ? website : 'https://' + website}" style="color: #333; text-decoration: none;">${website}</a></p>` : ''}
       
-      ${website ? `<p style="color: #333; margin: 15px 0 5px 0; font-size: 14px;"><a href="${website.startsWith('http') ? website : 'https://' + website}/download-app" style="color: #333; text-decoration: none;">Download My Mobile App Click Here</a></p>` : ''}
+      ${website ? `<p style="color: #333; margin: 15px 0 5px 0; font-size: 14px;"><a href="${website.startsWith('http') ? website : 'https://' + website}" style="color: #333; text-decoration: none;</a></p>` : ''}
       
       <div style="font-size: 12px; color: #999; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
         <p style="margin: 3px 0;">
