@@ -104,6 +104,13 @@ interface AgentProfile {
   first_name: string | null;
   last_name: string | null;
   email: string | null;
+  team_name: string | null;
+  brokerage: string | null;
+  office_address: string | null;
+  state_licenses: string[] | null;
+  phone_number: string | null;
+  office_number: string | null;
+  website: string | null;
 }
 
 interface EmailData {
@@ -125,49 +132,47 @@ interface FailureData {
 function generateStandardFooter(agent: AgentProfile): string {
   const agentName = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || 'Your Real Estate Agent';
   const agentEmail = agent.email || '';
+  const teamName = agent.team_name || '';
+  const brokerage = agent.brokerage || '';
+  const officeAddress = agent.office_address || '';
+  const stateLicenses = agent.state_licenses?.length ? agent.state_licenses.join(' and ') : '';
+  const phoneNumber = agent.phone_number || '';
+  const officeNumber = agent.office_number || '';
+  const website = agent.website || '';
+  
+  // Format licenses display
+  const licenseText = stateLicenses ? `Licensed in ${stateLicenses}` : '';
+  
+  // Format team and brokerage
+  const companyLine = [teamName, brokerage].filter(Boolean).join(' | ');
   
   return `
-    <div style="padding: 30px 20px; margin-top: 30px; border-top: 1px solid #e5e5e5; font-family: Arial, sans-serif;">
-      <div style="text-align: center; max-width: 600px; margin: 0 auto;">
-        <p style="color: #333; margin: 0 0 5px 0; font-size: 16px; font-weight: bold;">
-          ${agentName} - REALTOR®
+    <div style="padding: 30px 0; margin-top: 30px; border-top: 1px solid #e5e5e5; font-family: Arial, sans-serif; text-align: left;">
+      <p style="color: #333; margin: 0 0 5px 0; font-size: 16px; font-weight: bold;">
+        ${agentName}${agentName ? ' - REALTOR®' : 'REALTOR®'}
+      </p>
+      ${companyLine ? `<p style="color: #666; margin: 0 0 3px 0; font-size: 14px;">${companyLine}</p>` : ''}
+      ${officeAddress ? `<p style="color: #666; margin: 0 0 3px 0; font-size: 14px;">${officeAddress}</p>` : ''}
+      ${licenseText ? `<p style="color: #666; margin: 0 0 15px 0; font-size: 14px;">${licenseText}</p>` : ''}
+      
+      ${phoneNumber ? `<p style="color: #333; margin: 3px 0; font-size: 14px;">📱 Cell/Text: <a href="tel:${phoneNumber.replace(/\D/g, '')}" style="color: #333; text-decoration: none;">${phoneNumber}</a></p>` : ''}
+      ${officeNumber ? `<p style="color: #333; margin: 3px 0; font-size: 14px;">☎️ Office: <a href="tel:${officeNumber.replace(/\D/g, '')}" style="color: #333; text-decoration: none;">${officeNumber}</a></p>` : ''}
+      ${agentEmail ? `<p style="color: #333; margin: 3px 0; font-size: 14px;">📧 <a href="mailto:${agentEmail}" style="color: #333; text-decoration: none;">${agentEmail}</a></p>` : ''}
+      ${website ? `<p style="color: #333; margin: 3px 0; font-size: 14px;">🌐 <a href="${website.startsWith('http') ? website : 'https://' + website}" style="color: #333; text-decoration: none;">${website}</a></p>` : ''}
+      
+      ${website ? `<p style="color: #333; margin: 15px 0 5px 0; font-size: 14px;"><a href="${website.startsWith('http') ? website : 'https://' + website}/download-app" style="color: #333; text-decoration: none;">Download My Mobile App Click Here</a></p>` : ''}
+      
+      <div style="font-size: 12px; color: #999; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+        <p style="margin: 3px 0;">
+          This email was sent because you are a valued contact in our database.
         </p>
-        <p style="color: #666; margin: 0 0 15px 0; font-size: 14px; line-height: 1.4;">
-          Blue Jay Properties Group | Keller Williams Capital Properties<br>
-          1 Church St, Suite 101 Rockville MD 20850<br>
-          Associate Broker Licensed in MD and DC<br>
-          Salesperson Licensed in VA
+        <p style="margin: 3px 0;">
+          If you no longer wish to receive these market updates, you can 
+          <a href="mailto:${agentEmail}?subject=Unsubscribe%20Request" style="color: #999;">unsubscribe here</a>.
         </p>
-        
-        <p style="color: #333; margin: 3px 0; font-size: 14px;">
-          📱 Cell/Text: <a href="tel:3014045803" style="color: #333; text-decoration: none;">301.404.5803</a>
+        <p style="margin: 3px 0;">
+          © ${new Date().getFullYear()} ${agentName}. All rights reserved.
         </p>
-        <p style="color: #333; margin: 3px 0; font-size: 14px;">
-          ☎️ Office: <a href="tel:3012511221" style="color: #333; text-decoration: none;">301.251.1221</a>
-        </p>
-        <p style="color: #333; margin: 3px 0; font-size: 14px;">
-          📧 <a href="mailto:${agentEmail}" style="color: #333; text-decoration: none;">${agentEmail}</a>
-        </p>
-        <p style="color: #333; margin: 3px 0; font-size: 14px;">
-          🌐 <a href="https://www.bjpg.kw.com" style="color: #333; text-decoration: none;">www.bjpg.kw.com</a>
-        </p>
-        
-        <p style="color: #333; margin: 15px 0 5px 0; font-size: 14px;">
-          <a href="https://www.bjpg.kw.com/download-app" style="color: #333; text-decoration: none;">Download My Mobile App Click Here</a>
-        </p>
-        
-        <div style="font-size: 12px; color: #999; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
-          <p style="margin: 3px 0;">
-            This email was sent because you are a valued contact in our database.
-          </p>
-          <p style="margin: 3px 0;">
-            If you no longer wish to receive these market updates, you can 
-            <a href="mailto:${agentEmail}?subject=Unsubscribe%20Request" style="color: #999;">unsubscribe here</a>.
-          </p>
-          <p style="margin: 3px 0;">
-            © ${new Date().getFullYear()} ${agentName}. All rights reserved.
-          </p>
-        </div>
       </div>
     </div>
   `;
@@ -213,7 +218,7 @@ serve(async (req) => {
       // Get agent profile
       const { data: agent, error: agentError } = await supabase
         .from('profiles')
-        .select('user_id, first_name, last_name, email')
+        .select('user_id, first_name, last_name, email, team_name, brokerage, office_address, state_licenses, phone_number, office_number, website')
         .eq('user_id', agent_id)
         .single();
 
@@ -365,9 +370,12 @@ serve(async (req) => {
         for (const contact of zipContacts) {
           if (!contact.email) continue;
 
+          const agentFullName = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || 'your agent';
+          const contactFirstName = contact.first_name || 'Valued Client';
+          
           const subject = dry_run 
-            ? `[TEST] Your ${zipCode} Market Report - ${new Date().toLocaleDateString()}`
-            : `Your ${zipCode} Market Report - ${new Date().toLocaleDateString()}`;
+            ? `[TEST] ${contactFirstName}, your ${zipCode} Market Report is ready! From your agent ${agentFullName}`
+            : `${contactFirstName}, your ${zipCode} Market Report is ready! From your agent ${agentFullName}`;
           
           const toEmail = dry_run ? agent.email! : contact.email;
           const fromName = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || 'Your Real Estate Agent';

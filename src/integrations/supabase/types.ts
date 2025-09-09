@@ -1067,34 +1067,55 @@ export type Database = {
       }
       profiles: {
         Row: {
+          brokerage: string | null
           created_at: string
           email: string | null
           first_name: string | null
           id: string
           last_name: string | null
+          office_address: string | null
+          office_number: string | null
+          phone_number: string | null
           role: string
+          state_licenses: string[] | null
+          team_name: string | null
           updated_at: string
           user_id: string
+          website: string | null
         }
         Insert: {
+          brokerage?: string | null
           created_at?: string
           email?: string | null
           first_name?: string | null
           id?: string
           last_name?: string | null
+          office_address?: string | null
+          office_number?: string | null
+          phone_number?: string | null
           role?: string
+          state_licenses?: string[] | null
+          team_name?: string | null
           updated_at?: string
           user_id: string
+          website?: string | null
         }
         Update: {
+          brokerage?: string | null
           created_at?: string
           email?: string | null
           first_name?: string | null
           id?: string
           last_name?: string | null
+          office_address?: string | null
+          office_number?: string | null
+          phone_number?: string | null
           role?: string
+          state_licenses?: string[] | null
+          team_name?: string | null
           updated_at?: string
           user_id?: string
+          website?: string | null
         }
         Relationships: []
       }
