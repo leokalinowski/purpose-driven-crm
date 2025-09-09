@@ -90,8 +90,7 @@ Structure the HTML email as follows, with flexibility to customize based on disc
   - Recent Transactions: Bullet list or table of anonymized examples (e.g., "2-bed condo sold for $500K in August").
 - Analysis/Trends: 3-4 paragraphs narrating trends (e.g., YoY price changes, buyer/seller balance, economic factors like interest rates or local developments). Compare to nearby ZIPs if data shows value. Highlight any new important info (e.g., new infrastructure or market shifts).
 - Takeaways: Bullet list of 4-6 actionable insights for buyers/sellers (e.g., "With inventory rising, negotiate aggressively if buying.").
-- Call to Action: Encourage response (e.g., "Reply or schedule a call at [agent's link] for a free valuation of your home at ${address}.").
-- Footer: Sign off with agent's name and info (${agent_name}, ${agent_info}). Include unsubscribe note and privacy compliance.
+- Call to Action: End with a warm invitation to connect (e.g., "If you have any questions about your local market or are considering making a move, I'd love to help you navigate these exciting opportunities.").
 
 Ensure the email is unique based on real data and personalization, adding value like "Based on recent Redfin data, your area in ${zip_code} is seeing increased demand due to [specific trend]."`
           },

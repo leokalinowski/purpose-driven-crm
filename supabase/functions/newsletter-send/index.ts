@@ -122,6 +122,59 @@ interface FailureData {
   attempts: number;
 }
 
+function generateStandardFooter(agent: AgentProfile): string {
+  const agentName = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || 'Your Real Estate Agent';
+  const agentEmail = agent.email || '';
+  
+  return `
+    <div style="margin-top: 30px; padding: 20px; border-top: 2px solid #e5e5e5; background-color: #f9f9f9; font-family: Arial, sans-serif;">
+      <table style="width: 100%; max-width: 600px;">
+        <tr>
+          <td style="text-align: center;">
+            <h3 style="color: #2c3e50; margin: 0 0 15px 0; font-size: 20px;">Ready to Make Your Next Move?</h3>
+            <p style="color: #34495e; margin: 0 0 20px 0; font-size: 16px;">
+              As your local real estate expert, I'm here to help with all your property needs.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="text-align: center; padding: 20px; background-color: white; border-radius: 8px;">
+            <div style="margin-bottom: 15px;">
+              <strong style="color: #2c3e50; font-size: 18px; display: block;">${agentName}</strong>
+              <span style="color: #7f8c8d; font-size: 14px;">Licensed Real Estate Agent</span>
+            </div>
+            <div style="margin: 15px 0;">
+              <p style="margin: 5px 0; color: #34495e;">
+                📧 <a href="mailto:${agentEmail}" style="color: #3498db; text-decoration: none;">${agentEmail}</a>
+              </p>
+            </div>
+            <div style="margin-top: 20px; padding: 15px; background-color: #3498db; border-radius: 5px;">
+              <p style="margin: 0; color: white; font-weight: bold; font-size: 16px;">
+                📞 Call me today for a free market analysis of your property!
+              </p>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="text-align: center; padding-top: 20px;">
+            <div style="font-size: 12px; color: #95a5a6; line-height: 1.4;">
+              <p style="margin: 5px 0;">
+                This email was sent by ${agentName}. You are receiving this because you are a valued client.
+              </p>
+              <p style="margin: 5px 0;">
+                To unsubscribe from future market updates, please reply with "UNSUBSCRIBE" in the subject line.
+              </p>
+              <p style="margin: 5px 0;">
+                © ${new Date().getFullYear()} ${agentName}. All rights reserved.
+              </p>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -322,11 +375,14 @@ serve(async (req) => {
           const fromName = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || 'Your Real Estate Agent';
 
           try {
+            // Combine Grok's email content with standardized footer
+            const finalEmailHtml = emailData.html_email + generateStandardFooter(agent);
+            
             await resend.emails.send({
               from: `${fromName} <${Deno.env.get('RESEND_FROM_EMAIL')}>`,
               to: [toEmail],
               subject,
-              html: emailData.html_email,
+              html: finalEmailHtml,
             });
 
             totalEmailsSent++;
