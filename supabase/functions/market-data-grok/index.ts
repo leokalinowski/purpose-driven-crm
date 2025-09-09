@@ -92,7 +92,7 @@ Structure the HTML email as follows, with flexibility to customize based on disc
 - Takeaways: Bullet list of 4-6 actionable insights for buyers/sellers (e.g., "With inventory rising, negotiate aggressively if buying.").
 - Call to Action: End with a warm invitation to connect (e.g., "If you have any questions about your local market or are considering making a move, I'd love to help you navigate these exciting opportunities.").
 
-Ensure the email is unique based on real data and personalization, adding value like "Based on recent Redfin data, your area in ${zip_code} is seeing increased demand due to [specific trend]."`
+Ensure the email is unique based on real data and personalization, adding value like "Based on recent Zillow and Redfin data, your area in ${zip_code} is seeing increased demand due to [specific trend]."`
           },
           {
             role: 'user',
