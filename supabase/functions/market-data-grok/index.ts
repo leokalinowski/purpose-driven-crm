@@ -13,35 +13,57 @@ interface EmailRequest {
   address: string;
   agent_name: string;
   agent_info: string;
+  retry_attempt?: number;
+  model?: string;
 }
 
 interface EmailResponse {
   zip_code: string;
   html_email: string;
+  success: boolean;
+  retry_attempt?: number;
+  model_used?: string;
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+interface ErrorResponse {
+  zip_code: string;
+  success: false;
+  error: string;
+  retry_attempt: number;
+  model_used: string;
+  retryable: boolean;
+}
+
+const GROK_MODELS = ['grok-2-1212', 'grok-beta', 'grok-2'];
+
+async function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isRetryableError(error: any): boolean {
+  // Rate limit, timeout, or temporary server errors are retryable
+  const status = error.status || error.response?.status;
+  return status === 429 || status === 503 || status === 502 || status >= 500;
+}
+
+async function generateEmailWithGrok(
+  requestData: EmailRequest,
+  model: string,
+  attempt: number
+): Promise<EmailResponse | ErrorResponse> {
+  const {
+    zip_code,
+    first_name,
+    last_name,
+    email,
+    address,
+    agent_name,
+    agent_info
+  } = requestData;
+
+  console.log(`Attempt ${attempt} - Generating email for ZIP: ${zip_code}, Model: ${model}`);
 
   try {
-    const {
-      zip_code,
-      first_name,
-      last_name,
-      email,
-      address,
-      agent_name,
-      agent_info
-    }: EmailRequest = await req.json();
-
-    if (!zip_code || !first_name || !last_name || !email || !address || !agent_name || !agent_info) {
-      throw new Error('All personalization fields and ZIP code are required');
-    }
-
-    console.log(`Generating personalized market report email for ZIP: ${zip_code} and recipient: ${first_name} ${last_name}`);
-
     const grokResponse = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -49,7 +71,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'grok-2-1212',
+        model,
         messages: [
           {
             role: 'system',
@@ -83,27 +105,95 @@ Ensure the email is unique based on real data and personalization, adding value 
     });
 
     if (!grokResponse.ok) {
-      console.error('Grok API error:', grokResponse.status, grokResponse.statusText);
-      throw new Error(`Grok API error: ${grokResponse.status}`);
+      const errorText = await grokResponse.text();
+      console.error(`Grok API error (${model}):`, grokResponse.status, errorText);
+      
+      return {
+        zip_code,
+        success: false,
+        error: `Grok API error: ${grokResponse.status} - ${errorText}`,
+        retry_attempt: attempt,
+        model_used: model,
+        retryable: isRetryableError({ status: grokResponse.status })
+      };
     }
 
     const grokData = await grokResponse.json();
     const content = grokData.choices?.[0]?.message?.content;
     
     if (!content) {
-      throw new Error('No content received from Grok API');
+      return {
+        zip_code,
+        success: false,
+        error: 'No content received from Grok API',
+        retry_attempt: attempt,
+        model_used: model,
+        retryable: false
+      };
     }
 
-    // Since output is pure HTML string, no parsing needed
-    const emailData: EmailResponse = {
+    console.log(`Successfully generated email for ZIP: ${zip_code} using ${model}`);
+    
+    return {
       zip_code,
-      html_email: content
+      html_email: content,
+      success: true,
+      retry_attempt: attempt,
+      model_used: model
     };
 
-    console.log(`Successfully generated personalized email for ZIP: ${zip_code}`);
+  } catch (error) {
+    console.error(`Error generating email with ${model}:`, error);
     
-    return new Response(JSON.stringify(emailData), {
+    return {
+      zip_code,
+      success: false,
+      error: error.message,
+      retry_attempt: attempt,
+      model_used: model,
+      retryable: isRetryableError(error)
+    };
+  }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const requestData: EmailRequest = await req.json();
+    const {
+      zip_code,
+      first_name,
+      last_name,
+      email,
+      address,
+      agent_name,
+      agent_info,
+      retry_attempt = 1,
+      model
+    } = requestData;
+
+    if (!zip_code || !first_name || !last_name || !email || !address || !agent_name || !agent_info) {
+      throw new Error('All personalization fields and ZIP code are required');
+    }
+
+    // Use specified model or default sequence
+    const modelToUse = model || GROK_MODELS[0];
+    
+    // Add exponential backoff delay for retries
+    if (retry_attempt > 1) {
+      const delay_ms = Math.pow(2, retry_attempt - 1) * 1000; // 1s, 2s, 4s...
+      console.log(`Retry attempt ${retry_attempt}, waiting ${delay_ms}ms`);
+      await delay(delay_ms);
+    }
+
+    const result = await generateEmailWithGrok(requestData, modelToUse, retry_attempt);
+    
+    return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: result.success ? 200 : 500
     });
 
   } catch (error) {
