@@ -34,7 +34,7 @@ interface ErrorResponse {
   retryable: boolean;
 }
 
-const GROK_MODELS = ['grok-2-1212', 'grok-beta', 'grok-2'];
+const GROK_MODELS = ['grok-code-fast-1', 'grok-2-1212', 'grok-beta', 'grok-2'];
 
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -99,7 +99,7 @@ Ensure the email is unique based on real data and personalization, adding value 
             content: `Generate a personalized real estate market report email for ZIP code ${zip_code}. Recipient: ${first_name} ${last_name}, Email: ${email}, Address: ${address}. Agent: ${agent_name}, Agent Info: ${agent_info}. Use real-time data from Zillow, Redfin, Homes.com, and MLS—perform web searches and browse pages as needed to fetch current metrics, trends, and insights.`
           }
         ],
-        max_completion_tokens: 2000
+        max_completion_tokens: 4000
       }),
     });
 
