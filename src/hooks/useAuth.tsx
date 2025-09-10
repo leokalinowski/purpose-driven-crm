@@ -27,8 +27,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
-  signUp: async () => ({ error: null }),
-  signIn: async () => ({ error: null }),
+  signUp: async (_email: string, _password: string, _profileData?: AgentProfileData) => ({ error: null }),
+  signIn: async (_email: string, _password: string) => ({ error: null }),
   signInWithGoogle: async () => ({ error: null }),
   signOut: async () => ({ error: null }),
   loading: true,
