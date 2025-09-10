@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Phone, MessageSquare, Mail, Calendar, FileText, CheckSquare, Clock } from 'lucide-react';
+import { Plus, Phone, MessageSquare, Mail, Calendar, FileText, CheckSquare, Clock, Bot, Zap } from 'lucide-react';
 import { Contact } from '@/hooks/useContacts';
 import { useContactActivities, ContactActivity } from '@/hooks/useContactActivities';
 import { AddActivityForm } from './AddActivityForm';
@@ -15,19 +15,33 @@ interface ContactActivitiesDialogProps {
   contact: Contact;
 }
 
-const getActivityIcon = (type: ContactActivity['activity_type']) => {
-  switch (type) {
-    case 'call': return <Phone className="h-4 w-4" />;
-    case 'text': return <MessageSquare className="h-4 w-4" />;
-    case 'email': return <Mail className="h-4 w-4" />;
-    case 'meeting': return <Calendar className="h-4 w-4" />;
-    case 'note': return <FileText className="h-4 w-4" />;
-    case 'task': return <CheckSquare className="h-4 w-4" />;
-    default: return <FileText className="h-4 w-4" />;
-  }
+const getActivityIcon = (type: ContactActivity['activity_type'], isSystemGenerated?: boolean) => {
+  const Icon = isSystemGenerated ? Bot : (() => {
+    switch (type) {
+      case 'call': return Phone;
+      case 'text': return MessageSquare;
+      case 'email': return Mail;
+      case 'meeting': return Calendar;
+      case 'note': return FileText;
+      case 'task': return CheckSquare;
+      default: return FileText;
+    }
+  })();
+
+  return <Icon className="h-4 w-4" />;
 };
 
-const getActivityColor = (type: ContactActivity['activity_type']) => {
+const getActivityColor = (type: ContactActivity['activity_type'], isSystemGenerated?: boolean, systemSource?: string) => {
+  if (isSystemGenerated) {
+    if (systemSource === 'spheresync') {
+      return 'bg-primary';
+    }
+    if (systemSource === 'newsletter') {
+      return 'bg-secondary';
+    }
+    return 'bg-muted-foreground';
+  }
+  
   switch (type) {
     case 'call': return 'bg-blue-500';
     case 'text': return 'bg-green-500';
@@ -119,50 +133,82 @@ export const ContactActivitiesDialog: React.FC<ContactActivitiesDialogProps> = (
                 No activities recorded yet. Add your first activity to get started.
               </div>
             ) : (
-              activities.map((activity) => (
-                <Card key={activity.id} className="border-l-4" style={{ borderLeftColor: getActivityColor(activity.activity_type).replace('bg-', '') }}>
-                  <CardContent className="pt-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-full text-white ${getActivityColor(activity.activity_type)}`}>
-                          {getActivityIcon(activity.activity_type)}
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="capitalize">
-                              {activity.activity_type}
-                            </Badge>
-                            {activity.duration_minutes && (
-                              <Badge variant="secondary" className="text-xs">
-                                <Clock className="h-3 w-3 mr-1" />
-                                {activity.duration_minutes}m
-                              </Badge>
-                            )}
+              activities.map((activity) => {
+                const isSystemGenerated = activity.is_system_generated;
+                const systemSource = activity.system_source;
+                
+                return (
+                  <Card 
+                    key={activity.id} 
+                    className={`border-l-4 ${isSystemGenerated ? 'bg-muted/20' : ''}`} 
+                    style={{ borderLeftColor: getActivityColor(activity.activity_type, isSystemGenerated, systemSource).replace('bg-', '') }}
+                  >
+                    <CardContent className="pt-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-full text-white ${getActivityColor(activity.activity_type, isSystemGenerated, systemSource)}`}>
+                            {getActivityIcon(activity.activity_type, isSystemGenerated)}
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            {formatDistanceToNow(new Date(activity.activity_date), { addSuffix: true })} • 
-                            {new Date(activity.activity_date).toLocaleString()}
-                          </p>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="outline" className="capitalize">
+                                {activity.activity_type}
+                              </Badge>
+                              {isSystemGenerated && (
+                                <Badge variant="secondary" className="text-xs">
+                                  <Zap className="h-3 w-3 mr-1" />
+                                  {systemSource === 'spheresync' ? 'SphereSync' : 
+                                   systemSource === 'newsletter' ? 'Newsletter' : 'System'}
+                                </Badge>
+                              )}
+                              {activity.duration_minutes && (
+                                <Badge variant="secondary" className="text-xs">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  {activity.duration_minutes}m
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {formatDistanceToNow(new Date(activity.activity_date), { addSuffix: true })} • 
+                              {new Date(activity.activity_date).toLocaleString()}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    
-                    {activity.outcome && (
-                      <div className="mt-3">
-                        <p className="text-sm font-medium">Outcome:</p>
-                        <p className="text-sm text-muted-foreground">{activity.outcome}</p>
-                      </div>
-                    )}
-                    
-                    {activity.notes && (
-                      <div className="mt-3">
-                        <p className="text-sm font-medium">Notes:</p>
-                        <p className="text-sm text-muted-foreground">{activity.notes}</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))
+                      
+                      {activity.outcome && (
+                        <div className="mt-3">
+                          <p className="text-sm font-medium">Outcome:</p>
+                          <p className="text-sm text-muted-foreground">{activity.outcome}</p>
+                        </div>
+                      )}
+                      
+                      {activity.notes && (
+                        <div className="mt-3">
+                          <p className="text-sm font-medium">{isSystemGenerated ? 'Details:' : 'Notes:'}</p>
+                          <p className="text-sm text-muted-foreground">{activity.notes}</p>
+                        </div>
+                      )}
+                      
+                      {isSystemGenerated && activity.metadata && (
+                        <div className="mt-3 text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                          {systemSource === 'spheresync' && (
+                            <div>
+                              Week {activity.metadata.week_number}, {activity.metadata.year}
+                              {activity.metadata.completed && (
+                                <span className="ml-2 text-green-600">✓ Completed</span>
+                              )}
+                            </div>
+                          )}
+                          {systemSource === 'newsletter' && activity.metadata.campaign_name && (
+                            <div>Campaign: {activity.metadata.campaign_name}</div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })
             )}
           </div>
         </div>

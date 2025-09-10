@@ -411,6 +411,24 @@ serve(async (req) => {
             
             console.log(`Email sent to ${dry_run ? 'agent (test mode)' : contact.email}`);
             
+            // Log the newsletter activity for this contact (not in dry run mode)
+            if (!dry_run) {
+              try {
+                const { error: activityError } = await supabase.rpc('log_newsletter_activity', {
+                  p_contact_id: contact.id,
+                  p_agent_id: agent.user_id,
+                  p_campaign_name: `Market Report - ${zipCode}`,
+                  p_zip_code: zipCode
+                });
+                
+                if (activityError) {
+                  console.error(`Failed to log newsletter activity for ${contact.email}:`, activityError);
+                }
+              } catch (error) {
+                console.error(`Error logging newsletter activity for ${contact.email}:`, error);
+              }
+            }
+            
             // In test mode, only send one email
             if (dry_run) break;
           } catch (emailError) {

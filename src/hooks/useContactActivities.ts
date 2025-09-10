@@ -14,6 +14,8 @@ export interface ContactActivity {
   metadata: Record<string, any>;
   created_at: string;
   updated_at: string;
+  is_system_generated?: boolean;
+  system_source?: string;
 }
 
 export interface ActivityInput {
@@ -37,7 +39,11 @@ export const useContactActivities = (contactId: string) => {
     try {
       const { data, error } = await (supabase as any)
         .from('contact_activities')
-        .select('*')
+        .select(`
+          *,
+          is_system_generated,
+          system_source
+        `)
         .eq('contact_id', contactId)
         .order('activity_date', { ascending: false });
 
