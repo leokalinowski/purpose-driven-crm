@@ -5,22 +5,52 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { cleanupAuthState } from '@/utils/auth';
-import { Chrome } from 'lucide-react';
+import { Chrome, ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react';
 import authBackground from '@/assets/auth-background.jpg';
+
+interface AgentProfileData {
+  firstName?: string;
+  lastName?: string;
+  teamName?: string;
+  brokerage?: string;
+  phoneNumber?: string;
+  officeAddress?: string;
+  officeNumber?: string;
+  website?: string;
+  stateLicenses?: string[];
+}
 
 const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [signupStep, setSignupStep] = useState(1);
+  
+  // Agent profile data
+  const [profileData, setProfileData] = useState<AgentProfileData>({
+    firstName: '',
+    lastName: '',
+    teamName: '',
+    brokerage: '',
+    phoneNumber: '',
+    officeAddress: '',
+    officeNumber: '',
+    website: '',
+    stateLicenses: [],
+  });
+  
   const { signIn, signUp, signInWithGoogle, user } = useAuth();
   const navigate = useNavigate();
+
+  const updateProfileData = (field: keyof AgentProfileData, value: string | string[]) => {
+    setProfileData(prev => ({ ...prev, [field]: value }));
+  };
 
   useEffect(() => {
     cleanupAuthState();
@@ -91,7 +121,7 @@ const Auth = () => {
         return;
       }
 
-      const { error } = await signUp(email, password, firstName, lastName);
+      const { error } = await signUp(email, password, profileData);
 
       if (error) {
         toast({
@@ -109,6 +139,20 @@ const Auth = () => {
         toast({
           title: 'Success',
           description: 'Account created! Please check your email to confirm your account.',
+        });
+        
+        // Reset form
+        setSignupStep(1);
+        setProfileData({
+          firstName: '',
+          lastName: '',
+          teamName: '',
+          brokerage: '',
+          phoneNumber: '',
+          officeAddress: '',
+          officeNumber: '',
+          website: '',
+          stateLicenses: [],
         });
       }
     } catch (err: any) {
@@ -150,6 +194,255 @@ const Auth = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const nextStep = () => {
+    if (signupStep < 3) setSignupStep(signupStep + 1);
+  };
+
+  const prevStep = () => {
+    if (signupStep > 1) setSignupStep(signupStep - 1);
+  };
+
+  const canProceedStep1 = profileData.firstName && profileData.lastName && email && password && inviteCode;
+  const canProceedStep2 = profileData.teamName && profileData.brokerage && profileData.phoneNumber;
+
+  const renderSignupStep = () => {
+    switch (signupStep) {
+      case 1:
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">Basic Information</h3>
+              <span className="text-sm text-gray-500">Step 1 of 3</span>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName" className="text-gray-700 font-medium">First Name *</Label>
+                <Input
+                  id="firstName"
+                  value={profileData.firstName}
+                  onChange={(e) => updateProfileData('firstName', e.target.value)}
+                  className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                  placeholder="First name"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName" className="text-gray-700 font-medium">Last Name *</Label>
+                <Input
+                  id="lastName"
+                  value={profileData.lastName}
+                  onChange={(e) => updateProfileData('lastName', e.target.value)}
+                  className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                  placeholder="Last name"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="signupEmail" className="text-gray-700 font-medium">Email *</Label>
+              <Input
+                id="signupEmail"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                placeholder="Enter your email"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="signupPassword" className="text-gray-700 font-medium">Password *</Label>
+              <Input
+                id="signupPassword"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                placeholder="Create a password"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="inviteCode" className="text-gray-700 font-medium">Invitation Code *</Label>
+              <Input
+                id="inviteCode"
+                type="text"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value)}
+                required
+                className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                placeholder="Enter invitation code"
+              />
+            </div>
+            
+            <Button 
+              type="button"
+              onClick={nextStep}
+              disabled={!canProceedStep1}
+              className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Next: Professional Info <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        );
+        
+      case 2:
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">Professional Information</h3>
+              <span className="text-sm text-gray-500">Step 2 of 3</span>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="teamName" className="text-gray-700 font-medium">Team Name *</Label>
+              <Input
+                id="teamName"
+                value={profileData.teamName}
+                onChange={(e) => updateProfileData('teamName', e.target.value)}
+                className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                placeholder="Your team name"
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="brokerage" className="text-gray-700 font-medium">Brokerage *</Label>
+              <Input
+                id="brokerage"
+                value={profileData.brokerage}
+                onChange={(e) => updateProfileData('brokerage', e.target.value)}
+                className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                placeholder="Your brokerage name"
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber" className="text-gray-700 font-medium">Phone Number *</Label>
+              <Input
+                id="phoneNumber"
+                type="tel"
+                value={profileData.phoneNumber}
+                onChange={(e) => updateProfileData('phoneNumber', e.target.value)}
+                className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                placeholder="(555) 123-4567"
+                required
+              />
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                type="button"
+                onClick={prevStep}
+                variant="outline"
+                className="flex-1 border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 rounded-lg transition-all duration-300"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" /> Back
+              </Button>
+              <Button 
+                type="button"
+                onClick={nextStep}
+                disabled={!canProceedStep2}
+                className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                Next: Location & Licenses <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
+          </div>
+        );
+        
+      case 3:
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">Location & Licensing</h3>
+              <span className="text-sm text-gray-500">Step 3 of 3</span>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="officeAddress" className="text-gray-700 font-medium">Office Address</Label>
+              <Textarea
+                id="officeAddress"
+                value={profileData.officeAddress}
+                onChange={(e) => updateProfileData('officeAddress', e.target.value)}
+                className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                placeholder="Your office address"
+                rows={2}
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="officeNumber" className="text-gray-700 font-medium">Office Number</Label>
+                <Input
+                  id="officeNumber"
+                  type="tel"
+                  value={profileData.officeNumber}
+                  onChange={(e) => updateProfileData('officeNumber', e.target.value)}
+                  className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                  placeholder="(555) 123-4567"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="website" className="text-gray-700 font-medium">Website</Label>
+                <Input
+                  id="website"
+                  type="url"
+                  value={profileData.website}
+                  onChange={(e) => updateProfileData('website', e.target.value)}
+                  className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                  placeholder="https://yourwebsite.com"
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="stateLicenses" className="text-gray-700 font-medium">State Licenses</Label>
+              <Input
+                id="stateLicenses"
+                value={profileData.stateLicenses?.join(', ') || ''}
+                onChange={(e) => updateProfileData('stateLicenses', e.target.value.split(',').map(s => s.trim()).filter(s => s))}
+                className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                placeholder="CA, NV, AZ (comma-separated)"
+              />
+              <p className="text-xs text-gray-500">Enter state abbreviations separated by commas</p>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                type="button"
+                onClick={prevStep}
+                variant="outline"
+                className="flex-1 border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 rounded-lg transition-all duration-300"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" /> Back
+              </Button>
+              <Button 
+                type="submit"
+                disabled={loading}
+                className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {loading ? 'Creating account...' : (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Create Account
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        );
+        
+      default:
+        return null;
     }
   };
 
@@ -268,71 +561,7 @@ const Auth = () => {
               </div>
 
               <form onSubmit={handleSignUp} className="space-y-4 mt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName" className="text-gray-700 font-medium">First Name</Label>
-                    <Input
-                      id="firstName"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
-                      placeholder="First name"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName" className="text-gray-700 font-medium">Last Name</Label>
-                    <Input
-                      id="lastName"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
-                      placeholder="Last name"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signupEmail" className="text-gray-700 font-medium">Email</Label>
-                  <Input
-                    id="signupEmail"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
-                    placeholder="Enter your email"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signupPassword" className="text-gray-700 font-medium">Password</Label>
-                  <Input
-                    id="signupPassword"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
-                    placeholder="Create a password"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="inviteCode" className="text-gray-700 font-medium">Invitation Code</Label>
-                  <Input
-                    id="inviteCode"
-                    type="text"
-                    value={inviteCode}
-                    onChange={(e) => setInviteCode(e.target.value)}
-                    required
-                    className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
-                    placeholder="Enter invitation code"
-                  />
-                </div>
-                <Button 
-                  type="submit" 
-                  className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]" 
-                  disabled={loading}
-                >
-                  {loading ? 'Creating account...' : 'Create Account'}
-                </Button>
+                {renderSignupStep()}
               </form>
             </TabsContent>
           </Tabs>
