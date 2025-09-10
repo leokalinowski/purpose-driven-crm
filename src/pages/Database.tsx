@@ -54,24 +54,6 @@ const Database = () => {
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
   const [viewingActivitiesContact, setViewingActivitiesContact] = useState<Contact | null>(null);
 
-  // Satisfy ContactTable's async onEdit signature for inline saves
-  const handleInlineSave = async (updated: Contact) => {
-    const original = contacts.find(c => c.id === updated.id);
-    if (!original) return;
-    const fields: (keyof ContactInput)[] = [
-      'first_name', 'last_name', 'phone', 'email',
-      'address_1', 'address_2', 'zip_code', 'state', 'city',
-      'tags', 'dnc', 'notes'
-    ];
-    const patch: Partial<ContactInput> = {};
-    for (const key of fields) {
-      if ((original as any)[key] !== (updated as any)[key]) {
-        (patch as any)[key] = (updated as any)[key];
-      }
-    }
-    if (Object.keys(patch).length === 0) return;
-    await updateContact(updated.id, patch);
-  };
 
   const handleAddContact = async (contactData: any) => {
     try {
@@ -239,7 +221,6 @@ const Database = () => {
                     sortBy={sortBy}
                     sortOrder={sortOrder}
                     onSort={handleSort}
-                    onEdit={handleInlineSave}
                     onOpenEdit={openEditForm}
                     onDelete={setDeletingContact}
                     onViewActivities={setViewingActivitiesContact}
