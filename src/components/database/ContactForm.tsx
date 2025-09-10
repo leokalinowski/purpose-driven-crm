@@ -39,6 +39,21 @@ export const ContactForm: React.FC<ContactFormProps> = ({
   const [tagsInput, setTagsInput] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Format phone number as user types
+  const formatPhoneNumber = (value: string) => {
+    // Remove all non-digits
+    const digits = value.replace(/\D/g, '');
+    
+    // Format as (XXX) XXX-XXXX
+    if (digits.length <= 3) {
+      return digits;
+    } else if (digits.length <= 6) {
+      return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    } else {
+      return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+    }
+  };
+
   useEffect(() => {
     if (contact) {
       setFormData({
@@ -143,8 +158,12 @@ export const ContactForm: React.FC<ContactFormProps> = ({
                 id="phone"
                 type="tel"
                 value={formData.phone}
-                onChange={(e) => handleInputChange('phone', e.target.value)}
-                placeholder="Enter phone number"
+                onChange={(e) => {
+                  const formatted = formatPhoneNumber(e.target.value);
+                  handleInputChange('phone', formatted);
+                }}
+                placeholder="(555) 123-4567"
+                maxLength={14}
               />
             </div>
             

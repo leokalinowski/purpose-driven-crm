@@ -18,6 +18,7 @@ import { DNCCheckButton } from '@/components/database/DNCCheckButton';
 
 import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useDNCStats } from '@/hooks/useDNCStats';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useToast } from '@/components/ui/use-toast';
 
 const Database = () => {
@@ -45,6 +46,7 @@ const Database = () => {
     fetchDNCStats,
   } = useDNCStats();
   
+  const { isAdmin } = useUserRole();
   const { toast } = useToast();
  
   const [showContactForm, setShowContactForm] = useState(false);
@@ -206,15 +208,17 @@ const Database = () => {
           </div>
         </div>
         
-        {/* DNC Statistics Dashboard */}
-        <div className="flex justify-between items-start gap-4">
-          <div className="flex-1">
-            <DNCStatsCard stats={stats} loading={dncLoading} />
+        {/* DNC Statistics Dashboard - Admin Only */}
+        {isAdmin && (
+          <div className="flex justify-between items-start gap-4">
+            <div className="flex-1">
+              <DNCStatsCard stats={stats} loading={dncLoading} />
+            </div>
+            <div className="flex-shrink-0">
+              <DNCCheckButton />
+            </div>
           </div>
-          <div className="flex-shrink-0">
-            <DNCCheckButton />
-          </div>
-        </div>
+        )}
         
         <Card>
           <CardHeader>
