@@ -188,17 +188,35 @@ const handler = async (req: Request): Promise<Response> => {
           category: contact.category || contact.last_name?.charAt(0).toUpperCase() || 'A'
         })) || [];
 
-        // Delete existing tasks for current week and year
-        const currentYear = new Date().getFullYear();
-        const { error: deleteError } = await supabase
+        // Check if tasks already exist for this agent and week
+        const { data: existingTasks, error: checkError } = await supabase
           .from('spheresync_tasks')
-          .delete()
+          .select('id, task_type')
           .eq('agent_id', agent.user_id)
           .eq('week_number', currentWeekTasks.weekNumber)
           .eq('year', currentYear);
 
-        if (deleteError) {
-          console.error(`Error deleting existing tasks for agent ${agent.user_id}:`, deleteError);
+        if (checkError) {
+          console.error(`Error checking existing tasks for agent ${agent.user_id}:`, checkError);
+          continue;
+        }
+
+        // If tasks already exist, skip this agent to prevent duplicates unless forcing regeneration
+        if (existingTasks && existingTasks.length > 0) {
+          console.log(`Tasks already exist for agent ${agent.user_id}, deleting and regenerating`);
+          
+          // Delete existing tasks first
+          const { error: deleteError } = await supabase
+            .from('spheresync_tasks')
+            .delete()
+            .eq('agent_id', agent.user_id)
+            .eq('week_number', currentWeekTasks.weekNumber)
+            .eq('year', currentYear);
+
+          if (deleteError) {
+            console.error(`Error deleting existing tasks for agent ${agent.user_id}:`, deleteError);
+            continue;
+          }
         }
 
         // Filter contacts by categories
@@ -237,9 +255,16 @@ const handler = async (req: Request): Promise<Response> => {
             .insert(tasksToInsert);
 
           if (insertError) {
-            console.error(`Error inserting tasks for agent ${agent.user_id}:`, insertError);
-            throw insertError;
+            // Handle duplicate key errors gracefully
+            if (insertError.code === '23505') {
+              console.warn(`Duplicate tasks detected for agent ${agent.user_id}, skipping`);
+            } else {
+              console.error(`Error inserting tasks for agent ${agent.user_id}:`, insertError);
+            }
+            continue;
           }
+
+          console.log(`Generated ${tasksToInsert.length} tasks for agent ${agent.user_id}`);
         }
 
         results.push({

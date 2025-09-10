@@ -48,6 +48,7 @@ export function useSphereSyncTasks() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [historicalStats, setHistoricalStats] = useState<WeeklyStats[]>([]);
+  const [lastGeneratedWeek, setLastGeneratedWeek] = useState<string | null>(null);
   const currentWeek = getCurrentWeekTasks();
 
   const loadTasksAndContacts = useCallback(async () => {
@@ -144,6 +145,34 @@ export function useSphereSyncTasks() {
       const { callCategories, textCategory } = currentWeek;
       const currentYear = new Date().getFullYear();
 
+      // Check if tasks already exist for this week to prevent duplicates
+      const { data: existingTasks, error: checkError } = await supabase
+        .from('spheresync_tasks')
+        .select('id')
+        .eq('agent_id', user.id)
+        .eq('week_number', currentWeek.weekNumber)
+        .eq('year', currentYear);
+
+      if (checkError) {
+        console.error('Error checking existing tasks:', checkError);
+        throw checkError;
+      }
+
+      // If tasks already exist, delete them first to regenerate
+      if (existingTasks && existingTasks.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('spheresync_tasks')
+          .delete()
+          .eq('agent_id', user.id)
+          .eq('week_number', currentWeek.weekNumber)
+          .eq('year', currentYear);
+
+        if (deleteError) {
+          console.error('Error deleting existing tasks:', deleteError);
+          throw deleteError;
+        }
+      }
+
       // Filter contacts by categories
       const callContacts = contacts.filter(contact => 
         callCategories.includes(contact.category)
@@ -173,20 +202,19 @@ export function useSphereSyncTasks() {
       ];
 
       if (tasksToInsert.length > 0) {
-        // Delete existing tasks for this week/year
-        await supabase
-          .from('spheresync_tasks')
-          .delete()
-          .eq('agent_id', user.id)
-          .eq('week_number', currentWeek.weekNumber)
-          .eq('year', currentYear);
-
-        // Insert new tasks
+        // Insert new tasks with duplicate key error handling
         const { error: insertError } = await supabase
           .from('spheresync_tasks')
           .insert(tasksToInsert);
 
-        if (insertError) throw insertError;
+        if (insertError) {
+          // Handle duplicate key errors gracefully
+          if (insertError.code === '23505') {
+            console.warn('Duplicate tasks detected, skipping insertion');
+            return;
+          }
+          throw insertError;
+        }
       }
 
     } catch (error) {
@@ -196,11 +224,24 @@ export function useSphereSyncTasks() {
   };
 
   const generateWeeklyTasks = async () => {
-    if (!user) return;
+    if (!user || generating) return;
+    
+    const currentYear = new Date().getFullYear();
+    const weekKey = `${currentWeek.weekNumber}-${currentYear}`;
+    
+    // Prevent duplicate generation for the same week
+    if (lastGeneratedWeek === weekKey) {
+      toast({
+        title: "Info",
+        description: "Tasks for this week have already been generated"
+      });
+      return;
+    }
 
     try {
       setGenerating(true);
       await generateWeeklyTasksInternal();
+      setLastGeneratedWeek(weekKey);
       await loadTasksAndContacts();
       
       toast({
