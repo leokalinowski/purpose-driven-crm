@@ -142,8 +142,11 @@ export const useEvents = () => {
 
         if (tasksError) {
           console.error('Error creating tasks:', tasksError);
-          // Don't throw error, event was created successfully
+          throw new Error(`Event created but failed to create tasks: ${tasksError.message}`);
         }
+
+        // Immediately refresh tasks to show them in the UI
+        await fetchEventTasks();
       }
 
       setEvents(prev => [data, ...prev]);
