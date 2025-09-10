@@ -53,36 +53,80 @@ export function useNewsletterAnalytics() {
     },
   });
 
+  // Also fetch monthly runs as fallback data
+  const runsQuery = useQuery({
+    queryKey: ["monthly-runs-analytics"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("monthly_runs")
+        .select("id,agent_id,emails_sent,contacts_processed,run_date,status,created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const metrics: NewsletterMetrics = useMemo(() => {
-    if (!query.data) return { totalCampaigns: 0, totalRecipients: 0, avgOpenRate: null, avgClickRate: null };
+    const campaigns = query.data || [];
+    const runs = runsQuery.data || [];
+    
+    if (campaigns.length === 0 && runs.length === 0) {
+      return { totalCampaigns: 0, totalRecipients: 0, avgOpenRate: null, avgClickRate: null };
+    }
 
-    const totalCampaigns = query.data.length;
-    const totalRecipients = query.data.reduce((sum, c) => sum + (c.recipient_count ?? 0), 0);
+    // Prioritize campaign data, fallback to runs data
+    if (campaigns.length > 0) {
+      const totalCampaigns = campaigns.length;
+      const totalRecipients = campaigns.reduce((sum, c) => sum + (c.recipient_count ?? 0), 0);
 
-    const openRates = query.data.map((c) => c.open_rate).filter((v): v is number => typeof v === "number");
-    const clickRates = query.data
-      .map((c) => c.click_through_rate)
-      .filter((v): v is number => typeof v === "number");
+      const openRates = campaigns.map((c) => c.open_rate).filter((v): v is number => typeof v === "number");
+      const clickRates = campaigns
+        .map((c) => c.click_through_rate)
+        .filter((v): v is number => typeof v === "number");
 
-    const avgOpenRate = openRates.length ? openRates.reduce((a, b) => a + b, 0) / openRates.length : null;
-    const avgClickRate = clickRates.length ? clickRates.reduce((a, b) => a + b, 0) / clickRates.length : null;
+      const avgOpenRate = openRates.length ? openRates.reduce((a, b) => a + b, 0) / openRates.length : null;
+      const avgClickRate = clickRates.length ? clickRates.reduce((a, b) => a + b, 0) / clickRates.length : null;
 
-    return { totalCampaigns, totalRecipients, avgOpenRate, avgClickRate };
-  }, [query.data]);
+      return { totalCampaigns, totalRecipients, avgOpenRate, avgClickRate };
+    } else {
+      // Fallback to runs data
+      const completedRuns = runs.filter(r => r.status === 'completed' || r.status === 'success');
+      const totalCampaigns = completedRuns.length;
+      const totalRecipients = completedRuns.reduce((sum, r) => sum + (r.emails_sent ?? 0), 0);
+      
+      return { totalCampaigns, totalRecipients, avgOpenRate: null, avgClickRate: null };
+    }
+  }, [query.data, runsQuery.data]);
 
   const monthlySeries: MonthlySeriesPoint[] = useMemo(() => {
-    if (!query.data) return [];
+    const campaigns = query.data || [];
+    const runs = runsQuery.data || [];
+    
+    if (campaigns.length === 0 && runs.length === 0) return [];
 
     const grouped = new Map<string, { open: number[]; click: number[]; recipients: number }>();
 
-    for (const c of query.data) {
-      const key = toMonthKey(c.send_date);
-      if (!key) continue;
-      if (!grouped.has(key)) grouped.set(key, { open: [], click: [], recipients: 0 });
-      const g = grouped.get(key)!;
-      if (typeof c.open_rate === "number") g.open.push(c.open_rate);
-      if (typeof c.click_through_rate === "number") g.click.push(c.click_through_rate);
-      g.recipients += c.recipient_count ?? 0;
+    // Process campaigns first
+    if (campaigns.length > 0) {
+      for (const c of campaigns) {
+        const key = toMonthKey(c.send_date);
+        if (!key) continue;
+        if (!grouped.has(key)) grouped.set(key, { open: [], click: [], recipients: 0 });
+        const g = grouped.get(key)!;
+        if (typeof c.open_rate === "number") g.open.push(c.open_rate);
+        if (typeof c.click_through_rate === "number") g.click.push(c.click_through_rate);
+        g.recipients += c.recipient_count ?? 0;
+      }
+    } else {
+      // Fallback to runs data
+      for (const r of runs) {
+        const key = toMonthKey(r.run_date);
+        if (!key) continue;
+        if (!grouped.has(key)) grouped.set(key, { open: [], click: [], recipients: 0 });
+        const g = grouped.get(key)!;
+        g.recipients += r.emails_sent ?? 0;
+      }
     }
 
     const points = Array.from(grouped.entries()).map(([month, g]) => ({
@@ -94,12 +138,14 @@ export function useNewsletterAnalytics() {
 
     points.sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0));
     return points;
-  }, [query.data]);
+  }, [query.data, runsQuery.data]);
 
   return {
     ...query,
     campaigns: query.data ?? [],
     metrics,
     monthlySeries,
+    isLoading: query.isLoading || runsQuery.isLoading,
+    error: query.error || runsQuery.error,
   };
 }
