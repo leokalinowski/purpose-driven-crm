@@ -1,16 +1,18 @@
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
-import { useAdminMetrics } from '@/hooks/useAdminMetrics';
+import { useDashboardData } from '@/hooks/useDashboardData';
 import { useState } from 'react';
 
 export function RefreshButton() {
-  const { refetch } = useAdminMetrics();
+  console.warn('RefreshButton is deprecated. Use DashboardRefreshButton instead.');
+  
+  const { refreshData } = useDashboardData();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await refetch();
-    setTimeout(() => setIsRefreshing(false), 500); // Ensure visible feedback
+    await refreshData();
+    setTimeout(() => setIsRefreshing(false), 500);
   };
 
   return (

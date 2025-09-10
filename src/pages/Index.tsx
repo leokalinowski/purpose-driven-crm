@@ -6,6 +6,7 @@ import { AgentMetricsCards } from '@/components/agent/AgentMetricsCards';
 import { AgentActivityWidget } from '@/components/agent/AgentActivityWidget';
 import { AgentPerformanceCharts } from '@/components/agent/AgentPerformanceCharts';
 import { ExportButtons } from '@/components/dashboard/ExportButtons';
+import { DashboardRefreshButton } from '@/components/dashboard/DashboardRefreshButton';
 
 const Index = () => {
   const { user, loading } = useAuth();
@@ -43,7 +44,8 @@ const Index = () => {
               Your personal performance hub - track goals, manage tasks, and grow your business.
             </p>
           </div>
-          <div>
+          <div className="flex items-center gap-4">
+            <DashboardRefreshButton />
             <ExportButtons />
           </div>
         </div>

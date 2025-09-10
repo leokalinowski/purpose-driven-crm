@@ -7,7 +7,7 @@ import { CompanyMetricsCards } from '@/components/admin/CompanyMetricsCards';
 import { TeamManagementWidget } from '@/components/admin/TeamManagementWidget';
 import { CompanyAnalyticsCharts } from '@/components/admin/CompanyAnalyticsCharts';
 import { AgentPerformanceTable } from '@/components/admin/AgentPerformanceTable';
-import { RefreshButton } from '@/components/admin/RefreshButton';
+import { DashboardRefreshButton } from '@/components/dashboard/DashboardRefreshButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AgentSelector } from '@/components/admin/AgentSelector';
 import { AgentSpecificDashboard } from '@/components/admin/AgentSpecificDashboard';
@@ -52,7 +52,7 @@ const AdminDashboard = () => {
               Company-wide analytics, team performance, and strategic insights.
             </p>
           </div>
-          <RefreshButton />
+          <DashboardRefreshButton />
         </div>
 
         <Tabs defaultValue="company" className="w-full">

@@ -1,12 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Line, LineChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
-import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
+import { useDashboardData } from '@/hooks/useDashboardData';
 
 export function DashboardCharts() {
-  const { data } = useDashboardMetrics();
-  if (!data) return null;
+  const { data, isAgent } = useDashboardData();
+  
+  if (!data || !isAgent || !('charts' in data)) {
+    return null;
+  }
 
+  const agentData = data as any; // Type assertion since we checked isAgent and charts existence
+  
   const config = {
     leads: { label: 'Leads' },
     tasks: { label: 'Tasks' },
@@ -23,7 +28,7 @@ export function DashboardCharts() {
           <div className="w-full h-80">
             <ChartContainer config={config} className="w-full h-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.charts.leadsTrend} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <LineChart data={agentData.charts.leadsTrend} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="month" tickLine={false} axisLine={false} />
                   <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
@@ -44,7 +49,7 @@ export function DashboardCharts() {
           <div className="w-full h-80">
             <ChartContainer config={config} className="w-full h-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.charts.tasksTrend} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <LineChart data={agentData.charts.tasksTrend} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="month" tickLine={false} axisLine={false} />
                   <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
@@ -65,7 +70,7 @@ export function DashboardCharts() {
           <div className="w-full h-80">
             <ChartContainer config={config} className="w-full h-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.charts.transactionsTrend} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <LineChart data={agentData.charts.transactionsTrend} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="month" tickLine={false} axisLine={false} />
                   <YAxis tickLine={false} axisLine={false} allowDecimals={false} />

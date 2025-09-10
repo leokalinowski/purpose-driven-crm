@@ -2,11 +2,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
 import { Users, Calendar, Mail, TrendingUp, CheckCircle, Briefcase, GraduationCap, Pin } from 'lucide-react';
-import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
+import { useDashboardData } from '@/hooks/useDashboardData';
 import { useWidgetPreferences } from '@/hooks/useWidgetPreferences';
 
 const KPI_ORDER: Array<{
-  key: keyof ReturnType<typeof useDashboardMetrics>['data']['kpis'];
+  key: string;
   title: string;
   icon: React.ComponentType<any>;
   link: string;
@@ -20,7 +20,7 @@ const KPI_ORDER: Array<{
 ];
 
 export function DashboardCards() {
-  const { data, loading } = useDashboardMetrics();
+  const { data, loading, isAgent } = useDashboardData();
   const { pinned, togglePinned, isPinned } = useWidgetPreferences();
 
   const items = KPI_ORDER;
@@ -31,7 +31,7 @@ export function DashboardCards() {
     return ap - bp;
   });
 
-  if (loading || !data) {
+  if (loading || !data || !isAgent || !('charts' in data)) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -48,10 +48,14 @@ export function DashboardCards() {
     );
   }
 
+  const agentData = data as any; // Type assertion since we checked isAgent
+
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {sorted.map(({ key, title, icon: Icon, link }) => {
-        const kpi = data.kpis[key as keyof typeof data.kpis]!;
+        const kpi = agentData.kpis[key];
+        if (!kpi) return null; // Skip if KPI doesn't exist
+        
         const delta = kpi.deltaPct;
         const positive = typeof delta === 'number' ? delta >= 0 : undefined;
         return (
