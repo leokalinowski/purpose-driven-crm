@@ -14,7 +14,6 @@ import { ContactForm } from '@/components/database/ContactForm';
 import { CSVUpload } from '@/components/database/CSVUpload';
 import { DNCStatsCard } from '@/components/database/DNCStatsCard';
 import { ContactActivitiesDialog } from '@/components/database/ContactActivitiesDialog';
-import { DNCCheckButton } from '@/components/database/DNCCheckButton';
 
 import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useDNCStats } from '@/hooks/useDNCStats';
@@ -210,14 +209,7 @@ const Database = () => {
         
         {/* DNC Statistics Dashboard - Admin Only */}
         {isAdmin && (
-          <div className="flex justify-between items-start gap-4">
-            <div className="flex-1">
-              <DNCStatsCard stats={stats} loading={dncLoading} />
-            </div>
-            <div className="flex-shrink-0">
-              <DNCCheckButton />
-            </div>
-          </div>
+          <DNCStatsCard stats={stats} loading={dncLoading} />
         )}
         
         <Card>

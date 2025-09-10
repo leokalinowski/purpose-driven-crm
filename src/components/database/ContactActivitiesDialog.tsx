@@ -66,14 +66,18 @@ export const ContactActivitiesDialog: React.FC<ContactActivitiesDialogProps> = (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>Activities - {contact.first_name} {contact.last_name}</span>
-            <Button onClick={() => setShowAddForm(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Activity
-            </Button>
+          <DialogTitle>
+            Activities - {contact.first_name} {contact.last_name}
           </DialogTitle>
         </DialogHeader>
+
+        {/* Add Activity Button - Better positioned */}
+        <div className="flex justify-end mb-4">
+          <Button onClick={() => setShowAddForm(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Activity
+          </Button>
+        </div>
 
         <div className="flex-1 overflow-y-auto space-y-4 pr-2">
           {/* Contact Summary */}
