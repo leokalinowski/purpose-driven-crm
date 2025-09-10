@@ -2,10 +2,22 @@ import React, { useState, useEffect, createContext, useContext, ReactNode } from
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
+interface AgentProfileData {
+  firstName?: string;
+  lastName?: string;
+  teamName?: string;
+  brokerage?: string;
+  phoneNumber?: string;
+  officeAddress?: string;
+  officeNumber?: string;
+  website?: string;
+  stateLicenses?: string[];
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  signUp: (email: string, password: string, firstName?: string, lastName?: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, profileData?: AgentProfileData) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<{ error: any }>;
   signOut: () => Promise<{ error: any }>;
@@ -59,7 +71,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, firstName?: string, lastName?: string) => {
+  const signUp = async (email: string, password: string, profileData?: AgentProfileData) => {
     const redirectUrl = `${window.location.origin}/`;
     
     const { error } = await supabase.auth.signUp({
@@ -68,8 +80,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       options: {
         emailRedirectTo: redirectUrl,
         data: {
-          first_name: firstName,
-          last_name: lastName,
+          first_name: profileData?.firstName,
+          last_name: profileData?.lastName,
+          team_name: profileData?.teamName,
+          brokerage: profileData?.brokerage,
+          phone_number: profileData?.phoneNumber,
+          office_address: profileData?.officeAddress,
+          office_number: profileData?.officeNumber,
+          website: profileData?.website,
+          state_licenses: profileData?.stateLicenses,
         }
       }
     });
