@@ -67,10 +67,10 @@ export function useNewsletterAnalytics() {
     },
   });
 
+  const campaigns = query.data ?? [];
+  const runs = runsQuery.data ?? [];
+
   const metrics: NewsletterMetrics = useMemo(() => {
-    const campaigns = query.data || [];
-    const runs = runsQuery.data || [];
-    
     if (campaigns.length === 0 && runs.length === 0) {
       return { totalCampaigns: 0, totalRecipients: 0, avgOpenRate: null, avgClickRate: null };
     }
@@ -97,12 +97,9 @@ export function useNewsletterAnalytics() {
       
       return { totalCampaigns, totalRecipients, avgOpenRate: null, avgClickRate: null };
     }
-  }, [query.data, runsQuery.data]);
+  }, [campaigns, runs]);
 
   const monthlySeries: MonthlySeriesPoint[] = useMemo(() => {
-    const campaigns = query.data || [];
-    const runs = runsQuery.data || [];
-    
     if (campaigns.length === 0 && runs.length === 0) return [];
 
     const grouped = new Map<string, { open: number[]; click: number[]; recipients: number }>();
@@ -138,11 +135,11 @@ export function useNewsletterAnalytics() {
 
     points.sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0));
     return points;
-  }, [query.data, runsQuery.data]);
+  }, [campaigns, runs]);
 
   return {
     ...query,
-    campaigns: query.data ?? [],
+    campaigns,
     metrics,
     monthlySeries,
     isLoading: query.isLoading || runsQuery.isLoading,
