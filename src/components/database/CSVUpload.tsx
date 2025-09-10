@@ -8,27 +8,12 @@ import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useUser } from '@supabase/auth-helpers-react';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-interface ContactInput {
-  first_name: string;
-  last_name: string;
-  phone: string;
-  email: string;
-  address_1: string;
-  address_2: string;
-  zip_code: string;
-  state: string;
-  city: string;
-  tags: string[] | null;
-  dnc: boolean;
-  notes: string;
-  category: string;
-  agent_id: string;
-}
+import { ContactInput } from '@/hooks/useContacts';
 
 interface CSVUploadProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUpload?: (csvData: any[]) => Promise<void> | void; // optional callback for parent-managed upload
+  onUpload?: (csvData: ContactInput[]) => Promise<void> | void;
 }
 
 export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUpload }) => {
@@ -81,22 +66,20 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
       const dncRaw = getValue(['dnc', 'do not contact', 'do_not_contact']).toString().toLowerCase();
       const dncVal = ['true', '1', 'yes', 'y'].includes(dncRaw);
 
-      const contact: ContactInput = {
-        first_name: getValue(['first_name', 'firstname', 'first name']),
-        last_name: lastName,
-        phone: getValue(['phone', 'phone_number', 'phone number']),
-        email,
-        address_1: getValue(['address_1', 'address1', 'address 1', 'address']),
-        address_2: getValue(['address_2', 'address2', 'address 2']),
-        zip_code: getValue(['zip_code', 'zipcode', 'zip code', 'zip']),
-        state: getValue(['state']),
-        city: getValue(['city']),
-        tags: tagList,
-        dnc: dncVal,
-        notes: getValue(['notes']),
-        category: lastName.charAt(0).toUpperCase() || 'U',
-        agent_id: agentId,
-      };
+        const contact: ContactInput = {
+          first_name: getValue(['first_name', 'firstname', 'first name']),
+          last_name: lastName,
+          phone: getValue(['phone', 'phone_number', 'phone number']),
+          email,
+          address_1: getValue(['address_1', 'address1', 'address 1', 'address']),
+          address_2: getValue(['address_2', 'address2', 'address 2']),
+          zip_code: getValue(['zip_code', 'zipcode', 'zip code', 'zip']),
+          state: getValue(['state']),
+          city: getValue(['city']),
+          tags: tagList,
+          dnc: dncVal,
+          notes: getValue(['notes']),
+        };
 
       contacts.push(contact);
     });
@@ -180,8 +163,6 @@ const handleFileUpload = async (file: File) => {
           tags,
           dnc,
           notes: getVal(row, 'notes'),
-          category: last_name.charAt(0).toUpperCase() || 'U',
-          agent_id: agentId,
         };
         return contact;
       }).filter(Boolean) as ContactInput[];
@@ -192,13 +173,17 @@ const handleFileUpload = async (file: File) => {
       }
 
       if (onUpload) {
-        const payload = contacts.map(({ agent_id, category, ...rest }) => rest);
-        await onUpload(payload);
+        await onUpload(contacts);
         onOpenChange(false);
         return;
       }
 
-      const { data, error } = await supabase.from('contacts').insert(contacts).select();
+      const contactsForDb = contacts.map(contact => ({
+        ...contact,
+        agent_id: agentId,
+        category: contact.last_name.charAt(0).toUpperCase() || 'U'
+      }));
+      const { data, error } = await supabase.from('contacts').insert(contactsForDb).select();
       if (error) throw error;
       toast({ title: 'Success', description: `${contacts.length} contacts imported!` });
       onOpenChange(false);

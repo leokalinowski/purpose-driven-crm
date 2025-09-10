@@ -35,7 +35,6 @@ export const useContactActivities = (contactId: string) => {
 
     setLoading(true);
     try {
-      // Using direct table access since contact_activities might not be in generated types yet
       const { data, error } = await (supabase as any)
         .from('contact_activities')
         .select('*')
@@ -57,7 +56,6 @@ export const useContactActivities = (contactId: string) => {
     if (!user || !contactId) throw new Error('User not authenticated or no contact ID');
 
     try {
-      // Using direct insert since contact_activities might not be in generated types yet
       const { data, error } = await (supabase as any)
         .from('contact_activities')
         .insert([{

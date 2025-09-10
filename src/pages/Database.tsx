@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -55,7 +52,7 @@ const Database = () => {
   const [viewingActivitiesContact, setViewingActivitiesContact] = useState<Contact | null>(null);
 
 
-  const handleAddContact = async (contactData: any) => {
+  const handleAddContact = async (contactData: ContactInput) => {
     try {
       await addContact(contactData);
       toast({
@@ -63,7 +60,6 @@ const Database = () => {
         description: "Contact added successfully",
       });
       setShowContactForm(false);
-      fetchContacts();  // Refresh table after add
     } catch (error) {
       toast({
         title: "Error",
@@ -73,7 +69,7 @@ const Database = () => {
     }
   };
 
-  const handleEditContact = async (contactData: any) => {
+  const handleEditContact = async (contactData: Partial<ContactInput>) => {
     if (!editingContact) return;
    
     try {
@@ -83,7 +79,6 @@ const Database = () => {
         description: "Contact updated successfully",
       });
       closeContactForm();
-      fetchContacts();  // Refresh table after edit
     } catch (error) {
       toast({
         title: "Error",
@@ -103,7 +98,6 @@ const Database = () => {
         title: "Success",
         description: "Contact deleted successfully",
       });
-      fetchContacts();  // Refresh table after delete
     } catch (error) {
       toast({
         title: "Error",
@@ -113,7 +107,7 @@ const Database = () => {
     }
   };
 
-  const handleCSVUpload = async (csvData: any[]) => {
+  const handleCSVUpload = async (csvData: ContactInput[]) => {
     try {
       await uploadCSV(csvData);
       toast({
@@ -122,7 +116,6 @@ const Database = () => {
       });
       setShowCSVUpload(false);
       goToPage(1);
-      fetchContacts();  // Refresh table after CSV upload
     } catch (error) {
       toast({
         title: "Error",
@@ -143,10 +136,10 @@ const Database = () => {
   };
 
 
-  // Fetch DNC stats when component mounts and when contacts change
+  // Fetch DNC stats when component mounts
   useEffect(() => {
     fetchDNCStats();
-  }, [fetchDNCStats, contacts]);
+  }, [fetchDNCStats]);
 
   const generatePageNumbers = () => {
     const pages = [];

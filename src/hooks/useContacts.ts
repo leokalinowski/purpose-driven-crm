@@ -79,13 +79,12 @@ export const useContacts = () => {
   const addContact = async (contactData: ContactInput) => {
     if (!user) throw new Error('User not authenticated');
 
-    // Category will be set automatically by the database trigger
     const { data, error } = await supabase
       .from('contacts')
       .insert([{
         ...contactData,
         agent_id: user.id,
-        category: contactData.last_name ? contactData.last_name.charAt(0).toUpperCase() : 'A',
+        category: contactData.last_name.charAt(0).toUpperCase() || 'A',
       }])
       .select()
       .single();
@@ -124,8 +123,6 @@ export const useContacts = () => {
       .single();
 
     if (error) throw error;
-
-    fetchContacts();
     return data;
   };
 
@@ -139,8 +136,6 @@ export const useContacts = () => {
       .eq('agent_id', user.id);
 
     if (error) throw error;
-
-    fetchContacts();
   };
 
   const uploadCSV = async (csvData: ContactInput[]) => {
@@ -149,7 +144,7 @@ export const useContacts = () => {
     const contactsWithAgent = csvData.map(contact => ({
       ...contact,
       agent_id: user.id,
-      category: contact.last_name ? contact.last_name.charAt(0).toUpperCase() : 'A',
+      category: contact.last_name.charAt(0).toUpperCase() || 'A',
     }));
 
     const { data, error } = await supabase
@@ -185,7 +180,6 @@ export const useContacts = () => {
       }
     }
 
-    fetchContacts();
     return data;
   };
 

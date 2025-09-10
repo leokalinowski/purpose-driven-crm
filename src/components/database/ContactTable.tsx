@@ -5,7 +5,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, ChevronUp, ChevronDown, Activity } from 'lucide-react';
 import { Contact } from '@/hooks/useContacts';
-import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 
 interface ContactTableProps {
@@ -71,7 +70,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({
         <TableBody>
           {contacts.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+              <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                 No contacts found
               </TableCell>
             </TableRow>
@@ -79,10 +78,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({
             contacts.map((contact) => (
               <TableRow
                 key={contact.id}
-                className={cn(
-                  "hover:bg-muted/50",
-                  contact.dnc && "bg-red-50 hover:bg-red-100"
-                )}
+                className={contact.dnc ? "bg-destructive/10 hover:bg-destructive/20" : "hover:bg-muted/50"}
               >
                 <TableCell>{renderCell(contact, 'first_name')}</TableCell>
                 <TableCell>{renderCell(contact, 'last_name')}</TableCell>
