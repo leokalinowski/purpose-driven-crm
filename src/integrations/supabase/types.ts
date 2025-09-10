@@ -305,8 +305,65 @@ export type Database = {
           },
         ]
       }
+      contact_activities: {
+        Row: {
+          activity_date: string
+          activity_type: string
+          agent_id: string
+          contact_id: string
+          created_at: string
+          duration_minutes: number | null
+          id: string
+          is_system_generated: boolean | null
+          metadata: Json | null
+          notes: string | null
+          outcome: string | null
+          system_source: string | null
+          updated_at: string
+        }
+        Insert: {
+          activity_date?: string
+          activity_type: string
+          agent_id: string
+          contact_id: string
+          created_at?: string
+          duration_minutes?: number | null
+          id?: string
+          is_system_generated?: boolean | null
+          metadata?: Json | null
+          notes?: string | null
+          outcome?: string | null
+          system_source?: string | null
+          updated_at?: string
+        }
+        Update: {
+          activity_date?: string
+          activity_type?: string
+          agent_id?: string
+          contact_id?: string
+          created_at?: string
+          duration_minutes?: number | null
+          id?: string
+          is_system_generated?: boolean | null
+          metadata?: Json | null
+          notes?: string | null
+          outcome?: string | null
+          system_source?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_activities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
+          activity_count: number | null
           address_1: string | null
           address_2: string | null
           agent_id: string
@@ -318,6 +375,7 @@ export type Database = {
           email: string | null
           first_name: string | null
           id: string
+          last_activity_date: string | null
           last_name: string
           notes: string | null
           phone: string | null
@@ -327,6 +385,7 @@ export type Database = {
           zip_code: string | null
         }
         Insert: {
+          activity_count?: number | null
           address_1?: string | null
           address_2?: string | null
           agent_id: string
@@ -338,6 +397,7 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          last_activity_date?: string | null
           last_name: string
           notes?: string | null
           phone?: string | null
@@ -347,6 +407,7 @@ export type Database = {
           zip_code?: string | null
         }
         Update: {
+          activity_count?: number | null
           address_1?: string | null
           address_2?: string | null
           agent_id?: string
@@ -358,6 +419,7 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          last_activity_date?: string | null
           last_name?: string
           notes?: string | null
           phone?: string | null
@@ -1509,8 +1571,29 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      format_phone_display: {
+        Args: { phone_input: string }
+        Returns: string
+      }
       get_current_user_role: {
         Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      is_valid_phone: {
+        Args: { phone_input: string }
+        Returns: boolean
+      }
+      log_newsletter_activity: {
+        Args: {
+          p_agent_id: string
+          p_campaign_name: string
+          p_contact_id: string
+          p_zip_code?: string
+        }
+        Returns: undefined
+      }
+      normalize_phone: {
+        Args: { phone_input: string }
         Returns: string
       }
     }
