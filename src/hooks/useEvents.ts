@@ -58,13 +58,16 @@ export interface Event {
 
 export interface EventTask {
   id: string;
-  event_id: string;
+  event_id?: string;
+  agent_id: string;
   task_name: string;
   responsible_person: string;
-  due_date?: string;
+  due_date: string;
   completed_at?: string;
-  status: 'pending' | 'completed' | 'overdue';
-  agent_id: string;
+  status?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export const useEvents = () => {
@@ -178,7 +181,7 @@ export const useEvents = () => {
     }
   };
 
-  const addTask = async (taskData: Omit<EventTask, 'id' | 'agent_id'>) => {
+  const addTask = async (taskData: Omit<EventTask, 'id' | 'agent_id' | 'created_at' | 'updated_at'>) => {
     if (!user) return;
 
     try {

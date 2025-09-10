@@ -117,19 +117,13 @@ const Events = () => {
           </AccordionItem>
         </Accordion>
 
-        {/* Task Management for Next Event */}
-        {nextEvent && (
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold">Event Preparation</h2>
-              <TaskManagement 
-                eventId={nextEvent.id} 
-                tasks={tasks}
-              />
-            </div>
-
-          </div>
-        )}
+        {/* Task Management - Now shows all events with selector */}
+        <div className="mb-8">
+          <TaskManagement 
+            eventId={nextEvent?.id} 
+            tasks={tasks} 
+          />
+        </div>
 
         {/* All Events Timeline */}
         {events.length > 0 && (

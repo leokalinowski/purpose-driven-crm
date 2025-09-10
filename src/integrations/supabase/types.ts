@@ -454,6 +454,7 @@ export type Database = {
           due_date: string | null
           event_id: string | null
           id: string
+          notes: string | null
           responsible_person: string
           status: string | null
           task_name: string
@@ -466,6 +467,7 @@ export type Database = {
           due_date?: string | null
           event_id?: string | null
           id?: string
+          notes?: string | null
           responsible_person: string
           status?: string | null
           task_name: string
@@ -478,6 +480,7 @@ export type Database = {
           due_date?: string | null
           event_id?: string | null
           id?: string
+          notes?: string | null
           responsible_person?: string
           status?: string | null
           task_name?: string
