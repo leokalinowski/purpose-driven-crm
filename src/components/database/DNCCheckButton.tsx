@@ -1,53 +1,57 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Shield, Loader2, ChevronDown } from 'lucide-react';
+import { RefreshCw, Shield } from 'lucide-react';
+import { useDNCStats } from '@/hooks/useDNCStats';
+import { useToast } from '@/components/ui/use-toast';
 
 interface DNCCheckButtonProps {
-  onClick: (forceRecheck?: boolean) => void;
-  loading: boolean;
-  disabled?: boolean;
+  variant?: 'default' | 'outline';
+  size?: 'default' | 'sm' | 'lg';
 }
 
 export const DNCCheckButton: React.FC<DNCCheckButtonProps> = ({ 
-  onClick, 
-  loading, 
-  disabled = false 
+  variant = 'outline',
+  size = 'default'
 }) => {
-  if (loading) {
-    return (
-      <Button
-        variant="outline"
-        disabled={true}
-        className="flex items-center gap-2"
-      >
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Checking DNC...
-      </Button>
-    );
-  }
+  const { triggerDNCCheck, checking } = useDNCStats();
+  const { toast } = useToast();
+  const [isRunning, setIsRunning] = useState(false);
+
+  const handleDNCCheck = async () => {
+    if (checking || isRunning) return;
+
+    setIsRunning(true);
+    try {
+      await triggerDNCCheck(false); // false = don't force recheck
+      toast({
+        title: "DNC Check Started",
+        description: "DNC check has been initiated. This may take a few minutes to complete.",
+      });
+    } catch (error) {
+      console.error('Error starting DNC check:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start DNC check. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRunning(false);
+    }
+  };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          disabled={disabled}
-          className="flex items-center gap-2"
-        >
-          <Shield className="h-4 w-4" />
-          Check DNC
-          <ChevronDown className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        <DropdownMenuItem onClick={() => onClick(false)}>
-          Check New & Old Contacts
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onClick(true)}>
-          Force Check All Contacts
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      onClick={handleDNCCheck}
+      disabled={checking || isRunning}
+      variant={variant}
+      size={size}
+    >
+      {(checking || isRunning) ? (
+        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+      ) : (
+        <Shield className="h-4 w-4 mr-2" />
+      )}
+      {(checking || isRunning) ? 'Checking...' : 'Run DNC Check'}
+    </Button>
   );
 };

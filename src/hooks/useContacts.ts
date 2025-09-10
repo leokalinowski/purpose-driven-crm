@@ -16,13 +16,16 @@ export interface Contact {
   city: string | null;
   tags: string[] | null;
   dnc: boolean;
+  dnc_last_checked: string | null;
   notes: string | null;
   category: string;
+  last_activity_date: string | null;
+  activity_count: number;
   created_at: string;
   updated_at: string;
 }
 
-export type ContactInput = Omit<Contact, 'id' | 'agent_id' | 'category' | 'created_at' | 'updated_at'>;
+export type ContactInput = Omit<Contact, 'id' | 'agent_id' | 'category' | 'created_at' | 'updated_at' | 'dnc_last_checked' | 'last_activity_date' | 'activity_count'>;
 
 export const useContacts = () => {
   const { user } = useAuth();
@@ -63,7 +66,7 @@ export const useContacts = () => {
 
       if (error) throw error;
 
-      setContacts(data || []);
+      setContacts((data as Contact[]) || []);
       setTotalPages(Math.ceil((count || 0) / ITEMS_PER_PAGE));
     } catch (error) {
       console.error('Error fetching contacts:', error);

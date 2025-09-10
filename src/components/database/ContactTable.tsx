@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Edit, Trash2, ChevronUp, ChevronDown, Save } from 'lucide-react';
+import { Edit, Trash2, ChevronUp, ChevronDown, Save, Activity } from 'lucide-react';
 import { Contact } from '@/hooks/useContacts';
 import { cn } from '@/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
 
 interface ContactTableProps {
   contacts: Contact[];
@@ -16,6 +17,7 @@ interface ContactTableProps {
   onEdit: (contact: Contact) => Promise<void>; // async for inline save
   onOpenEdit: (contact: Contact) => void; // new prop for opening edit form
   onDelete: (contact: Contact) => void;
+  onViewActivities: (contact: Contact) => void; // new prop for viewing activities
 }
 
 export const ContactTable: React.FC<ContactTableProps> = ({
@@ -26,6 +28,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({
   onEdit,
   onOpenEdit,
   onDelete,
+  onViewActivities,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<keyof Contact | null>(null);
@@ -101,6 +104,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({
             ))}
             <TableHead>Address</TableHead>
             <TableHead>Tags</TableHead>
+            <TableHead>Activities</TableHead>
             <TableHead>DNC</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
@@ -108,7 +112,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({
         <TableBody>
           {contacts.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+              <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                 No contacts found
               </TableCell>
             </TableRow>
@@ -144,6 +148,20 @@ export const ContactTable: React.FC<ContactTableProps> = ({
                   </div>
                 </TableCell>
                 <TableCell>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        {contact.activity_count || 0} activities
+                      </Badge>
+                    </div>
+                    {contact.last_activity_date && (
+                      <div className="text-xs text-muted-foreground">
+                        Last: {formatDistanceToNow(new Date(contact.last_activity_date), { addSuffix: true })}
+                      </div>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
                   {contact.dnc && (
                     <Badge variant="destructive" className="text-xs">
                       DNC
@@ -155,8 +173,18 @@ export const ContactTable: React.FC<ContactTableProps> = ({
                     <Button
                       variant="outline"
                       size="sm"
+                      onClick={() => onViewActivities(contact)}
+                      className="h-8 w-8 p-0"
+                      title="View Activities"
+                    >
+                      <Activity className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => onOpenEdit(contact)}
                       className="h-8 w-8 p-0"
+                      title="Edit Contact"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -165,6 +193,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({
                       size="sm"
                       onClick={() => onDelete(contact)}
                       className="h-8 w-8 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                      title="Delete Contact"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

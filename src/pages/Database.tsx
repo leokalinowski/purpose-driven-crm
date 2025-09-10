@@ -13,6 +13,8 @@ import { ContactTable } from '@/components/database/ContactTable';
 import { ContactForm } from '@/components/database/ContactForm';
 import { CSVUpload } from '@/components/database/CSVUpload';
 import { DNCStatsCard } from '@/components/database/DNCStatsCard';
+import { ContactActivitiesDialog } from '@/components/database/ContactActivitiesDialog';
+import { DNCCheckButton } from '@/components/database/DNCCheckButton';
 
 import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useDNCStats } from '@/hooks/useDNCStats';
@@ -49,6 +51,7 @@ const Database = () => {
   const [showCSVUpload, setShowCSVUpload] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
+  const [viewingActivitiesContact, setViewingActivitiesContact] = useState<Contact | null>(null);
 
   // Satisfy ContactTable's async onEdit signature for inline saves
   const handleInlineSave = async (updated: Contact) => {
@@ -204,7 +207,14 @@ const Database = () => {
         </div>
         
         {/* DNC Statistics Dashboard */}
-        <DNCStatsCard stats={stats} loading={dncLoading} />
+        <div className="flex justify-between items-start gap-4">
+          <div className="flex-1">
+            <DNCStatsCard stats={stats} loading={dncLoading} />
+          </div>
+          <div className="flex-shrink-0">
+            <DNCCheckButton />
+          </div>
+        </div>
         
         <Card>
           <CardHeader>
@@ -236,6 +246,7 @@ const Database = () => {
                     onEdit={handleInlineSave}
                     onOpenEdit={openEditForm}
                     onDelete={setDeletingContact}
+                    onViewActivities={setViewingActivitiesContact}
                   />
                 </div>
                 {totalPages > 1 && (
@@ -295,6 +306,16 @@ const Database = () => {
           onOpenChange={setShowCSVUpload}
           onUpload={handleCSVUpload}
         />
+        
+        {/* Contact Activities Dialog */}
+        {viewingActivitiesContact && (
+          <ContactActivitiesDialog
+            open={!!viewingActivitiesContact}
+            onOpenChange={() => setViewingActivitiesContact(null)}
+            contact={viewingActivitiesContact}
+          />
+        )}
+        
         <AlertDialog open={!!deletingContact} onOpenChange={() => setDeletingContact(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
