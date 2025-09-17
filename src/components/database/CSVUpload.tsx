@@ -129,45 +129,74 @@ const handleFileUpload = useCallback(async (file: File) => {
 
     // Read file text and strip potential BOM
     const rawText = await file.text();
-    const text = rawText.replace(/^\uFEFF/, '');
-    
-    // Try different delimiters (tolerate non-critical errors) and pick the one with most fields
+    let text = rawText.replace(/^\uFEFF/, '');
+
+    // Drop bogus first line like "sep=,"
+    const lines = text.split(/\r?\n/);
+    if (lines[0] && /^sep\s*=/.test(lines[0].trim().toLowerCase())) {
+      console.debug('[CSVUpload] Detected sep= line, removing.');
+      lines.shift();
+      text = lines.join('\n');
+    }
+
     const delimiters = [',', ';', '\t', '|'];
-    let bestResult: Papa.ParseResult<any> | null = null;
-    let maxFields = 0;
 
-    for (const delimiter of delimiters) {
-      try {
-        const result = Papa.parse(text, {
-          header: true,
-          skipEmptyLines: true,
-          delimiter: delimiter === '\t' ? '\t' : delimiter,
-        });
-        const fieldCount = result.meta.fields?.length || 0;
-        const hasCritical = result.errors.some((e) => e.type === 'Delimiter' || e.type === 'Quotes');
-        console.debug('[CSVUpload] Delimiter attempt', delimiter === '\t' ? 'TAB' : delimiter, {
-          fieldCount,
-          errors: result.errors.map((e) => e.type),
-        });
-        if (!hasCritical && fieldCount >= maxFields) {
-          bestResult = result;
-          maxFields = fieldCount;
+    // Helper: choose the best result among multiple parse attempts
+    const pickBestHeaderParse = (t: string) => {
+      let best: Papa.ParseResult<any> | null = null;
+      let maxFields = 0;
+      for (const delimiter of delimiters) {
+        try {
+          const res = Papa.parse(t, {
+            header: true,
+            skipEmptyLines: true,
+            delimiter: delimiter === '\t' ? '\t' : delimiter,
+          });
+          const fieldCount = res.meta.fields?.length || 0;
+          const critical = res.errors.some(e => e.type === 'Delimiter' || e.type === 'Quotes');
+          console.debug('[CSVUpload] header:true attempt', delimiter === '\t' ? 'TAB' : delimiter, { fieldCount, errors: res.errors.map(e => e.type) });
+          if (!critical && fieldCount >= maxFields) {
+            best = res;
+            maxFields = fieldCount;
+          }
+        } catch (e) {
+          console.debug('[CSVUpload] header:true attempt failed', delimiter, e);
         }
-      } catch (e) {
-        console.debug('[CSVUpload] Delimiter attempt failed', delimiter, e);
-        continue; // Try next delimiter
       }
-    }
+      // Fallback to auto-detect
+      if (!best) {
+        console.debug('[CSVUpload] Falling back to auto-detect (header:true)');
+        best = Papa.parse(t, { header: true, skipEmptyLines: true });
+      }
+      return best as Papa.ParseResult<any>;
+    };
 
-    // If no good result found, try Papa's auto-detection
-    if (!bestResult || maxFields <= 1) {
-      console.debug('[CSVUpload] Falling back to auto-detect');
-      bestResult = Papa.parse(text, { header: true, skipEmptyLines: true });
-    }
+    // Helper: parse with header:false and reconstruct objects
+    const parseWithoutHeader = (t: string) => {
+      let best: { result: Papa.ParseResult<any>, delimiter: string, cols: number } | null = null;
+      for (const delimiter of delimiters) {
+        try {
+          const res = Papa.parse(t, {
+            header: false,
+            skipEmptyLines: true,
+            delimiter: delimiter === '\t' ? '\t' : delimiter,
+          });
+          const rowsArr: any[][] = (res.data as any[][]).filter(r => Array.isArray(r) && r.length > 0);
+          const cols = rowsArr[0]?.length || 0;
+          const critical = res.errors.some(e => e.type === 'Delimiter' || e.type === 'Quotes');
+          console.debug('[CSVUpload] header:false attempt', delimiter === '\t' ? 'TAB' : delimiter, { cols, errors: res.errors.map(e => e.type) });
+          if (!critical && cols > (best?.cols || 0)) {
+            best = { result: res, delimiter, cols };
+          }
+        } catch (e) {
+          console.debug('[CSVUpload] header:false attempt failed', delimiter, e);
+        }
+      }
+      return best;
+    };
 
-    if (!bestResult) {
-      throw new Error('Failed to parse CSV file');
-    }
+    // First try header:true approach
+    let bestResult = pickBestHeaderParse(text);
 
     // Validate parsing results (only fail on critical errors)
     if (bestResult.errors.length > 0) {
@@ -185,19 +214,51 @@ const handleFileUpload = useCallback(async (file: File) => {
     let headersRaw = (bestResult.meta.fields || Object.keys(rows[0] || {})) as string[];
     let headers = headersRaw.map((h) => String(h).trim());
 
-    // Heuristic: if only 1 header detected but the first line contains common delimiters, re-parse with the most likely delimiter
+    // If only one column detected, try heuristics: filename line, delimiter based on first line, then header:false reconstruction
     if ((!headers || headers.length <= 1) && text) {
       const firstLine = text.split(/\r?\n/)[0] || '';
-      const counts = delimiters.map((d) => ({ d, c: (firstLine.match(new RegExp(`\\${d}`, 'g')) || []).length }));
-      const best = counts.sort((a, b) => b.c - a.c)[0];
-      if (best && best.c > 0) {
-        console.debug('[CSVUpload] Re-parsing using heuristic delimiter', best.d);
-        const reparsed = Papa.parse(text, { header: true, skipEmptyLines: true, delimiter: best.d });
-        const criticalErrors = reparsed.errors.filter((e) => e.type === 'Delimiter' || e.type === 'Quotes');
-        if (criticalErrors.length === 0) {
-          rows = (reparsed.data as any[]).filter((r) => r && Object.keys(r).length > 0);
-          headersRaw = (reparsed.meta.fields || Object.keys(rows[0] || {})) as string[];
-          headers = headersRaw.map((h) => String(h).trim());
+
+      // If first parsed header equals filename, drop first line and retry
+      const baseName = file.name.replace(/\.(csv|txt)$/i, '');
+      if (headers?.[0] && headers[0].replace(/\.(csv|txt)$/i, '') === baseName) {
+        console.debug('[CSVUpload] First header equals filename; removing first line and retrying');
+        const nextText = text.split(/\r?\n/).slice(1).join('\n');
+        bestResult = pickBestHeaderParse(nextText);
+        rows = (bestResult.data as any[]).filter((r) => r && Object.keys(r).length > 0);
+        headersRaw = (bestResult.meta.fields || Object.keys(rows[0] || {})) as string[];
+        headers = headersRaw.map((h) => String(h).trim());
+      }
+
+      // If still one column, try header:false and rebuild
+      if (!headers || headers.length <= 1) {
+        const bestArray = parseWithoutHeader(text);
+        if (bestArray && bestArray.cols > 1) {
+          const dataRows: any[][] = (bestArray.result.data as any[][]).filter(r => Array.isArray(r) && r.length > 0);
+          const newHeaders = (dataRows[0] || []).map((h) => String(h).trim());
+          const objRows = dataRows.slice(1).map((arr) => {
+            const obj: Record<string, any> = {};
+            newHeaders.forEach((h, idx) => { obj[h] = arr[idx]; });
+            return obj;
+          });
+          headers = newHeaders;
+          rows = objRows;
+          console.debug('[CSVUpload] Reconstructed rows from header:false parse', { columnCount: headers.length, rowCount: rows.length });
+        }
+      }
+
+      // Last resort: choose delimiter by counting occurrences in first line and retry header:true
+      if (!headers || headers.length <= 1) {
+        const counts = delimiters.map((d) => ({ d, c: (firstLine.match(new RegExp(`\\${d}`, 'g')) || []).length }));
+        const best = counts.sort((a, b) => b.c - a.c)[0];
+        if (best && best.c > 0) {
+          console.debug('[CSVUpload] Re-parsing using heuristic delimiter', best.d);
+          const reparsed = Papa.parse(text, { header: true, skipEmptyLines: true, delimiter: best.d });
+          const criticalErrors = reparsed.errors.filter((e) => e.type === 'Delimiter' || e.type === 'Quotes');
+          if (criticalErrors.length === 0) {
+            rows = (reparsed.data as any[]).filter((r) => r && Object.keys(r).length > 0);
+            headersRaw = (reparsed.meta.fields || Object.keys(rows[0] || {})) as string[];
+            headers = headersRaw.map((h) => String(h).trim());
+          }
         }
       }
     }
@@ -206,31 +267,39 @@ const handleFileUpload = useCallback(async (file: File) => {
     if (!headers || headers.length === 0) {
       throw new Error('No headers found in CSV file. Please ensure your CSV has a header row.');
     }
+    if (headers.length === 1) {
+      throw new Error('Only one column detected. Please export as CSV (comma-separated) or ensure a proper delimiter (comma, semicolon, tab, or pipe).');
+    }
     if (rows.length === 0) {
       throw new Error('No data rows found in CSV file. Please ensure your CSV contains data below the headers.');
     }
 
     const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, '_');
+    const canonicalize = (s: string) => {
+      const nh = normalize(s);
+      if (nh === 'phone_number') return 'phone';
+      if (nh === 'zipcode' || nh === 'zip') return 'zip_code';
+      if (nh === 'firstname' || nh === 'first') return 'first_name';
+      if (nh === 'lastname' || nh === 'last') return 'last_name';
+      return nh;
+    };
 
     const defaultMap: Record<string, string> = {};
     ALL_FIELDS.forEach((field) => {
       const match = headers.find((h: string) => {
-        const nh = normalize(h);
-        if (field === 'phone') return nh === 'phone' || nh === 'phone_number';
-        if (field === 'zip_code') return nh === 'zip' || nh === 'zip_code' || nh === 'zipcode';
-        if (field === 'last_name') return nh === 'last_name' || nh === 'lastname' || nh === 'last';
-        if (field === 'first_name') return nh === 'first_name' || nh === 'firstname' || nh === 'first';
-        return nh === field;
+        const ch = canonicalize(h);
+        return ch === field;
       });
       if (match) defaultMap[field] = match;
     });
 
-    // Auto-import if headers match our template exactly
+    // Auto-import if headers match our template (order-insensitive, with synonyms)
     const TEMPLATE_HEADERS = [
       'first_name','last_name','phone','email','address_1','address_2','city','state','zip_code','tags','dnc','notes'
     ];
-    const headersNormalized = headers.map((h) => normalize(h));
-    const isTemplate = JSON.stringify(headersNormalized) === JSON.stringify(TEMPLATE_HEADERS);
+    const headerSet = new Set(headers.map(canonicalize));
+    const templateSet = new Set(TEMPLATE_HEADERS);
+    const isTemplate = TEMPLATE_HEADERS.every(h => headerSet.has(h)) && headerSet.size === templateSet.size;
 
     if (isTemplate) {
       console.debug('[CSVUpload] Template detected. Auto-importing.');
@@ -321,6 +390,13 @@ const handleFileUpload = useCallback(async (file: File) => {
         if (!header || header === '__ignore__') return '';
         return normalize(row[header]);
       };
+
+      // Guard: avoid importing when too few columns are mapped
+      const mappedHeaders = Array.from(new Set(Object.values(mapping).filter((v) => v && v !== '__ignore__')));
+      if (mappedHeaders.length < 2) {
+        toast({ title: 'Error', description: 'Only one column is mapped. Please map at least two columns (including last_name).' });
+        return;
+      }
 
       const contacts: ContactInput[] = rawRows.map((row: any) => {
         const last_name = getVal(row, 'last_name');
