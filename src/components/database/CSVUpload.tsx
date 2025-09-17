@@ -127,66 +127,91 @@ const handleFileUpload = useCallback(async (file: File) => {
       return;
     }
 
-    const text = await file.text();
+    // Read file text and strip potential BOM
+    const rawText = await file.text();
+    const text = rawText.replace(/^\uFEFF/, '');
     
-    // Try different delimiters to handle various CSV formats
+    // Try different delimiters (tolerate non-critical errors) and pick the one with most fields
     const delimiters = [',', ';', '\t', '|'];
     let bestResult: Papa.ParseResult<any> | null = null;
     let maxFields = 0;
 
     for (const delimiter of delimiters) {
       try {
-        const result = Papa.parse(text, { 
-          header: true, 
+        const result = Papa.parse(text, {
+          header: true,
           skipEmptyLines: true,
-          delimiter: delimiter === '\t' ? '\t' : delimiter
+          delimiter: delimiter === '\t' ? '\t' : delimiter,
         });
-        
         const fieldCount = result.meta.fields?.length || 0;
-        
-        if (result.errors.length === 0 && fieldCount > maxFields) {
+        const hasCritical = result.errors.some((e) => e.type === 'Delimiter' || e.type === 'Quotes');
+        console.debug('[CSVUpload] Delimiter attempt', delimiter === '\t' ? 'TAB' : delimiter, {
+          fieldCount,
+          errors: result.errors.map((e) => e.type),
+        });
+        if (!hasCritical && fieldCount >= maxFields) {
           bestResult = result;
           maxFields = fieldCount;
         }
       } catch (e) {
+        console.debug('[CSVUpload] Delimiter attempt failed', delimiter, e);
         continue; // Try next delimiter
       }
     }
 
-    // If no good result found, try auto-detection
+    // If no good result found, try Papa's auto-detection
     if (!bestResult || maxFields <= 1) {
+      console.debug('[CSVUpload] Falling back to auto-detect');
       bestResult = Papa.parse(text, { header: true, skipEmptyLines: true });
     }
 
     if (!bestResult) {
       throw new Error('Failed to parse CSV file');
     }
-    
-    // Validate parsing results
+
+    // Validate parsing results (only fail on critical errors)
     if (bestResult.errors.length > 0) {
-      const criticalErrors = bestResult.errors.filter(e => e.type === 'Delimiter' || e.type === 'Quotes');
+      const criticalErrors = bestResult.errors.filter(
+        (e) => e.type === 'Delimiter' || e.type === 'Quotes'
+      );
       if (criticalErrors.length > 0) {
-        throw new Error(`CSV parsing error: ${criticalErrors[0].message}. Please check your CSV file format.`);
+        throw new Error(
+          `CSV parsing error: ${criticalErrors[0].message}. Please check your CSV file format.`
+        );
       }
     }
 
-    const rows = (bestResult.data as any[]).filter((r) => r && Object.keys(r).length > 0);
-    const headers = bestResult.meta.fields || Object.keys(rows[0] || {});
+    let rows = (bestResult.data as any[]).filter((r) => r && Object.keys(r).length > 0);
+    let headersRaw = (bestResult.meta.fields || Object.keys(rows[0] || {})) as string[];
+    let headers = headersRaw.map((h) => String(h).trim());
+
+    // Heuristic: if only 1 header detected but the first line contains common delimiters, re-parse with the most likely delimiter
+    if ((!headers || headers.length <= 1) && text) {
+      const firstLine = text.split(/\r?\n/)[0] || '';
+      const counts = delimiters.map((d) => ({ d, c: (firstLine.match(new RegExp(`\\${d}`, 'g')) || []).length }));
+      const best = counts.sort((a, b) => b.c - a.c)[0];
+      if (best && best.c > 0) {
+        console.debug('[CSVUpload] Re-parsing using heuristic delimiter', best.d);
+        const reparsed = Papa.parse(text, { header: true, skipEmptyLines: true, delimiter: best.d });
+        const criticalErrors = reparsed.errors.filter((e) => e.type === 'Delimiter' || e.type === 'Quotes');
+        if (criticalErrors.length === 0) {
+          rows = (reparsed.data as any[]).filter((r) => r && Object.keys(r).length > 0);
+          headersRaw = (reparsed.meta.fields || Object.keys(rows[0] || {})) as string[];
+          headers = headersRaw.map((h) => String(h).trim());
+        }
+      }
+    }
 
     // Validate CSV structure
     if (!headers || headers.length === 0) {
       throw new Error('No headers found in CSV file. Please ensure your CSV has a header row.');
     }
-
-    if (headers.length === 1 && text.includes(',')) {
-      throw new Error('CSV appears to have multiple columns but only one header was detected. Please check that your file uses proper CSV formatting with commas separating values.');
-    }
-
     if (rows.length === 0) {
-      throw new Error('No data rows found in CSV file. Please ensure your CSV contains data below the headers.');  
+      throw new Error('No data rows found in CSV file. Please ensure your CSV contains data below the headers.');
     }
 
     const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, '_');
+
     const defaultMap: Record<string, string> = {};
     ALL_FIELDS.forEach((field) => {
       const match = headers.find((h: string) => {
@@ -200,6 +225,82 @@ const handleFileUpload = useCallback(async (file: File) => {
       if (match) defaultMap[field] = match;
     });
 
+    // Auto-import if headers match our template exactly
+    const TEMPLATE_HEADERS = [
+      'first_name','last_name','phone','email','address_1','address_2','city','state','zip_code','tags','dnc','notes'
+    ];
+    const headersNormalized = headers.map((h) => normalize(h));
+    const isTemplate = JSON.stringify(headersNormalized) === JSON.stringify(TEMPLATE_HEADERS);
+
+    if (isTemplate) {
+      console.debug('[CSVUpload] Template detected. Auto-importing.');
+      setCsvHeaders(headers as string[]);
+      setRawRows(rows);
+      setMapping(defaultMap);
+
+      // Build contacts directly (same logic as handleImport)
+      const normalizeVal = (v: any) => (v == null ? '' : String(v));
+      const getVal = (row: any, field: keyof ContactInput) => {
+        const header = (defaultMap as Record<string, string>)[field as string];
+        if (!header || header === '__ignore__') return '';
+        return normalizeVal(row[header]);
+      };
+      const contacts: ContactInput[] = rows
+        .map((row: any) => {
+          const last_name = getVal(row, 'last_name');
+          if (!last_name) return null;
+          const tagsRaw = getVal(row, 'tags');
+          const tags = tagsRaw ? tagsRaw.split(/[;,]/).map((t: string) => t.trim()).filter(Boolean) : null;
+          const dncRaw = getVal(row, 'dnc').toLowerCase();
+          const dnc = ['true', '1', 'yes', 'y'].includes(dncRaw);
+          const contact: ContactInput = {
+            first_name: getVal(row, 'first_name'),
+            last_name,
+            phone: getVal(row, 'phone'),
+            email: getVal(row, 'email'),
+            address_1: getVal(row, 'address_1'),
+            address_2: getVal(row, 'address_2'),
+            city: getVal(row, 'city'),
+            state: getVal(row, 'state'),
+            zip_code: getVal(row, 'zip_code'),
+            tags,
+            dnc,
+            notes: getVal(row, 'notes'),
+          };
+          return contact;
+        })
+        .filter(Boolean) as ContactInput[];
+
+      if (contacts.length === 0) {
+        toast({ title: 'Error', description: 'No valid rows. Ensure last_name is present.' });
+      } else {
+        // Determine which agent to assign contacts to
+        const targetAgentId = isAdmin
+          ? (selectedAgentId === '__self__' || !selectedAgentId ? agentId : selectedAgentId)
+          : agentId;
+        try {
+          if (onUpload) {
+            await onUpload(contacts, targetAgentId);
+          } else {
+            const contactsForDb = contacts.map((contact) => ({
+              ...contact,
+              agent_id: targetAgentId,
+              category: contact.last_name.charAt(0).toUpperCase() || 'U',
+            }));
+            const { error } = await supabase.from('contacts').insert(contactsForDb).select();
+            if (error) throw error;
+          }
+          toast({ title: 'Success', description: `${contacts.length} contacts imported!` });
+          onOpenChange(false);
+        } catch (e: any) {
+          console.error('Auto-import failed:', e);
+          toast({ title: 'Error', description: e?.message || 'Auto-import failed.' });
+        }
+      }
+      return;
+    }
+
+    // Default: proceed to mapping step
     setCsvHeaders(headers as string[]);
     setRawRows(rows);
     setMapping(defaultMap);
@@ -210,7 +311,7 @@ const handleFileUpload = useCallback(async (file: File) => {
   } finally {
     setLoading(false);
   }
-}, [loading, agentId, onOpenChange, ALL_FIELDS]);
+}, [loading, agentId, onOpenChange, ALL_FIELDS, isAdmin, selectedAgentId, onUpload]);
 
   const handleImport = useCallback(async () => {
     try {
