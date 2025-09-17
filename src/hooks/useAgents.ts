@@ -12,13 +12,14 @@ export interface Agent {
 
 export const useAgents = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchAgents = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
+      setLoading(true);
+      setError(null);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('user_id, first_name, last_name, email, role')
@@ -45,9 +46,10 @@ export const useAgents = () => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchAgents();
-  }, [fetchAgents]);
+  // Only fetch agents when explicitly called, not on mount
+  // useEffect(() => {
+  //   fetchAgents();
+  // }, [fetchAgents]);
 
   const getAgentDisplayName = useCallback((agent: Agent) => {
     if (!agent) return 'Unknown Agent';

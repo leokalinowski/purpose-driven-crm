@@ -11,6 +11,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { ContactInput } from '@/hooks/useContacts';
 import { useAgents } from '@/hooks/useAgents';
 import { useUserRole } from '@/hooks/useUserRole';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 interface CSVUploadProps {
   open: boolean;
@@ -21,7 +22,7 @@ interface CSVUploadProps {
 export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUpload }) => {
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
-  const { agents, loading: agentsLoading, getAgentDisplayName, error: agentsError } = useAgents();
+  const { agents, loading: agentsLoading, getAgentDisplayName, error: agentsError, fetchAgents } = useAgents();
   
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -37,7 +38,7 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
 
   const agentId = useMemo(() => user?.id || '', [user?.id]);
 
-  // Reset form when dialog closes
+  // Reset form when dialog closes and fetch agents when opening for admin users
   useEffect(() => {
     if (!open) {
       setStep('upload');
@@ -47,8 +48,11 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
       setSelectedAgentId('');
       setLoading(false);
       setDragActive(false);
+    } else if (open && isAdmin && !roleLoading) {
+      // Only fetch agents when dialog opens and user is admin
+      fetchAgents();
     }
-  }, [open]);
+  }, [open, isAdmin, roleLoading, fetchAgents]);
   
   const parseCSV = useCallback((text: string): ContactInput[] => {
     const { data } = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
@@ -273,14 +277,15 @@ const handleFileUpload = useCallback(async (file: File) => {
   }, [agentsError, isAdmin]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Upload Contacts CSV</DialogTitle>
-          <DialogDescription>
-            Upload a CSV file to import multiple contacts at once. You can map columns to contact fields and assign them to specific agents.
-          </DialogDescription>
-        </DialogHeader>
+    <ErrorBoundary>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Upload Contacts CSV</DialogTitle>
+            <DialogDescription>
+              Upload a CSV file to import multiple contacts at once. You can map columns to contact fields and assign them to specific agents.
+            </DialogDescription>
+          </DialogHeader>
 <div className="space-y-4">
   {step === 'upload' ? (
     <>
@@ -445,7 +450,8 @@ const handleFileUpload = useCallback(async (file: File) => {
     </div>
   )}
 </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </ErrorBoundary>
   );
 };
