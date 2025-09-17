@@ -503,13 +503,6 @@ export type Database = {
             foreignKeyName: "dtd2_tasks_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
-            referencedRelation: "leads_secure_summary"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "dtd2_tasks_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
             referencedRelation: "Leads_Table_Agents_Name"
             referencedColumns: ["user_id"]
           },
@@ -1570,13 +1563,6 @@ export type Database = {
             foreignKeyName: "transaction_coordination_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
-            referencedRelation: "leads_secure_summary"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "transaction_coordination_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
             referencedRelation: "Leads_Table_Agents_Name"
             referencedColumns: ["user_id"]
           },
@@ -1618,77 +1604,7 @@ export type Database = {
       }
     }
     Views: {
-      leads_secure_summary: {
-        Row: {
-          address_1: string | null
-          address_2: string | null
-          assigned_agent_id: string | null
-          city: string | null
-          client_tags: string | null
-          created_at: string | null
-          dnc_list: boolean | null
-          email: string | null
-          first_name: string | null
-          last_name: string | null
-          notes: string | null
-          phone: number | null
-          source: string | null
-          state: string | null
-          status: string | null
-          updated_at: string | null
-          user_id: number | null
-          zip_code: number | null
-        }
-        Insert: {
-          address_1?: string | null
-          address_2?: string | null
-          assigned_agent_id?: string | null
-          city?: string | null
-          client_tags?: string | null
-          created_at?: string | null
-          dnc_list?: boolean | null
-          email?: string | null
-          first_name?: string | null
-          last_name?: string | null
-          notes?: string | null
-          phone?: number | null
-          source?: string | null
-          state?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: number | null
-          zip_code?: number | null
-        }
-        Update: {
-          address_1?: string | null
-          address_2?: string | null
-          assigned_agent_id?: string | null
-          city?: string | null
-          client_tags?: string | null
-          created_at?: string | null
-          dnc_list?: boolean | null
-          email?: string | null
-          first_name?: string | null
-          last_name?: string | null
-          notes?: string | null
-          phone?: number | null
-          source?: string | null
-          state?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: number | null
-          zip_code?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "Leads Table [Agent's Name]_assigned_agent_id_fkey"
-            columns: ["assigned_agent_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
       format_phone_display: {
