@@ -91,25 +91,45 @@ serve(async (req) => {
       throw new Error('DNC API returned error response');
     }
 
-    // Create Supabase client
+    // Create Supabase client with user's JWT (RLS enforced)
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const authHeader = req.headers.get('Authorization');
     
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: authHeader ? { Authorization: authHeader } : undefined,
+      },
+    });
 
-    // Update the contact's DNC status
-    const { error: updateError } = await supabase
+    // Update the contact's DNC status with RLS enforced
+    const { data: updateData, error: updateError } = await supabase
       .from('contacts')
       .update({ 
         dnc: result.isDNC,
         dnc_last_checked: new Date().toISOString()
       })
-      .eq('id', contactId);
+      .eq('id', contactId)
+      .select();
 
     if (updateError) {
       console.error('Failed to update contact DNC status:', updateError);
       throw new Error('Failed to update contact DNC status');
+    }
+
+    // Check if update actually affected any rows (RLS check)
+    if (!updateData || updateData.length === 0) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Contact not found or access denied',
+          success: false 
+        }),
+        { 
+          status: 403, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
 
     if (result.isDNC) {

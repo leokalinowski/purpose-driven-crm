@@ -34,6 +34,9 @@ verify_jwt = false
 [functions.dnc-monthly-check]
 verify_jwt = false
 
+[functions.dnc-single-check]
+verify_jwt = true
+
 [functions.social-oauth]
 verify_jwt = true
 
