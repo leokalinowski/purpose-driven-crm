@@ -22,6 +22,14 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
   const user = useUser();
   const { isAdmin } = useUserRole();
   const { agents, loading: agentsLoading, getAgentDisplayName } = useAgents();
+  
+  // Debug logging
+  console.log('🔍 CSV Upload Debug:', { 
+    user: user?.id, 
+    isAdmin, 
+    agents: agents?.length, 
+    agentsLoading 
+  });
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [step, setStep] = useState<'upload' | 'map'>('upload');
@@ -35,6 +43,12 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
   const ALL_FIELDS: Array<keyof ContactInput> = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
 
   const agentId = user?.id || '';
+  
+  // Debug logging for agent section
+  if (isAdmin) {
+    console.log('🎯 Rendering agent section - isAdmin:', isAdmin, 'agents:', agents);
+  }
+  
   const parseCSV = (text: string): ContactInput[] => {
     const { data } = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
     const contacts: ContactInput[] = [];

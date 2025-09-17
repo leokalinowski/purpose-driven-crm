@@ -17,15 +17,27 @@ export const useAgents = () => {
   const fetchAgents = async () => {
     setLoading(true);
     try {
+      console.log('🔍 Fetching agents...');
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, user_id, first_name, last_name, email, role')
+        .select('user_id, first_name, last_name, email, role')
         .neq('role', 'admin')
         .order('first_name', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error fetching agents:', error);
+        throw error;
+      }
 
-      setAgents((data as Agent[]) || []);
+      console.log('✅ Agents fetched:', data);
+      
+      // Add the id field as user_id for compatibility with Agent interface
+      const agentsWithId = (data || []).map(agent => ({
+        ...agent,
+        id: agent.user_id
+      }));
+      
+      setAgents(agentsWithId as Agent[]);
     } catch (error) {
       console.error('Error fetching agents:', error);
     } finally {
