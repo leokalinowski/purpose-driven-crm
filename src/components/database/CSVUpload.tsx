@@ -23,14 +23,17 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { agents, loading: agentsLoading, getAgentDisplayName } = useAgents();
   
-  // Debug logging
+  // Debug logging with safe checks
   console.log('🔍 CSV Upload Debug:', { 
     userId: user?.id, 
     isAdmin, 
     roleLoading,
-    agentsCount: agents?.length, 
+    agentsCount: agents?.length || 0, 
     agentsLoading,
-    agents: agents?.map(a => ({ id: a.id, name: getAgentDisplayName(a) }))
+    agents: agents?.length ? agents.map(a => ({ 
+      id: a?.id || 'unknown', 
+      name: a ? getAgentDisplayName(a) : 'unknown' 
+    })) : []
   });
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -305,12 +308,6 @@ const handleFileUpload = async (file: File) => {
         </div>
       )}
       
-      {/* Debug info in development */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
-          Debug: isAdmin={String(isAdmin)}, roleLoading={String(roleLoading)}, agentsCount={agents.length}
-        </div>
-      )}
 
       <div
         className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
