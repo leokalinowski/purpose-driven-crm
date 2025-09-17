@@ -16,6 +16,7 @@ import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useDNCStats } from '@/hooks/useDNCStats';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const Database = () => {
   const {
@@ -107,9 +108,53 @@ const Database = () => {
     }
   };
 
-  const handleCSVUpload = async (csvData: ContactInput[]) => {
+  const handleCSVUpload = async (csvData: ContactInput[], agentId?: string) => {
     try {
-      await uploadCSV(csvData);
+      if (isAdmin && agentId) {
+        // Admin uploading for specific agent
+        const contactsWithAgent = csvData.map(contact => ({
+          ...contact,
+          agent_id: agentId,
+          category: contact.last_name.charAt(0).toUpperCase() || 'A',
+        }));
+
+        const { data, error } = await supabase
+          .from('contacts')
+          .insert(contactsWithAgent)
+          .select();
+
+        if (error) throw error;
+
+        // Automatically check DNC for all contacts with phone numbers
+        if (data && data.length > 0) {
+          const contactsWithPhones = data.filter(contact => contact.phone?.trim());
+          
+          if (contactsWithPhones.length > 0) {
+            console.log(`Initiating DNC checks for ${contactsWithPhones.length} contacts with phone numbers`);
+            
+            // Process DNC checks in small batches to avoid overwhelming the API
+            for (const contact of contactsWithPhones) {
+              try {
+                await supabase.functions.invoke('dnc-single-check', {
+                  body: { 
+                    phone: contact.phone.trim(),
+                    contactId: contact.id 
+                  }
+                });
+                // Small delay between requests to be respectful to the API
+                await new Promise(resolve => setTimeout(resolve, 200));
+              } catch (error) {
+                console.error(`Failed to initiate DNC check for contact ${contact.id}:`, error);
+                // Continue with other contacts even if one fails
+              }
+            }
+          }
+        }
+      } else {
+        // Regular agent upload or admin uploading for themselves
+        await uploadCSV(csvData);
+      }
+      
       toast({
         title: "Success",
         description: `${csvData.length} contacts uploaded successfully`,

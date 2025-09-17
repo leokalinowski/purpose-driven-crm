@@ -3,27 +3,32 @@ import React, { useState } from 'react';
 import Papa from 'papaparse';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Upload, Download } from 'lucide-react';
+import { Upload, Download, Users } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useUser } from '@supabase/auth-helpers-react';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { ContactInput } from '@/hooks/useContacts';
+import { useAgents } from '@/hooks/useAgents';
+import { useUserRole } from '@/hooks/useUserRole';
 
 interface CSVUploadProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUpload?: (csvData: ContactInput[]) => Promise<void> | void;
+  onUpload?: (csvData: ContactInput[], agentId?: string) => Promise<void> | void;
 }
 
 export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUpload }) => {
   const user = useUser();
+  const { isAdmin } = useUserRole();
+  const { agents, loading: agentsLoading, getAgentDisplayName } = useAgents();
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [step, setStep] = useState<'upload' | 'map'>('upload');
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<any[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
 
   const REQUIRED_FIELDS: Array<keyof ContactInput> = ['last_name'];
   const OPTIONAL_FIELDS: Array<keyof ContactInput> = ['first_name','email','phone','address_1','address_2','city','state','zip_code','tags','dnc','notes'];
@@ -172,15 +177,18 @@ const handleFileUpload = async (file: File) => {
         return;
       }
 
+      // Determine which agent to assign contacts to
+      const targetAgentId = isAdmin && selectedAgentId ? selectedAgentId : agentId;
+
       if (onUpload) {
-        await onUpload(contacts);
+        await onUpload(contacts, targetAgentId);
         onOpenChange(false);
         return;
       }
 
       const contactsForDb = contacts.map(contact => ({
         ...contact,
-        agent_id: agentId,
+        agent_id: targetAgentId,
         category: contact.last_name.charAt(0).toUpperCase() || 'U'
       }));
       const { data, error } = await supabase.from('contacts').insert(contactsForDb).select();
@@ -239,6 +247,40 @@ const handleFileUpload = async (file: File) => {
 <div className="space-y-4">
   {step === 'upload' ? (
     <>
+      {/* Agent Selection for Admins */}
+      {isAdmin && (
+        <div className="space-y-3 p-4 bg-muted/50 rounded-lg border">
+          <div className="flex items-center space-x-2">
+            <Users className="h-4 w-4 text-primary" />
+            <h4 className="font-medium">Agent Assignment</h4>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              Assign all contacts to agent:
+            </label>
+            <Select 
+              value={selectedAgentId} 
+              onValueChange={setSelectedAgentId}
+              disabled={agentsLoading}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select an agent..." />
+              </SelectTrigger>
+              <SelectContent>
+                {agents.map((agent) => (
+                  <SelectItem key={agent.user_id} value={agent.user_id}>
+                    {getAgentDisplayName(agent)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              If no agent is selected, contacts will be assigned to you.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div
         className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
           dragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'
@@ -346,7 +388,15 @@ const handleFileUpload = async (file: File) => {
       )}
       <div className="flex justify-between">
         <Button variant="outline" onClick={() => setStep('upload')}>Back</Button>
-        <Button onClick={handleImport} disabled={!mapping['last_name']}>Import</Button>
+        <Button 
+          onClick={handleImport} 
+          disabled={
+            !mapping['last_name'] || 
+            (isAdmin && !selectedAgentId && !agentId)
+          }
+        >
+          Import
+        </Button>
       </div>
     </div>
   )}
