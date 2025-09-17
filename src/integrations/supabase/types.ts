@@ -503,6 +503,13 @@ export type Database = {
             foreignKeyName: "dtd2_tasks_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
+            referencedRelation: "leads_secure_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "dtd2_tasks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
             referencedRelation: "Leads_Table_Agents_Name"
             referencedColumns: ["user_id"]
           },
@@ -1563,6 +1570,13 @@ export type Database = {
             foreignKeyName: "transaction_coordination_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
+            referencedRelation: "leads_secure_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "transaction_coordination_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
             referencedRelation: "Leads_Table_Agents_Name"
             referencedColumns: ["user_id"]
           },
@@ -1604,7 +1618,62 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      leads_secure_summary: {
+        Row: {
+          assigned_agent_id: string | null
+          city: string | null
+          created_at: string | null
+          email_masked: string | null
+          first_name: string | null
+          last_name_masked: string | null
+          phone_masked: string | null
+          source: string | null
+          state: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: number | null
+          zip_code: number | null
+        }
+        Insert: {
+          assigned_agent_id?: string | null
+          city?: string | null
+          created_at?: string | null
+          email_masked?: never
+          first_name?: string | null
+          last_name_masked?: never
+          phone_masked?: never
+          source?: string | null
+          state?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: number | null
+          zip_code?: number | null
+        }
+        Update: {
+          assigned_agent_id?: string | null
+          city?: string | null
+          created_at?: string | null
+          email_masked?: never
+          first_name?: string | null
+          last_name_masked?: never
+          phone_masked?: never
+          source?: string | null
+          state?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: number | null
+          zip_code?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "Leads Table [Agent's Name]_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
     }
     Functions: {
       format_phone_display: {
@@ -1627,6 +1696,14 @@ export type Database = {
           p_zip_code?: string
         }
         Returns: undefined
+      }
+      mask_email: {
+        Args: { email_address: string }
+        Returns: string
+      }
+      mask_phone: {
+        Args: { phone_number: string }
+        Returns: string
       }
       normalize_phone: {
         Args: { phone_input: string }
