@@ -7,6 +7,7 @@ import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { ContactInput } from '@/hooks/useContacts';
 import { useAgents } from '@/hooks/useAgents';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -32,6 +33,7 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
   const [selectedAgentId, setSelectedAgentId] = useState<string>('__self__');
   const [selectedDelimiter, setSelectedDelimiter] = useState<string>(',');
   const [originalText, setOriginalText] = useState<string>('');
+  const [customDelimiter, setCustomDelimiter] = useState<string>('');
 
   const REQUIRED_FIELDS: Array<keyof ContactInput> = ['last_name'];
   const OPTIONAL_FIELDS: Array<keyof ContactInput> = ['first_name','email','phone','address_1','address_2','city','state','zip_code','tags','dnc','notes'];
@@ -56,34 +58,74 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
     }
   }, [open, isAdmin, roleLoading, fetchAgents]);
 
+  // Helpers: delimiter guess, text cleaning, and parsing
+  const guessDelimiter = useCallback((line: string): string => {
+    const candidates = [',', ';', '\t', '|'];
+    let best = ',';
+    let bestCount = -1;
+    for (const d of candidates) {
+      const count = (line.match(new RegExp(`\\${d}`, 'g')) || []).length;
+      if (count > bestCount) {
+        best = d;
+        bestCount = count;
+      }
+    }
+    return best;
+  }, []);
+
+  const autoParseText = useCallback((text: string, forcedDelimiter?: string) => {
+    let t = text.replace(/^\uFEFF/, '');
+    const lines = t.split(/\r?\n/);
+    if (lines[0] && /^sep\s*=/.test(lines[0].trim().toLowerCase())) {
+      lines.shift();
+    }
+
+    const candidates = forcedDelimiter ? [forcedDelimiter] : [',', ';', '\t', '|'];
+    let chosen = forcedDelimiter || ',';
+    let startIdx = 0;
+    let bestScore = -1;
+
+    for (const d of candidates) {
+      for (let i = 0; i < Math.min(lines.length, 20); i++) {
+        const c1 = (lines[i] || '').split(d).length - 1;
+        const c2 = (lines[i + 1] || '').split(d).length - 1;
+        const score = c1 + c2;
+        if (score > bestScore) {
+          bestScore = score;
+          startIdx = i;
+          chosen = d;
+        }
+      }
+    }
+
+    const cleaned = lines.slice(startIdx).join('\n');
+    const result = Papa.parse(cleaned, {
+      header: true,
+      skipEmptyLines: true,
+      delimiter: chosen,
+    });
+
+    const rows = (result.data as any[]).filter((r) => r && Object.keys(r).length > 0);
+    const headers = (result.meta.fields || Object.keys(rows[0] || {})) as string[];
+    return { headers, rows, usedDelimiter: chosen, cleanedText: cleaned };
+  }, []);
+
   const handleDelimiterSelection = useCallback(async () => {
     if (!originalText) return;
-    
     setLoading(true);
     try {
-      console.debug(`[CSVUpload] Re-parsing with selected delimiter: ${selectedDelimiter}`);
-      
-      const result = Papa.parse(originalText, {
-        header: true,
-        skipEmptyLines: true,
-        delimiter: selectedDelimiter === 'tab' ? '\t' : selectedDelimiter,
-      });
+      const chosen = selectedDelimiter === 'tab' ? '\t' : (selectedDelimiter === 'custom' ? (customDelimiter || ',') : selectedDelimiter);
+      console.debug(`[CSVUpload] Re-parsing with selected delimiter: ${chosen === '\\t' ? 'TAB' : chosen}`);
+      const { headers, rows } = autoParseText(originalText, chosen);
 
-      if (result.errors.some(e => e.type === 'Delimiter' || e.type === 'Quotes')) {
-        throw new Error('Invalid delimiter for this file format');
-      }
-
-      const rows = (result.data as any[]).filter((r) => r && Object.keys(r).length > 0);
-      const headers = (result.meta.fields || Object.keys(rows[0] || {})) as string[];
-
-      if (headers.length <= 1) {
-        throw new Error('Still only one column after delimiter selection. Please check your file format.');
+      if (!headers || headers.length <= 1) {
+        throw new Error('Still only one column after delimiter selection. Please check your file.');
       }
 
       setCsvHeaders(headers);
       setRawRows(rows);
-      
-      // Set up default mapping
+
+      // Default mapping
       const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, '_');
       const canonicalize = (s: string) => {
         const nh = normalize(s);
@@ -93,16 +135,11 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
         if (nh === 'lastname' || nh === 'last') return 'last_name';
         return nh;
       };
-
       const defaultMap: Record<string, string> = {};
       ALL_FIELDS.forEach((field) => {
-        const match = headers.find((h: string) => {
-          const ch = canonicalize(h);
-          return ch === field;
-        });
+        const match = headers.find((h: string) => canonicalize(h) === field);
         if (match) defaultMap[field] = match;
       });
-      
       setMapping(defaultMap);
       setStep('map');
     } catch (error: any) {
@@ -111,11 +148,10 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
     } finally {
       setLoading(false);
     }
-  }, [originalText, selectedDelimiter, ALL_FIELDS]);
+  }, [originalText, selectedDelimiter, customDelimiter, ALL_FIELDS, autoParseText]);
 
   const handleFileUpload = useCallback(async (file: File) => {
     if (loading) return;
-    
     setLoading(true);
     try {
       if (!agentId) {
@@ -124,38 +160,102 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
         return;
       }
 
-      const rawText = await file.text();
-      let text = rawText.replace(/^\uFEFF/, '');
-      setOriginalText(text);
-
-      // Drop bogus first line like "sep=,"
-      const lines = text.split(/\r?\n/);
-      if (lines[0] && /^sep\s*=/.test(lines[0].trim().toLowerCase())) {
-        lines.shift();
-        text = lines.join('\n');
+      if (file.size > 20 * 1024 * 1024) {
+        throw new Error('File is too large. Maximum size is 20MB.');
       }
 
-      const delimiters = [',', ';', '\t', '|'];
-      let bestResult = Papa.parse(text, { header: true, skipEmptyLines: true });
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
 
-      let rows = (bestResult.data as any[]).filter((r) => r && Object.keys(r).length > 0);
-      let headers = (bestResult.meta.fields || Object.keys(rows[0] || {})) as string[];
+      // Detect XLSX by extension or ZIP signature (PK)
+      const isXlsx = file.name.toLowerCase().endsWith('.xlsx') || (bytes[0] === 0x50 && bytes[1] === 0x4b);
+      if (isXlsx) {
+        console.debug('[CSVUpload] Detected XLSX. Importing via xlsx parser.');
+        toast({ title: 'Info', description: 'Excel workbook detected (.xlsx). Importing first sheet.' });
+        const XLSX: any = await import('xlsx');
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const aoa: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+        if (!aoa || aoa.length === 0) throw new Error('The Excel sheet is empty.');
+        // Find header row as the one with the most non-empty cells
+        let headerIdx = 0;
+        let maxCells = -1;
+        for (let i = 0; i < Math.min(aoa.length, 50); i++) {
+          const nonEmpty = (aoa[i] || []).filter((c) => c != null && String(c).trim() !== '').length;
+          if (nonEmpty > maxCells) {
+            maxCells = nonEmpty;
+            headerIdx = i;
+          }
+        }
+        const headers = (aoa[headerIdx] || []).map((h) => String(h).trim());
+        if (headers.length <= 1) throw new Error('Could not detect headers in Excel sheet.');
+        const rows = aoa.slice(headerIdx + 1)
+          .map((r) => {
+            const obj: Record<string, any> = {};
+            headers.forEach((h, i) => {
+              obj[h] = r?.[i] ?? '';
+            });
+            return obj;
+          })
+          .filter((o) => Object.values(o).some((v) => String(v).trim() !== ''));
+
+        setCsvHeaders(headers);
+        setRawRows(rows);
+
+        // Default mapping
+        const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, '_');
+        const canonicalize = (s: string) => {
+          const nh = normalize(s);
+          if (nh === 'phone_number') return 'phone';
+          if (nh === 'zipcode' || nh === 'zip') return 'zip_code';
+          if (nh === 'firstname' || nh === 'first') return 'first_name';
+          if (nh === 'lastname' || nh === 'last') return 'last_name';
+          return nh;
+        };
+        const defaultMap: Record<string, string> = {};
+        ALL_FIELDS.forEach((field) => {
+          const match = headers.find((h: string) => canonicalize(h) === field);
+          if (match) defaultMap[field] = match;
+        });
+        setMapping(defaultMap);
+        setStep('map');
+        return;
+      }
+
+      // Decode text (UTF-8 default, handle UTF-16 BOM)
+      let text: string;
+      if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+        console.debug('[CSVUpload] Detected UTF-16 LE text.');
+        toast({ title: 'Info', description: 'UTF-16 text detected. Decoding and parsing.' });
+        text = new TextDecoder('utf-16le').decode(bytes);
+      } else if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+        console.debug('[CSVUpload] Detected UTF-16 BE text.');
+        toast({ title: 'Info', description: 'UTF-16 text detected. Decoding and parsing.' });
+        text = new TextDecoder('utf-16be').decode(bytes);
+      } else {
+        text = new TextDecoder('utf-8').decode(bytes);
+      }
+
+      setOriginalText(text);
+
+      const { headers, rows, usedDelimiter } = autoParseText(text);
 
       if (!headers || headers.length <= 1) {
-        console.debug('[CSVUpload] Single column detected, showing delimiter selection UI');
-        setCsvHeaders(['__single_column__']);
-        setRawRows([]);
+        console.debug('[CSVUpload] Single column detected after auto-parse. Showing delimiter UI.');
+        // Preselect guessed delimiter from the first non-empty line
+        const firstLine = (text.split(/\r?\n/).find((l) => l.trim().length > 0) || '');
+        const guess = guessDelimiter(firstLine);
+        setSelectedDelimiter(guess === '\t' ? 'tab' : (guess || ','));
         setStep('delimiter-select');
         return;
       }
 
-      if (rows.length === 0) {
-        throw new Error('No data rows found in CSV file.');
-      }
-
       setCsvHeaders(headers);
       setRawRows(rows);
-      
+
+      // Default mapping
       const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, '_');
       const canonicalize = (s: string) => {
         const nh = normalize(s);
@@ -165,25 +265,20 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
         if (nh === 'lastname' || nh === 'last') return 'last_name';
         return nh;
       };
-
       const defaultMap: Record<string, string> = {};
       ALL_FIELDS.forEach((field) => {
-        const match = headers.find((h: string) => {
-          const ch = canonicalize(h);
-          return ch === field;
-        });
+        const match = headers.find((h: string) => canonicalize(h) === field);
         if (match) defaultMap[field] = match;
       });
-
       setMapping(defaultMap);
       setStep('map');
     } catch (error: any) {
       console.error('CSV parsing error:', error);
-      toast({ title: 'Error', description: error?.message || 'Failed to read CSV file.' });
+      toast({ title: 'Error', description: error?.message || 'Failed to read file.' });
     } finally {
       setLoading(false);
     }
-  }, [loading, agentId, onOpenChange, ALL_FIELDS]);
+  }, [loading, agentId, onOpenChange, ALL_FIELDS, autoParseText, guessDelimiter]);
 
   const handleImport = useCallback(async () => {
     try {
@@ -288,12 +383,12 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
           <div>
             <h4 className="font-medium">Select Delimiter</h4>
             <p className="text-sm text-muted-foreground">
-              Only one column was detected. Please select the correct delimiter for your CSV file.
+              Only one column was detected or headers were unclear. Choose the delimiter and we’ll re-parse.
             </p>
           </div>
           <div className="space-y-3">
             <label className="text-sm font-medium">Delimiter</label>
-            <Select value={selectedDelimiter} onValueChange={setSelectedDelimiter}>
+            <Select value={selectedDelimiter} onValueChange={(v) => setSelectedDelimiter(v)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -302,9 +397,30 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
                 <SelectItem value=";">Semicolon (;)</SelectItem>
                 <SelectItem value="tab">Tab</SelectItem>
                 <SelectItem value="|">Pipe (|)</SelectItem>
+                <SelectItem value="custom">Custom…</SelectItem>
               </SelectContent>
             </Select>
+            {selectedDelimiter === 'custom' && (
+              <div className="space-y-2">
+                <label className="text-sm text-muted-foreground">Enter a single character</label>
+                <Input
+                  value={customDelimiter}
+                  onChange={(e) => setCustomDelimiter(e.target.value.slice(0, 1))}
+                  placeholder="," maxLength={1}
+                />
+              </div>
+            )}
           </div>
+
+          {originalText && (
+            <div className="rounded-md border p-3 bg-muted/50">
+              <div className="text-sm font-medium mb-2">File preview (first lines)</div>
+              <pre className="text-xs whitespace-pre-wrap max-h-40 overflow-auto font-mono">
+                {originalText.split(/\r?\n/).slice(0, 8).join('\n')}
+              </pre>
+            </div>
+          )}
+
           <div className="flex justify-between">
             <Button variant="outline" onClick={() => setStep('upload')}>
               Back
@@ -371,7 +487,7 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
                 if (loading) return;
                 const input = document.createElement('input');
                 input.type = 'file';
-                input.accept = '.csv';
+                input.accept = '.csv,.tsv,.txt,.xlsx';
                 input.onchange = (e) => {
                   const file = (e.target as HTMLInputElement).files?.[0];
                   if (file) handleFileUpload(file);
