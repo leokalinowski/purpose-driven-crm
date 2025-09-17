@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface Agent {
@@ -13,11 +13,12 @@ export interface Agent {
 export const useAgents = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchAgents = async () => {
+  const fetchAgents = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      console.log('🔍 Fetching agents...');
       const { data, error } = await supabase
         .from('profiles')
         .select('user_id, first_name, last_name, email, role')
@@ -25,11 +26,8 @@ export const useAgents = () => {
         .order('first_name', { ascending: true });
 
       if (error) {
-        console.error('❌ Error fetching agents:', error);
         throw error;
       }
-
-      console.log('✅ Agents fetched:', data);
       
       // Add the id field as user_id for compatibility with Agent interface
       const agentsWithId = (data || []).map(agent => ({
@@ -38,27 +36,33 @@ export const useAgents = () => {
       }));
       
       setAgents(agentsWithId as Agent[]);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching agents:', error);
+      setError(error.message || 'Failed to fetch agents');
+      setAgents([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchAgents();
-  }, []);
+  }, [fetchAgents]);
 
-  const getAgentDisplayName = (agent: Agent) => {
+  const getAgentDisplayName = useCallback((agent: Agent) => {
+    if (!agent) return 'Unknown Agent';
     if (agent.first_name || agent.last_name) {
       return `${agent.first_name || ''} ${agent.last_name || ''}`.trim();
     }
     return agent.email || 'Unknown Agent';
-  };
+  }, []);
+
+  const memoizedAgents = useMemo(() => agents, [agents]);
 
   return {
-    agents,
+    agents: memoizedAgents,
     loading,
+    error,
     fetchAgents,
     getAgentDisplayName,
   };

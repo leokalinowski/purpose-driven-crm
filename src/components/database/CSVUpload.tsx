@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import Papa from 'papaparse';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -21,20 +21,8 @@ interface CSVUploadProps {
 export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUpload }) => {
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
-  const { agents, loading: agentsLoading, getAgentDisplayName } = useAgents();
+  const { agents, loading: agentsLoading, getAgentDisplayName, error: agentsError } = useAgents();
   
-  // Debug logging with safe checks
-  console.log('🔍 CSV Upload Debug:', { 
-    userId: user?.id, 
-    isAdmin, 
-    roleLoading,
-    agentsCount: agents?.length || 0, 
-    agentsLoading,
-    agents: agents?.length ? agents.map(a => ({ 
-      id: a?.id || 'unknown', 
-      name: a ? getAgentDisplayName(a) : 'unknown' 
-    })) : []
-  });
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [step, setStep] = useState<'upload' | 'map'>('upload');
@@ -47,14 +35,22 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
   const OPTIONAL_FIELDS: Array<keyof ContactInput> = ['first_name','email','phone','address_1','address_2','city','state','zip_code','tags','dnc','notes'];
   const ALL_FIELDS: Array<keyof ContactInput> = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
 
-  const agentId = user?.id || '';
+  const agentId = useMemo(() => user?.id || '', [user?.id]);
+
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setStep('upload');
+      setCsvHeaders([]);
+      setRawRows([]);
+      setMapping({});
+      setSelectedAgentId('');
+      setLoading(false);
+      setDragActive(false);
+    }
+  }, [open]);
   
-  // Debug logging for agent section
-  if (isAdmin) {
-    console.log('🎯 Rendering agent section - isAdmin:', isAdmin, 'agents:', agents);
-  }
-  
-  const parseCSV = (text: string): ContactInput[] => {
+  const parseCSV = useCallback((text: string): ContactInput[] => {
     const { data } = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
     const contacts: ContactInput[] = [];
     const skipped: number[] = []; // Track skipped row numbers
@@ -114,9 +110,11 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
 
     if (contacts.length === 0) throw new Error('No valid contacts found in CSV');
     return contacts;
-  };
+  }, []);
 
-const handleFileUpload = async (file: File) => {
+const handleFileUpload = useCallback(async (file: File) => {
+  if (loading) return; // Prevent multiple uploads
+  
   setLoading(true);
   try {
     if (!agentId) {
@@ -127,8 +125,17 @@ const handleFileUpload = async (file: File) => {
 
     const text = await file.text();
     const result = Papa.parse(text, { header: true, skipEmptyLines: true });
+    
+    if (result.errors.length > 0) {
+      throw new Error(`CSV parsing error: ${result.errors[0].message}`);
+    }
+
     const rows = (result.data as any[]).filter((r) => r && Object.keys(r).length > 0);
     const headers = (result.meta as any).fields || Object.keys(rows[0] || {});
+
+    if (rows.length === 0) {
+      throw new Error('No valid data found in CSV file');
+    }
 
     const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, '_');
     const defaultMap: Record<string, string> = {};
@@ -154,9 +161,9 @@ const handleFileUpload = async (file: File) => {
   } finally {
     setLoading(false);
   }
-};
+}, [loading, agentId, onOpenChange, ALL_FIELDS]);
 
-  const handleImport = async () => {
+  const handleImport = useCallback(async () => {
     try {
       const normalize = (v: any) => (v == null ? '' : String(v));
       const getVal = (row: any, field: keyof ContactInput) => {
@@ -218,9 +225,9 @@ const handleFileUpload = async (file: File) => {
       console.error('Import failed:', e);
       toast({ title: 'Error', description: e?.message || 'Failed to import contacts.' });
     }
-  };
+  }, [rawRows, mapping, isAdmin, selectedAgentId, agentId, onUpload, onOpenChange]);
 
-  const handleDrag = (e: React.DragEvent) => {
+  const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === 'dragenter' || e.type === 'dragover') {
@@ -228,9 +235,9 @@ const handleFileUpload = async (file: File) => {
     } else if (e.type === 'dragleave') {
       setDragActive(false);
     }
-  };
+  }, []);
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
@@ -241,8 +248,9 @@ const handleFileUpload = async (file: File) => {
     } else {
       toast({ title: 'Error', description: 'Please upload a CSV file' });
     }
-  };
-  const downloadTemplate = () => {
+  }, [handleFileUpload]);
+
+  const downloadTemplate = useCallback(() => {
     const template = [
       'first_name,last_name,phone,email,address_1,address_2,city,state,zip_code,tags,dnc,notes',
       'John,Doe,555-1234,john@example.com,123 Main St,Apt 4,Anytown,CA,12345,client;lead,false,Important client',
@@ -255,7 +263,14 @@ const handleFileUpload = async (file: File) => {
     a.download = 'contacts_template.csv';
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }, []);
+
+  // Show agents error if there's one
+  useEffect(() => {
+    if (agentsError && isAdmin) {
+      toast({ title: 'Warning', description: `Failed to load agents: ${agentsError}` });
+    }
+  }, [agentsError, isAdmin]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -325,6 +340,7 @@ const handleFileUpload = async (file: File) => {
         <Button
           variant="outline"
           onClick={() => {
+            if (loading) return;
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = '.csv';
@@ -336,7 +352,7 @@ const handleFileUpload = async (file: File) => {
           }}
           disabled={loading}
         >
-          {loading ? 'Uploading...' : 'Browse Files'}
+          {loading ? 'Processing...' : 'Browse Files'}
         </Button>
       </div>
       <div className="space-y-2">
