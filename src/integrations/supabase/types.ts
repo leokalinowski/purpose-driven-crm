@@ -1620,13 +1620,18 @@ export type Database = {
     Views: {
       leads_secure_summary: {
         Row: {
+          address_1: string | null
+          address_2: string | null
           assigned_agent_id: string | null
           city: string | null
+          client_tags: string | null
           created_at: string | null
-          email_masked: string | null
+          dnc_list: boolean | null
+          email: string | null
           first_name: string | null
-          last_name_masked: string | null
-          phone_masked: string | null
+          last_name: string | null
+          notes: string | null
+          phone: number | null
           source: string | null
           state: string | null
           status: string | null
@@ -1635,13 +1640,18 @@ export type Database = {
           zip_code: number | null
         }
         Insert: {
+          address_1?: string | null
+          address_2?: string | null
           assigned_agent_id?: string | null
           city?: string | null
+          client_tags?: string | null
           created_at?: string | null
-          email_masked?: never
+          dnc_list?: boolean | null
+          email?: string | null
           first_name?: string | null
-          last_name_masked?: never
-          phone_masked?: never
+          last_name?: string | null
+          notes?: string | null
+          phone?: number | null
           source?: string | null
           state?: string | null
           status?: string | null
@@ -1650,13 +1660,18 @@ export type Database = {
           zip_code?: number | null
         }
         Update: {
+          address_1?: string | null
+          address_2?: string | null
           assigned_agent_id?: string | null
           city?: string | null
+          client_tags?: string | null
           created_at?: string | null
-          email_masked?: never
+          dnc_list?: boolean | null
+          email?: string | null
           first_name?: string | null
-          last_name_masked?: never
-          phone_masked?: never
+          last_name?: string | null
+          notes?: string | null
+          phone?: number | null
           source?: string | null
           state?: string | null
           status?: string | null
