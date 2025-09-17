@@ -1674,42 +1674,6 @@ export type Database = {
           },
         ]
       }
-      social_accounts_secure: {
-        Row: {
-          access_token_preview: string | null
-          account_id: string | null
-          account_name: string | null
-          agent_id: string | null
-          created_at: string | null
-          expires_at: string | null
-          id: string | null
-          platform: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          access_token_preview?: never
-          account_id?: string | null
-          account_name?: string | null
-          agent_id?: string | null
-          created_at?: string | null
-          expires_at?: string | null
-          id?: string | null
-          platform?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          access_token_preview?: never
-          account_id?: string | null
-          account_name?: string | null
-          agent_id?: string | null
-          created_at?: string | null
-          expires_at?: string | null
-          id?: string | null
-          platform?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
     }
     Functions: {
       format_phone_display: {
@@ -1746,8 +1710,16 @@ export type Database = {
         Args: { email_address: string }
         Returns: string
       }
+      mask_email_field: {
+        Args: { email_value: string }
+        Returns: string
+      }
       mask_phone: {
         Args: { phone_number: string }
+        Returns: string
+      }
+      mask_phone_field: {
+        Args: { phone_value: string }
         Returns: string
       }
       normalize_phone: {
