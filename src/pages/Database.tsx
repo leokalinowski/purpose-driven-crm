@@ -110,8 +110,11 @@ const Database = () => {
 
   const handleCSVUpload = async (csvData: ContactInput[], agentId?: string) => {
     try {
+      console.log('CSV Upload - isAdmin:', isAdmin, 'agentId:', agentId, 'contacts count:', csvData.length);
+      
       if (isAdmin && agentId) {
         // Admin uploading for specific agent
+        console.log('Admin uploading for agent:', agentId);
         const contactsWithAgent = csvData.map(contact => ({
           ...contact,
           agent_id: agentId,
@@ -124,6 +127,8 @@ const Database = () => {
           .select();
 
         if (error) throw error;
+
+        console.log(`Successfully inserted ${data?.length || 0} contacts for agent ${agentId}`);
 
         // Automatically check DNC for all contacts with phone numbers
         if (data && data.length > 0) {
@@ -152,16 +157,20 @@ const Database = () => {
         }
       } else {
         // Regular agent upload or admin uploading for themselves
+        console.log('Regular upload using uploadCSV hook');
         await uploadCSV(csvData);
       }
       
       toast({
         title: "Success",
-        description: `${csvData.length} contacts uploaded successfully`,
+        description: `${csvData.length} contacts uploaded successfully${agentId ? ` for selected agent` : ''}`,
       });
       setShowCSVUpload(false);
       goToPage(1);
+      // Refresh DNC stats after upload
+      fetchDNCStats();
     } catch (error) {
+      console.error('CSV Upload error:', error);
       toast({
         title: "Error",
         description: "Failed to upload contacts",
@@ -227,10 +236,8 @@ const Database = () => {
           </div>
         </div>
         
-        {/* DNC Statistics Dashboard - Admin Only */}
-        {isAdmin && (
-          <DNCStatsCard stats={stats} loading={dncLoading} />
-        )}
+        {/* DNC Statistics Dashboard */}
+        <DNCStatsCard stats={stats} loading={dncLoading} />
         
         <Card>
           <CardHeader>
