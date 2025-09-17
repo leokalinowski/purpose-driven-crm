@@ -1684,24 +1684,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
-      get_secure_lead_summaries: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          assigned_agent_id: string | null
-          city: string | null
-          created_at: string | null
-          email_masked: string | null
-          first_name: string | null
-          last_name_masked: string | null
-          phone_masked: string | null
-          source: string | null
-          state: string | null
-          status: string | null
-          updated_at: string | null
-          user_id: number | null
-          zip_code: number | null
-        }[]
-      }
       is_valid_phone: {
         Args: { phone_input: string }
         Returns: boolean
