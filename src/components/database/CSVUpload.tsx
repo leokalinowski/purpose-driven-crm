@@ -128,17 +128,62 @@ const handleFileUpload = useCallback(async (file: File) => {
     }
 
     const text = await file.text();
-    const result = Papa.parse(text, { header: true, skipEmptyLines: true });
     
-    if (result.errors.length > 0) {
-      throw new Error(`CSV parsing error: ${result.errors[0].message}`);
+    // Try different delimiters to handle various CSV formats
+    const delimiters = [',', ';', '\t', '|'];
+    let bestResult: Papa.ParseResult<any> | null = null;
+    let maxFields = 0;
+
+    for (const delimiter of delimiters) {
+      try {
+        const result = Papa.parse(text, { 
+          header: true, 
+          skipEmptyLines: true,
+          delimiter: delimiter === '\t' ? '\t' : delimiter
+        });
+        
+        const fieldCount = result.meta.fields?.length || 0;
+        
+        if (result.errors.length === 0 && fieldCount > maxFields) {
+          bestResult = result;
+          maxFields = fieldCount;
+        }
+      } catch (e) {
+        continue; // Try next delimiter
+      }
     }
 
-    const rows = (result.data as any[]).filter((r) => r && Object.keys(r).length > 0);
-    const headers = (result.meta as any).fields || Object.keys(rows[0] || {});
+    // If no good result found, try auto-detection
+    if (!bestResult || maxFields <= 1) {
+      bestResult = Papa.parse(text, { header: true, skipEmptyLines: true });
+    }
+
+    if (!bestResult) {
+      throw new Error('Failed to parse CSV file');
+    }
+    
+    // Validate parsing results
+    if (bestResult.errors.length > 0) {
+      const criticalErrors = bestResult.errors.filter(e => e.type === 'Delimiter' || e.type === 'Quotes');
+      if (criticalErrors.length > 0) {
+        throw new Error(`CSV parsing error: ${criticalErrors[0].message}. Please check your CSV file format.`);
+      }
+    }
+
+    const rows = (bestResult.data as any[]).filter((r) => r && Object.keys(r).length > 0);
+    const headers = bestResult.meta.fields || Object.keys(rows[0] || {});
+
+    // Validate CSV structure
+    if (!headers || headers.length === 0) {
+      throw new Error('No headers found in CSV file. Please ensure your CSV has a header row.');
+    }
+
+    if (headers.length === 1 && text.includes(',')) {
+      throw new Error('CSV appears to have multiple columns but only one header was detected. Please check that your file uses proper CSV formatting with commas separating values.');
+    }
 
     if (rows.length === 0) {
-      throw new Error('No valid data found in CSV file');
+      throw new Error('No data rows found in CSV file. Please ensure your CSV contains data below the headers.');  
     }
 
     const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, '_');
