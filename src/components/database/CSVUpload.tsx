@@ -515,7 +515,7 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
           <h4 className="font-medium">Map your columns</h4>
           <p className="text-sm text-muted-foreground">Match your CSV columns to contact fields. Last name is required.</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {ALL_FIELDS.map((field) => (
             <div key={field as string} className="space-y-1">
               <label className="text-sm font-medium">
@@ -543,22 +543,26 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
         </div>
         
         {rawRows.length > 0 && (
-          <div className="rounded-md border p-3">
-            <div className="text-sm font-medium mb-2">Preview (first 5 rows)</div>
-            <div className="text-xs overflow-auto">
-              <table className="w-full">
+          <div className="rounded-md border p-4 bg-muted/20">
+            <div className="text-sm font-medium mb-3">Preview (first 5 rows)</div>
+            <div className="text-xs overflow-x-auto">
+              <table className="w-full min-w-full border-collapse">
                 <thead>
-                  <tr>
+                  <tr className="border-b">
                     {ALL_FIELDS.filter((f) => mapping[f] && mapping[f] !== '__ignore__').map((f) => (
-                      <th key={String(f)} className="text-left pr-3 py-1 capitalize">{String(f).replace('_',' ')}</th>
+                      <th key={String(f)} className="text-left px-3 py-2 font-medium capitalize bg-muted/50">
+                        {String(f).replace('_',' ')}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {rawRows.slice(0, 5).map((row, i) => (
-                    <tr key={i} className="border-t">
+                    <tr key={i} className="border-b hover:bg-muted/30">
                       {ALL_FIELDS.filter((f) => mapping[f] && mapping[f] !== '__ignore__').map((f) => (
-                        <td key={String(f)} className="pr-3 py-1">{String(row[mapping[f] as string] ?? '')}</td>
+                        <td key={String(f)} className="px-3 py-2 max-w-32 truncate" title={String(row[mapping[f] as string] ?? '')}>
+                          {String(row[mapping[f] as string] ?? '')}
+                        </td>
                       ))}
                     </tr>
                   ))}
@@ -581,17 +585,24 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
     );
   };
 
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && step === 'map' && mapping['last_name'] && (!isAdmin || selectedAgentId || agentId)) {
+      e.preventDefault();
+      handleImport();
+    }
+  }, [step, mapping, isAdmin, selectedAgentId, agentId, handleImport]);
+
   return (
     <ErrorBoundary>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" onKeyDown={handleKeyDown}>
           <DialogHeader>
             <DialogTitle>Upload Contacts CSV</DialogTitle>
             <DialogDescription>
-              Upload a CSV file to import multiple contacts at once.
+              Upload a CSV file to import multiple contacts at once. Press Enter to import when ready.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-6">
             {renderContent()}
           </div>
         </DialogContent>
