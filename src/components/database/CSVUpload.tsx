@@ -584,7 +584,7 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
           <Button variant="outline" onClick={() => setStep('upload')}>Back</Button>
           <Button 
             onClick={handleImport} 
-            disabled={!mapping['last_name'] || (isAdmin && !selectedAgentId && !agentId)}
+            disabled={!mapping['last_name'] || (isAdmin && !selectedAgentId)}
           >
             Import
           </Button>

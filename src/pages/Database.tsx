@@ -127,34 +127,45 @@ const Database = () => {
         });
 
         if (error) throw error;
+        if (!data || data.success !== true) {
+          throw new Error(data?.error || 'Import failed.');
+        }
         
         console.log('Edge function response:', data);
         
         toast({
-          title: "Success",
-          description: data.message || `${csvData.length} contacts uploaded successfully for selected agent`,
+          title: 'Success',
+          description: data.message || `${data.contactCount ?? csvData.length} contacts uploaded successfully for selected agent`,
         });
+
+        // If admin uploaded to their own account, refresh list
+        if (user?.id && agentId === user.id) {
+          await fetchContacts();
+        }
       } else {
-        // Regular agent upload or admin uploading for themselves
+        // Regular agent upload or admin uploading for themselves (no agentId passed)
         console.log('Regular upload using uploadCSV hook');
         await uploadCSV(csvData);
         
         toast({
-          title: "Success",
+          title: 'Success',
           description: `${csvData.length} contacts uploaded successfully`,
         });
+
+        // Refresh the list for the uploading user
+        await fetchContacts();
       }
       
       setShowCSVUpload(false);
       goToPage(1);
       // Refresh DNC stats after upload
       fetchDNCStats();
-    } catch (error) {
+    } catch (error: any) {
       console.error('CSV Upload error:', error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to upload contacts",
-        variant: "destructive",
+        title: 'Error',
+        description: error?.message || 'Failed to upload contacts',
+        variant: 'destructive',
       });
     }
   };

@@ -23,7 +23,6 @@ export const useAgents = () => {
       const { data, error } = await supabase
         .from('profiles')
         .select('user_id, first_name, last_name, email, role')
-        .neq('role', 'admin')
         .order('first_name', { ascending: true });
 
       if (error) {
