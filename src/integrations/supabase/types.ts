@@ -705,7 +705,7 @@ export type Database = {
         Row: {
           address_1: string | null
           address_2: string | null
-          assigned_agent_id: string | null
+          assigned_agent_id: string
           city: string | null
           client_tags: string | null
           created_at: string
@@ -725,7 +725,7 @@ export type Database = {
         Insert: {
           address_1?: string | null
           address_2?: string | null
-          assigned_agent_id?: string | null
+          assigned_agent_id: string
           city?: string | null
           client_tags?: string | null
           created_at?: string
@@ -745,7 +745,7 @@ export type Database = {
         Update: {
           address_1?: string | null
           address_2?: string | null
-          assigned_agent_id?: string | null
+          assigned_agent_id?: string
           city?: string | null
           client_tags?: string | null
           created_at?: string
@@ -1181,6 +1181,42 @@ export type Database = {
           updated_at?: string
           user_id?: string
           website?: string | null
+        }
+        Relationships: []
+      }
+      security_audit_log: {
+        Row: {
+          created_at: string | null
+          id: string
+          ip_address: unknown | null
+          new_values: Json | null
+          old_values: Json | null
+          operation: string
+          table_name: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          operation: string
+          table_name: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          operation?: string
+          table_name?: string
+          user_agent?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
