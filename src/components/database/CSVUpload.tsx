@@ -30,7 +30,7 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<any[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('__self__');
 
   const REQUIRED_FIELDS: Array<keyof ContactInput> = ['last_name'];
   const OPTIONAL_FIELDS: Array<keyof ContactInput> = ['first_name','email','phone','address_1','address_2','city','state','zip_code','tags','dnc','notes'];
@@ -45,7 +45,7 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
       setCsvHeaders([]);
       setRawRows([]);
       setMapping({});
-      setSelectedAgentId('');
+      setSelectedAgentId('__self__');
       setLoading(false);
       setDragActive(false);
     } else if (open && isAdmin && !roleLoading) {
@@ -208,8 +208,9 @@ const handleFileUpload = useCallback(async (file: File) => {
       }
 
       // Determine which agent to assign contacts to
-      const targetAgentId = isAdmin && selectedAgentId ? selectedAgentId : agentId;
-
+      const targetAgentId = isAdmin
+        ? (selectedAgentId === '__self__' || !selectedAgentId ? agentId : selectedAgentId)
+        : agentId;
       if (onUpload) {
         await onUpload(contacts, targetAgentId);
         onOpenChange(false);
@@ -306,23 +307,23 @@ const handleFileUpload = useCallback(async (file: File) => {
               disabled={agentsLoading}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select an agent or leave blank for yourself" />
+                <SelectValue placeholder="Select an agent or keep default (yourself)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Assign to yourself</SelectItem>
-                {agentsLoading && <SelectItem value="" disabled>Loading agents...</SelectItem>}
+                <SelectItem value="__self__">Assign to yourself</SelectItem>
+                {agentsLoading && <SelectItem value="__loading__" disabled>Loading agents...</SelectItem>}
                 {!agentsLoading && agents.length > 0 && agents.map((agent) => (
                   <SelectItem key={agent.id} value={agent.id}>
                     {getAgentDisplayName(agent)}
                   </SelectItem>
                 ))}
                 {!agentsLoading && agents.length === 0 && (
-                  <SelectItem value="" disabled>No agents found</SelectItem>
+                  <SelectItem value="__none__" disabled>No agents found</SelectItem>
                 )}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Leave empty to assign contacts to yourself.
+              Default assigns to yourself. Choose an agent to override.
             </p>
           </div>
         </div>
