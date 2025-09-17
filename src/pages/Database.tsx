@@ -15,6 +15,7 @@ import { ContactActivitiesDialog } from '@/components/database/ContactActivities
 import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useDNCStats } from '@/hooks/useDNCStats';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -43,6 +44,7 @@ const Database = () => {
     fetchDNCStats,
   } = useDNCStats();
   
+  const { user } = useAuth();
   const { isAdmin } = useUserRole();
   const { toast } = useToast();
  
@@ -113,58 +115,36 @@ const Database = () => {
       console.log('CSV Upload - isAdmin:', isAdmin, 'agentId:', agentId, 'contacts count:', csvData.length);
       
       if (isAdmin && agentId) {
-        // Admin uploading for specific agent
-        console.log('Admin uploading for agent:', agentId);
-        const contactsWithAgent = csvData.map(contact => ({
-          ...contact,
-          agent_id: agentId,
-          category: contact.last_name.charAt(0).toUpperCase() || 'A',
-        }));
-
-        const { data, error } = await supabase
-          .from('contacts')
-          .insert(contactsWithAgent)
-          .select();
+        // Admin uploading for specific agent - use edge function
+        console.log('Admin uploading for agent via edge function:', agentId);
+        
+        const { data, error } = await supabase.functions.invoke('admin-contacts-import', {
+          body: { 
+            contacts: csvData, 
+            agentId: agentId,
+            adminUserId: user?.id 
+          }
+        });
 
         if (error) throw error;
-
-        console.log(`Successfully inserted ${data?.length || 0} contacts for agent ${agentId}`);
-
-        // Automatically check DNC for all contacts with phone numbers
-        if (data && data.length > 0) {
-          const contactsWithPhones = data.filter(contact => contact.phone?.trim());
-          
-          if (contactsWithPhones.length > 0) {
-            console.log(`Initiating DNC checks for ${contactsWithPhones.length} contacts with phone numbers`);
-            
-            // Process DNC checks in small batches to avoid overwhelming the API
-            for (const contact of contactsWithPhones) {
-              try {
-                await supabase.functions.invoke('dnc-single-check', {
-                  body: { 
-                    phone: contact.phone.trim(),
-                    contactId: contact.id 
-                  }
-                });
-                // Small delay between requests to be respectful to the API
-                await new Promise(resolve => setTimeout(resolve, 200));
-              } catch (error) {
-                console.error(`Failed to initiate DNC check for contact ${contact.id}:`, error);
-                // Continue with other contacts even if one fails
-              }
-            }
-          }
-        }
+        
+        console.log('Edge function response:', data);
+        
+        toast({
+          title: "Success",
+          description: data.message || `${csvData.length} contacts uploaded successfully for selected agent`,
+        });
       } else {
         // Regular agent upload or admin uploading for themselves
         console.log('Regular upload using uploadCSV hook');
         await uploadCSV(csvData);
+        
+        toast({
+          title: "Success",
+          description: `${csvData.length} contacts uploaded successfully`,
+        });
       }
       
-      toast({
-        title: "Success",
-        description: `${csvData.length} contacts uploaded successfully${agentId ? ` for selected agent` : ''}`,
-      });
       setShowCSVUpload(false);
       goToPage(1);
       // Refresh DNC stats after upload
@@ -173,7 +153,7 @@ const Database = () => {
       console.error('CSV Upload error:', error);
       toast({
         title: "Error",
-        description: "Failed to upload contacts",
+        description: error.message || "Failed to upload contacts",
         variant: "destructive",
       });
     }

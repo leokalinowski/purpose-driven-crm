@@ -1,6 +1,9 @@
 
 project_id = "cguoaokqwgqvzkqqezcq"
 
+[functions.admin-contacts-import]
+verify_jwt = true
+
 [functions.clickup-webhook]
 verify_jwt = false
 

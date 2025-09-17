@@ -30,7 +30,7 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<any[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [selectedAgentId, setSelectedAgentId] = useState<string>('__self__');
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [selectedDelimiter, setSelectedDelimiter] = useState<string>(',');
   const [originalText, setOriginalText] = useState<string>('');
   const [customDelimiter, setCustomDelimiter] = useState<string>('');
@@ -48,7 +48,7 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
       setCsvHeaders([]);
       setRawRows([]);
       setMapping({});
-      setSelectedAgentId('__self__');
+      setSelectedAgentId('');
       setSelectedDelimiter(',');
       setOriginalText('');
       setLoading(false);
@@ -320,9 +320,13 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
         return;
       }
 
-      const targetAgentId = isAdmin
-        ? (selectedAgentId === '__self__' || !selectedAgentId ? agentId : selectedAgentId)
-        : agentId;
+      const targetAgentId = isAdmin ? selectedAgentId : agentId;
+
+      // Admin users must select a specific agent
+      if (isAdmin && !targetAgentId) {
+        toast({ title: 'Error', description: 'Please select an agent to assign contacts to.' });
+        return;
+      }
 
       if (onUpload) {
         await onUpload(contacts, targetAgentId);
@@ -443,28 +447,32 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
                 <Users className="h-4 w-4 text-primary" />
                 <h4 className="font-medium">Agent Assignment</h4>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Assign all contacts to agent:
-                </label>
-                <Select 
-                  value={selectedAgentId} 
-                  onValueChange={setSelectedAgentId}
-                  disabled={agentsLoading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select an agent or keep default (yourself)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__self__">Assign to yourself</SelectItem>
-                    {!agentsLoading && agents.map((agent) => (
-                      <SelectItem key={agent.id} value={agent.id}>
-                        {getAgentDisplayName(agent)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                 <div className="space-y-2">
+                 <label className="text-sm font-medium">
+                   <span className="text-destructive">*</span> Assign all contacts to agent:
+                 </label>
+                 <Select 
+                   value={selectedAgentId} 
+                   onValueChange={setSelectedAgentId}
+                   disabled={agentsLoading}
+                 >
+                   <SelectTrigger>
+                     <SelectValue placeholder="Select an agent (required)" />
+                   </SelectTrigger>
+                   <SelectContent>
+                     {!agentsLoading && agents.map((agent) => (
+                       <SelectItem key={agent.id} value={agent.id}>
+                         {getAgentDisplayName(agent)} ({agent.role})
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
+                 {!selectedAgentId && (
+                   <p className="text-sm text-destructive">
+                     Please select an agent to assign contacts to
+                   </p>
+                 )}
+               </div>
             </div>
           )}
 
