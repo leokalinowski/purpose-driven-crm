@@ -1674,6 +1674,42 @@ export type Database = {
           },
         ]
       }
+      social_accounts_secure: {
+        Row: {
+          access_token_preview: string | null
+          account_id: string | null
+          account_name: string | null
+          agent_id: string | null
+          created_at: string | null
+          expires_at: string | null
+          id: string | null
+          platform: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          access_token_preview?: never
+          account_id?: string | null
+          account_name?: string | null
+          agent_id?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string | null
+          platform?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          access_token_preview?: never
+          account_id?: string | null
+          account_name?: string | null
+          agent_id?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string | null
+          platform?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       format_phone_display: {
@@ -1696,6 +1732,15 @@ export type Database = {
           p_zip_code?: string
         }
         Returns: undefined
+      }
+      mask_contact_data: {
+        Args: {
+          contact_id: string
+          field_name: string
+          field_value: string
+          requesting_user_id?: string
+        }
+        Returns: string
       }
       mask_email: {
         Args: { email_address: string }
