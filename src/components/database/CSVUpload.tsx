@@ -2,11 +2,11 @@
 import React, { useState } from 'react';
 import Papa from 'papaparse';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Upload, Download, Users } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useUser } from '@supabase/auth-helpers-react';
+import { useAuth } from '@/hooks/useAuth';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { ContactInput } from '@/hooks/useContacts';
 import { useAgents } from '@/hooks/useAgents';
@@ -19,16 +19,18 @@ interface CSVUploadProps {
 }
 
 export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUpload }) => {
-  const user = useUser();
-  const { isAdmin } = useUserRole();
+  const { user } = useAuth();
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const { agents, loading: agentsLoading, getAgentDisplayName } = useAgents();
   
   // Debug logging
   console.log('🔍 CSV Upload Debug:', { 
-    user: user?.id, 
+    userId: user?.id, 
     isAdmin, 
-    agents: agents?.length, 
-    agentsLoading 
+    roleLoading,
+    agentsCount: agents?.length, 
+    agentsLoading,
+    agents: agents?.map(a => ({ id: a.id, name: getAgentDisplayName(a) }))
   });
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -257,12 +259,15 @@ const handleFileUpload = async (file: File) => {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Upload Contacts CSV</DialogTitle>
+          <DialogDescription>
+            Upload a CSV file to import multiple contacts at once. You can map columns to contact fields and assign them to specific agents.
+          </DialogDescription>
         </DialogHeader>
 <div className="space-y-4">
   {step === 'upload' ? (
     <>
       {/* Agent Selection for Admins */}
-      {isAdmin && (
+      {isAdmin && !roleLoading && (
         <div className="space-y-3 p-4 bg-muted/50 rounded-lg border">
           <div className="flex items-center space-x-2">
             <Users className="h-4 w-4 text-primary" />
@@ -278,20 +283,32 @@ const handleFileUpload = async (file: File) => {
               disabled={agentsLoading}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select an agent..." />
+                <SelectValue placeholder="Select an agent or leave blank for yourself" />
               </SelectTrigger>
               <SelectContent>
-                {agents.map((agent) => (
-                  <SelectItem key={agent.user_id} value={agent.user_id}>
+                <SelectItem value="">Assign to yourself</SelectItem>
+                {agentsLoading && <SelectItem value="" disabled>Loading agents...</SelectItem>}
+                {!agentsLoading && agents.length > 0 && agents.map((agent) => (
+                  <SelectItem key={agent.id} value={agent.id}>
                     {getAgentDisplayName(agent)}
                   </SelectItem>
                 ))}
+                {!agentsLoading && agents.length === 0 && (
+                  <SelectItem value="" disabled>No agents found</SelectItem>
+                )}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              If no agent is selected, contacts will be assigned to you.
+              Leave empty to assign contacts to yourself.
             </p>
           </div>
+        </div>
+      )}
+      
+      {/* Debug info in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
+          Debug: isAdmin={String(isAdmin)}, roleLoading={String(roleLoading)}, agentsCount={agents.length}
         </div>
       )}
 
