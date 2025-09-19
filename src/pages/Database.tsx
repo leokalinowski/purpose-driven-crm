@@ -4,20 +4,23 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Upload, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Upload, Search, ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { ContactTable } from '@/components/database/ContactTable';
 import { ContactForm } from '@/components/database/ContactForm';
 import { CSVUpload } from '@/components/database/CSVUpload';
 import { DNCStatsCard } from '@/components/database/DNCStatsCard';
 import { ContactActivitiesDialog } from '@/components/database/ContactActivitiesDialog';
+import { DuplicateCleanupButton } from '@/components/admin/DuplicateCleanupButton';
 
 import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useDNCStats } from '@/hooks/useDNCStats';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
+import { useAgents } from '@/hooks/useAgents';
 import { supabase } from '@/integrations/supabase/client';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const Database = () => {
   const {
@@ -47,12 +50,21 @@ const Database = () => {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
   const { toast } = useToast();
+  const { agents, fetchAgents, getAgentDisplayName } = useAgents();
  
   const [showContactForm, setShowContactForm] = useState(false);
   const [showCSVUpload, setShowCSVUpload] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
   const [viewingActivitiesContact, setViewingActivitiesContact] = useState<Contact | null>(null);
+  const [selectedCleanupAgent, setSelectedCleanupAgent] = useState<string>('');
+
+  // Fetch agents for admin cleanup selector
+  useEffect(() => {
+    if (isAdmin) {
+      fetchAgents();
+    }
+  }, [isAdmin, fetchAgents]);
 
 
   const handleAddContact = async (contactData: ContactInput) => {
@@ -213,6 +225,37 @@ const Database = () => {
           </div>
          
           <div className="flex gap-2">
+            {/* Admin Duplicate Cleanup Section */}
+            {isAdmin && (
+              <div className="flex items-center gap-2 mr-4">
+                <Select value={selectedCleanupAgent} onValueChange={setSelectedCleanupAgent}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Select agent for cleanup" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agents.map((agent) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        {getAgentDisplayName(agent)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedCleanupAgent && (
+                  <DuplicateCleanupButton
+                    agentId={selectedCleanupAgent}
+                    agentName={getAgentDisplayName(agents.find(a => a.id === selectedCleanupAgent)!)}
+                    onCleanupComplete={() => {
+                      // Refresh contacts if cleaned up own account
+                      if (selectedCleanupAgent === user?.id) {
+                        fetchContacts();
+                      }
+                      setSelectedCleanupAgent('');
+                    }}
+                  />
+                )}
+              </div>
+            )}
+            
             <Button
               onClick={() => setShowCSVUpload(true)}
               variant="outline"

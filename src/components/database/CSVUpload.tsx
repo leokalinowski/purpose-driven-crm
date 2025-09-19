@@ -55,8 +55,12 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
       setDragActive(false);
     } else if (open && isAdmin && !roleLoading) {
       fetchAgents();
+      // Auto-select current user for admin uploads to their own account
+      if (!selectedAgentId && agentId) {
+        setSelectedAgentId(agentId);
+      }
     }
-  }, [open, isAdmin, roleLoading, fetchAgents]);
+  }, [open, isAdmin, roleLoading, fetchAgents, selectedAgentId, agentId]);
 
   // Helpers: delimiter guess, text cleaning, and parsing
   const guessDelimiter = useCallback((line: string): string => {
@@ -281,6 +285,9 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
   }, [loading, agentId, onOpenChange, ALL_FIELDS, autoParseText, guessDelimiter]);
 
   const handleImport = useCallback(async () => {
+    if (loading) return; // Prevent multiple clicks
+    setLoading(true);
+    
     try {
       const normalize = (v: any) => (v == null ? '' : String(v));
       const getVal = (row: any, field: keyof ContactInput) => {
@@ -320,11 +327,11 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
         return;
       }
 
-      const targetAgentId = isAdmin ? selectedAgentId : agentId;
+      // For admins, use selectedAgentId or fallback to their own ID if none selected
+      const targetAgentId = isAdmin ? (selectedAgentId || agentId) : agentId;
 
-      // Admin users must select a specific agent
-      if (isAdmin && !targetAgentId) {
-        toast({ title: 'Error', description: 'Please select an agent to assign contacts to.' });
+      if (!targetAgentId) {
+        toast({ title: 'Error', description: 'Unable to determine target agent for import.' });
         return;
       }
 
@@ -340,13 +347,22 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
         if (error) throw error;
       }
       
-      toast({ title: 'Success', description: `${contacts.length} contacts imported!` });
+      const agentName = isAdmin && selectedAgentId && selectedAgentId !== agentId 
+        ? agents.find(a => a.id === selectedAgentId)?.first_name || 'selected agent'
+        : 'your account';
+        
+      toast({ 
+        title: 'Success', 
+        description: `${contacts.length} contacts imported to ${agentName}!` 
+      });
       onOpenChange(false);
     } catch (error: any) {
       console.error('Import failed:', error);
       toast({ title: 'Error', description: error?.message || 'Import failed.' });
+    } finally {
+      setLoading(false);
     }
-  }, [rawRows, mapping, isAdmin, selectedAgentId, agentId, onUpload, onOpenChange]);
+  }, [rawRows, mapping, isAdmin, selectedAgentId, agentId, onUpload, onOpenChange, loading, agents]);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -584,9 +600,9 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
           <Button variant="outline" onClick={() => setStep('upload')}>Back</Button>
           <Button 
             onClick={handleImport} 
-            disabled={!mapping['last_name'] || (isAdmin && !selectedAgentId)}
+            disabled={!mapping['last_name'] || loading}
           >
-            Import
+            {loading ? 'Importing...' : 'Import'}
           </Button>
         </div>
       </div>
@@ -594,11 +610,11 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
   };
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && step === 'map' && mapping['last_name'] && (!isAdmin || selectedAgentId || agentId)) {
+    if (e.key === 'Enter' && step === 'map' && mapping['last_name'] && !loading) {
       e.preventDefault();
       handleImport();
     }
-  }, [step, mapping, isAdmin, selectedAgentId, agentId, handleImport]);
+  }, [step, mapping, loading, handleImport]);
 
   return (
     <ErrorBoundary>
