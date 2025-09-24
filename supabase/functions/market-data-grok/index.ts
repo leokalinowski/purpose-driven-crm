@@ -1,68 +1,76 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-interface EmailRequest {
-  zip_code: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  address: string;
-  agent_name: string;
-  agent_info: string;
-  retry_attempt?: number;
-  model?: string;
 }
 
-interface EmailResponse {
-  zip_code: string;
-  html_email: string;
-  success: boolean;
-  retry_attempt?: number;
-  model_used?: string;
+const GROK_MODELS = ['grok-2', 'grok-beta', 'grok-3-mini'];
+
+interface MarketData {
+  medianValue: number;
+  valueChange: string;
+  areaName: string;
+  source: string;
+  lastUpdated: string;
 }
 
-interface ErrorResponse {
-  zip_code: string;
-  success: false;
-  error: string;
-  retry_attempt: number;
-  model_used: string;
-  retryable: boolean;
+async function getMarketDataFromDatabase(zipCode: string): Promise<MarketData | null> {
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!
+    )
+
+    // Get the most recent active CSV file
+    const { data: csvFile } = await supabase
+      .from('newsletter_csv_files')
+      .select('*')
+      .eq('is_active', true)
+      .order('upload_date', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (!csvFile) {
+      console.log('No active CSV file found')
+      return null
+    }
+
+    // Get market data for the ZIP code from the active CSV
+    const { data: marketData } = await supabase
+      .from('newsletter_market_data')
+      .select('*')
+      .eq('zip_code', zipCode)
+      .eq('csv_file_id', csvFile.id)
+      .single()
+
+    if (!marketData) {
+      console.log(`No market data found for ZIP ${zipCode}`)
+      return null
+    }
+
+    console.log(`Found market data for ZIP ${zipCode}: $${marketData.median_value}, ${marketData.value_change}`)
+
+    return {
+      medianValue: marketData.median_value,
+      valueChange: marketData.value_change,
+      areaName: marketData.area_name,
+      source: `CSV: ${csvFile.filename}`,
+      lastUpdated: marketData.created_at
+    }
+  } catch (error) {
+    console.error('Database market data error:', error)
+    return null
+  }
 }
 
-const GROK_MODELS = ['grok-code-fast-1', 'grok-3-mini', 'grok-beta', 'grok-2'];
-
-async function delay(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function isRetryableError(error: any): boolean {
-  // Rate limit, timeout, or temporary server errors are retryable
-  const status = error.status || error.response?.status;
-  return status === 429 || status === 503 || status === 502 || status >= 500;
-}
-
-async function generateEmailWithGrok(
-  requestData: EmailRequest,
-  model: string,
-  attempt: number
-): Promise<EmailResponse | ErrorResponse> {
-  const {
-    zip_code,
-    first_name,
-    last_name,
-    email,
-    address,
-    agent_name,
-    agent_info
-  } = requestData;
-
-  console.log(`Attempt ${attempt} - Generating email for ZIP: ${zip_code}, Model: ${model}`);
-
+async function generateProfessionalNewsletter(
+  zipCode: string,
+  marketData: MarketData | null,
+  contactInfo: any,
+  agentInfo: any
+): Promise<string> {
   try {
     const grokResponse = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
@@ -71,32 +79,57 @@ async function generateEmailWithGrok(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model,
+        model: 'grok-beta',
         messages: [
           {
             role: 'system',
-            content: `You are a professional real estate market analyst specializing in creating personalized, insightful monthly newsletters for homeowners. Your goal is to provide valuable, data-driven content that helps recipients understand their local market, spot trends, and make informed decisions. ALWAYS use real-time data fetched via web searches and page browsing from reliable sources like Zillow, Redfin, Homes.com, and official MLS sites. NEVER simulate, estimate, guess, or use placeholder data—only include verifiable facts from online research. If specific data is unavailable, state "Data not available at this time" without fabricating.
+            content: `You are a professional real estate market analyst creating personalized newsletters for homeowners.
 
-Output ONLY a single string containing the full, mobile-responsive HTML for the email body (no JSON, no extra text). Use inline CSS for compatibility with email clients (e.g., tables for layout, sans-serif fonts). Make the content engaging, professional, and concise (800-1200 words max).
+${marketData ? `
+REAL MARKET DATA FROM CSV:
+- ZIP Code: ${zipCode}
+- Median Home Value: $${marketData.medianValue.toLocaleString()}
+- 1-Year Change: ${marketData.valueChange}
+- Area: ${marketData.areaName}
+- Data Source: ${marketData.source}
+- Last Updated: ${marketData.lastUpdated}
 
-Structure the HTML email as follows, with flexibility to customize based on discovered data (e.g., add subsections for emerging trends or local events if relevant):
-- <html><body> wrapper with basic styles (e.g., font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;).
-- Subject line suggestion as a comment at the top (e.g., <!-- Subject: Your September 2025 Market Update for ZIP ${zip_code} -->).
-- Introduction: Personalized greeting (e.g., "Dear ${first_name} ${last_name},") followed by 2-3 sentences overviewing the market in ${zip_code} (include city/state from research), referencing the recipient's address (${address}) and how trends might affect their property.
-- Data Tables: Use <table> for key metrics, e.g.:
-  - Median Prices: Columns for Metric (e.g., Median Listing Price, Median Sale Price, Price per Sq Ft), Value, YoY Change, Notes.
-  - Inventory Metrics: Active Listings, Months of Supply, New/Pending Listings.
-  - Averages: Average Days on Market, Absorption Rate.
-  - Recent Transactions: Bullet list or table of anonymized examples (e.g., "2-bed condo sold for $500K in August").
-- Analysis/Trends: 3-4 paragraphs narrating trends (e.g., YoY price changes, buyer/seller balance, economic factors like interest rates or local developments). Compare to nearby ZIPs if data shows value. Highlight any new important info (e.g., new infrastructure or market shifts).
-- Takeaways: Bullet list of 4-6 actionable insights for buyers/sellers (e.g., "With inventory rising, negotiate aggressively if buying.").
-- DO NOT include any footer, call-to-action, contact information, or closing signature as this will be added automatically by the newsletter system.
+USE THIS EXACT DATA - DO NOT MODIFY THESE NUMBERS
+` : `
+NO REAL DATA AVAILABLE - CREATE GENERAL MARKET UPDATE WITHOUT SPECIFIC NUMBERS
+`}
 
-Ensure the email is unique based on real data and personalization, adding value like "Based on recent Zillow and Redfin data, your area in ${zip_code} is seeing increased demand due to [specific trend]."`
+Create a comprehensive, professional real estate newsletter that includes:
+
+1. **Market Overview Section** with real data (if available)
+2. **Detailed Market Analysis Table** with metrics
+3. **Local Market Trends** and insights
+4. **What This Means for Homeowners** section
+5. **Professional Recommendations**
+6. **Strong Call-to-Action** for the agent
+
+Format as clean HTML with professional headings, tables, and clear sections.`
           },
           {
             role: 'user',
-            content: `Generate a personalized real estate market report email for ZIP code ${zip_code}. Recipient: ${first_name} ${last_name}, Email: ${email}, Address: ${address}. Agent: ${agent_name}, Agent Info: ${agent_info}. Use real-time data from Zillow, Redfin, Homes.com, and MLS—perform web searches and browse pages as needed to fetch current metrics, trends, and insights.`
+            content: `Generate a comprehensive real estate market report email.
+
+RECIPIENT: ${contactInfo.first_name} ${contactInfo.last_name} (${contactInfo.email})
+ADDRESS: ${contactInfo.address}
+AGENT: ${agentInfo.agent_name} - ${agentInfo.agent_info}
+
+${marketData ? `
+REAL CSV DATA TO USE:
+- Median Home Value: $${marketData.medianValue.toLocaleString()}
+- 1-Year Change: ${marketData.valueChange}
+- Area: ${marketData.areaName}
+- Source: ${marketData.source}
+- Last Updated: ${marketData.lastUpdated}
+
+Build your newsletter around this real data with professional analysis.` : `
+Create a general market update without specific numbers since no real data is available.`
+}
+`
           }
         ],
         max_completion_tokens: 4000
@@ -104,107 +137,68 @@ Ensure the email is unique based on real data and personalization, adding value 
     });
 
     if (!grokResponse.ok) {
-      const errorText = await grokResponse.text();
-      console.error(`Grok API error (${model}):`, grokResponse.status, errorText);
-      
-      return {
-        zip_code,
-        success: false,
-        error: `Grok API error: ${grokResponse.status} - ${errorText}`,
-        retry_attempt: attempt,
-        model_used: model,
-        retryable: isRetryableError({ status: grokResponse.status })
-      };
+      throw new Error(`Grok API error: ${grokResponse.status}`);
     }
 
     const grokData = await grokResponse.json();
-    const content = grokData.choices?.[0]?.message?.content;
-    
-    if (!content) {
-      return {
-        zip_code,
-        success: false,
-        error: 'No content received from Grok API',
-        retry_attempt: attempt,
-        model_used: model,
-        retryable: false
-      };
-    }
-
-    console.log(`Successfully generated email for ZIP: ${zip_code} using ${model}`);
-    
-    return {
-      zip_code,
-      html_email: content,
-      success: true,
-      retry_attempt: attempt,
-      model_used: model
-    };
+    return grokData.choices?.[0]?.message?.content || '';
 
   } catch (error) {
-    console.error(`Error generating email with ${model}:`, error);
-    
-    return {
-      zip_code,
-      success: false,
-      error: error.message,
-      retry_attempt: attempt,
-      model_used: model,
-      retryable: isRetryableError(error)
-    };
+    console.error('Newsletter generation error:', error);
+    throw error;
   }
 }
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const requestData: EmailRequest = await req.json();
-    const {
+    const { zip_code, first_name, last_name, email, address, agent_name, agent_info } = await req.json()
+    
+    console.log(`Generating newsletter for ZIP: ${zip_code}`);
+    
+    // Get real market data from CSV database
+    const marketData = await getMarketDataFromDatabase(zip_code);
+    
+    // Generate professional newsletter with Grok
+    const emailContent = await generateProfessionalNewsletter(
       zip_code,
-      first_name,
-      last_name,
-      email,
-      address,
-      agent_name,
-      agent_info,
-      retry_attempt = 1,
-      model
-    } = requestData;
-
-    if (!zip_code || !first_name || !last_name || !email || !address || !agent_name || !agent_info) {
-      throw new Error('All personalization fields and ZIP code are required');
-    }
-
-    // Use specified model or default sequence
-    const modelToUse = model || GROK_MODELS[0];
+      marketData,
+      { first_name, last_name, email, address },
+      { agent_name, agent_info }
+    );
     
-    // Add exponential backoff delay for retries
-    if (retry_attempt > 1) {
-      const delay_ms = Math.pow(2, retry_attempt - 1) * 1000; // 1s, 2s, 4s...
-      console.log(`Retry attempt ${retry_attempt}, waiting ${delay_ms}ms`);
-      await delay(delay_ms);
-    }
-
-    const result = await generateEmailWithGrok(requestData, modelToUse, retry_attempt);
-    
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: result.success ? 200 : 500
-    });
-
-  } catch (error) {
-    console.error('Error in market-data-grok function:', error);
     return new Response(
       JSON.stringify({ 
-        error: 'Failed to generate market report email',
-        details: error.message 
+        success: true,
+        zip_code,
+        html_email: emailContent,
+        real_data: marketData ? {
+          median_value: marketData.medianValue,
+          value_change: marketData.valueChange,
+          area_name: marketData.areaName,
+          source: marketData.source,
+          last_updated: marketData.lastUpdated
+        } : null
       }),
-      {
-        status: 500,
+      { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200 
+      }
+    );
+
+  } catch (error) {
+    console.error('Function error:', error);
+    return new Response(
+      JSON.stringify({ 
+        error: 'Function error',
+        details: error.message
+      }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500 
       }
     );
   }

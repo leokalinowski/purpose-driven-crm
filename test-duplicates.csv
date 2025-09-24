@@ -1,0 +1,4 @@
+first_name,last_name,phone,email,address_1,city,state,zip_code,tags,dnc,notes
+John,Doe,555-1234,john@example.com,123 Main St,Anytown,CA,12345,client,false,First contact
+Jane,Smith,555-5678,jane@example.com,456 Oak Ave,Somewhere,TX,67890,lead,false,Second contact
+John,Doe,555-1234,john@example.com,789 Different St,Another City,NY,54321,duplicate,false,This should be blocked

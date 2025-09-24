@@ -165,28 +165,30 @@ serve(async (req) => {
         let contacts, contactsError;
         
         if (forceRecheck) {
-          // Force recheck: get ALL contacts with phone numbers
+          // Force recheck: get ALL contacts with phone numbers that are NOT already marked as DNC
           const result = await supabase
             .from('contacts')
             .select('id, phone, agent_id, dnc, dnc_last_checked')
             .eq('agent_id', agent.user_id)
+            .eq('dnc', false) // Only check contacts that are NOT already marked as DNC
             .not('phone', 'is', null)
             .not('phone', 'eq', '');
           contacts = result.data;
           contactsError = result.error;
-          console.log(`Query: ALL contacts for agent ${agent.user_id} WHERE phone IS NOT NULL AND phone != '' (FORCE RECHECK)`);
+          console.log(`Query: ALL non-DNC contacts for agent ${agent.user_id} WHERE dnc = false AND phone IS NOT NULL AND phone != '' (FORCE RECHECK)`);
         } else {
-          // Normal check: only contacts that haven't been checked or are older than 30 days
+          // Normal check: only contacts that haven't been checked or are older than 30 days AND are NOT already marked as DNC
           const result = await supabase
             .from('contacts')
             .select('id, phone, agent_id, dnc, dnc_last_checked')
             .eq('agent_id', agent.user_id)
+            .eq('dnc', false) // Only check contacts that are NOT already marked as DNC
             .or(`dnc_last_checked.is.null,dnc_last_checked.lt.${cutoffDate}`)
             .not('phone', 'is', null)
             .not('phone', 'eq', '');
           contacts = result.data;
           contactsError = result.error;
-          console.log(`Query: contacts for agent ${agent.user_id} WHERE (dnc_last_checked IS NULL OR dnc_last_checked < '${cutoffDate}') AND phone IS NOT NULL AND phone != ''`);
+          console.log(`Query: non-DNC contacts for agent ${agent.user_id} WHERE dnc = false AND (dnc_last_checked IS NULL OR dnc_last_checked < '${cutoffDate}') AND phone IS NOT NULL AND phone != ''`);
         }
 
         if (contactsError) {

@@ -37,24 +37,30 @@ interface MarketDataResponse {
   }>;
 }
 
-async function callGrokAPI(zipCode: string, periodMonth: string): Promise<MarketDataResponse> {
-  const xaiApiKey = Deno.env.get('XAI_API_KEY');
-  if (!xaiApiKey) {
-    throw new Error('XAI_API_KEY not configured');
+async function callClaudeAPI(zipCode: string, periodMonth: string): Promise<MarketDataResponse> {
+  const anthropicApiKey = Deno.env.get('ANTHROPIC_API_KEY');
+  if (!anthropicApiKey) {
+    throw new Error('ANTHROPIC_API_KEY not configured');
   }
 
   // Enhanced comprehensive prompt for narrative-driven market intelligence
-  const prompt = `As a real estate market analyst with access to comprehensive market data, research and analyze ZIP code ${zipCode} for ${periodMonth}. 
+  const prompt = `EXACT WEB SEARCH STEPS FOR ZIP ${zipCode}:
 
-Generate a comprehensive market intelligence report with ONLY valid JSON output that includes:
+1. Go to this EXACT URL: https://www.zillow.com/home-values/${zipCode}/
+2. Find the "Typical Home Values" number (like $641,307 for 20001)
+3. Find the "1-year Value Change" percentage (like -3.8% for 20001)
+4. Copy the exact URL from your browser
+5. Return ONLY valid JSON with these exact numbers
+
+Generate a market intelligence report with ONLY valid JSON output that includes:
 
 {
   "zip_code": "${zipCode}",
   "period_month": "${periodMonth}",
-  "median_sale_price": [actual median sale price from market data],
-  "median_list_price": [actual median listing price from market data],
-  "homes_sold": [actual number of homes sold],
-  "new_listings": [actual new listings count],
+  "median_sale_price": [exact number from Zillow page],
+  "median_list_price": [exact number from Zillow page],
+  "homes_sold": [exact number from Zillow page],
+  "new_listings": [exact number from Zillow page],
   "inventory": [current active inventory/listings],
   "median_dom": [actual median days on market],
   "avg_price_per_sqft": [calculated from recent sales data],
@@ -104,26 +110,42 @@ Make the key takeaways specific and actionable, focusing on:
 5. Neighborhood-specific opportunities or challenges`;
 
   try {
-    console.log(`Calling Grok API for ZIP ${zipCode}, period ${periodMonth}`);
+    console.log(`Calling Claude API for ZIP ${zipCode}, period ${periodMonth}`);
     
-    const response = await fetch('https://api.x.ai/v1/chat/completions', {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${xaiApiKey}`,
+        'x-api-key': anthropicApiKey,
         'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
         messages: [
           {
             role: 'system',
-            content: 'You are a comprehensive real estate market analyst with access to live market data. Research current conditions using all available sources including MLS data, Zillow, Redfin, Realtor.com, economic reports, and local market intelligence. Return ONLY valid JSON with comprehensive market analysis that provides actionable insights for homeowners.'
+            content: 'You are a professional real estate market analyst. CRITICAL: You represent real estate agents professionally - NEVER fabricate, estimate, or hallucinate data. Your credibility depends on 100% accuracy.
+
+    MANDATORY WEB SEARCH REQUIREMENTS - FOLLOW EXACTLY:
+    1. GO to this EXACT URL: https://www.zillow.com/home-values/${zipCode}/
+    2. FIND the number next to "Typical Home Values:" - copy it EXACTLY
+    3. FIND the percentage next to "1-year Value Change:" - copy it EXACTLY
+    4. COPY the full URL from your browser address bar
+    5. IF you cannot find these numbers, use null values in JSON
+    6. DO NOT estimate, guess, or make up any numbers - only use what you actually see
+
+SEARCH VERIFICATION REQUIRED:
+- Include at least one specific URL from your search results
+- Mention the specific page or section where you found each data point
+- If no data found, explicitly state "No current market data available from web search"
+
+Return ONLY valid JSON with market analysis. Better to have incomplete data than false data.'
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        model: 'grok-beta',
+        model: 'claude-3-5-sonnet-20241022',
         stream: false,
         max_tokens: 2000,
       }),
@@ -131,18 +153,18 @@ Make the key takeaways specific and actionable, focusing on:
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Grok API error: ${response.status} ${response.statusText}`, errorText);
-      throw new Error(`Grok API error: ${response.status} ${response.statusText}`);
+      console.error(`Claude API error: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`Claude API error: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
-    console.log('Grok API raw response received');
+    console.log('Claude API raw response received');
 
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error('Invalid response format from Grok API');
+    if (!data.content || !data.content[0] || !data.content[0].text) {
+      throw new Error('Invalid response format from Claude API');
     }
 
-    const content = data.choices[0].message.content;
+    const content = data.content[0].text;
     
     // Enhanced JSON extraction
     let jsonData;
@@ -202,7 +224,7 @@ Make the key takeaways specific and actionable, focusing on:
     return marketData;
 
   } catch (error) {
-    console.error('Error calling Grok API:', error);
+    console.error('Error calling Claude API:', error);
     
     // Enhanced fallback data with realistic variation by ZIP code
     const basePrice = zipCode.startsWith('1') ? 800000 : // NYC area
@@ -245,7 +267,7 @@ Make the key takeaways specific and actionable, focusing on:
       }))
     };
 
-    console.log('Using enhanced fallback data due to Grok API error');
+    console.log('Using enhanced fallback data due to Claude API error');
     return fallbackData;
   }
 }
@@ -269,7 +291,7 @@ async function storeMarketData(supabase: any, marketData: MarketDataResponse) {
       source: { 
         provider: 'grok',
         generated_at: new Date().toISOString(),
-        model: 'grok-beta'
+        model: 'claude-3-5-sonnet-20241022'
       }
     }, {
       onConflict: 'zip_code,period_month'
@@ -349,8 +371,8 @@ serve(async (req) => {
       );
     }
 
-    // Generate new data using Grok API
-    const marketData = await callGrokAPI(zip_code, reportMonth);
+    // Generate new data using Claude API
+    const marketData = await callClaudeAPI(zip_code, reportMonth);
     
     // Store the data
     await storeMarketData(supabase, marketData);

@@ -12,6 +12,7 @@ import { CSVUpload } from '@/components/database/CSVUpload';
 import { DNCStatsCard } from '@/components/database/DNCStatsCard';
 import { ContactActivitiesDialog } from '@/components/database/ContactActivitiesDialog';
 import { DuplicateCleanupButton } from '@/components/admin/DuplicateCleanupButton';
+import { DNCCheckButton } from '@/components/database/DNCCheckButton';
 
 import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useDNCStats } from '@/hooks/useDNCStats';
@@ -75,6 +76,8 @@ const Database = () => {
         description: "Contact added successfully",
       });
       setShowContactForm(false);
+      // Refresh DNC stats after adding contact
+      await fetchDNCStats();
     } catch (error) {
       toast({
         title: "Error",
@@ -94,6 +97,8 @@ const Database = () => {
         description: "Contact updated successfully",
       });
       closeContactForm();
+      // Refresh DNC stats after updating contact
+      await fetchDNCStats();
     } catch (error) {
       toast({
         title: "Error",
@@ -113,6 +118,8 @@ const Database = () => {
         title: "Success",
         description: "Contact deleted successfully",
       });
+      // Refresh DNC stats after deleting contact
+      await fetchDNCStats();
     } catch (error) {
       toast({
         title: "Error",
@@ -126,9 +133,9 @@ const Database = () => {
     try {
       console.log('CSV Upload - isAdmin:', isAdmin, 'agentId:', agentId, 'contacts count:', csvData.length);
       
-      if (isAdmin && agentId) {
-        // Admin uploading for specific agent - use edge function
-        console.log('Admin uploading for agent via edge function:', agentId);
+      // For admins: use edge function if uploading to someone else, regular upload for own account
+      if (isAdmin && agentId && agentId !== user?.id) {
+        console.log('Admin uploading for another agent via edge function:', agentId);
         
         const { data, error } = await supabase.functions.invoke('admin-contacts-import', {
           body: { 
@@ -147,15 +154,10 @@ const Database = () => {
         
         toast({
           title: 'Success',
-          description: data.message || `${data.contactCount ?? csvData.length} contacts uploaded successfully for selected agent`,
+          description: data.message || `${data.contactCount ?? csvData.length} contacts uploaded successfully`,
         });
-
-        // If admin uploaded to their own account, refresh list
-        if (user?.id && agentId === user.id) {
-          await fetchContacts();
-        }
       } else {
-        // Regular agent upload or admin uploading for themselves (no agentId passed)
+        // Regular upload (agents or admins uploading to their own account)
         console.log('Regular upload using uploadCSV hook');
         await uploadCSV(csvData);
         
@@ -171,14 +173,28 @@ const Database = () => {
       setShowCSVUpload(false);
       goToPage(1);
       // Refresh DNC stats after upload
-      fetchDNCStats();
+      await fetchDNCStats();
     } catch (error: any) {
       console.error('CSV Upload error:', error);
+      
+      // Provide more specific error messages for common issues
+      let errorMessage = 'Failed to upload contacts';
+      if (error?.message?.includes('Duplicate contacts found')) {
+        errorMessage = error.message;
+      } else if (error?.message?.includes('duplicate key value')) {
+        errorMessage = 'Some contacts already exist in the database. Please check for duplicates and try again.';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: 'Error',
-        description: error?.message || 'Failed to upload contacts',
+        description: errorMessage,
         variant: 'destructive',
       });
+    } finally {
+      // Ensure the CSV upload dialog closes even if there's an error
+      setShowCSVUpload(false);
     }
   };
 
@@ -271,7 +287,17 @@ const Database = () => {
         </div>
         
         {/* DNC Statistics Dashboard */}
-        <DNCStatsCard stats={stats} loading={dncLoading} />
+        <div className="space-y-4">
+          <DNCStatsCard stats={stats} loading={dncLoading} />
+          
+          {/* DNC Check Buttons - Admin Only */}
+          {isAdmin && (
+            <div className="flex justify-center gap-4">
+              <DNCCheckButton variant="default" size="lg" />
+              <DNCCheckButton variant="destructive" size="lg" forceRecheck={true} />
+            </div>
+          )}
+        </div>
         
         <Card>
           <CardHeader>

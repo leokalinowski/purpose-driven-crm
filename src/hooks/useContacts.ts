@@ -91,21 +91,7 @@ export const useContacts = () => {
 
     if (error) throw error;
 
-    // Automatically check DNC if phone number exists
-    if (data && contactData.phone?.trim()) {
-      try {
-        await supabase.functions.invoke('dnc-single-check', {
-          body: { 
-            phone: contactData.phone.trim(),
-            contactId: data.id 
-          }
-        });
-        console.log('DNC check initiated for new contact');
-      } catch (error) {
-        console.error('Failed to initiate DNC check:', error);
-        // Don't fail the contact creation if DNC check fails
-      }
-    }
+    // Note: DNC checks are now handled by monthly automation only
 
     fetchContacts();
     return data;
@@ -141,6 +127,57 @@ export const useContacts = () => {
   const uploadCSV = async (csvData: ContactInput[]) => {
     if (!user) throw new Error('User not authenticated');
 
+    // Check for duplicates before inserting
+    console.log(`Checking for duplicates among ${csvData.length} contacts`);
+    
+    // Get all emails and phones from the CSV contacts
+    const csvEmails = csvData.filter(c => c.email?.trim()).map(c => c.email.trim());
+    const csvPhones = csvData.filter(c => c.phone?.trim()).map(c => c.phone.trim());
+    
+    console.log(`CSV contains ${csvEmails.length} emails and ${csvPhones.length} phones`);
+    
+    if (csvEmails.length > 0 || csvPhones.length > 0) {
+      // Build OR conditions for all emails and phones
+      const orConditions = [];
+      
+      // Add email conditions
+      csvEmails.forEach(email => {
+        orConditions.push(`email.eq.${email}`);
+      });
+      
+      // Add phone conditions  
+      csvPhones.forEach(phone => {
+        orConditions.push(`phone.eq.${phone}`);
+      });
+      
+      if (orConditions.length > 0) {
+        console.log(`Checking ${orConditions.length} potential duplicates in database`);
+        
+        const { data: existingContacts, error: duplicateError } = await supabase
+          .from('contacts')
+          .select('id, email, phone, first_name, last_name')
+          .eq('agent_id', user.id)
+          .or(orConditions.join(','));
+          
+        if (duplicateError) {
+          console.error('Error checking for duplicates:', duplicateError);
+          throw new Error(`Failed to check for duplicates: ${duplicateError.message}`);
+        }
+        
+        if (existingContacts && existingContacts.length > 0) {
+          const duplicateInfo = existingContacts.map(d => {
+            const name = `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'Unknown';
+            return `${name} (Email: ${d.email || 'N/A'}, Phone: ${d.phone || 'N/A'})`;
+          }).join('; ');
+          
+          console.error('Duplicates found:', duplicateInfo);
+          throw new Error(`Duplicate contacts found: ${duplicateInfo}. Please remove these duplicates from your CSV and try again.`);
+        }
+      }
+    }
+
+    console.log('No duplicates found, proceeding with import');
+
     const contactsWithAgent = csvData.map(contact => ({
       ...contact,
       agent_id: user.id,
@@ -154,31 +191,7 @@ export const useContacts = () => {
 
     if (error) throw error;
 
-    // Automatically check DNC for all contacts with phone numbers
-    if (data && data.length > 0) {
-      const contactsWithPhones = data.filter(contact => contact.phone?.trim());
-      
-      if (contactsWithPhones.length > 0) {
-        console.log(`Initiating DNC checks for ${contactsWithPhones.length} contacts with phone numbers`);
-        
-        // Process DNC checks in small batches to avoid overwhelming the API
-        for (const contact of contactsWithPhones) {
-          try {
-            await supabase.functions.invoke('dnc-single-check', {
-              body: { 
-                phone: contact.phone.trim(),
-                contactId: contact.id 
-              }
-            });
-            // Small delay between requests to be respectful to the API
-            await new Promise(resolve => setTimeout(resolve, 200));
-          } catch (error) {
-            console.error(`Failed to initiate DNC check for contact ${contact.id}:`, error);
-            // Continue with other contacts even if one fails
-          }
-        }
-      }
-    }
+    // Note: DNC checks are now handled by monthly automation only
 
     return data;
   };

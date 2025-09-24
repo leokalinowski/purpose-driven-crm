@@ -10,10 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { useAdminNewsletter } from "@/hooks/useAdminNewsletter";
+import { NewsletterCostTracking } from "@/components/admin/NewsletterCostTracking";
+import { CSVUploadManager } from "@/components/admin/CSVUploadManager";
+import { AdminNewsletterPreview } from "@/components/admin/AdminNewsletterPreview";
+import { NewsletterSendManager } from "@/components/admin/NewsletterSendManager";
 import { formatDistanceToNow } from "date-fns";
-import { CalendarDays, Send, Settings, TestTube, Users } from "lucide-react";
+import { CalendarDays, Send, Settings, TestTube, Users, DollarSign, Upload, FileText, Mail } from "lucide-react";
 import { useState } from "react";
-
 export default function AdminNewsletter() {
   const {
     agents,
@@ -107,8 +110,20 @@ export default function AdminNewsletter() {
           </div>
         </div>
 
-        <Tabs defaultValue="agents" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs defaultValue="csv-upload" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger value="csv-upload" className="flex items-center gap-2">
+              <Upload className="h-4 w-4" />
+              CSV Upload
+            </TabsTrigger>
+            <TabsTrigger value="test-preview" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Test Preview
+            </TabsTrigger>
+            <TabsTrigger value="send-newsletter" className="flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              Send Newsletter
+            </TabsTrigger>
             <TabsTrigger value="agents" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Agent Settings
@@ -117,7 +132,23 @@ export default function AdminNewsletter() {
               <CalendarDays className="h-4 w-4" />
               Campaign History
             </TabsTrigger>
+            <TabsTrigger value="costs" className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4" />
+              Cost Tracking
+            </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="csv-upload" className="space-y-4">
+            <CSVUploadManager />
+          </TabsContent>
+
+          <TabsContent value="test-preview" className="space-y-4">
+            <AdminNewsletterPreview />
+          </TabsContent>
+
+          <TabsContent value="send-newsletter" className="space-y-4">
+            <NewsletterSendManager />
+          </TabsContent>
 
           <TabsContent value="agents" className="space-y-4">
             {isDryRun && (
@@ -297,6 +328,10 @@ export default function AdminNewsletter() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="costs" className="space-y-4">
+            <NewsletterCostTracking />
           </TabsContent>
         </Tabs>
       </div>

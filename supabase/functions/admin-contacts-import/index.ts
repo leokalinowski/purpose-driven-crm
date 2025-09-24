@@ -77,6 +77,57 @@ serve(async (req) => {
       throw new Error('Target agent not found');
     }
 
+    // Check for duplicates before inserting
+    console.log(`Checking for duplicates among ${contacts.length} contacts`);
+    
+    // Get all emails and phones from the CSV contacts
+    const csvEmails = contacts.filter(c => c.email?.trim()).map(c => c.email.trim());
+    const csvPhones = contacts.filter(c => c.phone?.trim()).map(c => c.phone.trim());
+    
+    console.log(`CSV contains ${csvEmails.length} emails and ${csvPhones.length} phones`);
+    
+    if (csvEmails.length > 0 || csvPhones.length > 0) {
+      // Build OR conditions for all emails and phones
+      const orConditions = [];
+      
+      // Add email conditions
+      csvEmails.forEach(email => {
+        orConditions.push(`email.eq.${email}`);
+      });
+      
+      // Add phone conditions  
+      csvPhones.forEach(phone => {
+        orConditions.push(`phone.eq.${phone}`);
+      });
+      
+      if (orConditions.length > 0) {
+        console.log(`Checking ${orConditions.length} potential duplicates in database`);
+        
+        const { data: existingContacts, error: duplicateError } = await supabaseServiceRole
+          .from('contacts')
+          .select('id, email, phone, first_name, last_name')
+          .eq('agent_id', agentId)
+          .or(orConditions.join(','));
+          
+        if (duplicateError) {
+          console.error('Error checking for duplicates:', duplicateError);
+          throw new Error(`Failed to check for duplicates: ${duplicateError.message}`);
+        }
+        
+        if (existingContacts && existingContacts.length > 0) {
+          const duplicateInfo = existingContacts.map(d => {
+            const name = `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'Unknown';
+            return `${name} (Email: ${d.email || 'N/A'}, Phone: ${d.phone || 'N/A'})`;
+          }).join('; ');
+          
+          console.error('Duplicates found:', duplicateInfo);
+          throw new Error(`Duplicate contacts found: ${duplicateInfo}. Please remove these duplicates from your CSV and try again.`);
+        }
+      }
+    }
+
+    console.log('No duplicates found, proceeding with import');
+
     // Prepare contacts for insertion
     const contactsForDb = contacts.map((contact: ContactInput) => ({
       ...contact,
@@ -99,36 +150,13 @@ serve(async (req) => {
 
     console.log(`Successfully inserted ${insertedContacts?.length || 0} contacts`);
 
-    // Automatically initiate DNC checks for contacts with phone numbers
-    const contactsWithPhones = insertedContacts?.filter(contact => 
-      contact.phone && contact.phone.trim() !== ''
-    ) || [];
-
-    if (contactsWithPhones.length > 0) {
-      console.log(`Initiating DNC checks for ${contactsWithPhones.length} contacts with phone numbers`);
-      
-      try {
-        // Call the DNC check function for each contact
-        const dncPromises = contactsWithPhones.map(contact => 
-          supabaseServiceRole.functions.invoke('dnc-single-check', {
-            body: { contactId: contact.id }
-          })
-        );
-
-        await Promise.all(dncPromises);
-        console.log('DNC checks initiated successfully');
-      } catch (dncError) {
-        console.error('DNC check initiation failed:', dncError);
-        // Don't fail the entire operation for DNC check failures
-      }
-    }
+    // Note: DNC checks are now handled by monthly automation only
 
     return new Response(
       JSON.stringify({
         success: true,
         message: `Successfully imported ${insertedContacts?.length || 0} contacts for agent ${targetAgent.first_name} ${targetAgent.last_name}`,
-        contactCount: insertedContacts?.length || 0,
-        dncChecksInitiated: contactsWithPhones.length
+        contactCount: insertedContacts?.length || 0
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -1,10 +1,13 @@
-import React from "react";
+import React, { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Layout } from "@/components/layout/Layout";
 import { useNewsletterAnalytics } from "@/hooks/useNewsletterAnalytics";
+import { NewsletterPreview } from "@/components/newsletter/NewsletterPreview";
+import { Eye } from "lucide-react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -25,6 +28,7 @@ function formatPercent(value: number | null | undefined) {
 
 export default function Newsletter() {
   const { campaigns, metrics, monthlySeries, isLoading, error } = useNewsletterAnalytics();
+  const [showPreview, setShowPreview] = useState(false);
 
   return (
     <Layout>
@@ -38,8 +42,16 @@ export default function Newsletter() {
       </Helmet>
 
       <div className="mx-auto w-full max-w-6xl">
-        <header className="mb-4">
+        <header className="mb-4 flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Newsletter Analytics</h1>
+          <Button 
+            onClick={() => setShowPreview(true)}
+            variant="outline"
+            size="sm"
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            Preview Newsletter
+          </Button>
         </header>
 
         {error ? (
@@ -204,6 +216,12 @@ export default function Newsletter() {
             )}
           </CardContent>
         </Card>
+        
+        {/* Newsletter Preview Dialog */}
+        <NewsletterPreview 
+          open={showPreview} 
+          onOpenChange={setShowPreview}
+        />
       </div>
     </Layout>
   );

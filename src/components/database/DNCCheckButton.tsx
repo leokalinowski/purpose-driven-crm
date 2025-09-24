@@ -5,13 +5,15 @@ import { useDNCStats } from '@/hooks/useDNCStats';
 import { useToast } from '@/components/ui/use-toast';
 
 interface DNCCheckButtonProps {
-  variant?: 'default' | 'outline';
+  variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
   size?: 'default' | 'sm' | 'lg';
+  forceRecheck?: boolean;
 }
 
 export const DNCCheckButton: React.FC<DNCCheckButtonProps> = ({ 
   variant = 'outline',
-  size = 'default'
+  size = 'default',
+  forceRecheck = false
 }) => {
   const { triggerDNCCheck, checking } = useDNCStats();
   const { toast } = useToast();
@@ -22,10 +24,12 @@ export const DNCCheckButton: React.FC<DNCCheckButtonProps> = ({
 
     setIsRunning(true);
     try {
-      await triggerDNCCheck(false); // false = don't force recheck
+      await triggerDNCCheck(forceRecheck);
       toast({
         title: "DNC Check Started",
-        description: "DNC check has been initiated. This may take a few minutes to complete.",
+        description: forceRecheck 
+          ? "DNC recheck has been initiated for all contacts. This may take several minutes to complete."
+          : "DNC check has been initiated for unchecked contacts. This may take a few minutes to complete.",
       });
     } catch (error) {
       console.error('Error starting DNC check:', error);
@@ -51,7 +55,7 @@ export const DNCCheckButton: React.FC<DNCCheckButtonProps> = ({
       ) : (
         <Shield className="h-4 w-4 mr-2" />
       )}
-      {(checking || isRunning) ? 'Checking...' : 'Run DNC Check'}
+{(checking || isRunning) ? 'Checking...' : (forceRecheck ? 'Force Recheck All' : 'Run DNC Check')}
     </Button>
   );
 };

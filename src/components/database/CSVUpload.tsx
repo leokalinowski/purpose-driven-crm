@@ -55,10 +55,13 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
       setDragActive(false);
     } else if (open && isAdmin && !roleLoading) {
       fetchAgents();
-      // Auto-select current user for admin uploads to their own account
+      // For admins, default to their own account but allow selection
       if (!selectedAgentId && agentId) {
         setSelectedAgentId(agentId);
       }
+    } else if (open && !isAdmin && !roleLoading) {
+      // For agents, always use their own ID
+      setSelectedAgentId(agentId);
     }
   }, [open, isAdmin, roleLoading, fetchAgents, selectedAgentId, agentId]);
 
@@ -327,8 +330,8 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
         return;
       }
 
-      // For admins, use selectedAgentId or fallback to their own ID if none selected
-      const targetAgentId = isAdmin ? (selectedAgentId || agentId) : agentId;
+      // Determine target agent ID
+      const targetAgentId = selectedAgentId || agentId;
 
       if (!targetAgentId) {
         toast({ title: 'Error', description: 'Unable to determine target agent for import.' });
@@ -347,13 +350,15 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
         if (error) throw error;
       }
       
-      const agentName = isAdmin && selectedAgentId && selectedAgentId !== agentId 
+      // Show success message with target info
+      const isAdminUploadingToOther = isAdmin && selectedAgentId && selectedAgentId !== agentId;
+      const targetName = isAdminUploadingToOther 
         ? agents.find(a => a.id === selectedAgentId)?.first_name || 'selected agent'
         : 'your account';
         
       toast({ 
         title: 'Success', 
-        description: `${contacts.length} contacts imported to ${agentName}!` 
+        description: `${contacts.length} contacts imported to ${targetName}!` 
       });
       onOpenChange(false);
     } catch (error: any) {
@@ -488,6 +493,9 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
                      Please select an agent to assign contacts to
                    </p>
                  )}
+                 <p className="text-xs text-muted-foreground">
+                   💡 Tip: You can upload to your own account or any other agent's account
+                 </p>
                </div>
             </div>
           )}
@@ -518,7 +526,7 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
                 };
                 input.click();
               }}
-              disabled={loading}
+              disabled={loading || (isAdmin && !selectedAgentId)}
             >
               {loading ? 'Processing...' : 'Browse Files'}
             </Button>

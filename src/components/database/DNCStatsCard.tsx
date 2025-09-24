@@ -102,6 +102,11 @@ export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading }) =>
         <div className="text-sm text-muted-foreground">
           Last DNC check: {formatDate(stats.lastChecked)}
         </div>
+        
+        {/* Monthly Automation Info */}
+        <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+          💡 DNC checks run automatically on the 1st of each month for all accounts. Only contacts not already marked as DNC are checked to optimize costs.
+        </div>
       </CardContent>
     </Card>
   );
