@@ -158,7 +158,7 @@ serve(async (req) => {
       
       let agentChecked = 0;
       let agentFlagged = 0;
-      let agentErrors: string[] = [];
+      const agentErrors: string[] = [];
 
       try {
         // Get contacts that need DNC checking for this agent

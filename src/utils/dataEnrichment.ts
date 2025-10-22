@@ -3,7 +3,7 @@ import { Contact } from '@/hooks/useContacts';
 export interface EnrichedContact extends Contact {
   enrichment_score: number;
   enrichment_suggestions: string[];
-  enriched_fields: Record<string, any>;
+  enriched_fields: Record<string, boolean>;
   data_quality: 'poor' | 'fair' | 'good' | 'excellent';
 }
 
@@ -231,7 +231,7 @@ export const inferCompanyFromEmail = (email?: string | null): string | null => {
 // Data quality scoring - focused on core contact information
 export const calculateDataQualityScore = (contact: Contact): number => {
   let score = 0;
-  let totalFields = 4; // Name, Phone, Email, Address
+  const totalFields = 4; // Name, Phone, Email, Address
 
   // Name field (required for any contact)
   if (contact.first_name && contact.last_name) {
@@ -282,7 +282,7 @@ export const generateEnrichmentSuggestions = (contact: Contact): string[] => {
 // Main enrichment function
 export const enrichContact = (contact: Contact): EnrichmentResult => {
   const changes: string[] = [];
-  const enriched: any = { ...contact };
+  const enriched: Partial<Contact> = { ...contact };
 
   // Standardize phone
   const standardizedPhone = standardizePhone(contact.phone);

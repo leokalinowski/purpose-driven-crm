@@ -56,7 +56,7 @@ export const BulkContactEnricher: React.FC<BulkContactEnricherProps> = ({
         try {
           const originalQuality = Math.round(((() => {
             let score = 0;
-            let totalFields = 3;
+            const totalFields = 3;
             if (contact.first_name && contact.last_name) score += 1;
             if (contact.phone || contact.email) score += 1;
             if (contact.address_1 || contact.city || contact.state || contact.zip_code) score += 1;
@@ -68,7 +68,7 @@ export const BulkContactEnricher: React.FC<BulkContactEnricherProps> = ({
           // Calculate new quality score
           const newQuality = Math.round(((() => {
             let score = 0;
-            let totalFields = 3;
+            const totalFields = 3;
             if (result.contact.first_name && result.contact.last_name) score += 1;
             if (result.contact.phone || result.contact.email) score += 1;
             if (result.contact.address_1 || result.contact.city || result.contact.state || result.contact.zip_code) score += 1;

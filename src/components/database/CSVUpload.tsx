@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ContactInput } from '@/hooks/useContacts';
 import { useAgents } from '@/hooks/useAgents';
 import { useUserRole } from '@/hooks/useUserRole';
-import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 interface CSVUploadProps {
   open: boolean;
@@ -19,11 +19,15 @@ interface CSVUploadProps {
   onUpload?: (csvData: ContactInput[], agentId?: string) => Promise<void> | void;
 }
 
+const REQUIRED_FIELDS: Array<keyof ContactInput> = ['last_name'];
+const OPTIONAL_FIELDS: Array<keyof ContactInput> = ['first_name','email','phone','address_1','address_2','city','state','zip_code','tags','dnc','notes'];
+const ALL_FIELDS: Array<keyof ContactInput> = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
+
 export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUpload }) => {
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { agents, loading: agentsLoading, getAgentDisplayName, error: agentsError, fetchAgents } = useAgents();
-  
+
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [step, setStep] = useState<'upload' | 'delimiter-select' | 'map'>('upload');
@@ -34,10 +38,6 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
   const [selectedDelimiter, setSelectedDelimiter] = useState<string>(',');
   const [originalText, setOriginalText] = useState<string>('');
   const [customDelimiter, setCustomDelimiter] = useState<string>('');
-
-  const REQUIRED_FIELDS: Array<keyof ContactInput> = ['last_name'];
-  const OPTIONAL_FIELDS: Array<keyof ContactInput> = ['first_name','email','phone','address_1','address_2','city','state','zip_code','tags','dnc','notes'];
-  const ALL_FIELDS: Array<keyof ContactInput> = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
 
   const agentId = useMemo(() => user?.id || '', [user?.id]);
 
@@ -81,7 +81,7 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
   }, []);
 
   const autoParseText = useCallback((text: string, forcedDelimiter?: string) => {
-    let t = text.replace(/^\uFEFF/, '');
+    const t = text.replace(/^\uFEFF/, '');
     const lines = t.split(/\r?\n/);
     if (lines[0] && /^sep\s*=/.test(lines[0].trim().toLowerCase())) {
       lines.shift();

@@ -7,7 +7,7 @@ interface MetricoolIframeProps {
   userId?: string;
 }
 
-export function MetricoolIframe({ userId }: MetricoolIframeProps) {
+export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
   const { data: metricoolLink, isLoading } = useMetricoolLink(userId);
 
   if (isLoading) {
@@ -45,16 +45,18 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Metricool Dashboard</CardTitle>
+        <CardTitle>Metricool Social Media Dashboard</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="w-full">
           <iframe
-            src={metricoolLink.iframe_url}
+            src={`/metricool-test.html?url=${encodeURIComponent(metricoolLink.iframe_url)}`}
             className="w-full h-[800px] border-0 rounded-lg"
             title="Metricool Dashboard"
-            allow="clipboard-write"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
+            allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
+            referrerPolicy="no-referrer"
+            loading="lazy"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-orientation-lock allow-popups-to-escape-sandbox"
           />
         </div>
       </CardContent>

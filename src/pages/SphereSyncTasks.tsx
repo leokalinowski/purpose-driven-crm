@@ -24,21 +24,9 @@ export default function SphereSyncTasks() {
     historicalStats,
     updateTask
   } = useSphereSyncTasks();
-  
+
   const previousCompletionRate = useRef<number>(0);
   const hasTriggeredConfetti = useRef<boolean>(false);
-
-  if (!user) {
-    return (
-      <Layout>
-        <Card>
-          <CardContent className="p-6">
-            <p>Please sign in to access SphereSync tasks.</p>
-          </CardContent>
-        </Card>
-      </Layout>
-    );
-  }
 
   const totalTasks = callTasks.length + textTasks.length;
   const completedTasks = [...callTasks, ...textTasks].filter(task => task.completed).length;
@@ -67,6 +55,18 @@ export default function SphereSyncTasks() {
     
     previousCompletionRate.current = completionRate;
   }, [completionRate, totalTasks, triggerCelebration]);
+
+  if (!user) {
+    return (
+      <Layout>
+        <Card>
+          <CardContent className="p-6">
+            <p>Please sign in to access SphereSync tasks.</p>
+          </CardContent>
+        </Card>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

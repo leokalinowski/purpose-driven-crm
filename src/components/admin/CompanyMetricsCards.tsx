@@ -38,7 +38,7 @@ export function CompanyMetricsCards() {
       label: 'Social Media Engagement',
       value: '0%', // Placeholder - would need social analytics integration
       subtext: 'No social data available',
-      trend: 'neutral' as 'neutral'
+      trend: 'neutral' as const
     }
   };
 

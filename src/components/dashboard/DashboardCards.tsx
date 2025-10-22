@@ -1,14 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
-import { Users, Calendar, Mail, TrendingUp, CheckCircle, Briefcase, GraduationCap, Pin } from 'lucide-react';
-import { useDashboardData } from '@/hooks/useDashboardData';
+import { Users, Calendar, Mail, TrendingUp, CheckCircle, Briefcase, GraduationCap, Pin, LucideIcon } from 'lucide-react';
+import { useDashboardData, AgentDashboardData } from '@/hooks/useDashboardData';
 import { useWidgetPreferences } from '@/hooks/useWidgetPreferences';
 
+type KPIMetric = keyof AgentDashboardData['kpis'];
+
 const KPI_ORDER: Array<{
-  key: string;
+  key: KPIMetric;
   title: string;
-  icon: React.ComponentType<any>;
+  icon: LucideIcon;
   link: string;
 }> = [
   { key: 'totalContacts', title: 'Total Leads', icon: Users, link: '/database' },
@@ -26,8 +28,8 @@ export function DashboardCards() {
   const items = KPI_ORDER;
 
   const sorted = [...items].sort((a, b) => {
-    const ap = isPinned(a.key as any) ? 0 : 1;
-    const bp = isPinned(b.key as any) ? 0 : 1;
+    const ap = isPinned(a.key) ? 0 : 1;
+    const bp = isPinned(b.key) ? 0 : 1;
     return ap - bp;
   });
 
@@ -48,7 +50,7 @@ export function DashboardCards() {
     );
   }
 
-  const agentData = data as any; // Type assertion since we checked isAgent
+  const agentData = data as AgentDashboardData;
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

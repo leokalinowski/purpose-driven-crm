@@ -191,7 +191,7 @@ export const useContacts = () => {
     }
   };
 
-  const fetchContacts = async () => {
+  const fetchContacts = useCallback(async () => {
     if (!user) return;
 
     setLoading(true);
@@ -358,7 +358,7 @@ export const useContacts = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, debouncedSearchTerm, currentPage, sortBy, sortOrder]);
 
   const addContact = async (contactData: ContactInput) => {
     if (!user) throw new Error('User not authenticated');
@@ -475,7 +475,7 @@ export const useContacts = () => {
 
   useEffect(() => {
     fetchContacts();
-  }, [user, currentPage, debouncedSearchTerm, sortBy, sortOrder]);
+  }, [fetchContacts]);
 
   return {
     contacts,

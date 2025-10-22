@@ -62,7 +62,7 @@ export function AgentMetricsCards() {
     contactsDatabase: {
       value: contacts.length,
       subtext: 'Total contacts in database',
-      trend: 'neutral' as 'neutral'
+      trend: 'neutral' as const
     },
     upcomingTasks: {
       value: pendingEventTasks,
@@ -77,7 +77,7 @@ export function AgentMetricsCards() {
     coachingMetrics: {
       value: weeklyMetrics?.dials_made || 0,
       subtext: `${weeklyMetrics?.conversations || 0} conversations`,
-      trend: 'neutral' as 'neutral'
+      trend: 'neutral' as const
     },
   };
 

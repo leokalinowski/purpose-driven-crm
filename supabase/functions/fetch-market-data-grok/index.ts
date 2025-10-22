@@ -123,7 +123,7 @@ Make the key takeaways specific and actionable, focusing on:
         messages: [
           {
             role: 'system',
-            content: 'You are a professional real estate market analyst. CRITICAL: You represent real estate agents professionally - NEVER fabricate, estimate, or hallucinate data. Your credibility depends on 100% accuracy.
+            content: `You are a professional real estate market analyst. CRITICAL: You represent real estate agents professionally - NEVER fabricate, estimate, or hallucinate data. Your credibility depends on 100% accuracy.
 
     MANDATORY WEB SEARCH REQUIREMENTS - FOLLOW EXACTLY:
     1. GO to this EXACT URL: https://www.zillow.com/home-values/${zipCode}/
@@ -138,7 +138,7 @@ SEARCH VERIFICATION REQUIRED:
 - Mention the specific page or section where you found each data point
 - If no data found, explicitly state "No current market data available from web search"
 
-Return ONLY valid JSON with market analysis. Better to have incomplete data than false data.'
+Return ONLY valid JSON with market analysis. Better to have incomplete data than false data.`
           },
           {
             role: 'user',

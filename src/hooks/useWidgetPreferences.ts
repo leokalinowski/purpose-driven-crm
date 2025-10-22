@@ -17,13 +17,17 @@ export function useWidgetPreferences() {
     try {
       const raw = localStorage.getItem(PREF_KEY);
       if (raw) setPinned(JSON.parse(raw));
-    } catch {}
+    } catch {
+      // Silently fail if localStorage is not available
+    }
   }, []);
 
   useEffect(() => {
     try {
       localStorage.setItem(PREF_KEY, JSON.stringify(pinned));
-    } catch {}
+    } catch {
+      // Silently fail if localStorage is not available
+    }
   }, [pinned]);
 
   const togglePinned = (key: KpiKey) => {
