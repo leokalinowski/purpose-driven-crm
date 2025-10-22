@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Upload Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>CSV Upload Test Files</h1>
+    
+    <div class="test-section">
+        <h2>Test 1: Basic CSV with Duplicates</h2>
+        <p>This CSV contains some duplicate contacts to test the duplicate detection:</p>
+        <pre>first_name,last_name,phone,email,address_1,city,state,zip_code
+John,Doe,555-123-4567,john@example.com,123 Main St,Anytown,CA,12345
+Jane,Smith,555-987-6543,jane@example.com,456 Oak Ave,Somewhere,NY,67890
+John,Doe,555-123-4567,john@example.com,123 Main St,Anytown,CA,12345
+Bob,Johnson,555-555-5555,bob@test.com,789 Pine Rd,Nowhere,TX,54321
+Jane,Smith,555-987-6543,jane@example.com,456 Oak Ave,Somewhere,NY,67890</pre>
+        <button onclick="downloadCSV('test1.csv', 'first_name,last_name,phone,email,address_1,city,state,zip_code\nJohn,Doe,555-123-4567,john@example.com,123 Main St,Anytown,CA,12345\nJane,Smith,555-987-6543,jane@example.com,456 Oak Ave,Somewhere,NY,67890\nJohn,Doe,555-123-4567,john@example.com,123 Main St,Anytown,CA,12345\nBob,Johnson,555-555-5555,bob@test.com,789 Pine Rd,Nowhere,TX,54321\nJane,Smith,555-987-6543,jane@example.com,456 Oak Ave,Somewhere,NY,67890')">Download Test 1 CSV</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 2: Large CSV (100 contacts)</h2>
+        <p>This CSV contains 100 contacts to test batch processing:</p>
+        <button onclick="generateLargeCSV()">Generate & Download Large CSV</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 3: CSV with Validation Errors</h2>
+        <p>This CSV contains contacts with missing required fields and invalid data:</p>
+        <pre>first_name,last_name,phone,email,address_1,city,state,zip_code
+,Smith,555-123-4567,invalid-email,123 Main St,Anytown,CA,12345
+John,,555-987-6543,jane@example.com,456 Oak Ave,Somewhere,NY,67890
+Bob,Johnson,invalid-phone,bob@test.com,789 Pine Rd,Nowhere,TX,54321
+Alice,Brown,555-111-2222,alice@example.com,321 Elm St,Everywhere,FL,11111</pre>
+        <button onclick="downloadCSV('test3.csv', 'first_name,last_name,phone,email,address_1,city,state,zip_code\n,Smith,555-123-4567,invalid-email,123 Main St,Anytown,CA,12345\nJohn,,555-987-6543,jane@example.com,456 Oak Ave,Somewhere,NY,67890\nBob,Johnson,invalid-phone,bob@test.com,789 Pine Rd,Nowhere,TX,54321\nAlice,Brown,555-111-2222,alice@example.com,321 Elm St,Everywhere,FL,11111')">Download Test 3 CSV</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 4: Different Delimiter (Semicolon)</h2>
+        <p>This CSV uses semicolons as delimiters to test delimiter detection:</p>
+        <pre>first_name;last_name;phone;email;address_1;city;state;zip_code
+John;Doe;555-123-4567;john@example.com;123 Main St;Anytown;CA;12345
+Jane;Smith;555-987-6543;jane@example.com;456 Oak Ave;Somewhere;NY;67890</pre>
+        <button onclick="downloadCSV('test4.csv', 'first_name;last_name;phone;email;address_1;city;state;zip_code\nJohn;Doe;555-123-4567;john@example.com;123 Main St;Anytown;CA;12345\nJane;Smith;555-987-6543;jane@example.com;456 Oak Ave;Somewhere;NY;67890')">Download Test 4 CSV</button>
+    </div>
+
+    <div class="test-section success">
+        <h2>✅ Instructions for Testing</h2>
+        <ol>
+            <li>Download any of the test CSV files above</li>
+            <li>Go to your CRM at <a href="http://localhost:8083" target="_blank">http://localhost:8083</a></li>
+            <li>Navigate to the Database page</li>
+            <li>Click "Upload CSV"</li>
+            <li>Upload the test file and observe the duplicate detection and resolution process</li>
+            <li>Try uploading multiple different files to test the state reset functionality</li>
+        </ol>
+    </div>
+
+    <script>
+        function downloadCSV(filename, content) {
+            const blob = new Blob([content], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function generateLargeCSV() {
+            const headers = 'first_name,last_name,phone,email,address_1,city,state,zip_code';
+            const firstNames = ['John', 'Jane', 'Bob', 'Alice', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry'];
+            const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'];
+            const cities = ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'San Jose'];
+            const states = ['NY', 'CA', 'IL', 'TX', 'AZ', 'PA', 'TX', 'CA', 'TX', 'CA'];
+            
+            let content = headers + '\n';
+            
+            for (let i = 1; i <= 100; i++) {
+                const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+                const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+                const phone = `555-${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`;
+                const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}${i}@example.com`;
+                const city = cities[Math.floor(Math.random() * cities.length)];
+                const state = states[Math.floor(Math.random() * states.length)];
+                const zip = Math.floor(Math.random() * 90000) + 10000;
+                const address = `${Math.floor(Math.random() * 9999) + 1} ${['Main', 'Oak', 'Pine', 'Elm', 'Cedar'][Math.floor(Math.random() * 5)]} St`;
+                
+                content += `${firstName},${lastName},${phone},${email},${address},${city},${state},${zip}\n`;
+            }
+            
+            downloadCSV('large-test.csv', content);
+        }
+    </script>
+</body>
+</html>

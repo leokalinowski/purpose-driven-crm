@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useConnectSocialAccount } from '@/hooks/useSocialScheduler';
-import { Loader2, Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
+import { Loader2, Facebook, Instagram, Linkedin, Twitter, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface ConnectSocialAccountsProps {
@@ -22,24 +22,32 @@ const socialPlatforms = [
     label: 'Facebook',
     icon: Facebook,
     color: 'bg-blue-600',
+    status: 'working', // Working with direct API fallback
+    description: 'Fully functional with direct posting',
   },
   {
     name: 'instagram',
     label: 'Instagram',
     icon: Instagram,
     color: 'bg-gradient-to-r from-purple-500 to-pink-500',
+    status: 'coming_soon', // Not yet implemented
+    description: 'Coming soon - requires Instagram Business API',
   },
   {
     name: 'linkedin',
     label: 'LinkedIn',
     icon: Linkedin,
     color: 'bg-blue-700',
+    status: 'coming_soon', // Not yet implemented
+    description: 'Coming soon - requires LinkedIn API',
   },
   {
     name: 'twitter',
     label: 'Twitter',
     icon: Twitter,
     color: 'bg-blue-400',
+    status: 'coming_soon', // Not yet implemented
+    description: 'Coming soon - requires Twitter API v2',
   },
 ];
 
@@ -96,22 +104,47 @@ export function ConnectSocialAccounts({ agentId, connectedAccounts = [] }: Conne
           const account = getConnectedAccount(platform.name);
           const isConnecting = connectingPlatform === platform.name;
           const IconComponent = platform.icon;
-          
+
+          const getStatusIcon = () => {
+            if (connected) return <CheckCircle className="h-4 w-4 text-green-600" />;
+            if (platform.status === 'working') return <CheckCircle className="h-4 w-4 text-blue-600" />;
+            if (platform.status === 'coming_soon') return <Clock className="h-4 w-4 text-yellow-600" />;
+            return <AlertCircle className="h-4 w-4 text-red-600" />;
+          };
+
+          const getStatusBadge = () => {
+            if (connected) {
+              return <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">
+                Connected
+              </Badge>;
+            }
+            if (platform.status === 'working') {
+              return <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">
+                Ready to Connect
+              </Badge>;
+            }
+            return <Badge variant="secondary" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+              Coming Soon
+            </Badge>;
+          };
+
           return (
             <Card key={platform.name} className="relative">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center space-x-3">
-                    <div className={`w-10 h-10 rounded-lg ${platform.color} flex items-center justify-center text-white`}>
+                    <div className={`w-10 h-10 rounded-lg ${platform.color} flex items-center justify-center text-white relative`}>
                       <IconComponent className="h-5 w-5" />
+                      <div className="absolute -top-1 -right-1 bg-white rounded-full p-0.5">
+                        {getStatusIcon()}
+                      </div>
                     </div>
-                    <span>{platform.label}</span>
+                    <div>
+                      <span>{platform.label}</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">{platform.description}</p>
+                    </div>
                   </CardTitle>
-                  {connected && (
-                    <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">
-                      Connected
-                    </Badge>
-                  )}
+                  {getStatusBadge()}
                 </div>
               </CardHeader>
               
@@ -128,11 +161,14 @@ export function ConnectSocialAccounts({ agentId, connectedAccounts = [] }: Conne
                 ) : (
                   <div className="space-y-3">
                     <p className="text-sm text-muted-foreground">
-                      Connect your {platform.label} account to schedule posts
+                      {platform.status === 'working'
+                        ? `Connect your ${platform.label} account to schedule posts`
+                        : platform.description
+                      }
                     </p>
                     <Button
                       onClick={() => handleConnect(platform.name)}
-                      disabled={isConnecting || connectAccountMutation.isPending}
+                      disabled={isConnecting || connectAccountMutation.isPending || platform.status !== 'working'}
                       className="w-full"
                     >
                       {isConnecting ? (
@@ -140,8 +176,10 @@ export function ConnectSocialAccounts({ agentId, connectedAccounts = [] }: Conne
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Connecting...
                         </>
-                      ) : (
+                      ) : platform.status === 'working' ? (
                         `Connect ${platform.label}`
+                      ) : (
+                        'Coming Soon'
                       )}
                     </Button>
                   </div>

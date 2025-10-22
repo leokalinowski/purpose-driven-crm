@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Phone, MessageSquare, User } from 'lucide-react';
 import { SphereSyncTask } from '@/hooks/useSphereSyncTasks';
+import { useConfetti } from '@/hooks/useConfetti';
 
 interface SphereSyncTaskCardProps {
   task: SphereSyncTask;
@@ -15,11 +16,18 @@ interface SphereSyncTaskCardProps {
 export function SphereSyncTaskCard({ task, onUpdate }: SphereSyncTaskCardProps) {
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState(task.notes || '');
+  const { triggerConfetti } = useConfetti();
 
   const handleCompletionChange = (completed: boolean | string) => {
     // Ensure we always have a boolean value
     const isCompleted = completed === true || completed === "true";
     console.log('Checkbox clicked:', { taskId: task.id, completed: isCompleted, currentStatus: task.completed, originalValue: completed });
+    
+    // Trigger confetti if task is being completed (not uncompleted)
+    if (isCompleted && !task.completed) {
+      triggerConfetti();
+    }
+    
     onUpdate(task.id, { completed: isCompleted });
   };
 

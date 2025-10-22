@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 interface NewsletterPreviewProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  mode?: 'user' | 'admin';
 }
 
 interface PreviewData {
@@ -23,9 +24,10 @@ interface PreviewData {
   estimatedCost: number;
 }
 
-export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ 
-  open, 
-  onOpenChange
+export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
+  open,
+  onOpenChange,
+  mode = 'user'
 }) => {
   const { user } = useAuth();
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
@@ -42,25 +44,26 @@ export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
     setSampleContact(null); // Clear previous contact data
   };
 
+  // Extract ZIP validation logic
+  const validateZipCode = (zip: string): string | null => {
+    if (!zip.trim()) return 'Please enter a ZIP code';
+    const zipPattern = /^\d{5}$/;
+    if (!zipPattern.test(zip.trim())) return 'Please enter a valid 5-digit ZIP code';
+    return null;
+  };
+
   const generatePreview = async () => {
     if (!user) return;
-    
-    // Validate ZIP code
-    if (!zipCode.trim()) {
-      setError('Please enter a ZIP code');
+
+    const zipError = validateZipCode(zipCode);
+    if (zipError) {
+      setError(zipError);
       return;
     }
-    
-    // Basic ZIP code validation (5 digits)
-    const zipPattern = /^\d{5}$/;
-    if (!zipPattern.test(zipCode.trim())) {
-      setError('Please enter a valid 5-digit ZIP code');
-      return;
-    }
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       // Get real contacts for this ZIP to use their actual information
       const { data: contacts, error: contactsError } = await supabase
@@ -130,9 +133,14 @@ export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
         }
       });
       
-      if (previewError) throw previewError;
-      
+      if (previewError) {
+        console.error('Preview generation error:', previewError);
+        throw new Error(`Preview generation failed: ${previewError.message || 'Unknown error'}`);
+      }
+
       if (previewResult && previewResult.success) {
+        console.log('Preview result received:', { hasHtmlEmail: !!previewResult.html_email, zipCode: previewResult.zip_code });
+
         // Generate the footer with agent information
         const agentName = `${agentProfile.first_name || ''} ${agentProfile.last_name || ''}`.trim() || 'Your Real Estate Agent';
         const agentEmail = agentProfile.email || '';
@@ -143,10 +151,10 @@ export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
         const phoneNumber = agentProfile.phone_number || '';
         const officeNumber = agentProfile.office_number || '';
         const website = agentProfile.website || '';
-        
+
         const licenseText = stateLicenses ? `Licensed in ${stateLicenses}` : '';
         const companyLine = [teamName, brokerage].filter(Boolean).join(' | ');
-        
+
         const footer = `
           <div style="padding: 30px 0; margin-top: 30px; border-top: 1px solid #e5e5e5; font-family: Arial, sans-serif; text-align: left;">
             <p style="color: #333; margin: 0 0 5px 0; font-size: 16px; font-weight: bold;">
@@ -155,18 +163,18 @@ export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
             ${companyLine ? `<p style="color: #666; margin: 0 0 3px 0; font-size: 14px;">${companyLine}</p>` : ''}
             ${officeAddress ? `<p style="color: #666; margin: 0 0 3px 0; font-size: 14px;">${officeAddress}</p>` : ''}
             ${licenseText ? `<p style="color: #666; margin: 0 0 15px 0; font-size: 14px;">${licenseText}</p>` : ''}
-            
+
             ${phoneNumber ? `<p style="color: #333; margin: 3px 0; font-size: 14px;">📱 Cell/Text: <a href="tel:${phoneNumber.replace(/\D/g, '')}" style="color: #333; text-decoration: none;">${phoneNumber}</a></p>` : ''}
             ${officeNumber ? `<p style="color: #333; margin: 3px 0; font-size: 14px;">☎️ Office: <a href="tel:${officeNumber.replace(/\D/g, '')}" style="color: #333; text-decoration: none;">${officeNumber}</a></p>` : ''}
             ${agentEmail ? `<p style="color: #333; margin: 3px 0; font-size: 14px;">📧 <a href="mailto:${agentEmail}" style="color: #333; text-decoration: none;">${agentEmail}</a></p>` : ''}
             ${website ? `<p style="color: #333; margin: 3px 0; font-size: 14px;">🌐 <a href="${website.startsWith('http') ? website : 'https://' + website}" style="color: #333; text-decoration: none;">${website}</a></p>` : ''}
-                  
+
             <div style="font-size: 12px; color: #999; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
               <p style="margin: 3px 0;">
                 This email was sent because you are a valued contact in our database.
               </p>
               <p style="margin: 3px 0;">
-                If you no longer wish to receive these market updates, you can 
+                If you no longer wish to receive these market updates, you can
                 <a href="mailto:${agentEmail}?subject=Unsubscribe%20Request" style="color: #999;">unsubscribe here</a>.
               </p>
               <p style="margin: 3px 0;">
@@ -175,7 +183,7 @@ export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
             </div>
           </div>
         `;
-        
+
         setPreviewData({
           content: previewResult.html_email + footer,
           subject: `Market Update for ${zipCode.trim()}`,
@@ -184,7 +192,8 @@ export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
           estimatedCost: (contacts?.length || 0) * 0.02 // Rough estimate
         });
       } else {
-        throw new Error('Failed to generate preview content');
+        console.error('Preview result structure:', previewResult);
+        throw new Error(`Failed to generate preview content: ${previewResult?.error || 'Invalid response format'}`);
       }
     } catch (err: any) {
       console.error('Preview generation error:', err);
@@ -200,10 +209,13 @@ export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Eye className="h-5 w-5" />
-            Newsletter Preview
+            {mode === 'admin' ? 'Test Newsletter Preview' : 'Newsletter Preview'}
           </DialogTitle>
           <DialogDescription>
-            Preview your newsletter content before sending to your contacts
+            {mode === 'admin'
+              ? 'Generate and preview newsletter content with real market data for testing'
+              : 'Preview your newsletter content before sending to your contacts'
+            }
           </DialogDescription>
         </DialogHeader>
 
@@ -211,7 +223,9 @@ export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
           {/* Preview Controls */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Preview Settings</CardTitle>
+              <CardTitle className="text-lg">
+                {mode === 'admin' ? 'Test Preview Settings' : 'Preview Settings'}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-3">
@@ -238,7 +252,10 @@ export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
                   </div>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Enter a 5-digit ZIP code to preview market data for that area
+                  {mode === 'admin'
+                    ? 'Enter a 5-digit ZIP code to generate a test newsletter with real CSV market data'
+                    : 'Enter a 5-digit ZIP code to preview market data for that area'
+                  }
                 </div>
                 {sampleContact && (
                   <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
@@ -253,7 +270,7 @@ export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
                     {error}
                   </div>
                   <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded">
-                    <strong>Note:</strong> Preview generation requires API access. You can still send newsletters - they will generate content in real-time during the send process.
+                    <strong>Requirements:</strong> Preview generation requires real CSV market data to be uploaded first. {mode === 'admin' ? 'Upload CSV data in the "CSV Upload" tab first.' : 'Contact your admin to upload market data.'}
                   </div>
                 </div>
               )}
@@ -303,7 +320,9 @@ export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
           ) : previewData ? (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Email Preview</CardTitle>
+                <CardTitle className="text-lg">
+                  {mode === 'admin' ? 'Test Email Preview' : 'Email Preview'}
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="border rounded-lg p-4 bg-muted/20">

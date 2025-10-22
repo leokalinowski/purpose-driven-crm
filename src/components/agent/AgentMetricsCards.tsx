@@ -26,9 +26,9 @@ export function AgentMetricsCards() {
 
   if (dashboardLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
         {Array.from({ length: 6 }).map((_, i) => (
-          <Card key={i}>
+          <Card key={i} className="min-h-[120px]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Loading...</CardTitle>
             </CardHeader>
@@ -82,7 +82,7 @@ export function AgentMetricsCards() {
   };
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
       {AGENT_KPI_CONFIG.map(({ key, title, icon: Icon }) => {
         const kpi = agentKpis[key];
         const TrendIcon = kpi.trend === 'up' ? TrendingUp : kpi.trend === 'down' ? TrendingDown : null;

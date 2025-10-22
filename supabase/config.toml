@@ -48,3 +48,9 @@ verify_jwt = true
 
 [functions.social-analytics]
 verify_jwt = true
+
+[functions.social-webhook]
+verify_jwt = false
+
+[functions.social-posting]
+verify_jwt = true

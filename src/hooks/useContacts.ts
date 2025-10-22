@@ -30,6 +30,8 @@ export type ContactInput = Omit<Contact, 'id' | 'agent_id' | 'category' | 'creat
 export const useContacts = () => {
   const { user } = useAuth();
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [allContacts, setAllContacts] = useState<Contact[]>([]);
+  const [totalContacts, setTotalContacts] = useState(0);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -40,35 +42,317 @@ export const useContacts = () => {
 
   const ITEMS_PER_PAGE = 25;
 
+  const fetchAllContacts = async (): Promise<Contact[]> => {
+    if (!user) return [];
+
+    try {
+      if (debouncedSearchTerm) {
+        try {
+          // Try the advanced search edge function for all contacts too
+          const { data, error } = await supabase.functions.invoke('contact-search', {
+            body: {
+              searchTerm: debouncedSearchTerm,
+              agentId: user.id,
+              page: 1,
+              limit: 1000, // Get all for dashboard
+              sortBy,
+              sortOrder
+            }
+          });
+
+          if (error) throw error;
+
+          return (data?.data as Contact[]) || [];
+        } catch (edgeFunctionError) {
+          console.warn('Edge function search failed for all contacts, falling back to client-side search:', edgeFunctionError);
+
+          // Fallback to client-side search with improved logic
+          const trimmedTerm = debouncedSearchTerm.trim();
+          const searchTerms = trimmedTerm.split(/\s+/).filter(term => term.length > 0);
+
+          if (searchTerms.length === 2) {
+            // Special handling for two terms: use intersection of queries to achieve AND logic
+            const [first, last] = searchTerms;
+
+            // Query 1: contacts with first term in first_name
+            const firstNameQuery = supabase
+              .from('contacts')
+              .select('id, first_name, last_name, email, phone')
+              .eq('agent_id', user.id)
+              .ilike('first_name', `%${first}%`);
+
+            // Query 2: contacts with second term in last_name
+            const lastNameQuery = supabase
+              .from('contacts')
+              .select('id, first_name, last_name, email, phone')
+              .eq('agent_id', user.id)
+              .ilike('last_name', `%${last}%`);
+
+            // Also check reverse order
+            const reverseFirstQuery = supabase
+              .from('contacts')
+              .select('id, first_name, last_name, email, phone')
+              .eq('agent_id', user.id)
+              .ilike('first_name', `%${last}%`);
+
+            const reverseLastQuery = supabase
+              .from('contacts')
+              .select('id, first_name, last_name, email, phone')
+              .eq('agent_id', user.id)
+              .ilike('last_name', `%${first}%`);
+
+            const [firstResults, lastResults, reverseFirstResults, reverseLastResults] = await Promise.all([
+              firstNameQuery,
+              lastNameQuery,
+              reverseFirstQuery,
+              reverseLastQuery
+            ]);
+
+            if (firstResults.error || lastResults.error || reverseFirstResults.error || reverseLastResults.error) {
+              throw firstResults.error || lastResults.error || reverseFirstResults.error || reverseLastResults.error;
+            }
+
+            // Find intersection: contacts that appear in both queries
+            const firstNameIds = new Set(firstResults.data?.map(c => c.id) || []);
+            const lastNameIds = new Set(lastResults.data?.map(c => c.id) || []);
+            const intersectionIds = new Set([...firstNameIds].filter(id => lastNameIds.has(id)));
+
+            const reverseFirstIds = new Set(reverseFirstResults.data?.map(c => c.id) || []);
+            const reverseLastIds = new Set(reverseLastResults.data?.map(c => c.id) || []);
+            const reverseIntersectionIds = new Set([...reverseFirstIds].filter(id => reverseLastIds.has(id)));
+
+            // Combine both orderings
+            const allMatchingIds = new Set([...intersectionIds, ...reverseIntersectionIds]);
+
+            if (allMatchingIds.size > 0) {
+              // Get full contact data for matching IDs
+              const { data: matchedContacts, error: matchError } = await supabase
+                .from('contacts')
+                .select('*')
+                .eq('agent_id', user.id)
+                .in('id', Array.from(allMatchingIds))
+                .order(sortBy, { ascending: sortOrder === 'asc' });
+
+              if (matchError) throw matchError;
+
+              return (matchedContacts as Contact[]) || [];
+            } else {
+              return [];
+            }
+          } else {
+            // Single term or multiple terms: use regular OR search
+            let orConditions = [
+              `first_name.ilike.%${trimmedTerm}%`,
+              `last_name.ilike.%${trimmedTerm}%`,
+              `email.ilike.%${trimmedTerm}%`,
+              `phone.ilike.%${trimmedTerm}%`
+            ];
+
+            if (searchTerms.length === 1) {
+              const term = searchTerms[0];
+              orConditions.push(`first_name.ilike.%${term}%`, `last_name.ilike.%${term}%`);
+            } else {
+              searchTerms.forEach(term => {
+                orConditions.push(`first_name.ilike.%${term}%`, `last_name.ilike.%${term}%`);
+              });
+            }
+
+            const query = supabase
+              .from('contacts')
+              .select('*')
+              .eq('agent_id', user.id)
+              .or(orConditions.join(','))
+              .order(sortBy, { ascending: sortOrder === 'asc' });
+
+            const { data, error } = await query;
+
+            if (error) throw error;
+
+            return (data as Contact[]) || [];
+          }
+        }
+      }
+
+      // Regular fetch without search
+      const query = supabase
+        .from('contacts')
+        .select('*')
+        .eq('agent_id', user.id)
+        .order(sortBy, { ascending: sortOrder === 'asc' });
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      return (data as Contact[]) || [];
+    } catch (error) {
+      console.error('Error fetching all contacts:', error);
+      return [];
+    }
+  };
+
   const fetchContacts = async () => {
     if (!user) return;
 
     setLoading(true);
     try {
-      let query = supabase
-        .from('contacts')
-        .select('*', { count: 'exact' })
-        .eq('agent_id', user.id);
-
-      // Apply search filter
       if (debouncedSearchTerm) {
-        query = query.or(`first_name.ilike.%${debouncedSearchTerm}%,last_name.ilike.%${debouncedSearchTerm}%,email.ilike.%${debouncedSearchTerm}%,phone.ilike.%${debouncedSearchTerm}%`);
+        try {
+          // Try the advanced search edge function
+          const { data, error } = await supabase.functions.invoke('contact-search', {
+            body: {
+              searchTerm: debouncedSearchTerm,
+              agentId: user.id,
+              page: currentPage,
+              limit: ITEMS_PER_PAGE,
+              sortBy,
+              sortOrder
+            }
+          });
+
+          if (error) throw error;
+
+          setContacts((data?.data as Contact[]) || []);
+          setTotalContacts(data?.count || 0);
+          setTotalPages(data?.totalPages || 1);
+        } catch (edgeFunctionError) {
+          console.warn('Edge function search failed, falling back to client-side search:', edgeFunctionError);
+
+          // Fallback to client-side search with improved logic
+          const trimmedTerm = debouncedSearchTerm.trim();
+          const searchTerms = trimmedTerm.split(/\s+/).filter(term => term.length > 0);
+
+          if (searchTerms.length === 2) {
+            // Special handling for two terms: use intersection of queries to achieve AND logic
+            const [first, last] = searchTerms;
+
+            // Query 1: contacts with first term in first_name
+            const firstNameQuery = supabase
+              .from('contacts')
+              .select('id, first_name, last_name, email, phone')
+              .eq('agent_id', user.id)
+              .ilike('first_name', `%${first}%`);
+
+            // Query 2: contacts with second term in last_name
+            const lastNameQuery = supabase
+              .from('contacts')
+              .select('id, first_name, last_name, email, phone')
+              .eq('agent_id', user.id)
+              .ilike('last_name', `%${last}%`);
+
+            // Also check reverse order
+            const reverseFirstQuery = supabase
+              .from('contacts')
+              .select('id, first_name, last_name, email, phone')
+              .eq('agent_id', user.id)
+              .ilike('first_name', `%${last}%`);
+
+            const reverseLastQuery = supabase
+              .from('contacts')
+              .select('id, first_name, last_name, email, phone')
+              .eq('agent_id', user.id)
+              .ilike('last_name', `%${first}%`);
+
+            const [firstResults, lastResults, reverseFirstResults, reverseLastResults] = await Promise.all([
+              firstNameQuery,
+              lastNameQuery,
+              reverseFirstQuery,
+              reverseLastQuery
+            ]);
+
+            if (firstResults.error || lastResults.error || reverseFirstResults.error || reverseLastResults.error) {
+              throw firstResults.error || lastResults.error || reverseFirstResults.error || reverseLastResults.error;
+            }
+
+            // Find intersection: contacts that appear in both queries
+            const firstNameIds = new Set(firstResults.data?.map(c => c.id) || []);
+            const lastNameIds = new Set(lastResults.data?.map(c => c.id) || []);
+            const intersectionIds = new Set([...firstNameIds].filter(id => lastNameIds.has(id)));
+
+            const reverseFirstIds = new Set(reverseFirstResults.data?.map(c => c.id) || []);
+            const reverseLastIds = new Set(reverseLastResults.data?.map(c => c.id) || []);
+            const reverseIntersectionIds = new Set([...reverseFirstIds].filter(id => reverseLastIds.has(id)));
+
+            // Combine both orderings
+            const allMatchingIds = new Set([...intersectionIds, ...reverseIntersectionIds]);
+
+            if (allMatchingIds.size > 0) {
+              // Get full contact data for matching IDs
+              const { data: matchedContacts, error: matchError } = await supabase
+                .from('contacts')
+                .select('*', { count: 'exact' })
+                .eq('agent_id', user.id)
+                .in('id', Array.from(allMatchingIds))
+                .order(sortBy, { ascending: sortOrder === 'asc' })
+                .range((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE - 1);
+
+              if (matchError) throw matchError;
+
+              setContacts((matchedContacts as Contact[]) || []);
+              setTotalContacts(allMatchingIds.size);
+              setTotalPages(Math.ceil(allMatchingIds.size / ITEMS_PER_PAGE));
+            } else {
+              // No matches found
+              setContacts([]);
+              setTotalContacts(0);
+              setTotalPages(0);
+            }
+          } else {
+            // Single term or multiple terms: use regular OR search
+            let orConditions = [
+              `first_name.ilike.%${trimmedTerm}%`,
+              `last_name.ilike.%${trimmedTerm}%`,
+              `email.ilike.%${trimmedTerm}%`,
+              `phone.ilike.%${trimmedTerm}%`
+            ];
+
+            if (searchTerms.length === 1) {
+              const term = searchTerms[0];
+              orConditions.push(`first_name.ilike.%${term}%`, `last_name.ilike.%${term}%`);
+            } else {
+              searchTerms.forEach(term => {
+                orConditions.push(`first_name.ilike.%${term}%`, `last_name.ilike.%${term}%`);
+              });
+            }
+
+            const query = supabase
+              .from('contacts')
+              .select('*', { count: 'exact' })
+              .eq('agent_id', user.id)
+              .or(orConditions.join(','))
+              .order(sortBy, { ascending: sortOrder === 'asc' })
+              .range((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE - 1);
+
+            const { data, error, count } = await query;
+
+            if (error) throw error;
+
+            setContacts((data as Contact[]) || []);
+            setTotalContacts(count || 0);
+            setTotalPages(Math.ceil((count || 0) / ITEMS_PER_PAGE));
+          }
+        }
+      } else {
+        // Regular fetch without search
+        const query = supabase
+          .from('contacts')
+          .select('*', { count: 'exact' })
+          .eq('agent_id', user.id)
+          .order(sortBy, { ascending: sortOrder === 'asc' })
+          .range((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE - 1);
+
+        const { data, error, count } = await query;
+
+        if (error) throw error;
+
+        setContacts((data as Contact[]) || []);
+        setTotalContacts(count || 0);
+        setTotalPages(Math.ceil((count || 0) / ITEMS_PER_PAGE));
       }
 
-      // Apply sorting
-      query = query.order(sortBy, { ascending: sortOrder === 'asc' });
-
-      // Apply pagination
-      const from = (currentPage - 1) * ITEMS_PER_PAGE;
-      const to = from + ITEMS_PER_PAGE - 1;
-      query = query.range(from, to);
-
-      const { data, error, count } = await query;
-
-      if (error) throw error;
-
-      setContacts((data as Contact[]) || []);
-      setTotalPages(Math.ceil((count || 0) / ITEMS_PER_PAGE));
+      // Also fetch all contacts for dashboard/enrichment functions
+      const allContactsData = await fetchAllContacts();
+      setAllContacts(allContactsData);
     } catch (error) {
       console.error('Error fetching contacts:', error);
     } finally {
@@ -127,73 +411,38 @@ export const useContacts = () => {
   const uploadCSV = async (csvData: ContactInput[]) => {
     if (!user) throw new Error('User not authenticated');
 
-    // Check for duplicates before inserting
-    console.log(`Checking for duplicates among ${csvData.length} contacts`);
-    
-    // Get all emails and phones from the CSV contacts
-    const csvEmails = csvData.filter(c => c.email?.trim()).map(c => c.email.trim());
-    const csvPhones = csvData.filter(c => c.phone?.trim()).map(c => c.phone.trim());
-    
-    console.log(`CSV contains ${csvEmails.length} emails and ${csvPhones.length} phones`);
-    
-    if (csvEmails.length > 0 || csvPhones.length > 0) {
-      // Build OR conditions for all emails and phones
-      const orConditions = [];
+    console.log(`Processing ${csvData.length} contacts for upload`);
+
+    // Use batch processing for large uploads
+    const BATCH_SIZE = 100;
+    const results = [];
+
+    for (let i = 0; i < csvData.length; i += BATCH_SIZE) {
+      const batch = csvData.slice(i, i + BATCH_SIZE);
       
-      // Add email conditions
-      csvEmails.forEach(email => {
-        orConditions.push(`email.eq.${email}`);
-      });
+      console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(csvData.length / BATCH_SIZE)}`);
       
-      // Add phone conditions  
-      csvPhones.forEach(phone => {
-        orConditions.push(`phone.eq.${phone}`);
-      });
-      
-      if (orConditions.length > 0) {
-        console.log(`Checking ${orConditions.length} potential duplicates in database`);
-        
-        const { data: existingContacts, error: duplicateError } = await supabase
-          .from('contacts')
-          .select('id, email, phone, first_name, last_name')
-          .eq('agent_id', user.id)
-          .or(orConditions.join(','));
-          
-        if (duplicateError) {
-          console.error('Error checking for duplicates:', duplicateError);
-          throw new Error(`Failed to check for duplicates: ${duplicateError.message}`);
-        }
-        
-        if (existingContacts && existingContacts.length > 0) {
-          const duplicateInfo = existingContacts.map(d => {
-            const name = `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'Unknown';
-            return `${name} (Email: ${d.email || 'N/A'}, Phone: ${d.phone || 'N/A'})`;
-          }).join('; ');
-          
-          console.error('Duplicates found:', duplicateInfo);
-          throw new Error(`Duplicate contacts found: ${duplicateInfo}. Please remove these duplicates from your CSV and try again.`);
-        }
+      const contactsWithAgent = batch.map(contact => ({
+        ...contact,
+        agent_id: user.id,
+        category: contact.last_name.charAt(0).toUpperCase() || 'A',
+      }));
+
+      const { data, error } = await supabase
+        .from('contacts')
+        .insert(contactsWithAgent)
+        .select();
+
+      if (error) {
+        console.error(`Error in batch ${Math.floor(i / BATCH_SIZE) + 1}:`, error);
+        throw error;
       }
+
+      results.push(...(data || []));
     }
 
-    console.log('No duplicates found, proceeding with import');
-
-    const contactsWithAgent = csvData.map(contact => ({
-      ...contact,
-      agent_id: user.id,
-      category: contact.last_name.charAt(0).toUpperCase() || 'A',
-    }));
-
-    const { data, error } = await supabase
-      .from('contacts')
-      .insert(contactsWithAgent)
-      .select();
-
-    if (error) throw error;
-
-    // Note: DNC checks are now handled by monthly automation only
-
-    return data;
+    console.log(`Successfully uploaded ${results.length} contacts`);
+    return results;
   };
 
   const handleSort = (column: keyof Contact) => {
@@ -230,6 +479,8 @@ export const useContacts = () => {
 
   return {
     contacts,
+    allContacts,
+    totalContacts,
     loading,
     currentPage,
     totalPages,
@@ -244,5 +495,6 @@ export const useContacts = () => {
     handleSearch,
     goToPage,
     fetchContacts,
+    fetchAllContacts,
   };
 };

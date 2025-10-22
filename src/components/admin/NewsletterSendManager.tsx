@@ -28,7 +28,6 @@ interface Campaign {
 }
 
 export function NewsletterSendManager() {
-  const [selectedCSV, setSelectedCSV] = useState('')
   const [campaignName, setCampaignName] = useState('')
   const [csvFiles, setCsvFiles] = useState<CSVFile[]>([])
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
@@ -76,22 +75,22 @@ export function NewsletterSendManager() {
   }
 
   const sendNewsletter = async () => {
-    if (!selectedCSV) {
-      setMessage({ type: 'error', text: 'Please select a CSV file' })
-      return
-    }
-
     if (!campaignName.trim()) {
       setMessage({ type: 'error', text: 'Please enter a campaign name' })
       return
     }
-    
+
+    if (csvFiles.length === 0) {
+      setMessage({ type: 'error', text: 'No active CSV files found. Please upload market data first.' })
+      return
+    }
+
     setSending(true)
     setMessage(null)
-    
+
     try {
       const { data: { access_token } } = await supabase.auth.getSession()
-      
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/newsletter-send`, {
         method: 'POST',
         headers: {
@@ -99,26 +98,24 @@ export function NewsletterSendManager() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          csv_file_id: selectedCSV,
           campaign_name: campaignName.trim()
         })
       })
-      
+
       const result = await response.json()
-      
+
       if (!response.ok) {
         throw new Error(result.error || 'Newsletter sending failed')
       }
-      
-      setMessage({ 
-        type: 'success', 
-        text: `Newsletter campaign started successfully! Campaign ID: ${result.campaign_id}` 
+
+      setMessage({
+        type: 'success',
+        text: `Newsletter campaign started successfully! Run ID: ${result.run_id}`
       })
-      
-      setSelectedCSV('')
+
       setCampaignName('')
       await fetchCampaigns()
-      
+
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Failed to send newsletter' })
     } finally {
@@ -169,33 +166,20 @@ export function NewsletterSendManager() {
           </div>
 
           <div>
-            <Label>Select Market Data CSV</Label>
-            <Select value={selectedCSV} onValueChange={setSelectedCSV}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose CSV file" />
-              </SelectTrigger>
-              <SelectContent>
-                {csvFiles.length === 0 ? (
-                  <SelectItem value="" disabled>No active CSV files found</SelectItem>
-                ) : (
-                  csvFiles.map((file) => (
-                    <SelectItem key={file.id} value={file.id}>
-                      {file.filename} ({formatDate(file.upload_date)})
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-            {csvFiles.length === 0 && (
-              <p className="text-sm text-muted-foreground mt-1">
-                Upload a CSV file in the "CSV Upload" tab first.
+            <Label>Newsletter Campaign Setup</Label>
+            <p className="text-sm text-muted-foreground mt-1 mb-3">
+              This will send personalized newsletters to all agent contacts using CSV market data and AI-generated content. One email per ZIP code will be generated and sent to all contacts in that area.
+            </p>
+            <div className="bg-blue-50 border border-blue-200 rounded p-3">
+              <p className="text-sm text-blue-800">
+                <strong>How it works:</strong> The system analyzes CSV market data for each unique ZIP code in your contacts, generates personalized content using AI, and sends customized emails to all contacts in that ZIP code.
               </p>
-            )}
+            </div>
           </div>
           
-          <Button 
-            onClick={sendNewsletter} 
-            disabled={!selectedCSV || !campaignName.trim() || sending || csvFiles.length === 0}
+          <Button
+            onClick={sendNewsletter}
+            disabled={!campaignName.trim() || sending || csvFiles.length === 0}
             className="w-full"
           >
             {sending ? 'Starting Campaign...' : 'Send Newsletter Campaign'}

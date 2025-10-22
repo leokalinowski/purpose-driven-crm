@@ -81,15 +81,15 @@ export const ContactActivitiesDialog: React.FC<ContactActivitiesDialogProps> = (
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>
-            Activities - {contact.first_name} {contact.last_name}
+            Touchpoints - {contact.first_name} {contact.last_name}
           </DialogTitle>
         </DialogHeader>
 
-        {/* Add Activity Button - Better positioned */}
+        {/* Add Touchpoint Button - Better positioned */}
         <div className="flex justify-end mb-4">
           <Button onClick={() => setShowAddForm(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            Add Activity
+            Add Touchpoint
           </Button>
         </div>
 
@@ -101,11 +101,11 @@ export const ContactActivitiesDialog: React.FC<ContactActivitiesDialogProps> = (
             </CardHeader>
             <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Activities</p>
+                <p className="text-sm font-medium text-muted-foreground">Total Touchpoints</p>
                 <p className="text-2xl font-bold">{contact.activity_count || 0}</p>
               </div>
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Last Activity</p>
+                <p className="text-sm font-medium text-muted-foreground">Last Touchpoint</p>
                 <p className="text-sm">
                   {contact.last_activity_date 
                     ? formatDistanceToNow(new Date(contact.last_activity_date), { addSuffix: true })
@@ -124,13 +124,13 @@ export const ContactActivitiesDialog: React.FC<ContactActivitiesDialogProps> = (
             </CardContent>
           </Card>
 
-          {/* Activities Timeline */}
+          {/* Touchpoints Timeline */}
           <div className="space-y-4">
             {loading ? (
-              <div className="text-center py-8">Loading activities...</div>
+              <div className="text-center py-8">Loading touchpoints...</div>
             ) : activities.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No activities recorded yet. Add your first activity to get started.
+                No touchpoints recorded yet. Add your first touchpoint to get started.
               </div>
             ) : (
               activities.map((activity) => {
@@ -213,7 +213,7 @@ export const ContactActivitiesDialog: React.FC<ContactActivitiesDialogProps> = (
           </div>
         </div>
 
-        {/* Add Activity Form */}
+        {/* Add Touchpoint Form */}
         <AddActivityForm
           open={showAddForm}
           onOpenChange={setShowAddForm}

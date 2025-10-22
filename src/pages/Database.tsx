@@ -8,11 +8,14 @@ import { Plus, Upload, Search, ChevronLeft, ChevronRight, Users } from 'lucide-r
 import { Layout } from '@/components/layout/Layout';
 import { ContactTable } from '@/components/database/ContactTable';
 import { ContactForm } from '@/components/database/ContactForm';
-import { CSVUpload } from '@/components/database/CSVUpload';
+import { ImprovedCSVUpload } from '@/components/database/ImprovedCSVUpload';
 import { DNCStatsCard } from '@/components/database/DNCStatsCard';
 import { ContactActivitiesDialog } from '@/components/database/ContactActivitiesDialog';
 import { DuplicateCleanupButton } from '@/components/admin/DuplicateCleanupButton';
+import { DuplicateCleanup } from '@/components/database/DuplicateCleanup';
 import { DNCCheckButton } from '@/components/database/DNCCheckButton';
+import { DataQualityDashboard } from '@/components/database/DataQualityDashboard';
+import { EnrichedContact } from '@/utils/dataEnrichment';
 
 import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useDNCStats } from '@/hooks/useDNCStats';
@@ -20,12 +23,15 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 import { useAgents } from '@/hooks/useAgents';
+import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
 import { supabase } from '@/integrations/supabase/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const Database = () => {
   const {
     contacts,
+    allContacts,
+    totalContacts,
     loading,
     currentPage,
     totalPages,
@@ -52,13 +58,34 @@ const Database = () => {
   const { isAdmin } = useUserRole();
   const { toast } = useToast();
   const { agents, fetchAgents, getAgentDisplayName } = useAgents();
- 
+  const { generateTasksForNewContacts } = useSphereSyncTasks();
+
+  // Prevent scrolling to top when search changes
+  const scrollPositionRef = React.useRef<number>(0);
+
+  const handleSearchNoScroll = React.useCallback((term: string) => {
+    scrollPositionRef.current = window.scrollY;
+    handleSearch(term);
+  }, [handleSearch]);
+
+  // Restore scroll position after search results load
+  React.useEffect(() => {
+    if (!loading && scrollPositionRef.current > 0) {
+      const timeoutId = setTimeout(() => {
+        window.scrollTo({ top: scrollPositionRef.current, behavior: 'instant' });
+        scrollPositionRef.current = 0;
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [loading]);
+
   const [showContactForm, setShowContactForm] = useState(false);
   const [showCSVUpload, setShowCSVUpload] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
-  const [viewingActivitiesContact, setViewingActivitiesContact] = useState<Contact | null>(null);
+  const [viewingTouchpointsContact, setViewingTouchpointsContact] = useState<Contact | null>(null);
   const [selectedCleanupAgent, setSelectedCleanupAgent] = useState<string>('');
+  const [showDuplicateCleanup, setShowDuplicateCleanup] = useState(false);
 
   // Fetch agents for admin cleanup selector
   useEffect(() => {
@@ -110,7 +137,7 @@ const Database = () => {
 
   const handleDeleteContact = async () => {
     if (!deletingContact) return;
-   
+
     try {
       await deleteContact(deletingContact.id);
       setDeletingContact(null);
@@ -124,6 +151,83 @@ const Database = () => {
       toast({
         title: "Error",
         description: "Failed to delete contact",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleContactEnriched = async (enrichedContact: EnrichedContact) => {
+    try {
+      // Convert enriched contact back to ContactInput format
+      const contactInput: ContactInput = {
+        first_name: enrichedContact.first_name,
+        last_name: enrichedContact.last_name,
+        phone: enrichedContact.phone,
+        email: enrichedContact.email,
+        address_1: enrichedContact.address_1,
+        address_2: enrichedContact.address_2,
+        city: enrichedContact.city,
+        state: enrichedContact.state,
+        zip_code: enrichedContact.zip_code,
+        tags: enrichedContact.tags,
+        dnc: enrichedContact.dnc,
+        notes: enrichedContact.notes,
+      };
+
+      await updateContact(enrichedContact.id, contactInput);
+
+      // Refresh contacts list to show updated data
+      await fetchContacts();
+
+      toast({
+        title: "Contact Updated",
+        description: "Contact data has been enriched and saved.",
+      });
+    } catch (error) {
+      console.error('Error updating enriched contact:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save enriched contact data.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleBulkContactsEnriched = async (enrichedContacts: EnrichedContact[]) => {
+    try {
+      const updatePromises = enrichedContacts.map(async (enrichedContact) => {
+        const contactInput: ContactInput = {
+          first_name: enrichedContact.first_name,
+          last_name: enrichedContact.last_name,
+          phone: enrichedContact.phone,
+          email: enrichedContact.email,
+          address_1: enrichedContact.address_1,
+          address_2: enrichedContact.address_2,
+          city: enrichedContact.city,
+          state: enrichedContact.state,
+          zip_code: enrichedContact.zip_code,
+          tags: enrichedContact.tags,
+          dnc: enrichedContact.dnc,
+          notes: enrichedContact.notes,
+        };
+
+        return updateContact(enrichedContact.id, contactInput);
+      });
+
+      await Promise.all(updatePromises);
+
+      // Refresh contacts list to show updated data
+      await fetchContacts();
+
+      toast({
+        title: "Bulk Update Complete",
+        description: `${enrichedContacts.length} contacts have been enriched and saved.`,
+      });
+    } catch (error) {
+      console.error('Error updating bulk enriched contacts:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save some enriched contact data.",
         variant: "destructive",
       });
     }
@@ -159,15 +263,18 @@ const Database = () => {
       } else {
         // Regular upload (agents or admins uploading to their own account)
         console.log('Regular upload using uploadCSV hook');
-        await uploadCSV(csvData);
+        const insertedContacts = await uploadCSV(csvData);
         
         toast({
           title: 'Success',
-          description: `${csvData.length} contacts uploaded successfully`,
+          description: `${insertedContacts.length} contacts uploaded successfully`,
         });
 
         // Refresh the list for the uploading user
         await fetchContacts();
+
+        // Generate tasks for new contacts if they match current week's categories
+        await generateTasksForNewContacts(insertedContacts);
       }
       
       setShowCSVUpload(false);
@@ -233,7 +340,7 @@ const Database = () => {
 
   return (
     <Layout>
-      <div className="container mx-auto p-6 space-y-6">
+      <div className="container mx-auto p-4 sm:p-6 space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold">Contact Database</h1>
@@ -273,6 +380,13 @@ const Database = () => {
             )}
             
             <Button
+              onClick={() => setShowDuplicateCleanup(true)}
+              variant="outline"
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Clean Duplicates
+            </Button>
+            <Button
               onClick={() => setShowCSVUpload(true)}
               variant="outline"
             >
@@ -299,11 +413,17 @@ const Database = () => {
           )}
         </div>
         
+        {/* Data Quality Dashboard */}
+        <DataQualityDashboard
+          contacts={allContacts}
+          onBulkEnriched={handleBulkContactsEnriched}
+        />
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>Contacts</span>
-              <Badge variant="secondary">{contacts.length} contacts</Badge>
+              <Badge variant="secondary">{totalContacts} contacts</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -312,7 +432,7 @@ const Database = () => {
               <Input
                 placeholder="Search contacts by name, email, or phone..."
                 value={searchTerm}
-                onChange={(e) => handleSearch(e.target.value)}
+                onChange={(e) => handleSearchNoScroll(e.target.value)}
                 className="max-w-sm"
               />
             </div>
@@ -320,7 +440,7 @@ const Database = () => {
               <div className="text-center py-8">Loading contacts...</div>
             ) : (
               <>
-                <div className="overflow-x-auto">
+                <div className="w-full overflow-x-auto">
                   <ContactTable
                     contacts={contacts}
                     sortBy={sortBy}
@@ -328,7 +448,8 @@ const Database = () => {
                     onSort={handleSort}
                     onOpenEdit={openEditForm}
                     onDelete={setDeletingContact}
-                    onViewActivities={setViewingActivitiesContact}
+                    onViewActivities={setViewingTouchpointsContact}
+                    onEnriched={handleContactEnriched}
                   />
                 </div>
                 {totalPages > 1 && (
@@ -383,18 +504,38 @@ const Database = () => {
           onSubmit={editingContact ? handleEditContact : handleAddContact}
           title={editingContact ? "Edit Contact" : "Add New Contact"}
         />
-        <CSVUpload
+        <ImprovedCSVUpload
           open={showCSVUpload}
           onOpenChange={setShowCSVUpload}
           onUpload={handleCSVUpload}
         />
         
-        {/* Contact Activities Dialog */}
-        {viewingActivitiesContact && (
+        {/* Duplicate Cleanup Dialog */}
+        {showDuplicateCleanup && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-background rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-2xl font-bold">Duplicate Contact Cleanup</h2>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDuplicateCleanup(false)}
+                  >
+                    Close
+                  </Button>
+                </div>
+                <DuplicateCleanup />
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Contact Touchpoints Dialog */}
+        {viewingTouchpointsContact && (
           <ContactActivitiesDialog
-            open={!!viewingActivitiesContact}
-            onOpenChange={() => setViewingActivitiesContact(null)}
-            contact={viewingActivitiesContact}
+            open={!!viewingTouchpointsContact}
+            onOpenChange={() => setViewingTouchpointsContact(null)}
+            contact={viewingTouchpointsContact}
           />
         )}
         

@@ -4,21 +4,29 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { SphereSyncTaskCard } from '@/components/spheresync/SphereSyncTaskCard';
+import { UpcomingTasksPreview } from '@/components/spheresync/UpcomingTasksPreview';
 import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
+import { useConfetti } from '@/hooks/useConfetti';
 import { useAuth } from '@/hooks/useAuth';
 import { Layout } from '@/components/layout/Layout';
 import { Phone, MessageSquare, Calendar, BarChart3 } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 export default function SphereSyncTasks() {
   const { user } = useAuth();
+  const { triggerConfetti, triggerCelebration } = useConfetti();
   const {
     callTasks,
     textTasks,
+    contacts,
     loading,
     currentWeek,
     historicalStats,
     updateTask
   } = useSphereSyncTasks();
+  
+  const previousCompletionRate = useRef<number>(0);
+  const hasTriggeredConfetti = useRef<boolean>(false);
 
   if (!user) {
     return (
@@ -35,6 +43,30 @@ export default function SphereSyncTasks() {
   const totalTasks = callTasks.length + textTasks.length;
   const completedTasks = [...callTasks, ...textTasks].filter(task => task.completed).length;
   const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+
+  // Trigger confetti when completion reaches 100%
+  useEffect(() => {
+    if (totalTasks > 0 && completionRate >= 100 && previousCompletionRate.current < 100) {
+      // Only trigger if we haven't already triggered confetti for this week
+      if (!hasTriggeredConfetti.current) {
+        triggerCelebration();
+        hasTriggeredConfetti.current = true;
+        
+        // Show a celebration message
+        setTimeout(() => {
+          // You could add a toast notification here if desired
+          console.log('🎉 Congratulations! All weekly tasks completed! 🎉');
+        }, 1000);
+      }
+    }
+    
+    // Reset confetti trigger when starting a new week or when tasks are regenerated
+    if (completionRate === 0 && previousCompletionRate.current > 0) {
+      hasTriggeredConfetti.current = false;
+    }
+    
+    previousCompletionRate.current = completionRate;
+  }, [completionRate, totalTasks, triggerCelebration]);
 
   return (
     <Layout>
@@ -103,8 +135,23 @@ export default function SphereSyncTasks() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{Math.round(completionRate)}%</div>
-              <Progress value={completionRate} className="mt-2" />
+              <div className="text-2xl font-bold flex items-center gap-2">
+                {Math.round(completionRate)}%
+                {completionRate >= 100 && (
+                  <span className="text-primary text-lg">
+                    Complete!
+                  </span>
+                )}
+              </div>
+              <Progress 
+                value={completionRate} 
+                className="mt-2"
+              />
+              {completionRate >= 100 && (
+                <p className="text-xs text-muted-foreground mt-2 font-medium">
+                  Congratulations! All weekly tasks completed!
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -175,6 +222,9 @@ export default function SphereSyncTasks() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Upcoming Tasks Preview */}
+      <UpcomingTasksPreview contacts={contacts} />
 
       {/* Historical Performance */}
       {historicalStats.length > 0 && (

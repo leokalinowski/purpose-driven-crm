@@ -90,68 +90,122 @@ const handler = async (req: Request): Promise<Response> => {
         }
 
         try {
-          // Prepare post data for Postiz
-          const postData = {
-            content,
-            datetime: schedule_time,
-            platforms: [platform],
-            ...(media_url && { media: [{ url: media_url }] }),
-          };
+          // Retry logic for Postiz API calls
+          const maxRetries = 3;
+          let lastError: Error | null = null;
 
-          // Call Postiz Public API
-          const postizResponse = await fetch(`${postizBaseUrl}/api/posts`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${postizApiKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(postData),
-          });
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+              // Prepare post data for Postiz
+              const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/social-webhook`;
 
-          if (!postizResponse.ok) {
-            const errorData = await postizResponse.text();
-            console.error(`Postiz API error for ${platform}:`, errorData);
-            throw new Error(`Postiz API error: ${postizResponse.status}`);
+              const postData = {
+                content,
+                datetime: schedule_time,
+                platforms: [platform],
+                ...(media_url && { media: [{ url: media_url }] }),
+                webhook_url: webhookUrl, // Add webhook URL for status updates
+              };
+
+              console.log(`Attempting Postiz API call for ${platform} (attempt ${attempt}/${maxRetries})`);
+
+              // Call Postiz Public API with timeout
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+              const postizResponse = await fetch(`${postizBaseUrl}/api/posts`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${postizApiKey}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(postData),
+                signal: controller.signal,
+              });
+
+              clearTimeout(timeoutId);
+
+              if (!postizResponse.ok) {
+                const errorData = await postizResponse.text();
+                console.error(`Postiz API error for ${platform} (attempt ${attempt}):`, errorData);
+
+                // Check if it's a retryable error
+                const isRetryable = postizResponse.status >= 500 || postizResponse.status === 429;
+
+                if (!isRetryable || attempt === maxRetries) {
+                  throw new Error(`Postiz API error (${postizResponse.status}): ${errorData}`);
+                }
+
+                // Wait before retry (exponential backoff)
+                const waitTime = Math.pow(2, attempt) * 1000;
+                console.log(`Retrying ${platform} post in ${waitTime}ms...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                continue;
+              }
+
+              const postizResult = await postizResponse.json();
+              const postizId = postizResult.id || `postiz_${Date.now()}_${platform}`;
+
+              // Save the scheduled post to database
+              const { data: post, error: insertError } = await supabaseClient
+                .from('social_posts')
+                .insert({
+                  agent_id: actualAgentId,
+                  platform,
+                  content,
+                  media_url,
+                  schedule_time,
+                  status: 'scheduled',
+                  postiz_post_id: postizId,
+                })
+                .select()
+                .single();
+
+              if (insertError) {
+                console.error(`Database error for ${platform}:`, insertError);
+                throw new Error(`Failed to save post: ${insertError.message}`);
+              }
+
+              console.log(`✅ Successfully scheduled ${platform} post via Postiz:`, post.id);
+              results.push({
+                platform,
+                success: true,
+                post_id: post.id,
+                postiz_id: postizId,
+              });
+              break; // Success, exit retry loop
+
+            } catch (attemptError) {
+              lastError = attemptError as Error;
+              console.error(`Attempt ${attempt} failed for ${platform}:`, attemptError);
+
+              if (attempt === maxRetries) {
+                throw lastError;
+              }
+
+              // Wait before next attempt
+              const waitTime = Math.pow(2, attempt) * 1000;
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
           }
-
-          const postizResult = await postizResponse.json();
-          const postizId = postizResult.id || `postiz_${Date.now()}`;
-
-          // Save the scheduled post to database
-          const { data: post, error: insertError } = await supabaseClient
-            .from('social_posts')
-            .insert({
-              agent_id: actualAgentId,
-              platform,
-              content,
-              media_url,
-              schedule_time,
-              status: 'scheduled',
-              postiz_post_id: postizId,
-            })
-            .select()
-            .single();
-
-          if (insertError) {
-            console.error(`Database error for ${platform}:`, insertError);
-            results.push({
-              platform,
-              success: false,
-              error: 'Failed to save post',
-            });
-            continue;
-          }
-
-          console.log(`Successfully scheduled ${platform} post via Postiz:`, post.id);
-          results.push({
-            platform,
-            success: true,
-            post_id: post.id,
-            postiz_id: postizId,
-          });
 
         } catch (postizError) {
-          console.error(`Postiz scheduling error for ${platform}:`, postizError);
+          console.error(`❌ All Postiz attempts failed for ${platform}:`, postizError);
+
+          // Categorize the error
+          let errorMessage = postizError.message;
+          let fallbackStatus = 'failed';
+
+          if (errorMessage.includes('timeout') || errorMessage.includes('aborted')) {
+            errorMessage = 'Postiz API timeout - will retry later';
+            fallbackStatus = 'pending';
+          } else if (errorMessage.includes('401') || errorMessage.includes('403')) {
+            errorMessage = 'Postiz authentication failed - check API key';
+          } else if (errorMessage.includes('429')) {
+            errorMessage = 'Postiz rate limit exceeded - will retry later';
+            fallbackStatus = 'pending';
+          }
+
           // Fallback: save to database without Postiz
           const { data: post, error: insertError } = await supabaseClient
             .from('social_posts')
@@ -161,17 +215,49 @@ const handler = async (req: Request): Promise<Response> => {
               content,
               media_url,
               schedule_time,
-              status: 'pending',
-              error_message: postizError.message,
+              status: fallbackStatus,
+              error_message: errorMessage,
             })
             .select()
             .single();
 
+          // Try direct posting as fallback for supported platforms
+          if (platform === 'facebook' && post?.id) {
+            try {
+              console.log(`🔄 Attempting direct posting to ${platform} as fallback`);
+
+              const directPostResult = await supabaseClient.functions.invoke('social-posting', {
+                body: {
+                  post_id: post.id,
+                  platform,
+                  content,
+                  media_url,
+                  schedule_time,
+                },
+              });
+
+              if (directPostResult.data?.success) {
+                console.log(`✅ Direct posting succeeded for ${platform}`);
+                results.push({
+                  platform,
+                  success: true,
+                  post_id: post.id,
+                  method: 'direct',
+                  error: undefined,
+                });
+                continue; // Skip to next platform
+              }
+            } catch (directPostError) {
+              console.error(`❌ Direct posting also failed for ${platform}:`, directPostError);
+            }
+          }
+
           results.push({
             platform,
             success: false,
-            error: `Postiz error: ${postizError.message}`,
+            error: errorMessage,
             post_id: post?.id,
+            retryable: fallbackStatus === 'pending',
           });
         }
 

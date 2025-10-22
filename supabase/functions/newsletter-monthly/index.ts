@@ -336,89 +336,44 @@ ${unsubscribeLine}
 }
 
 // Data sources
-async function fetchMarketDataViaGrok(supabase: SupabaseClient, zip: string, currentMonth: string): Promise<any | null> {
-  // Call new edge function 'fetch-market-data-grok' 
+async function fetchMarketDataViaGrok(supabase: SupabaseClient, zip: string, contactInfo: any, agentInfo: any): Promise<any | null> {
+  // Call market-data-grok function with contact and agent info for personalization
   try {
-    console.log(`fetchMarketDataViaGrok: Calling fetch-market-data-grok for zip ${zip}`);
-    
-    const { data, error } = await supabase.functions.invoke("fetch-market-data-grok", {
-      body: { 
-        zip_code: zip, 
-        period_month: currentMonth.slice(0, 7) // Convert to YYYY-MM format
+    console.log(`fetchMarketDataViaGrok: Calling market-data-grok for zip ${zip}`);
+
+    const { data, error } = await supabase.functions.invoke("market-data-grok", {
+      body: {
+        zip_code: zip,
+        first_name: contactInfo.first_name || 'Valued',
+        last_name: contactInfo.last_name || 'Homeowner',
+        email: contactInfo.email || 'contact@example.com',
+        address: contactInfo.address || `Property in ${zip}`,
+        agent_name: agentInfo.agent_name || 'Your Real Estate Agent',
+        agent_info: agentInfo.agent_info || 'Professional Real Estate Services'
       },
     });
-    
+
     if (error) {
       console.error("fetchMarketDataViaGrok: Edge function error", { zip, error });
-      return null; // signal fallback
-    }
-    
-    if (!data || !data.success || !data.data) {
-      console.error("fetchMarketDataViaGrok: Invalid data format", { zip, data });
       return null;
     }
-    
-    console.log(`fetchMarketDataViaGrok: Retrieved market data for zip ${zip}`);
-    return data.data;
-  } catch (e) {
-    console.error("fetchMarketDataViaGrok: Exception occurred", { zip, error: String(e) });
-    return null; // signal fallback
-  }
-}
 
-async function fetchTransactionsViaApifyFallback(zip: string, currentMonth: string) {
-  // Fallback: attempt to run user-provided actor/task via env vars
-  // Tries APIFY_TASK_ID first, then APIFY_ACTOR_ID
-  const token = Deno.env.get("APIFY_API_TOKEN");
-  if (!token) {
-    console.log("No APIFY_API_TOKEN configured, skipping Apify fallback");
-    return [];
-  }
-
-  const taskId = Deno.env.get("APIFY_TASK_ID");
-  const actorId = Deno.env.get("APIFY_ACTOR_ID");
-  if (!taskId && !actorId) {
-    console.log("No APIFY_TASK_ID or APIFY_ACTOR_ID configured, skipping Apify fallback");
-    return [];
-  }
-
-  console.log(`Fallback: trying Apify for ${zip} via ${taskId ? 'task' : 'actor'}`);
-
-  let runUrl: string;
-  if (taskId) {
-    runUrl = `https://api.apify.com/v2/actor-tasks/${taskId}/run-sync?token=${token}`;
-  } else {
-    runUrl = `https://api.apify.com/v2/acts/${actorId}/run-sync?token=${token}`;
-  }
-
-  const input = {
-    location: zip,
-    maxItems: 50,
-    type: 'sold'
-  };
-
-  try {
-    const response = await fetch(runUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-
-    if (!response.ok) {
-      console.error(`Apify run failed: ${response.statusText}`);
-      return [];
+    if (!data || !data.success) {
+      console.error("fetchMarketDataViaGrok: Invalid response", { zip, data });
+      return null;
     }
 
-    const result = await response.json();
-    const items = result.items || [];
-    
-    console.log(`Apify returned ${items.length} items for ${zip}`);
-    return items;
-  } catch (error) {
-    console.error("Apify fallback error:", error);
-    return [];
+    console.log(`fetchMarketDataViaGrok: Retrieved market data for zip ${zip}`);
+    return {
+      html_email: data.html_email,
+      real_data: data.real_data
+    };
+  } catch (e) {
+    console.error("fetchMarketDataViaGrok: Exception occurred", { zip, error: String(e) });
+    return null;
   }
 }
+
 
 // Database operations
 async function getAgentProfiles(supabase: SupabaseClient): Promise<AgentProfile[]> {
@@ -463,10 +418,51 @@ async function getContactsForZip(supabase: SupabaseClient, agentId: string, zip:
     .eq('zip_code', zip)
     .not('email', 'is', null)
     .eq('dnc', false); // Exclude DNC contacts
-  
+
   if (error) throw error;
-  
+
   return data?.map(row => row.email).filter(Boolean) || [];
+}
+
+async function getFirstContactForZip(supabase: SupabaseClient, agentId: string, zip: string): Promise<any> {
+  const { data, error } = await supabase
+    .from('contacts')
+    .select('id, first_name, last_name, email, address_1, address_2, city, state, zip_code')
+    .eq('agent_id', agentId)
+    .eq('zip_code', zip)
+    .not('email', 'is', null)
+    .eq('dnc', false)
+    .limit(1)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+function generateStandardFooter(agent: AgentProfile | null): string {
+  const agentName = agent ? `${agent.first_name || ''} ${agent.last_name || ''}`.trim() : 'Your Real Estate Agent';
+  const agentEmail = agent?.email || '';
+
+  return `
+    <div style="padding: 30px 0; margin-top: 30px; border-top: 1px solid #e5e5e5; font-family: Arial, sans-serif; text-align: left;">
+      <p style="color: #333; margin: 0 0 5px 0; font-size: 16px; font-weight: bold;">
+        ${agentName}${agentName !== 'Your Real Estate Agent' ? ' - REALTOR®' : ''}
+      </p>
+
+      <div style="font-size: 12px; color: #999; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+        <p style="margin: 3px 0;">
+          This email was sent because you are a valued contact in our database.
+        </p>
+        ${agentEmail ? `<p style="margin: 3px 0;">
+          If you no longer wish to receive these market updates, you can
+          <a href="mailto:${agentEmail}?subject=Unsubscribe%20Request" style="color: #999;">unsubscribe here</a>.
+        </p>` : ''}
+        <p style="margin: 3px 0;">
+          © ${new Date().getFullYear()} ${agentName}. All rights reserved.
+        </p>
+      </div>
+    </div>
+  `;
 }
 
 async function getCache(supabase: SupabaseClient, zip: string, periodMonth: string): Promise<CacheData | null> {
@@ -787,116 +783,66 @@ async function processAgent(
 
   for (const zip of zips) {
     try {
-      // Enhanced debugging for zip processing
       console.log(`Processing zip ${zip} for agent ${agentId}`);
-      console.log(`Zip processing details:`, {
-        zipCode: zip,
-        agentId,
-        agentName: agentProfile ? `${agentProfile.first_name} ${agentProfile.last_name}` : 'unknown',
-        contactFetchStep: "starting",
-        dryRun: opts.dryRun
-      });
 
-      // Cache check
-      let cache = await getCache(admin, zip, reportMonth);
-      if (!cache) {
-        // Fetch market data using Grok API
-        let marketData = await fetchMarketDataViaGrok(admin, zip, reportMonth);
-        if (marketData === null) {
-          // If Grok fails, create fallback data
-          marketData = {
-            zip_code: zip,
-            period_month: reportMonth.slice(0, 7),
-            median_sale_price: null,
-            median_list_price: null,
-            homes_sold: null,
-            new_listings: null,
-            inventory: null,
-            median_dom: null,
-            avg_price_per_sqft: null,
-            market_insights: {
-              key_takeaways: ['Market data temporarily unavailable. Please check back later.']
-            },
-            transactions_sample: []
-          };
-        }
-        // Throttle API calls
-        await sleep(1000);
-
-        // Skip zips with no data unless it's a dry run - allow fallback data to proceed
-        if (!marketData) {
-          console.log(`Skipping ${zip}: no market data available`);
-          continue;
-        }
-        
-        // Check if this is completely empty data (not just fallback data)
-        const hasAnyData = marketData.median_sale_price || marketData.homes_sold || marketData.median_list_price || marketData.new_listings;
-        const isFallbackData = marketData.market_insights?.key_takeaways?.[0]?.includes('unavailable');
-        
-        if (!hasAnyData && !isFallbackData && !opts.dryRun) {
-          console.log(`Skipping ${zip}: no meaningful data and not in test mode`);
-          continue;
-        }
-        
-        console.log(`Processing ${zip}: hasData=${hasAnyData}, isFallback=${isFallbackData}, dryRun=${opts.dryRun}`);
-
-        // Get previous month's data for comparison (if available)
-        let prevMetrics: any = null;
-        try {
-          const prevCache = await getCache(admin, zip, prevMonth);
-          prevMetrics = prevCache?.metrics ?? null;
-        } catch (e) {
-          // not critical
-          await logError(admin, "Failed to get previous month cache for comparison", { zip, prevMonth, error: String(e) }, agentId);
-        }
-
-        // Build HTML with agent personalization and unsubscribe link
-        const unsubscribeURL = await buildUnsubscribeURL(zip, agentId);
-        console.log(`Building email for ${zip}, marketData available:`, !!marketData, 'keys:', marketData ? Object.keys(marketData) : 'none');
-        const html = buildEmailHTML(zip, reportMonth, marketData, agentProfile, unsubscribeURL);
-        console.log(`Generated HTML length: ${html?.length || 0} characters for ${zip}`);
-
-        cache = {
-          zip_code: zip,
-          period_month: reportMonth,
-          metrics: marketData, // Store the full Grok data as metrics
-          prev_comparison: prevMetrics ? compareMetrics(marketData, prevMetrics) : undefined,
-          html,
-        };
-
-        await upsertCache(admin, zip, reportMonth, cache);
-      } else {
-        out.cacheHits += 1;
+      // Get all contacts for this ZIP code
+      const recipients = await getContactsForZip(authedClient, agentId, zip);
+      if (!recipients.length) {
+        console.log(`No contacts found for ZIP ${zip}, skipping`);
+        continue;
       }
 
-      // Send emails
-      let recipients: string[] = [];
-      
-      if (opts.dryRun) {
-        // Test mode: send only to admin who triggered the test
-        if (adminProfile?.email) {
-          recipients = [adminProfile.email];
-          console.log(`Test mode: sending email to admin ${adminProfile.email} instead of real contacts`);
-        } else {
-          await logError(admin, "Test mode: no admin email found for test recipient", { agentId, zip }, agentId);
-          continue;
-        }
-      } else {
-        // Production mode: send to all contacts for this ZIP
-        recipients = await getContactsForZip(authedClient, agentId, zip);
-        if (!recipients.length) {
-          // skip zips with no contacts
-          continue;
-        }
+      // In dry run mode, send only to admin
+      const actualRecipients = opts.dryRun ? [adminProfile?.email].filter(Boolean) : recipients;
+      if (actualRecipients.length === 0) {
+        console.log(`No valid recipients for ZIP ${zip} in ${opts.dryRun ? 'dry run' : 'production'} mode`);
+        continue;
       }
 
-      const baseSubject = `${zip} Monthly Real Estate Newsletter – ${new Date().toLocaleDateString()}`;
+      // Use first contact's info for generating personalized content
+      const firstContact = recipients.length > 0 ? await getFirstContactForZip(authedClient, agentId, zip) : null;
+
+      // Generate market data and email content using Grok (once per ZIP code)
+      const contactInfo = firstContact ? {
+        first_name: firstContact.first_name,
+        last_name: firstContact.last_name,
+        email: firstContact.email,
+        address: [firstContact.address_1, firstContact.city, firstContact.state].filter(Boolean).join(', ') || `Property in ${zip}`
+      } : {
+        first_name: 'Valued',
+        last_name: 'Homeowner',
+        email: 'contact@example.com',
+        address: `Property in ${zip}`
+      };
+
+      const agentInfo = {
+        agent_name: agentProfile ? `${agentProfile.first_name} ${agentProfile.last_name}`.trim() : 'Your Real Estate Agent',
+        agent_info: agentProfile ? `${agentProfile.first_name} ${agentProfile.last_name}, Real Estate Agent` : 'Professional Real Estate Services'
+      };
+
+      // Generate personalized content for this ZIP code
+      const marketData = await fetchMarketDataViaGrok(admin, zip, contactInfo, agentInfo);
+
+      if (!marketData || !marketData.html_email) {
+        const msg = `Failed to generate content for ZIP ${zip} - no market data available`;
+        out.errors.push(msg);
+        await logError(admin, msg, { agentId, zip }, agentId);
+        continue;
+      }
+
+      // Add standard footer with agent information
+      const finalHtml = marketData.html_email + generateStandardFooter(agentProfile);
+
+      // Send personalized emails to all contacts in this ZIP code
+      const baseSubject = `${zip} Market Report - ${new Date().toLocaleDateString()}`;
       const subject = opts.dryRun ? `[TEST] ${baseSubject}` : baseSubject;
-      
-      // Send emails in batches (Resend handles this internally, but we chunk for rate limiting)
-      const batches = chunkArray(recipients, 50); // Smaller batches for better rate limiting
+
+      console.log(`Sending ${actualRecipients.length} emails for ZIP ${zip}`);
+
+      // Send emails in batches for rate limiting
+      const batches = chunkArray(actualRecipients, 50);
       for (const batch of batches) {
-        const res = await sendEmailBatch(batch, subject, cache.html, agentProfile);
+        const res = await sendEmailBatch(batch, subject, finalHtml, agentProfile);
         if (res.error) {
           const msg = `Failed to send batch for ${zip}: ${res.error}`;
           out.errors.push(msg);

@@ -37,14 +37,14 @@ const Index = () => {
   return (
     <Layout>
       <div id="agent-dashboard-root" className="space-y-6">
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Agent Dashboard</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Agent Dashboard</h1>
+            <p className="text-muted-foreground text-sm sm:text-base">
               Your personal performance hub - track goals, manage tasks, and grow your business.
             </p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 self-start sm:self-auto">
             <DashboardRefreshButton />
             <ExportButtons />
           </div>

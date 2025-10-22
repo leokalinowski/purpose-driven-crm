@@ -20,7 +20,7 @@ async function getMarketDataFromDatabase(zipCode: string): Promise<MarketData | 
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
     // Get the most recent active CSV file
@@ -33,8 +33,7 @@ async function getMarketDataFromDatabase(zipCode: string): Promise<MarketData | 
       .single()
 
     if (!csvFile) {
-      console.log('No active CSV file found')
-      return null
+      throw new Error('No active CSV file found. Please upload market data before sending newsletters.')
     }
 
     // Get market data for the ZIP code from the active CSV
@@ -46,8 +45,7 @@ async function getMarketDataFromDatabase(zipCode: string): Promise<MarketData | 
       .single()
 
     if (!marketData) {
-      console.log(`No market data found for ZIP ${zipCode}`)
-      return null
+      throw new Error(`No market data found for ZIP code ${zipCode} in uploaded CSV. Please ensure your CSV contains data for this ZIP code.`)
     }
 
     console.log(`Found market data for ZIP ${zipCode}: $${marketData.median_value}, ${marketData.value_change}`)
@@ -86,29 +84,27 @@ async function generateProfessionalNewsletter(
             content: `You are a professional real estate market analyst creating personalized newsletters for homeowners.
 
 ${marketData ? `
-REAL MARKET DATA FROM CSV:
-- ZIP Code: ${zipCode}
+REAL CSV MARKET DATA FOR ZIP ${zipCode}:
 - Median Home Value: $${marketData.medianValue.toLocaleString()}
 - 1-Year Change: ${marketData.valueChange}
 - Area: ${marketData.areaName}
 - Data Source: ${marketData.source}
 - Last Updated: ${marketData.lastUpdated}
 
-USE THIS EXACT DATA - DO NOT MODIFY THESE NUMBERS
+USE THIS EXACT DATA - DO NOT MODIFY OR ESTIMATE THESE NUMBERS
 ` : `
-NO REAL DATA AVAILABLE - CREATE GENERAL MARKET UPDATE WITHOUT SPECIFIC NUMBERS
+NO CSV DATA AVAILABLE FOR ZIP ${zipCode} - CREATE GENERAL MARKET UPDATE
 `}
 
-Create a comprehensive, professional real estate newsletter that includes:
+Create a personalized market update email that includes:
 
-1. **Market Overview Section** with real data (if available)
-2. **Detailed Market Analysis Table** with metrics
-3. **Local Market Trends** and insights
-4. **What This Means for Homeowners** section
-5. **Professional Recommendations**
-6. **Strong Call-to-Action** for the agent
+1. **Personal Greeting** using recipient's name
+2. **Market Overview** with ZIP-specific data (if available)
+3. **Key Insights** and local market context
+4. **Professional Recommendations**
+5. **Call-to-Action** for consultation
 
-Format as clean HTML with professional headings, tables, and clear sections.`
+Format as clean HTML email content. Keep it concise and professional.`
           },
           {
             role: 'user',
@@ -132,7 +128,7 @@ Create a general market update without specific numbers since no real data is av
 `
           }
         ],
-        max_completion_tokens: 4000
+        max_completion_tokens: 3000
       }),
     });
 
@@ -145,9 +141,10 @@ Create a general market update without specific numbers since no real data is av
 
   } catch (error) {
     console.error('Newsletter generation error:', error);
-    throw error;
+    throw new Error(`Failed to generate newsletter content: ${error.message}`);
   }
 }
+
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -156,11 +153,13 @@ serve(async (req) => {
 
   try {
     const { zip_code, first_name, last_name, email, address, agent_name, agent_info } = await req.json()
-    
+
     console.log(`Generating newsletter for ZIP: ${zip_code}`);
-    
+
     // Get real market data from CSV database
     const marketData = await getMarketDataFromDatabase(zip_code);
+
+    console.log(`Market data lookup result for ZIP ${zip_code}:`, marketData ? 'Found data' : 'No data found');
     
     // Generate professional newsletter with Grok
     const emailContent = await generateProfessionalNewsletter(

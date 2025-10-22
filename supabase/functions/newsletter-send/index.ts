@@ -84,7 +84,8 @@ async function sendFailureReport(
 
 interface NewsletterRequest {
   agent_id: string;
-  dry_run: boolean;
+  dry_run?: boolean;
+  campaign_name?: string;
 }
 
 interface Contact {
@@ -183,8 +184,8 @@ serve(async (req) => {
   }
 
   try {
-    const { agent_id, dry_run }: NewsletterRequest = await req.json();
-    
+    const { agent_id, dry_run, campaign_name }: NewsletterRequest = await req.json();
+
     console.log(`Starting newsletter ${dry_run ? 'test' : 'send'} for agent: ${agent_id}`);
 
     // Initialize Supabase and Resend clients
@@ -213,7 +214,7 @@ serve(async (req) => {
     }
 
     // Create newsletter campaign record
-    const campaignName = `${dry_run ? 'Test ' : ''}Market Newsletter - ${new Date().toLocaleDateString()}`;
+    const campaignName = campaign_name || `${dry_run ? 'Test ' : ''}Market Newsletter - ${new Date().toLocaleDateString()}`;
     const { data: campaignRecord, error: campaignError } = await supabase
       .from('newsletter_campaigns')
       .insert({
@@ -281,221 +282,52 @@ serve(async (req) => {
       
       let totalEmailsSent = 0;
       let totalContactsProcessed = 0;
-      let totalGrokCalls = 0;
-      let totalTokensUsed = 0;
-      let totalCacheHits = 0;
       const failures: FailureData[] = [];
-      const GROK_MODELS = ['grok-3-mini', 'grok-beta']; // Optimized for cost/quality ratio
 
-      // Content validation function to prevent fake data
-      function validateNewsletterContent(htmlContent: string, zipCode: string): boolean {
-        try {
-          // Check for common fake data indicators
-          const suspiciousPatterns = [
-            /\$[0-9]+,[0-9]+,[0-9]+/g, // Suspiciously round numbers like $500,000
-            /\$[0-9]+,[0-9]+,000/g, // Very round numbers like $6,500,000
-            /\$[0-9]+,000/g, // Round thousands like $2,500
-            /\$650,000|\$635,000|\$525/g, // Specific fake numbers from the example
-            /\$[0-9]+,000,000/g, // Million-dollar round numbers
-            /median.*price.*\$[0-9]+,[0-9]+/gi, // Generic median price patterns
-            /according to.*data.*as of/g, // Vague data source references
-            /approximately.*\$[0-9]+/gi, // Approximate values (often fake)
-            /estimated.*\$[0-9]+/gi, // Estimated values (often fake)
-            /\$[0-9]+,[0-9]+,[0-9]+,000/g, // Million-dollar round numbers
-            /123 Main St/g, // Generic fake addresses
-            /generic.*address/gi, // References to generic addresses
-          ];
 
-          // Check for data source citations
-          const hasDataSources = /(zillow|redfin|mls|homes\.com|realtor\.com)/gi.test(htmlContent);
-          
-          // Check for actual web search evidence (URLs, page references)
-          const hasSearchEvidence = /(https?:\/\/|\.com|\.net|\.org|page|section|accessed|web search|market trends page|zillow\.com\/home-values)/gi.test(htmlContent);
-          
-          // Check for "data not available" statements (good - shows honesty)
-          const hasDataUnavailable = /data not available|information not available|no current market data|market data not available/gi.test(htmlContent);
-          
-          // Check for specific ZIP code mention
-          const mentionsZipCode = htmlContent.includes(zipCode);
-          
-          // Check for agent personalization and CTA
-          const hasAgentPersonalization = /(your.*agent|local.*expert|feel free.*reply|give me.*call|reach out|contact me)/gi.test(htmlContent);
-          
-          // Check for agent name mentions (should appear multiple times)
-          const agentNameMentions = (htmlContent.match(/Leo Kalinowski/gi) || []).length;
-          
-          // Check for business generation elements
-          const hasBusinessCTA = /(buying|selling|discuss|consultation|market.*conditions|property.*value)/gi.test(htmlContent);
 
-          // If content has suspicious patterns without data sources, flag it
-          const hasSuspiciousPatterns = suspiciousPatterns.some(pattern => pattern.test(htmlContent));
-          
-          if (hasSuspiciousPatterns && !hasDataSources && !hasDataUnavailable) {
-            console.error('Content validation failed: Suspicious patterns detected without data sources');
-            return false;
-          }
-          
-          // Check for web search evidence if data sources are mentioned
-          if (hasDataSources && !hasSearchEvidence && !hasDataUnavailable) {
-            console.error('Content validation failed: Data sources mentioned but no web search evidence found - likely fabricated data');
-            return false;
-          }
-          
-          // If content has specific numbers but no search evidence, it's likely fake
-          if (hasSuspiciousPatterns && !hasSearchEvidence && !hasDataUnavailable) {
-            console.error('Content validation failed: Specific numbers present but no web search evidence - likely fabricated data');
-            return false;
-          }
 
-          // If content doesn't mention the ZIP code, it might be generic/fake
-          if (!mentionsZipCode && !hasDataUnavailable) {
-            console.error('Content validation failed: ZIP code not mentioned');
-            return false;
-          }
-          
-          // Check for agent personalization and business generation
-          if (!hasAgentPersonalization || !hasBusinessCTA) {
-            console.warn('Content validation warning: Missing agent personalization or business CTA');
-            // Don't fail validation, but log warning
-          }
-          
-          // Check for sufficient agent name mentions
-          if (agentNameMentions < 2) {
-            console.warn(`Content validation warning: Agent name only mentioned ${agentNameMentions} times (should be at least 2)`);
-            // Don't fail validation, but log warning
-          }
-
-          return true;
-        } catch (error) {
-          console.error('Content validation error:', error);
-          return false;
-        }
-      }
-
-      // Cost tracking function
-      async function trackCosts(agentId: string, campaignId: string, grokCalls: number, tokens: number, emails: number, zipCodes: number, cacheHits: number): Promise<void> {
-        const estimatedCost = (grokCalls * 0.005) + (tokens * 0.000001); // Rough cost estimation
-        
-        await supabase
-          .from('newsletter_cost_tracking')
-          .insert({
-            agent_id: agentId,
-            campaign_id: campaignId,
-            grok_api_calls: grokCalls,
-            grok_tokens_used: tokens,
-            estimated_cost: estimatedCost,
-            emails_sent: emails,
-            zip_codes_processed: zipCodes,
-            cache_hits: cacheHits
-          });
-      }
-
-      // Check cache for existing content (24-hour TTL)
-      async function getCachedContent(zipCode: string): Promise<EmailData | null> {
-        const cacheKey = `newsletter_content_${zipCode}`;
-        const { data: cachedData } = await supabase
-          .from('newsletter_cache')
-          .select('content, created_at')
-          .eq('cache_key', cacheKey)
-          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-          .single();
-        
-        if (cachedData) {
-          console.log(`Using cached content for ZIP ${zipCode}`);
-          totalCacheHits++;
-          return JSON.parse(cachedData.content);
-        }
-        return null;
-      }
-
-      // Cache generated content
-      async function cacheContent(zipCode: string, content: EmailData): Promise<void> {
-        const cacheKey = `newsletter_content_${zipCode}`;
-        await supabase
-          .from('newsletter_cache')
-          .upsert({
-            cache_key: cacheKey,
-            content: JSON.stringify(content),
-            created_at: new Date().toISOString()
-          });
-      }
-
-      async function generateEmailWithRetry(
-        zipCode: string, 
-        contact: Contact, 
-        address: string, 
+      async function generateEmailContent(
+        zipCode: string,
+        contact: Contact,
+        address: string,
         agent: AgentProfile
       ): Promise<EmailData | null> {
-        // Check cache first
-        const cachedContent = await getCachedContent(zipCode);
-        if (cachedContent) {
-          return cachedContent;
-        }
+        try {
+          console.log(`Generating email content for ZIP ${zipCode} using CSV data + Grok`);
 
-        let lastError = '';
-        
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          // Model switching: use different model after 2 failures
-          const modelIndex = attempt <= 2 ? 0 : Math.min(attempt - 2, GROK_MODELS.length - 1);
-          const model = GROK_MODELS[modelIndex];
-          
-          console.log(`ZIP ${zipCode}, attempt ${attempt} using model: ${model}`);
-          
-          try {
-            totalGrokCalls++; // Track API call
-            const { data: emailData, error: emailError } = await supabase.functions.invoke('market-data-grok', {
-              body: {
-                zip_code: zipCode,
-                first_name: contact.first_name || '',
-                last_name: contact.last_name || '',
-                email: contact.email,
-                address: address,
-                agent_name: `${agent.first_name || ''} ${agent.last_name || ''}`.trim(),
-                agent_info: `${agent.first_name || ''} ${agent.last_name || ''}, Real Estate Agent, Email: ${agent.email || ''}`,
-                retry_attempt: attempt,
-                model: model
-              }
-            });
-
-            if (emailError) {
-              lastError = emailError.message;
-              console.error(`Attempt ${attempt} failed for ZIP ${zipCode}:`, emailError);
-              continue;
+          const { data: emailData, error: emailError } = await supabase.functions.invoke('market-data-grok', {
+            body: {
+              zip_code: zipCode,
+              first_name: contact.first_name || 'Valued',
+              last_name: contact.last_name || 'Homeowner',
+              email: contact.email,
+              address: address,
+              agent_name: `${agent.first_name || ''} ${agent.last_name || ''}`.trim(),
+              agent_info: `${agent.first_name || ''} ${agent.last_name || ''}, Real Estate Agent, Email: ${agent.email || ''}`
             }
+          });
 
-            if (emailData && emailData.success) {
-              console.log(`Success on attempt ${attempt} for ZIP ${zipCode} using ${emailData.model_used}`);
-              
-              // Validate content to prevent fake data
-              const isValidContent = validateNewsletterContent(emailData.html_email, zipCode);
-              if (!isValidContent) {
-                console.error(`Content validation failed for ZIP ${zipCode} - contains potentially fake data`);
-                lastError = 'Content validation failed - potential fake data detected';
-                continue;
-              }
-              
-              // Cache the successful content
-              await cacheContent(zipCode, emailData);
-              return emailData;
-            } else {
-              lastError = emailData?.error || 'Unknown error';
-              console.error(`Attempt ${attempt} failed for ZIP ${zipCode}:`, lastError);
-              
-              // If not retryable, skip remaining attempts
-              if (emailData && !emailData.retryable) {
-                console.log(`Non-retryable error for ZIP ${zipCode}, skipping remaining attempts`);
-                break;
-              }
-            }
-          } catch (error) {
-            lastError = error.message;
-            console.error(`Attempt ${attempt} exception for ZIP ${zipCode}:`, error);
+          if (emailError) {
+            console.error(`Failed to generate content for ZIP ${zipCode}:`, emailError);
+            return null;
           }
+
+          if (emailData && emailData.success && emailData.html_email) {
+            return {
+              zip_code: zipCode,
+              html_email: emailData.html_email,
+              success: true,
+              real_data: emailData.real_data
+            };
+          } else {
+            console.error(`Invalid response from market-data-grok for ZIP ${zipCode}:`, emailData);
+            return null;
+          }
+        } catch (error) {
+          console.error(`Exception generating content for ZIP ${zipCode}:`, error);
+          return null;
         }
-        
-        // All attempts failed, record failure
-        console.error(`All attempts failed for ZIP ${zipCode}. Last error: ${lastError}`);
-        return null;
       }
 
       for (const zipCode of zipsToProcess) {
@@ -505,9 +337,9 @@ serve(async (req) => {
         const zipContacts = validContacts.filter(c => c.zip_code === zipCode);
         console.log(`Found ${zipContacts.length} contacts for ZIP ${zipCode}`);
 
-        // Try to generate email for this ZIP code (with retries and model switching)
+        // Generate one email per ZIP code using CSV data and Grok
         let emailData: EmailData | null = null;
-        
+
         if (zipContacts.length > 0) {
           const firstContact = zipContacts[0];
           const addressParts = [
@@ -516,22 +348,23 @@ serve(async (req) => {
             firstContact.city,
             firstContact.state
           ].filter(Boolean);
-          const address = addressParts.length > 0 ? addressParts.join(', ') : `ZIP ${firstContact.zip_code}`;
+          const address = addressParts.length > 0 ? addressParts.join(', ') : `Property in ${firstContact.zip_code}`;
 
-          emailData = await generateEmailWithRetry(zipCode, firstContact, address, agent);
+          // Generate content using market-data-grok function (CSV data + Grok)
+          emailData = await generateEmailContent(zipCode, firstContact, address, agent);
         }
 
         if (!emailData) {
-          // All attempts failed for this ZIP code, record the failure
+          // Record failure for this ZIP code
           failures.push({
             zip_code: zipCode,
             contacts: zipContacts,
             agent: agent,
-            error: 'Failed to generate email after 3 attempts with model switching',
-            attempts: 3
+            error: 'Failed to generate email content',
+            attempts: 1
           });
-          
-          console.error(`Skipping ZIP ${zipCode} after all retry attempts failed`);
+
+          console.error(`Skipping ZIP ${zipCode} - failed to generate content`);
           continue;
         }
 
@@ -599,7 +432,7 @@ serve(async (req) => {
         await sendFailureReport(failures, agent, resend, totalEmailsSent, totalContactsProcessed);
       }
 
-      // Update run record with results including cost tracking
+      // Update run record with results
       await supabase
         .from('monthly_runs')
         .update({
@@ -607,25 +440,11 @@ serve(async (req) => {
           emails_sent: totalEmailsSent,
           contacts_processed: totalContactsProcessed,
           zip_codes_processed: zipsToProcess.length,
-          grok_api_calls: totalGrokCalls,
-          grok_tokens_used: totalTokensUsed,
-          estimated_cost: (totalGrokCalls * 0.005) + (totalTokensUsed * 0.000001),
-          cache_hits: totalCacheHits,
           failed_zip_codes: failures.length,
           finished_at: new Date().toISOString()
         })
         .eq('id', runRecord.id);
 
-      // Track costs for analytics
-      await trackCosts(
-        agentId, 
-        campaignRecord?.id || '', 
-        totalGrokCalls, 
-        totalTokensUsed, 
-        totalEmailsSent, 
-        zipsToProcess.length, 
-        totalCacheHits
-      );
 
       // Update campaign record with results
       if (campaignRecord) {

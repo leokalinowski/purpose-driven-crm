@@ -82,6 +82,22 @@ interface Contact {
   agent_id: string;
 }
 
+interface Agent {
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+}
+
+interface ProcessResult {
+  agent_id: string;
+  agent_name: string;
+  tasks_generated?: number;
+  call_tasks?: number;
+  text_tasks?: number;
+  error?: string;
+}
+
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -111,8 +127,8 @@ const handler = async (req: Request): Promise<Response> => {
     const currentWeekTasks = getCurrentWeekTasks();
     console.log('Current week tasks:', currentWeekTasks);
 
-    let agents = [];
-    
+    let agents: Agent[] = [];
+
     if (mode === 'global') {
       // Get all agents
       const { data: agentsData, error: agentsError } = await supabase
@@ -125,7 +141,7 @@ const handler = async (req: Request): Promise<Response> => {
         throw agentsError;
       }
 
-      agents = agentsData || [];
+      agents = (agentsData || []) as Agent[];
     } else if (agentId) {
       // Get specific agent
       const { data: agentData, error: agentError } = await supabase
@@ -139,12 +155,12 @@ const handler = async (req: Request): Promise<Response> => {
         throw agentError;
       }
 
-      agents = agentData ? [agentData] : [];
+      agents = agentData ? [agentData as Agent] : [];
     }
 
     console.log(`Processing ${agents.length} agents`);
 
-    const results = [];
+    const results: ProcessResult[] = [];
 
     // Process each agent
     for (const agent of agents) {
@@ -189,6 +205,7 @@ const handler = async (req: Request): Promise<Response> => {
         })) || [];
 
         // Check if tasks already exist for this agent and week
+        const currentYear = new Date().getFullYear();
         const { data: existingTasks, error: checkError } = await supabase
           .from('spheresync_tasks')
           .select('id, task_type')

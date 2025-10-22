@@ -120,7 +120,7 @@ export function useSphereSyncTasks() {
 
       // Auto-generate tasks if none exist for current week
       if (tasksWithLeads.length === 0 && updatedContacts.length > 0) {
-        await generateWeeklyTasksInternal();
+        await generateWeeklyTasksInternal(updatedContacts);
       }
 
       // Load historical stats
@@ -138,7 +138,7 @@ export function useSphereSyncTasks() {
     }
   }, [user, currentWeek.weekNumber]);
 
-  const generateWeeklyTasksInternal = async () => {
+  const generateWeeklyTasksInternal = async (contactsToUse?: Contact[]) => {
     if (!user) return;
 
     try {
@@ -173,13 +173,26 @@ export function useSphereSyncTasks() {
         }
       }
 
+      // Use provided contacts or fall back to state
+      const contactsToFilter = contactsToUse || contacts;
+
       // Filter contacts by categories
-      const callContacts = contacts.filter(contact => 
+      const callContacts = contactsToFilter.filter(contact => 
         callCategories.includes(contact.category)
       );
-      const textContacts = contacts.filter(contact => 
+      const textContacts = contactsToFilter.filter(contact => 
         contact.category === textCategory
       );
+
+      console.log('Task generation debug:', {
+        totalContacts: contactsToFilter.length,
+        callCategories,
+        textCategory,
+        callContacts: callContacts.length,
+        textContacts: textContacts.length,
+        weekNumber: currentWeek.weekNumber,
+        year: currentYear
+      });
 
       // Create tasks
       const tasksToInsert = [
@@ -240,7 +253,7 @@ export function useSphereSyncTasks() {
 
     try {
       setGenerating(true);
-      await generateWeeklyTasksInternal();
+      await generateWeeklyTasksInternal(contacts);
       setLastGeneratedWeek(weekKey);
       await loadTasksAndContacts();
       
@@ -357,6 +370,82 @@ export function useSphereSyncTasks() {
 
   const refreshTasks = loadTasksAndContacts;
 
+  // Function to generate tasks for newly uploaded contacts
+  const generateTasksForNewContacts = useCallback(async (newContacts: Contact[]) => {
+    if (!user || newContacts.length === 0) return;
+
+    try {
+      const { callCategories, textCategory } = currentWeek;
+      const currentYear = new Date().getFullYear();
+
+      // Filter new contacts by current week's categories
+      const callContacts = newContacts.filter(contact => 
+        callCategories.includes(contact.category)
+      );
+      const textContacts = newContacts.filter(contact => 
+        contact.category === textCategory
+      );
+
+      console.log('New contact task generation:', {
+        totalNewContacts: newContacts.length,
+        callCategories,
+        textCategory,
+        callContacts: callContacts.length,
+        textContacts: textContacts.length
+      });
+
+      // Only generate tasks if there are contacts matching this week's categories
+      if (callContacts.length > 0 || textContacts.length > 0) {
+        const tasksToInsert = [
+          ...callContacts.map(contact => ({
+            agent_id: user.id,
+            lead_id: contact.id,
+            task_type: 'call' as const,
+            week_number: currentWeek.weekNumber,
+            year: currentYear,
+            completed: false
+          })),
+          ...textContacts.map(contact => ({
+            agent_id: user.id,
+            lead_id: contact.id,
+            task_type: 'text' as const,
+            week_number: currentWeek.weekNumber,
+            year: currentYear,
+            completed: false
+          }))
+        ];
+
+        if (tasksToInsert.length > 0) {
+          const { error: insertError } = await supabase
+            .from('spheresync_tasks')
+            .insert(tasksToInsert);
+
+          if (insertError) {
+            console.error('Error inserting new contact tasks:', insertError);
+            return;
+          }
+
+          // Refresh tasks to show the new ones
+          await loadTasksAndContacts();
+
+          toast({
+            title: "Tasks Generated",
+            description: `${tasksToInsert.length} new tasks created for contacts matching this week's categories (${callCategories.join(', ')} calls, ${textCategory} texts)`
+          });
+        }
+      } else {
+        // Show info about when tasks will be generated
+        const unmatchedCategories = [...new Set(newContacts.map(c => c.category))];
+        toast({
+          title: "Tasks Scheduled",
+          description: `New contacts uploaded (${unmatchedCategories.join(', ')}). Tasks will be generated when their letters come up in the weekly rotation.`
+        });
+      }
+    } catch (error) {
+      console.error('Error generating tasks for new contacts:', error);
+    }
+  }, [user, currentWeek, loadTasksAndContacts]);
+
   useEffect(() => {
     if (user) {
       loadTasksAndContacts();
@@ -376,6 +465,7 @@ export function useSphereSyncTasks() {
     currentWeek,
     historicalStats,
     generateWeeklyTasks,
+    generateTasksForNewContacts,
     updateTask,
     refreshTasks
   };
