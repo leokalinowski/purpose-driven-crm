@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { startOfMonth, subMonths, addMonths } from 'date-fns';
 import { toZonedTime, fromZonedTime } from 'date-fns-tz';
+import type { AgentDashboardData as AgentDashboardType, AdminDashboardData as AdminDashboardType, KPIData } from '@/types';
 
 const ET_TZ = 'America/New_York';
 

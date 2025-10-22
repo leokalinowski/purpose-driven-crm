@@ -1,15 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
-
-export interface MetricoolLink {
-  id: string;
-  user_id: string;
-  iframe_url: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
+import type { MetricoolLink } from '@/types';
 
 export const useMetricoolLink = (userId?: string) => {
   const { user } = useAuth();

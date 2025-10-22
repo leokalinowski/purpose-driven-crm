@@ -32,10 +32,10 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.spheresync-generate-tasks]
-verify_jwt = false
+verify_jwt = true
 
 [functions.dnc-monthly-check]
-verify_jwt = false
+verify_jwt = true
 
 [functions.dnc-single-check]
 verify_jwt = true

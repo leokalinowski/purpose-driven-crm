@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
+import { corsHeaders } from "../_shared/cors.ts";
 
 // SphereSync Method - Balanced letter distribution for weekly contact assignments
 // Based on English surname frequency analysis for more even task distribution
@@ -112,7 +113,51 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing Supabase configuration');
+      console.error("Missing Supabase environment variables");
+      return new Response(
+        JSON.stringify({ error: "Server configuration error" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Create Supabase client for authentication check
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // For non-admin users, require authentication (but allow cron jobs without auth)
+    const authHeader = req.headers.get('Authorization');
+    const isCronJob = req.headers.get('X-Cron-Job') === 'true' || req.headers.get('source') === 'pg_cron';
+
+    if (!isCronJob && (!authHeader || !authHeader.startsWith('Bearer '))) {
+      return new Response(
+        JSON.stringify({ error: "Authentication required" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    if (!isCronJob) {
+      // Verify user is authenticated and is admin
+      const supabaseAuth = createClient(supabaseUrl, supabaseServiceKey, {
+        global: { headers: { Authorization: authHeader } }
+      });
+
+      const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+      if (authError || !user) {
+        return new Response(
+          JSON.stringify({ error: "Invalid authentication" }),
+          { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      // Check if user is admin
+      const { data: userRole, error: roleError } = await supabaseAuth
+        .rpc('get_current_user_role');
+
+      if (roleError || userRole !== 'admin') {
+        return new Response(
+          JSON.stringify({ error: "Admin access required" }),
+          { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
