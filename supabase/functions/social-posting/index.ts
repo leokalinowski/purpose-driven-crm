@@ -29,17 +29,32 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`🚀 Direct posting to ${platform} for post ${post_id}`);
 
-    // Get the social account for this platform
-    const { data: account, error: accountError } = await supabaseClient
-      .from('social_accounts')
-      .select('*')
-      .eq('platform', platform)
-      .eq('agent_id', (await supabaseClient.auth.getUser()).data.user?.id)
+    // Get user from post
+    const { data: post, error: postError } = await supabaseClient
+      .from('social_posts')
+      .select('agent_id')
+      .eq('id', post_id)
       .single();
 
-    if (accountError || !account) {
-      throw new Error(`No ${platform} account connected`);
+    if (postError || !post) {
+      throw new Error('Post not found');
     }
+
+    // Decrypt social account tokens
+    const encryptionKey = 'reop-social-tokens-2025';
+    const { data: accountData, error: accountError } = await supabaseClient
+      .rpc('decrypt_social_token', {
+        p_agent_id: post.agent_id,
+        p_platform: platform,
+        p_encryption_key: encryptionKey
+      });
+
+    if (accountError || !accountData || accountData.error) {
+      throw new Error(`No ${platform} account connected: ${accountData?.error || accountError?.message}`);
+    }
+
+    console.log(`✅ Retrieved encrypted ${platform} account`);
+    const account = accountData;
 
     let postResult: any = null;
     let postStatus = 'failed';

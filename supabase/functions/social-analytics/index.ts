@@ -42,10 +42,10 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Fetching analytics for agent ${actualAgentId}`);
 
-    // Get all connected accounts for the agent
+    // Get all connected platform accounts (without tokens)
     let accountsQuery = supabaseClient
       .from('social_accounts')
-      .select('*')
+      .select('platform, account_id, account_name, agent_id')
       .eq('agent_id', actualAgentId);
 
     if (platform) {
@@ -72,6 +72,12 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
+    // Create service client for decryption
+    const supabaseServiceClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
     const analyticsData = [];
     const today = new Date().toISOString().split('T')[0];
 
@@ -79,24 +85,39 @@ const handler = async (req: Request): Promise<Response> => {
       try {
         console.log(`Fetching real analytics for ${account.platform} account ${account.account_id}`);
 
+        // Decrypt tokens for this account
+        const encryptionKey = 'reop-social-tokens-2025';
+        const { data: accountData, error: decryptError } = await supabaseServiceClient
+          .rpc('decrypt_social_token', {
+            p_agent_id: account.agent_id,
+            p_platform: account.platform,
+            p_encryption_key: encryptionKey
+          });
+
+        if (decryptError || !accountData || accountData.error) {
+          console.error(`Failed to decrypt ${account.platform} tokens:`, decryptError || accountData?.error);
+          throw new Error('Token decryption failed');
+        }
+
+        const decryptedAccount = { ...account, ...accountData };
         let platformAnalytics = [];
 
         // Fetch real analytics from platforms
         switch (account.platform) {
           case 'facebook':
-            platformAnalytics = await fetchFacebookAnalytics(account, start_date, end_date);
+            platformAnalytics = await fetchFacebookAnalytics(decryptedAccount, start_date, end_date);
             break;
           case 'instagram':
-            platformAnalytics = await fetchInstagramAnalytics(account, start_date, end_date);
+            platformAnalytics = await fetchInstagramAnalytics(decryptedAccount, start_date, end_date);
             break;
           case 'linkedin':
-            platformAnalytics = await fetchLinkedInAnalytics(account, start_date, end_date);
+            platformAnalytics = await fetchLinkedInAnalytics(decryptedAccount, start_date, end_date);
             break;
           case 'twitter':
-            platformAnalytics = await fetchTwitterAnalytics(account, start_date, end_date);
+            platformAnalytics = await fetchTwitterAnalytics(decryptedAccount, start_date, end_date);
             break;
           case 'tiktok':
-            platformAnalytics = await fetchTikTokAnalytics(account, start_date, end_date);
+            platformAnalytics = await fetchTikTokAnalytics(decryptedAccount, start_date, end_date);
             break;
           default:
             console.log(`No analytics implementation for ${account.platform}, using mock data`);

@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,6 +9,69 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Contact, ContactInput } from '@/hooks/useContacts';
+
+// Comprehensive input validation schema
+const contactSchema = z.object({
+  first_name: z.string()
+    .trim()
+    .max(100, "First name must be less than 100 characters")
+    .regex(/^[a-zA-Z\s'-]*$/, "First name can only contain letters, spaces, hyphens, and apostrophes")
+    .optional()
+    .or(z.literal("")),
+  last_name: z.string()
+    .trim()
+    .min(1, "Last name is required")
+    .max(100, "Last name must be less than 100 characters")
+    .regex(/^[a-zA-Z\s'-]+$/, "Last name can only contain letters, spaces, hyphens, and apostrophes"),
+  email: z.string()
+    .trim()
+    .email("Invalid email address")
+    .max(255, "Email must be less than 255 characters")
+    .optional()
+    .or(z.literal("")),
+  phone: z.string()
+    .trim()
+    .regex(/^[\d\s\-\(\)\+\.]*$/, "Phone number can only contain digits, spaces, and standard punctuation")
+    .max(20, "Phone number must be less than 20 characters")
+    .optional()
+    .or(z.literal("")),
+  address_1: z.string()
+    .trim()
+    .max(255, "Address must be less than 255 characters")
+    .optional()
+    .or(z.literal("")),
+  address_2: z.string()
+    .trim()
+    .max(255, "Address line 2 must be less than 255 characters")
+    .optional()
+    .or(z.literal("")),
+  city: z.string()
+    .trim()
+    .max(100, "City must be less than 100 characters")
+    .regex(/^[a-zA-Z\s'-]*$/, "City can only contain letters, spaces, hyphens, and apostrophes")
+    .optional()
+    .or(z.literal("")),
+  state: z.string()
+    .trim()
+    .max(2, "State must be 2 characters")
+    .regex(/^[A-Z]{0,2}$/, "State must be uppercase letters")
+    .optional()
+    .or(z.literal("")),
+  zip_code: z.string()
+    .trim()
+    .regex(/^(\d{5}(-\d{4})?)?$/, "Zip code must be 5 digits or 5+4 format")
+    .optional()
+    .or(z.literal("")),
+  notes: z.string()
+    .trim()
+    .max(2000, "Notes must be less than 2000 characters")
+    .optional()
+    .or(z.literal("")),
+  dnc: z.boolean().optional(),
+  tags: z.array(z.string()).nullable().optional(),
+});
+
+type ContactFormData = z.infer<typeof contactSchema>;
 
 interface ContactFormProps {
   open: boolean;
@@ -22,22 +88,33 @@ export const ContactForm: React.FC<ContactFormProps> = ({
   onSubmit,
   title,
 }) => {
-  const [formData, setFormData] = useState<ContactInput>({
-    first_name: '',
-    last_name: '',
-    phone: '',
-    email: '',
-    address_1: '',
-    address_2: '',
-    zip_code: '',
-    state: '',
-    city: '',
-    tags: [],
-    dnc: false,
-    notes: '',
-  });
   const [tagsInput, setTagsInput] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  const {
+    register,
+    handleSubmit: handleFormSubmit,
+    formState: { errors },
+    reset,
+    setValue,
+    watch,
+  } = useForm<ContactFormData>({
+    resolver: zodResolver(contactSchema),
+    defaultValues: {
+      first_name: '',
+      last_name: '',
+      phone: '',
+      email: '',
+      address_1: '',
+      address_2: '',
+      zip_code: '',
+      state: '',
+      city: '',
+      tags: [],
+      dnc: false,
+      notes: '',
+    },
+  });
 
   // Format phone number as user types
   const formatPhoneNumber = (value: string) => {
@@ -55,8 +132,8 @@ export const ContactForm: React.FC<ContactFormProps> = ({
   };
 
   useEffect(() => {
-    if (contact) {
-      setFormData({
+    if (contact && open) {
+      reset({
         first_name: contact.first_name || '',
         last_name: contact.last_name || '',
         phone: contact.phone || '',
@@ -71,53 +148,47 @@ export const ContactForm: React.FC<ContactFormProps> = ({
         notes: contact.notes || '',
       });
       setTagsInput(contact.tags?.join(', ') || '');
-    } else {
-      setFormData({
-        first_name: '',
-        last_name: '',
-        phone: '',
-        email: '',
-        address_1: '',
-        address_2: '',
-        zip_code: '',
-        state: '',
-        city: '',
-        tags: [],
-        dnc: false,
-        notes: '',
-      });
+    } else if (!open) {
+      reset();
       setTagsInput('');
     }
-  }, [contact, open]);
+  }, [contact, open, reset]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (data: ContactFormData) => {
     setLoading(true);
 
     try {
       const tags = tagsInput
         .split(',')
-        .map(tag => tag.trim())
+        .map(tag => tag.trim().substring(0, 50))
         .filter(tag => tag.length > 0);
 
-      await onSubmit({
-        ...formData,
+      // Ensure all required fields are present for ContactInput type
+      const contactInput: ContactInput = {
+        first_name: data.first_name || '',
+        last_name: data.last_name,
+        email: data.email || '',
+        phone: data.phone || '',
+        address_1: data.address_1 || '',
+        address_2: data.address_2 || '',
+        city: data.city || '',
+        state: data.state || '',
+        zip_code: data.zip_code || '',
+        notes: data.notes || '',
+        dnc: data.dnc || false,
         tags: tags.length > 0 ? tags : null,
-      });
+      };
+
+      await onSubmit(contactInput);
       
       onOpenChange(false);
+      reset();
+      setTagsInput('');
     } catch (error) {
       console.error('Error submitting form:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleInputChange = (field: keyof ContactInput, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value,
-    }));
   };
 
   return (
@@ -127,27 +198,32 @@ export const ContactForm: React.FC<ContactFormProps> = ({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleFormSubmit(handleSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="first_name">First Name</Label>
               <Input
                 id="first_name"
-                value={formData.first_name}
-                onChange={(e) => handleInputChange('first_name', e.target.value)}
-                placeholder="Enter first name"
+                {...register('first_name')}
+                placeholder="John"
+                maxLength={100}
               />
+              {errors.first_name && (
+                <p className="text-sm text-destructive">{errors.first_name.message}</p>
+              )}
             </div>
             
             <div className="space-y-2">
               <Label htmlFor="last_name">Last Name *</Label>
               <Input
                 id="last_name"
-                value={formData.last_name}
-                onChange={(e) => handleInputChange('last_name', e.target.value)}
-                placeholder="Enter last name"
-                required
+                {...register('last_name')}
+                placeholder="Doe"
+                maxLength={100}
               />
+              {errors.last_name && (
+                <p className="text-sm text-destructive">{errors.last_name.message}</p>
+              )}
             </div>
           </div>
 
@@ -157,14 +233,18 @@ export const ContactForm: React.FC<ContactFormProps> = ({
               <Input
                 id="phone"
                 type="tel"
-                value={formData.phone}
-                onChange={(e) => {
-                  const formatted = formatPhoneNumber(e.target.value);
-                  handleInputChange('phone', formatted);
-                }}
+                {...register('phone', {
+                  onChange: (e) => {
+                    const formatted = formatPhoneNumber(e.target.value);
+                    setValue('phone', formatted);
+                  }
+                })}
                 placeholder="(555) 123-4567"
-                maxLength={14}
+                maxLength={20}
               />
+              {errors.phone && (
+                <p className="text-sm text-destructive">{errors.phone.message}</p>
+              )}
             </div>
             
             <div className="space-y-2">
@@ -172,10 +252,13 @@ export const ContactForm: React.FC<ContactFormProps> = ({
               <Input
                 id="email"
                 type="email"
-                value={formData.email}
-                onChange={(e) => handleInputChange('email', e.target.value)}
-                placeholder="Enter email address"
+                {...register('email')}
+                placeholder="john@example.com"
+                maxLength={255}
               />
+              {errors.email && (
+                <p className="text-sm text-destructive">{errors.email.message}</p>
+              )}
             </div>
           </div>
 
@@ -183,20 +266,26 @@ export const ContactForm: React.FC<ContactFormProps> = ({
             <Label htmlFor="address_1">Address 1</Label>
             <Input
               id="address_1"
-              value={formData.address_1}
-              onChange={(e) => handleInputChange('address_1', e.target.value)}
-              placeholder="Enter street address"
+              {...register('address_1')}
+              placeholder="123 Main St"
+              maxLength={255}
             />
+            {errors.address_1 && (
+              <p className="text-sm text-destructive">{errors.address_1.message}</p>
+            )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="address_2">Address 2</Label>
             <Input
               id="address_2"
-              value={formData.address_2}
-              onChange={(e) => handleInputChange('address_2', e.target.value)}
-              placeholder="Enter apartment, suite, etc. (optional)"
+              {...register('address_2')}
+              placeholder="Apt 4B"
+              maxLength={255}
             />
+            {errors.address_2 && (
+              <p className="text-sm text-destructive">{errors.address_2.message}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -204,30 +293,44 @@ export const ContactForm: React.FC<ContactFormProps> = ({
               <Label htmlFor="city">City</Label>
               <Input
                 id="city"
-                value={formData.city}
-                onChange={(e) => handleInputChange('city', e.target.value)}
-                placeholder="Enter city"
+                {...register('city')}
+                placeholder="New York"
+                maxLength={100}
               />
+              {errors.city && (
+                <p className="text-sm text-destructive">{errors.city.message}</p>
+              )}
             </div>
             
             <div className="space-y-2">
               <Label htmlFor="state">State</Label>
               <Input
                 id="state"
-                value={formData.state}
-                onChange={(e) => handleInputChange('state', e.target.value)}
-                placeholder="Enter state"
+                {...register('state', {
+                  onChange: (e) => {
+                    setValue('state', e.target.value.toUpperCase());
+                  }
+                })}
+                placeholder="NY"
+                maxLength={2}
+                style={{ textTransform: 'uppercase' }}
               />
+              {errors.state && (
+                <p className="text-sm text-destructive">{errors.state.message}</p>
+              )}
             </div>
             
             <div className="space-y-2">
               <Label htmlFor="zip_code">Zip Code</Label>
               <Input
                 id="zip_code"
-                value={formData.zip_code}
-                onChange={(e) => handleInputChange('zip_code', e.target.value)}
-                placeholder="Enter zip code"
+                {...register('zip_code')}
+                placeholder="10001"
+                maxLength={10}
               />
+              {errors.zip_code && (
+                <p className="text-sm text-destructive">{errors.zip_code.message}</p>
+              )}
             </div>
           </div>
 
@@ -238,14 +341,16 @@ export const ContactForm: React.FC<ContactFormProps> = ({
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
               placeholder="client, lead, prospect"
+              maxLength={500}
             />
+            <p className="text-xs text-muted-foreground">Max 50 characters per tag</p>
           </div>
 
           <div className="flex items-center space-x-2">
             <Checkbox
               id="dnc"
-              checked={formData.dnc}
-              onCheckedChange={(checked) => handleInputChange('dnc', checked)}
+              checked={watch('dnc')}
+              onCheckedChange={(checked) => setValue('dnc', checked as boolean)}
             />
             <Label htmlFor="dnc">Do Not Contact (DNC)</Label>
           </div>
@@ -254,11 +359,14 @@ export const ContactForm: React.FC<ContactFormProps> = ({
             <Label htmlFor="notes">Notes</Label>
             <Textarea
               id="notes"
-              value={formData.notes}
-              onChange={(e) => handleInputChange('notes', e.target.value)}
-              placeholder="Enter additional notes"
+              {...register('notes')}
+              placeholder="Additional notes about this contact..."
               rows={3}
+              maxLength={2000}
             />
+            {errors.notes && (
+              <p className="text-sm text-destructive">{errors.notes.message}</p>
+            )}
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">
