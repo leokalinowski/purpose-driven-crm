@@ -23,7 +23,19 @@
 </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #00B8A9 0%, #009688 100%);">
+        <div style="text-align: center; color: white;">
+          <div style="width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; margin: 0 auto 16px; animation: spin 1s linear infinite;"></div>
+          <h1 style="font-size: 24px; font-weight: 600; margin: 0;">Loading Real Estate on Purpose CRM...</h1>
+        </div>
+      </div>
+      <style>
+        @keyframes spin { 
+          to { transform: rotate(360deg); } 
+        }
+      </style>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

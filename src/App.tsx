@@ -1,5 +1,5 @@
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -39,29 +39,35 @@ const PageLoader = () => (
 
 const queryClient = new QueryClient();
 
-const AppContent = () => (
-  <Suspense fallback={<PageLoader />}>
-    <Routes>
-      <Route path="/" element={<Index />} />
-      <Route path="/auth" element={<Auth />} />
-      <Route path="/spheresync-tasks" element={<SphereSyncTasks />} />
-      <Route path="/database" element={<Database />} />
-      <Route path="/events" element={<Events />} />
-      <Route path="/newsletter" element={<Newsletter />} />
-      <Route path="/coaching" element={<Coaching />} />
-      <Route path="/transactions" element={<Transactions />} />
-      <Route path="/pipeline" element={<Pipeline />} />
-      <Route path="/admin/dashboard" element={<AdminDashboard />} />
-      <Route path="/admin/invitations" element={<AdminInvitations />} />
-      <Route path="/admin/newsletter" element={<AdminNewsletter />} />
-      <Route path="/social-scheduler" element={<SocialScheduler />} />
-      <Route path="/admin/social-scheduler" element={<AdminSocialScheduler />} />
-      <Route path="/oauth-callback" element={<OAuthCallback />} />
-      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  </Suspense>
-);
+const AppContent = () => {
+  useEffect(() => {
+    console.log('✅ AppContent mounted, router active');
+  }, []);
+
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route path="/" element={<Index />} />
+        <Route path="/auth" element={<Auth />} />
+        <Route path="/spheresync-tasks" element={<SphereSyncTasks />} />
+        <Route path="/database" element={<Database />} />
+        <Route path="/events" element={<Events />} />
+        <Route path="/newsletter" element={<Newsletter />} />
+        <Route path="/coaching" element={<Coaching />} />
+        <Route path="/transactions" element={<Transactions />} />
+        <Route path="/pipeline" element={<Pipeline />} />
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/invitations" element={<AdminInvitations />} />
+        <Route path="/admin/newsletter" element={<AdminNewsletter />} />
+        <Route path="/social-scheduler" element={<SocialScheduler />} />
+        <Route path="/admin/social-scheduler" element={<AdminSocialScheduler />} />
+        <Route path="/oauth-callback" element={<OAuthCallback />} />
+        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
+  );
+};
 
 function App() {
   return (
