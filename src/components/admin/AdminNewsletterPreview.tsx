@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import { Loader2 } from 'lucide-react'
 
 interface PreviewData {
   success: boolean;
@@ -25,7 +26,33 @@ export function AdminNewsletterPreview() {
   const [previewData, setPreviewData] = useState<PreviewData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [availableZips, setAvailableZips] = useState<string[]>([])
+  const [loadingZips, setLoadingZips] = useState(true)
   const { session } = useAuth()
+
+  useEffect(() => {
+    const fetchAvailableZips = async () => {
+      setLoadingZips(true)
+      try {
+        const { data, error } = await supabase
+          .from('newsletter_market_data')
+          .select('zip_code')
+          .order('zip_code')
+          .limit(50)
+        
+        if (data && !error) {
+          const uniqueZips = Array.from(new Set(data.map(d => d.zip_code)))
+          setAvailableZips(uniqueZips)
+        }
+      } catch (err) {
+        console.error('Error fetching available ZIP codes:', err)
+      } finally {
+        setLoadingZips(false)
+      }
+    }
+    
+    fetchAvailableZips()
+  }, [])
 
   const generatePreview = async () => {
     if (!zipCode) {
@@ -50,13 +77,8 @@ export function AdminNewsletterPreview() {
         return
       }
       
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/market-data-grok`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const { data, error: invokeError } = await supabase.functions.invoke('market-data-grok', {
+        body: {
           zip_code: zipCode,
           first_name: 'Test',
           last_name: 'User',
@@ -64,13 +86,15 @@ export function AdminNewsletterPreview() {
           address: getRealisticAddress(zipCode),
           agent_name: 'Admin Test Agent',
           agent_info: 'Test Agent Information - This is a preview'
-        })
+        }
       })
       
-      const data = await response.json()
+      if (invokeError) {
+        throw new Error(invokeError.message || 'Preview generation failed')
+      }
       
-      if (!response.ok) {
-        throw new Error(data.error || 'Preview generation failed')
+      if (data.error) {
+        throw new Error(data.details || data.error || 'Preview generation failed')
       }
       
       setPreviewData(data)
@@ -111,6 +135,29 @@ export function AdminNewsletterPreview() {
           <CardTitle>Test Newsletter Preview</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {loadingZips ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading available ZIP codes...
+            </div>
+          ) : availableZips.length > 0 ? (
+            <Alert>
+              <AlertDescription>
+                <strong>Available ZIP codes in database:</strong>
+                <div className="mt-2 text-sm">
+                  {availableZips.slice(0, 15).join(', ')}
+                  {availableZips.length > 15 && ` ... and ${availableZips.length - 15} more`}
+                </div>
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Alert variant="destructive">
+              <AlertDescription>
+                No market data found in database. Please upload a CSV file first.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div>
             <Label htmlFor="test-zip">ZIP Code</Label>
             <Input
@@ -122,11 +169,11 @@ export function AdminNewsletterPreview() {
                   clearPreview()
                 }
               }}
-              placeholder="Enter ZIP code to test (e.g., 20001)"
+              placeholder={availableZips.length > 0 ? `Try: ${availableZips[0]}` : "Enter 5-digit ZIP code"}
               maxLength={5}
             />
             <p className="text-sm text-muted-foreground mt-1">
-              Enter a 5-digit ZIP code to generate a preview newsletter with real market data.
+              Enter a 5-digit ZIP code from the available list above to test the newsletter generation.
             </p>
           </div>
           
@@ -140,7 +187,9 @@ export function AdminNewsletterPreview() {
 
           {error && (
             <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                <strong>Error:</strong> {error}
+              </AlertDescription>
             </Alert>
           )}
 

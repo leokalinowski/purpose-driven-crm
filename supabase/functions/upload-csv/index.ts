@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import Papa from 'https://esm.sh/papaparse@5.4.1'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,56 +18,62 @@ interface CSVRow {
 }
 
 function parseCSV(csvText: string): CSVRow[] {
-  const lines = csvText.split('\n').filter(line => line.trim());
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+  const { data, errors, meta } = Papa.parse(csvText, {
+    header: true,
+    dynamicTyping: true,
+    skipEmptyLines: true,
+    transformHeader: (header: string) => header.trim().toLowerCase().replace(/\s+/g, '_')
+  });
   
-  console.log('CSV Headers found:', headers);
+  if (errors.length > 0) {
+    console.error('CSV parsing errors:', errors);
+  }
   
-  const rows: CSVRow[] = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',').map(v => v.trim());
-    const row: any = {};
-    
-    headers.forEach((header, index) => {
-      row[header] = values[index] || null;
-    });
-    
-    // Handle multiple possible column name variations
-    const zipVariations = ['zip_code', 'zip', 'postal_code', 'zipcode'];
-    const priceVariations = ['median_listing_price', 'median_price', 'median_value', 'price'];
-    const yoyVariations = ['median_listing_price_yoy', 'yoy_change', 'year_over_year', 'yoy'];
+  console.log('CSV Headers found:', meta.fields);
+  console.log(`Parsed ${data.length} rows from CSV`);
+  console.log('Sample parsed row:', data[0]);
+  
+  // Map flexible column names
+  return data.map((row: any) => {
+    const mapped: any = { ...row };
     
     // Find and normalize zip code
+    const zipVariations = ['zip_code', 'zip', 'postal_code', 'zipcode'];
     for (const variant of zipVariations) {
       if (row[variant]) {
-        row.zip_code = row[variant];
+        mapped.zip_code = String(row[variant]).trim();
         break;
       }
     }
     
     // Find and normalize median price
+    const priceVariations = ['median_listing_price', 'median_listing_price_mm', 'median_list_price', 'median_price', 'median_value', 'price'];
     for (const variant of priceVariations) {
-      if (row[variant]) {
+      if (row[variant] !== undefined && row[variant] !== null && row[variant] !== '') {
         const cleanValue = String(row[variant]).replace(/[$,]/g, '');
-        row.median_listing_price = parseFloat(cleanValue);
-        break;
+        const parsed = parseFloat(cleanValue);
+        if (!isNaN(parsed)) {
+          mapped.median_listing_price = parsed;
+          break;
+        }
       }
     }
     
     // Find and normalize YoY change
+    const yoyVariations = ['median_listing_price_yoy', 'median_listing_price_yy', 'yoy_change', 'year_over_year', 'yoy'];
     for (const variant of yoyVariations) {
-      if (row[variant]) {
-        row.median_listing_price_yoy = row[variant];
+      if (row[variant] !== undefined && row[variant] !== null) {
+        mapped.median_listing_price_yoy = String(row[variant]);
         break;
       }
     }
     
-    rows.push(row);
-  }
-  
-  console.log('Sample parsed row:', rows[0]);
-  return rows;
+    // Find city and state
+    mapped.city = row.city || row.zip_name || row.region_name || '';
+    mapped.state = row.state || row.state_code || '';
+    
+    return mapped;
+  });
 }
 
 async function processAndStoreCSVData(csvFileId: string, csvText: string, supabase: any) {
@@ -87,26 +94,40 @@ async function processAndStoreCSVData(csvFileId: string, csvText: string, supaba
     console.log(`Valid rows after filtering: ${marketDataRows.length}`);
     
     if (marketDataRows.length === 0) {
+      const sampleRow = rows[0] || {};
       throw new Error(
-        'No valid data rows found in CSV. Please ensure your CSV contains columns for: ' +
-        'zip_code (or zip/postal_code), median_listing_price (or median_price/price), ' +
-        'and optionally median_listing_price_yoy (or yoy_change). ' +
-        'Check that numeric values are properly formatted.'
+        `No valid data rows found in CSV.\n\n` +
+        `Detected columns: ${Object.keys(sampleRow).join(', ')}\n\n` +
+        `Required: At least one ZIP column (zip_code, zip, postal_code) ` +
+        `and one price column (median_listing_price, median_price, price).\n\n` +
+        `Sample row data: ${JSON.stringify(sampleRow, null, 2)}`
       );
     }
 
-    // Insert market data in batches
-    const batchSize = 100;
-    for (let i = 0; i < marketDataRows.length; i += batchSize) {
-      const batch = marketDataRows.slice(i, i + batchSize);
-      const { error } = await supabase
-        .from('newsletter_market_data')
-        .insert(batch);
-      
-      if (error) {
-        console.error('Error inserting batch:', error);
-        throw error;
+    // Insert market data in batches with improved performance
+    const batchSize = 1000;
+    let totalInserted = 0;
+
+    try {
+      for (let i = 0; i < marketDataRows.length; i += batchSize) {
+        const batch = marketDataRows.slice(i, i + batchSize);
+        const { error } = await supabase
+          .from('newsletter_market_data')
+          .insert(batch, { count: 'exact' });
+        
+        if (error) {
+          console.error(`Error inserting batch ${Math.floor(i/batchSize) + 1}:`, error);
+          // Cleanup partial inserts on failure
+          await supabase.from('newsletter_market_data').delete().eq('csv_file_id', csvFileId);
+          throw new Error(`Batch insert failed: ${error.message}. All data rolled back.`);
+        }
+        
+        totalInserted += batch.length;
+        console.log(`Inserted batch ${Math.floor(i/batchSize) + 1}: ${totalInserted}/${marketDataRows.length} rows`);
       }
+    } catch (error) {
+      console.error('Insert failed, cleaning up...');
+      throw error;
     }
     
     console.log(`Successfully stored ${marketDataRows.length} market data records`);

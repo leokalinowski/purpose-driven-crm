@@ -74,15 +74,24 @@ async function generateProfessionalNewsletter(
     throw new Error(`Cannot generate newsletter for ZIP ${zipCode} - no real market data available. Please upload CSV data for this ZIP code first.`);
   }
 
+  const XAI_API_KEY = Deno.env.get('XAI_API_KEY');
+  if (!XAI_API_KEY) {
+    console.error('XAI_API_KEY is not configured');
+    throw new Error('XAI_API_KEY environment variable is not set. Please configure it in Supabase secrets.');
+  }
+
+  console.log('XAI_API_KEY status: configured ✓');
+  console.log(`Calling Grok API for ZIP ${zipCode}`);
+
   try {
     const grokResponse = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${Deno.env.get('XAI_API_KEY')}`,
+        'Authorization': `Bearer ${XAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'grok-beta',
+        model: 'grok-2-latest',
         messages: [
           {
             role: 'system',
@@ -130,10 +139,19 @@ Build your newsletter around this real data with professional analysis and insig
       }),
     });
 
+    console.log(`Grok API response status: ${grokResponse.status}`);
+
     if (!grokResponse.ok) {
       const errorText = await grokResponse.text();
       console.error(`Grok API error: ${grokResponse.status} - ${errorText}`);
-      throw new Error(`Grok API returned ${grokResponse.status}`);
+      
+      if (grokResponse.status === 404) {
+        throw new Error('Grok API endpoint not found (404). The API endpoint or model may have changed. Please check X.AI documentation.');
+      } else if (grokResponse.status === 401) {
+        throw new Error('Grok API authentication failed (401). Please verify your XAI_API_KEY is correct.');
+      } else {
+        throw new Error(`Grok API returned ${grokResponse.status}: ${errorText}`);
+      }
     }
 
     const grokData = await grokResponse.json();
