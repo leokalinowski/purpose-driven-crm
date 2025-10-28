@@ -50,6 +50,28 @@
           console.error('⏱️ Boot timeout - app did not mount in 8 seconds');
         }
       }, 8000);
+
+      // On-screen boot diagnostics - capture pre-mount errors
+      window.addEventListener('error', function(e) {
+        var el = document.getElementById('boot-watchdog');
+        if (el && e && e.message) {
+          el.style.display = 'block';
+          el.innerHTML = '<p style="font: 14px/1.4 system-ui; color:#fff; max-width:600px; margin:8px auto 0;">Boot error: ' +
+            (e.message || 'Unknown error') +
+            '</p><button onclick="window.location.href=window.location.href.split(\'?\')[0]+\'?v=\'+Date.now()" style="background: white; color: #00B8A9; border: none; padding: 8px 16px; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; margin-top:8px;">Force Reload</button>';
+        }
+      });
+
+      window.addEventListener('unhandledrejection', function(e) {
+        var el = document.getElementById('boot-watchdog');
+        var msg = e && e.reason && e.reason.message ? e.reason.message : (e && e.reason ? String(e.reason) : 'Unhandled promise rejection');
+        if (el) {
+          el.style.display = 'block';
+          el.innerHTML = '<p style="font: 14px/1.4 system-ui; color:#fff; max-width:600px; margin:8px auto 0;">Boot promise error: ' +
+            msg +
+            '</p><button onclick="window.location.href=window.location.href.split(\'?\')[0]+\'?v=\'+Date.now()" style="background: white; color: #00B8A9; border: none; padding: 8px 16px; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; margin-top:8px;">Force Reload</button>';
+        }
+      });
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -29,62 +29,6 @@ export default defineConfig(({ mode }) => ({
     target: 'es2019',
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          // Vendor chunks - separate large libraries
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'vendor-react';
-            }
-            if (id.includes('react-router-dom')) {
-              return 'vendor-router';
-            }
-            if (id.includes('@tanstack/react-query')) {
-              return 'vendor-query';
-            }
-            if (id.includes('@radix-ui')) {
-              return 'vendor-ui';
-            }
-            if (id.includes('recharts')) {
-              return 'vendor-charts';
-            }
-            if (id.includes('@supabase')) {
-              return 'vendor-supabase';
-            }
-            if (id.includes('react-hook-form') || id.includes('@hookform') || id.includes('zod')) {
-              return 'vendor-forms';
-            }
-            if (id.includes('date-fns') || id.includes('clsx') || id.includes('tailwind-merge') || id.includes('lucide-react')) {
-              return 'vendor-utils';
-            }
-            if (id.includes('xlsx') || id.includes('papaparse') || id.includes('html2canvas') || id.includes('jspdf')) {
-              return 'vendor-heavy';
-            }
-            // Other node_modules go to vendor
-            return 'vendor';
-          }
-
-          // Feature-based chunks
-          if (id.includes('/src/pages/')) {
-            if (id.includes('/admin/')) {
-              return 'pages-admin';
-            }
-            return 'pages-agent';
-          }
-
-          if (id.includes('/src/components/')) {
-            if (id.includes('/admin/')) {
-              return 'components-admin';
-            }
-            return 'components-agent';
-          }
-
-          if (id.includes('/src/hooks/')) {
-            if (id.includes('Admin') || id.includes('admin')) {
-              return 'hooks-admin';
-            }
-            return 'hooks-agent';
-          }
-        },
         // Optimize chunk file names
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: (assetInfo) => {
