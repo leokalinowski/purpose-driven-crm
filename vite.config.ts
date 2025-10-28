@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import legacy from "@vitejs/plugin-legacy";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -14,6 +15,10 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === 'development' &&
     componentTagger(),
+    legacy({
+      targets: ['defaults', 'not IE 11', 'Safari >= 13'],
+      additionalLegacyPolyfills: ['regenerator-runtime/runtime']
+    }),
   ].filter(Boolean),
   resolve: {
     alias: {
@@ -21,6 +26,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
+    target: 'es2019',
     rollupOptions: {
       output: {
         manualChunks: (id) => {
@@ -102,7 +108,7 @@ export default defineConfig(({ mode }) => ({
     minify: mode === 'production' ? 'terser' : false,
     terserOptions: mode === 'production' ? {
       compress: {
-        drop_console: true,
+        drop_console: false, // Temporarily enabled for boot diagnostics
         drop_debugger: true,
       },
     } : undefined
