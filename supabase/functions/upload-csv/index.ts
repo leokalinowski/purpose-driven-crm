@@ -18,7 +18,10 @@ interface CSVRow {
 
 function parseCSV(csvText: string): CSVRow[] {
   const lines = csvText.split('\n').filter(line => line.trim());
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+  
+  console.log('CSV Headers found:', headers);
+  
   const rows: CSVRow[] = [];
 
   for (let i = 1; i < lines.length; i++) {
@@ -29,14 +32,40 @@ function parseCSV(csvText: string): CSVRow[] {
       row[header] = values[index] || null;
     });
     
-    // Convert numeric fields
-    if (row.median_listing_price) {
-      row.median_listing_price = parseFloat(row.median_listing_price.replace(/[$,]/g, ''));
+    // Handle multiple possible column name variations
+    const zipVariations = ['zip_code', 'zip', 'postal_code', 'zipcode'];
+    const priceVariations = ['median_listing_price', 'median_price', 'median_value', 'price'];
+    const yoyVariations = ['median_listing_price_yoy', 'yoy_change', 'year_over_year', 'yoy'];
+    
+    // Find and normalize zip code
+    for (const variant of zipVariations) {
+      if (row[variant]) {
+        row.zip_code = row[variant];
+        break;
+      }
+    }
+    
+    // Find and normalize median price
+    for (const variant of priceVariations) {
+      if (row[variant]) {
+        const cleanValue = String(row[variant]).replace(/[$,]/g, '');
+        row.median_listing_price = parseFloat(cleanValue);
+        break;
+      }
+    }
+    
+    // Find and normalize YoY change
+    for (const variant of yoyVariations) {
+      if (row[variant]) {
+        row.median_listing_price_yoy = row[variant];
+        break;
+      }
     }
     
     rows.push(row);
   }
   
+  console.log('Sample parsed row:', rows[0]);
   return rows;
 }
 
@@ -54,6 +83,17 @@ async function processAndStoreCSVData(csvFileId: string, csvText: string, supaba
       area_name: `${row.city || ''} ${row.state || ''}`.trim(),
       raw_data: row
     })).filter(row => row.zip_code && row.median_value);
+
+    console.log(`Valid rows after filtering: ${marketDataRows.length}`);
+    
+    if (marketDataRows.length === 0) {
+      throw new Error(
+        'No valid data rows found in CSV. Please ensure your CSV contains columns for: ' +
+        'zip_code (or zip/postal_code), median_listing_price (or median_price/price), ' +
+        'and optionally median_listing_price_yoy (or yoy_change). ' +
+        'Check that numeric values are properly formatted.'
+      );
+    }
 
     // Insert market data in batches
     const batchSize = 100;

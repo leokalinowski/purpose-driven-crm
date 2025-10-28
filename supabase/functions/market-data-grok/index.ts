@@ -133,7 +133,9 @@ Create a general market update without specific numbers since no real data is av
     });
 
     if (!grokResponse.ok) {
-      throw new Error(`Grok API error: ${grokResponse.status}`);
+      const errorText = await grokResponse.text();
+      console.error(`Grok API error: ${grokResponse.status} - ${errorText}`);
+      throw new Error(`Grok API returned ${grokResponse.status}`);
     }
 
     const grokData = await grokResponse.json();
@@ -141,8 +143,67 @@ Create a general market update without specific numbers since no real data is av
 
   } catch (error) {
     console.error('Newsletter generation error:', error);
-    throw new Error(`Failed to generate newsletter content: ${error.message}`);
+    
+    // Fallback to simple template if Grok API fails
+    console.log('Using fallback template newsletter');
+    return generateFallbackNewsletter(zipCode, marketData, contactInfo, agentInfo);
   }
+}
+
+function generateFallbackNewsletter(
+  zipCode: string,
+  marketData: MarketData | null,
+  contactInfo: any,
+  agentInfo: any
+): string {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #2563eb; color: white; padding: 30px; text-align: center; }
+        .content { padding: 30px; background: #f9fafb; }
+        .data-box { background: white; padding: 20px; margin: 20px 0; border-left: 4px solid #2563eb; }
+        .footer { padding: 20px; text-align: center; color: #666; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Your Market Update</h1>
+        </div>
+        <div class="content">
+          <h2>Hello ${contactInfo.first_name},</h2>
+          <p>Here's your personalized real estate market update for ${contactInfo.address}.</p>
+          
+          ${marketData ? `
+          <div class="data-box">
+            <h3>Market Data for ZIP ${zipCode}</h3>
+            <p><strong>Median Home Value:</strong> $${marketData.medianValue.toLocaleString()}</p>
+            <p><strong>1-Year Change:</strong> ${marketData.valueChange}</p>
+            <p><strong>Area:</strong> ${marketData.areaName}</p>
+            <p><em>Source: ${marketData.source}</em></p>
+          </div>
+          ` : `
+          <div class="data-box">
+            <h3>Market Update</h3>
+            <p>The real estate market continues to evolve. Contact me for the latest insights specific to your area.</p>
+          </div>
+          `}
+          
+          <p>If you'd like to discuss your home's value or explore your options, I'm here to help.</p>
+          
+          <div class="footer">
+            <p><strong>${agentInfo.agent_name}</strong></p>
+            <p>${agentInfo.agent_info}</p>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
 }
 
 
