@@ -310,7 +310,7 @@ serve(async (req) => {
 
           if (emailError) {
             console.error(`Failed to generate content for ZIP ${zipCode}:`, emailError);
-            return null;
+            throw new Error(`Market data generation failed: ${emailError.message || 'Unknown error'}`);
           }
 
           if (emailData && emailData.success && emailData.html_email) {
@@ -322,11 +322,11 @@ serve(async (req) => {
             };
           } else {
             console.error(`Invalid response from market-data-grok for ZIP ${zipCode}:`, emailData);
-            return null;
+            throw new Error('Invalid response from newsletter generation service');
           }
         } catch (error) {
           console.error(`Exception generating content for ZIP ${zipCode}:`, error);
-          return null;
+          throw error;
         }
       }
 
@@ -351,20 +351,25 @@ serve(async (req) => {
           const address = addressParts.length > 0 ? addressParts.join(', ') : `Property in ${firstContact.zip_code}`;
 
           // Generate content using market-data-grok function (CSV data + Grok)
-          emailData = await generateEmailContent(zipCode, firstContact, address, agent);
+          try {
+            emailData = await generateEmailContent(zipCode, firstContact, address, agent);
+          } catch (error) {
+            console.error(`Failed to generate content for ZIP ${zipCode}:`, error.message);
+            // emailData remains null, will be handled below
+          }
         }
 
         if (!emailData) {
-          // Record failure for this ZIP code
+          // Record failure for this ZIP code with specific error
           failures.push({
             zip_code: zipCode,
             contacts: zipContacts,
             agent: agent,
-            error: 'Failed to generate email content',
+            error: 'No CSV market data available for this ZIP code',
             attempts: 1
           });
 
-          console.error(`Skipping ZIP ${zipCode} - failed to generate content`);
+          console.error(`Skipping ZIP ${zipCode} - no real market data available, will not send generic emails`);
           continue;
         }
 

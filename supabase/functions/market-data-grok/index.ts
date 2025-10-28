@@ -69,6 +69,11 @@ async function generateProfessionalNewsletter(
   contactInfo: any,
   agentInfo: any
 ): Promise<string> {
+  // CRITICAL: Refuse to generate newsletter without real CSV data
+  if (!marketData) {
+    throw new Error(`Cannot generate newsletter for ZIP ${zipCode} - no real market data available. Please upload CSV data for this ZIP code first.`);
+  }
+
   try {
     const grokResponse = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
@@ -83,7 +88,6 @@ async function generateProfessionalNewsletter(
             role: 'system',
             content: `You are a professional real estate market analyst creating personalized newsletters for homeowners.
 
-${marketData ? `
 REAL CSV MARKET DATA FOR ZIP ${zipCode}:
 - Median Home Value: $${marketData.medianValue.toLocaleString()}
 - 1-Year Change: ${marketData.valueChange}
@@ -91,10 +95,8 @@ REAL CSV MARKET DATA FOR ZIP ${zipCode}:
 - Data Source: ${marketData.source}
 - Last Updated: ${marketData.lastUpdated}
 
-USE THIS EXACT DATA - DO NOT MODIFY OR ESTIMATE THESE NUMBERS
-` : `
-NO CSV DATA AVAILABLE FOR ZIP ${zipCode} - CREATE GENERAL MARKET UPDATE
-`}
+CRITICAL RULE: USE ONLY THIS EXACT DATA. DO NOT MODIFY, ESTIMATE, OR FABRICATE ANY NUMBERS.
+If you cannot create a valuable newsletter with this data, refuse to generate content.
 
 Create a personalized market update email that includes:
 
@@ -114,7 +116,6 @@ RECIPIENT: ${contactInfo.first_name} ${contactInfo.last_name} (${contactInfo.ema
 ADDRESS: ${contactInfo.address}
 AGENT: ${agentInfo.agent_name} - ${agentInfo.agent_info}
 
-${marketData ? `
 REAL CSV DATA TO USE:
 - Median Home Value: $${marketData.medianValue.toLocaleString()}
 - 1-Year Change: ${marketData.valueChange}
@@ -122,10 +123,7 @@ REAL CSV DATA TO USE:
 - Source: ${marketData.source}
 - Last Updated: ${marketData.lastUpdated}
 
-Build your newsletter around this real data with professional analysis.` : `
-Create a general market update without specific numbers since no real data is available.`
-}
-`
+Build your newsletter around this real data with professional analysis and insights.`
           }
         ],
         max_completion_tokens: 3000
@@ -143,67 +141,9 @@ Create a general market update without specific numbers since no real data is av
 
   } catch (error) {
     console.error('Newsletter generation error:', error);
-    
-    // Fallback to simple template if Grok API fails
-    console.log('Using fallback template newsletter');
-    return generateFallbackNewsletter(zipCode, marketData, contactInfo, agentInfo);
+    // Do NOT use fallback templates - throw error to prevent sending emails without real data
+    throw error;
   }
-}
-
-function generateFallbackNewsletter(
-  zipCode: string,
-  marketData: MarketData | null,
-  contactInfo: any,
-  agentInfo: any
-): string {
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: #2563eb; color: white; padding: 30px; text-align: center; }
-        .content { padding: 30px; background: #f9fafb; }
-        .data-box { background: white; padding: 20px; margin: 20px 0; border-left: 4px solid #2563eb; }
-        .footer { padding: 20px; text-align: center; color: #666; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Your Market Update</h1>
-        </div>
-        <div class="content">
-          <h2>Hello ${contactInfo.first_name},</h2>
-          <p>Here's your personalized real estate market update for ${contactInfo.address}.</p>
-          
-          ${marketData ? `
-          <div class="data-box">
-            <h3>Market Data for ZIP ${zipCode}</h3>
-            <p><strong>Median Home Value:</strong> $${marketData.medianValue.toLocaleString()}</p>
-            <p><strong>1-Year Change:</strong> ${marketData.valueChange}</p>
-            <p><strong>Area:</strong> ${marketData.areaName}</p>
-            <p><em>Source: ${marketData.source}</em></p>
-          </div>
-          ` : `
-          <div class="data-box">
-            <h3>Market Update</h3>
-            <p>The real estate market continues to evolve. Contact me for the latest insights specific to your area.</p>
-          </div>
-          `}
-          
-          <p>If you'd like to discuss your home's value or explore your options, I'm here to help.</p>
-          
-          <div class="footer">
-            <p><strong>${agentInfo.agent_name}</strong></p>
-            <p>${agentInfo.agent_info}</p>
-          </div>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
 }
 
 
