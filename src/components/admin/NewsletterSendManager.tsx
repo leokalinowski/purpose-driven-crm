@@ -89,12 +89,17 @@ export function NewsletterSendManager() {
     setMessage(null)
 
     try {
-      const { data: { access_token } } = await supabase.auth.getSession()
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setMessage({ type: 'error', text: 'Authentication required' })
+        return
+      }
 
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/newsletter-send`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${access_token}`,
+          'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

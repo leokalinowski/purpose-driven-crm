@@ -220,14 +220,32 @@ const handler = async (req: Request): Promise<Response> => {
         const profileData = await profileResponse.json();
         console.log('✅ Facebook profile retrieved:', { id: profileData.id, name: profileData.name });
 
-        // Save to database
-        const { error: insertError } = await supabaseClient
+        // Encrypt tokens with pgcrypto
+        const encryptionKey = 'reop-social-tokens-2025'; // Match migration key
+        
+        const { data: encryptedData, error: encryptError } = await supabaseServiceClient
+          .rpc('encrypt_social_token', {
+            p_access_token: tokenData.access_token,
+            p_refresh_token: null,
+            p_encryption_key: encryptionKey
+          });
+
+        if (encryptError) {
+          console.error('❌ Token encryption failed:', encryptError);
+          return new Response(
+            JSON.stringify({ error: 'Failed to encrypt tokens' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Save encrypted tokens to database
+        const { error: insertError } = await supabaseServiceClient
           .from('social_accounts')
           .upsert({
             agent_id: actualAgentId,
             platform,
-            access_token: tokenData.access_token,
-            refresh_token: null,
+            access_token_encrypted: encryptedData.encrypted_access_token,
+            refresh_token_encrypted: null,
             expires_at: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null,
             account_id: profileData.id,
             account_name: profileData.name,

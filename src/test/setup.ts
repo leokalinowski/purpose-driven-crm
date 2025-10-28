@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom';
 
 // Mock IntersectionObserver
+// @ts-ignore - Test mock
 global.IntersectionObserver = class IntersectionObserver {
   constructor() {}
   observe() {
@@ -12,9 +13,14 @@ global.IntersectionObserver = class IntersectionObserver {
   unobserve() {
     return null;
   }
+  root = null;
+  rootMargin = '';
+  thresholds = [];
+  takeRecords = () => [];
 };
 
 // Mock ResizeObserver
+// @ts-ignore - Test mock
 global.ResizeObserver = class ResizeObserver {
   constructor(cb: ResizeObserverCallback) {}
   observe() {
@@ -44,12 +50,16 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock localStorage
-const localStorageMock = {
+const localStorageMock: Storage = {
   getItem: (key: string) => null,
-  setItem: (key: string, value: string) => null,
-  removeItem: (key: string) => null,
-  clear: () => null,
+  setItem: (key: string, value: string) => {},
+  removeItem: (key: string) => {},
+  clear: () => {},
+  length: 0,
+  key: (index: number) => null,
 };
+
+// @ts-ignore - Test mock
 global.localStorage = localStorageMock;
 
 // Mock URL.createObjectURL

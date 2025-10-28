@@ -347,7 +347,7 @@ export const enrichContact = (contact: Contact): EnrichmentResult => {
   }
 
   // Calculate quality score
-  const qualityScore = calculateDataQualityScore(enriched);
+  const qualityScore = calculateDataQualityScore(enriched as Contact);
 
   // Determine quality level
   let quality: 'poor' | 'fair' | 'good' | 'excellent';
@@ -357,9 +357,9 @@ export const enrichContact = (contact: Contact): EnrichmentResult => {
   else quality = 'poor';
 
   const result: EnrichedContact = {
-    ...enriched,
+    ...(enriched as Contact),
     enrichment_score: qualityScore,
-    enrichment_suggestions: generateEnrichmentSuggestions(enriched),
+    enrichment_suggestions: generateEnrichmentSuggestions(enriched as Contact),
     enriched_fields: changes.reduce((acc, change) => {
       acc[change.toLowerCase().replace(/\s+/g, '_')] = true;
       return acc;

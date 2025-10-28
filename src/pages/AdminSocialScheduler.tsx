@@ -118,11 +118,11 @@ export default function AdminSocialScheduler() {
               </TabsList>
 
               <TabsContent value="dashboard">
-                <MetricoolDashboard agentId={selectedAgentId} />
+                <MetricoolDashboard />
               </TabsContent>
 
               <TabsContent value="analytics">
-                <MetricoolAnalytics agentId={selectedAgentId} />
+                <MetricoolAnalytics />
               </TabsContent>
             </Tabs>
           ) : (

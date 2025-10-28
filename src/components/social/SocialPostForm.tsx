@@ -256,7 +256,6 @@ export function SocialPostForm({ agentId, onSuccess }: SocialPostFormProps) {
                       </Label>
                       <Input
                         id={variable}
-                        size="sm"
                         placeholder={`Enter ${variable}`}
                         value={templateVariables[variable] || ''}
                         onChange={(e) => handleVariableChange(variable, e.target.value)}

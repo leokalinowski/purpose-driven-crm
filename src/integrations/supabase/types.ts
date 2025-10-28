@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      agents: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          full_name: string
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          full_name: string
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          full_name?: string
+          id?: string
+        }
+        Relationships: []
+      }
       automation_runs: {
         Row: {
           created_at: string
@@ -823,6 +844,33 @@ export type Database = {
         }
         Relationships: []
       }
+      metricool_links: {
+        Row: {
+          created_at: string
+          id: string
+          iframe_url: string
+          is_active: boolean | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          iframe_url: string
+          is_active?: boolean | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          iframe_url?: string
+          is_active?: boolean | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       monthly_runs: {
         Row: {
           agent_id: string
@@ -876,41 +924,53 @@ export type Database = {
       }
       newsletter_campaigns: {
         Row: {
+          body: string | null
           campaign_name: string
           click_through_rate: number | null
           created_at: string
           created_by: string | null
           id: string
+          name: string | null
           open_rate: number | null
           recipient_count: number | null
           send_date: string | null
+          sender_id: string | null
           status: string | null
+          subject: string | null
           template_content: string | null
           updated_at: string
         }
         Insert: {
+          body?: string | null
           campaign_name: string
           click_through_rate?: number | null
           created_at?: string
           created_by?: string | null
           id?: string
+          name?: string | null
           open_rate?: number | null
           recipient_count?: number | null
           send_date?: string | null
+          sender_id?: string | null
           status?: string | null
+          subject?: string | null
           template_content?: string | null
           updated_at?: string
         }
         Update: {
+          body?: string | null
           campaign_name?: string
           click_through_rate?: number | null
           created_at?: string
           created_by?: string | null
           id?: string
+          name?: string | null
           open_rate?: number | null
           recipient_count?: number | null
           send_date?: string | null
+          sender_id?: string | null
           status?: string | null
+          subject?: string | null
           template_content?: string | null
           updated_at?: string
         }
@@ -921,6 +981,77 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      newsletter_csv_files: {
+        Row: {
+          file_path: string
+          file_size: number | null
+          filename: string
+          id: string
+          is_active: boolean | null
+          upload_date: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          file_path: string
+          file_size?: number | null
+          filename: string
+          id?: string
+          is_active?: boolean | null
+          upload_date?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          file_path?: string
+          file_size?: number | null
+          filename?: string
+          id?: string
+          is_active?: boolean | null
+          upload_date?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
+      newsletter_market_data: {
+        Row: {
+          area_name: string | null
+          created_at: string | null
+          csv_file_id: string | null
+          id: string
+          median_value: number | null
+          raw_data: Json | null
+          value_change: string | null
+          zip_code: string
+        }
+        Insert: {
+          area_name?: string | null
+          created_at?: string | null
+          csv_file_id?: string | null
+          id?: string
+          median_value?: number | null
+          raw_data?: Json | null
+          value_change?: string | null
+          zip_code: string
+        }
+        Update: {
+          area_name?: string | null
+          created_at?: string | null
+          csv_file_id?: string | null
+          id?: string
+          median_value?: number | null
+          raw_data?: Json | null
+          value_change?: string | null
+          zip_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_market_data_csv_file_id_fkey"
+            columns: ["csv_file_id"]
+            isOneToOne: false
+            referencedRelation: "newsletter_csv_files"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1184,11 +1315,41 @@ export type Database = {
         }
         Relationships: []
       }
+      role_change_audit: {
+        Row: {
+          changed_at: string | null
+          changed_by: string
+          id: number
+          new_role: string
+          note: string | null
+          old_role: string | null
+          target_user: string
+        }
+        Insert: {
+          changed_at?: string | null
+          changed_by: string
+          id?: never
+          new_role: string
+          note?: string | null
+          old_role?: string | null
+          target_user: string
+        }
+        Update: {
+          changed_at?: string | null
+          changed_by?: string
+          id?: never
+          new_role?: string
+          note?: string | null
+          old_role?: string | null
+          target_user?: string
+        }
+        Relationships: []
+      }
       security_audit_log: {
         Row: {
           created_at: string | null
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           new_values: Json | null
           old_values: Json | null
           operation: string
@@ -1199,7 +1360,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           new_values?: Json | null
           old_values?: Json | null
           operation: string
@@ -1210,7 +1371,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           new_values?: Json | null
           old_values?: Json | null
           operation?: string
@@ -1575,6 +1736,59 @@ export type Database = {
           },
         ]
       }
+      transactions: {
+        Row: {
+          agent_id: string | null
+          city: string | null
+          closing_date: string | null
+          commission_amount: number | null
+          contract_status: string | null
+          created_at: string | null
+          id: string
+          property_address: string
+          purchase_amount: number | null
+          representation_side: string | null
+          state: string | null
+          team_name: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          city?: string | null
+          closing_date?: string | null
+          commission_amount?: number | null
+          contract_status?: string | null
+          created_at?: string | null
+          id?: string
+          property_address: string
+          purchase_amount?: number | null
+          representation_side?: string | null
+          state?: string | null
+          team_name?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          city?: string | null
+          closing_date?: string | null
+          commission_amount?: number | null
+          contract_status?: string | null
+          created_at?: string | null
+          id?: string
+          property_address?: string
+          purchase_amount?: number | null
+          representation_side?: string | null
+          state?: string | null
+          team_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       zip_reports: {
         Row: {
           created_at: string
@@ -1607,18 +1821,41 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      format_phone_display: {
-        Args: { phone_input: string }
-        Returns: string
+      decrypt_social_token: {
+        Args: {
+          p_agent_id: string
+          p_encryption_key: string
+          p_platform: string
+        }
+        Returns: Json
       }
-      get_current_user_role: {
-        Args: Record<PropertyKey, never>
-        Returns: string
+      encrypt_social_token: {
+        Args: {
+          p_access_token: string
+          p_encryption_key: string
+          p_refresh_token: string
+        }
+        Returns: Json
       }
-      is_valid_phone: {
-        Args: { phone_input: string }
-        Returns: boolean
+      format_phone_display: { Args: { phone_input: string }; Returns: string }
+      get_current_user_role: { Args: never; Returns: string }
+      insert_reop_transaction: {
+        Args: {
+          p_agent_name: string
+          p_city: string
+          p_closing_date: string
+          p_contract_status?: string
+          p_property_address: string
+          p_purchase_amount: number
+          p_representation_side: string
+          p_seller_to_buyer_broker: number
+          p_seller_to_listing_broker: number
+          p_state: string
+          p_team_name?: string
+        }
+        Returns: undefined
       }
+      is_valid_phone: { Args: { phone_input: string }; Returns: boolean }
       log_newsletter_activity: {
         Args: {
           p_agent_id: string
@@ -1637,26 +1874,11 @@ export type Database = {
         }
         Returns: string
       }
-      mask_email: {
-        Args: { email_address: string }
-        Returns: string
-      }
-      mask_email_field: {
-        Args: { email_value: string }
-        Returns: string
-      }
-      mask_phone: {
-        Args: { phone_number: string }
-        Returns: string
-      }
-      mask_phone_field: {
-        Args: { phone_value: string }
-        Returns: string
-      }
-      normalize_phone: {
-        Args: { phone_input: string }
-        Returns: string
-      }
+      mask_email: { Args: { email_address: string }; Returns: string }
+      mask_email_field: { Args: { email_value: string }; Returns: string }
+      mask_phone: { Args: { phone_number: string }; Returns: string }
+      mask_phone_field: { Args: { phone_value: string }; Returns: string }
+      normalize_phone: { Args: { phone_input: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never

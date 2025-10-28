@@ -194,7 +194,7 @@ export const DuplicateCleanup: React.FC = () => {
             .update(merged)
             .eq('id', group.contacts[0].id);
           
-          if (updateError) throw error;
+          if (updateError) throw updateError;
           
           // Delete the rest
           const toDelete = group.contacts.slice(1);
@@ -206,7 +206,7 @@ export const DuplicateCleanup: React.FC = () => {
               .delete()
               .in('id', deleteIds);
             
-            if (deleteError) throw error;
+            if (deleteError) throw deleteError;
           }
         }
         

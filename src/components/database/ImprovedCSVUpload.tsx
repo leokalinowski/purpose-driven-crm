@@ -379,7 +379,22 @@ export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({
     
     try {
       if (onUpload) {
-        await onUpload(contacts, targetAgentId);
+        // Convert to match useContacts ContactInput type
+        const formattedContacts = contacts.map(c => ({
+          first_name: c.first_name || '',
+          last_name: c.last_name,
+          phone: c.phone,
+          email: c.email,
+          address_1: c.address_1,
+          address_2: c.address_2,
+          city: c.city,
+          state: c.state,
+          zip_code: c.zip_code,
+          tags: c.tags,
+          notes: c.notes,
+          dnc: c.dnc || false
+        }));
+        await onUpload(formattedContacts, targetAgentId);
       }
       
       setUploadProgress({ stage: 'complete', progress: 100, message: `Successfully uploaded ${contacts.length} contacts` });

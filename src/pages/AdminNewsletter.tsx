@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { useAdminNewsletter } from "@/hooks/useAdminNewsletter";
 import { NewsletterCostTracking } from "@/components/admin/NewsletterCostTracking";
 import { CSVUploadManager } from "@/components/admin/CSVUploadManager";
-import { NewsletterPreview } from "@/components/newsletter/NewsletterPreview";
+import { AdminNewsletterPreview } from "@/components/admin/AdminNewsletterPreview";
 import { NewsletterSendManager } from "@/components/admin/NewsletterSendManager";
 import { formatDistanceToNow } from "date-fns";
 import { CalendarDays, Send, Settings, TestTube, Users, DollarSign, Upload, FileText, Mail } from "lucide-react";
@@ -143,7 +143,15 @@ export default function AdminNewsletter() {
           </TabsContent>
 
           <TabsContent value="test-preview" className="space-y-4">
-            <NewsletterPreview mode="admin" />
+            <Card>
+              <CardHeader>
+                <CardTitle>Newsletter Preview</CardTitle>
+                <CardDescription>Test newsletter generation with a ZIP code</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AdminNewsletterPreview />
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="send-newsletter" className="space-y-4">
