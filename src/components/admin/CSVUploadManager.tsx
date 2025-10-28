@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 
 interface CSVFile {
@@ -22,11 +22,6 @@ export function CSVUploadManager() {
   const [uploadedFiles, setUploadedFiles] = useState<CSVFile[]>([])
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const { session } = useAuth()
-
-  const supabase = createClient(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_ANON_KEY
-  )
 
   useEffect(() => {
     fetchUploadedFiles()

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 
 interface PreviewData {
@@ -26,11 +26,6 @@ export function AdminNewsletterPreview() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { session } = useAuth()
-
-  const supabase = createClient(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_ANON_KEY
-  )
 
   const generatePreview = async () => {
     if (!zipCode) {

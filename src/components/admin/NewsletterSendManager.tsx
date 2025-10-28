@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 
 interface CSVFile {
@@ -19,12 +19,17 @@ interface CSVFile {
 
 interface Campaign {
   id: string;
+  name: string;
   campaign_name: string;
+  body: string;
   status: string;
-  total_contacts: number;
-  sent_count: number;
   created_at: string;
-  sent_at: string | null;
+  created_by: string;
+  send_date: string;
+  recipient_count: number;
+  open_rate: number;
+  click_through_rate: number;
+  updated_at: string;
 }
 
 export function NewsletterSendManager() {
@@ -34,11 +39,6 @@ export function NewsletterSendManager() {
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const { session } = useAuth()
-
-  const supabase = createClient(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_ANON_KEY
-  )
 
   useEffect(() => {
     fetchCSVFiles()
@@ -216,10 +216,11 @@ export function NewsletterSendManager() {
                     </div>
                     <div className="text-sm text-muted-foreground space-y-1">
                       <p>Created: {formatDate(campaign.created_at)}</p>
-                      {campaign.sent_at && (
-                        <p>Sent: {formatDate(campaign.sent_at)}</p>
+                      {campaign.send_date && (
+                        <p>Send Date: {formatDate(campaign.send_date)}</p>
                       )}
-                      <p>Progress: {campaign.sent_count} / {campaign.total_contacts} contacts</p>
+                      <p>Recipients: {campaign.recipient_count} contacts</p>
+                      <p>Open Rate: {campaign.open_rate}% • Click Rate: {campaign.click_through_rate}%</p>
                     </div>
                   </div>
                 </div>
