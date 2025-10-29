@@ -1264,14 +1264,19 @@ export type Database = {
       profiles: {
         Row: {
           brokerage: string | null
+          brokerage_info: string | null
+          can_email_marketing: boolean | null
           created_at: string
           email: string | null
           first_name: string | null
           id: string
           last_name: string | null
+          license_number: string | null
+          license_states: string[] | null
           office_address: string | null
           office_number: string | null
           phone_number: string | null
+          privacy_policy_url: string | null
           role: string
           state_licenses: string[] | null
           team_name: string | null
@@ -1281,14 +1286,19 @@ export type Database = {
         }
         Insert: {
           brokerage?: string | null
+          brokerage_info?: string | null
+          can_email_marketing?: boolean | null
           created_at?: string
           email?: string | null
           first_name?: string | null
           id?: string
           last_name?: string | null
+          license_number?: string | null
+          license_states?: string[] | null
           office_address?: string | null
           office_number?: string | null
           phone_number?: string | null
+          privacy_policy_url?: string | null
           role?: string
           state_licenses?: string[] | null
           team_name?: string | null
@@ -1298,14 +1308,19 @@ export type Database = {
         }
         Update: {
           brokerage?: string | null
+          brokerage_info?: string | null
+          can_email_marketing?: boolean | null
           created_at?: string
           email?: string | null
           first_name?: string | null
           id?: string
           last_name?: string | null
+          license_number?: string | null
+          license_states?: string[] | null
           office_address?: string | null
           office_number?: string | null
           phone_number?: string | null
+          privacy_policy_url?: string | null
           role?: string
           state_licenses?: string[] | null
           team_name?: string | null

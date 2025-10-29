@@ -18,6 +18,11 @@ interface PreviewData {
     area_name: string;
     source: string;
     last_updated: string;
+    active_listings?: number;
+    median_days_on_market?: number;
+    pending_ratio?: number;
+    price_reduced_share?: number;
+    price_per_sqft?: number;
   } | null;
 }
 
@@ -207,35 +212,95 @@ export function AdminNewsletterPreview() {
       </Card>
 
       {previewData && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Preview Result - ZIP {previewData.zip_code}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="border rounded-lg p-4 bg-white">
-              <div 
-                dangerouslySetInnerHTML={{ __html: previewData.html_email }} 
-                className="prose max-w-none"
-              />
-            </div>
-            
-            <div className="mt-4 pt-4 border-t">
-              <h4 className="font-medium mb-2">Preview Details:</h4>
-              <div className="text-sm text-muted-foreground space-y-1">
-                <p><strong>ZIP Code:</strong> {previewData.zip_code}</p>
-                <p><strong>Market Data:</strong> {previewData.real_data ? 'Real data found' : 'No real data available'}</p>
-                {previewData.real_data && (
-                  <>
-                    <p><strong>Area:</strong> {previewData.real_data.area_name}</p>
-                    <p><strong>Median Value:</strong> ${previewData.real_data.median_value?.toLocaleString()}</p>
-                    <p><strong>Value Change:</strong> {previewData.real_data.value_change}</p>
-                    <p><strong>Data Source:</strong> {previewData.real_data.source}</p>
-                  </>
-                )}
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Market Intelligence Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {previewData.real_data && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Location</p>
+                      <p className="text-base font-semibold">{previewData.real_data.area_name} ({previewData.zip_code})</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Data Source</p>
+                      <p className="text-sm">{previewData.real_data.source}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="border-t pt-4">
+                    <h4 className="text-sm font-semibold mb-3">Key Market Metrics</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <div className="bg-muted/50 p-3 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Median Home Value</p>
+                        <p className="text-lg font-bold">${previewData.real_data.median_value?.toLocaleString()}</p>
+                        <p className="text-xs text-green-600">{previewData.real_data.value_change}</p>
+                      </div>
+                      
+                      {previewData.real_data.active_listings !== undefined && (
+                        <div className="bg-muted/50 p-3 rounded-lg">
+                          <p className="text-xs text-muted-foreground">Active Listings</p>
+                          <p className="text-lg font-bold">{previewData.real_data.active_listings}</p>
+                        </div>
+                      )}
+                      
+                      {previewData.real_data.median_days_on_market !== undefined && (
+                        <div className="bg-muted/50 p-3 rounded-lg">
+                          <p className="text-xs text-muted-foreground">Days on Market</p>
+                          <p className="text-lg font-bold">{previewData.real_data.median_days_on_market} days</p>
+                        </div>
+                      )}
+                      
+                      {previewData.real_data.pending_ratio !== undefined && (
+                        <div className="bg-muted/50 p-3 rounded-lg">
+                          <p className="text-xs text-muted-foreground">Pending Ratio</p>
+                          <p className="text-lg font-bold">{(previewData.real_data.pending_ratio * 100).toFixed(1)}%</p>
+                          <p className="text-xs text-muted-foreground">Buyer demand</p>
+                        </div>
+                      )}
+                      
+                      {previewData.real_data.price_reduced_share !== undefined && (
+                        <div className="bg-muted/50 p-3 rounded-lg">
+                          <p className="text-xs text-muted-foreground">Price Reductions</p>
+                          <p className="text-lg font-bold">{(previewData.real_data.price_reduced_share * 100).toFixed(1)}%</p>
+                          <p className="text-xs text-muted-foreground">Of listings</p>
+                        </div>
+                      )}
+                      
+                      {previewData.real_data.price_per_sqft !== undefined && (
+                        <div className="bg-muted/50 p-3 rounded-lg">
+                          <p className="text-xs text-muted-foreground">Price per Sq Ft</p>
+                          <p className="text-lg font-bold">${previewData.real_data.price_per_sqft}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="border-t pt-4">
+                    <p className="text-xs text-muted-foreground">Last Updated: {new Date(previewData.real_data.last_updated).toLocaleString()}</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        
+          <Card>
+            <CardHeader>
+              <CardTitle>Generated Email Preview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="border rounded-lg p-4 bg-white">
+                <div 
+                  dangerouslySetInnerHTML={{ __html: previewData.html_email }} 
+                  className="prose max-w-none"
+                />
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   )

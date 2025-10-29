@@ -9,11 +9,46 @@ const corsHeaders = {
 const GROK_MODELS = ['grok-2', 'grok-beta', 'grok-3-mini'];
 
 interface MarketData {
+  // Core metrics
   medianValue: number;
   valueChange: string;
   areaName: string;
   source: string;
   lastUpdated: string;
+  
+  // Inventory & Supply Metrics
+  activeListings: number;
+  activeListingsChange: string;
+  newListings: number;
+  totalListings: number;
+  
+  // Market Velocity Indicators
+  medianDaysOnMarket: number;
+  daysOnMarketChange: string;
+  pendingListings: number;
+  pendingRatio: number;
+  
+  // Pricing Intelligence
+  averageListingPrice: number;
+  pricePerSquareFoot: number;
+  pricePerSqFtChange: string;
+  
+  // Market Pressure Indicators
+  priceReducedCount: number;
+  priceReducedShare: number;
+  priceIncreasedCount: number;
+  
+  // Property Characteristics
+  medianSquareFeet: number;
+  
+  // Period identifier
+  monthDate: string;
+}
+
+function formatPercentage(value: number | null | undefined): string {
+  if (value === null || value === undefined || isNaN(value)) return 'N/A';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${(value * 100).toFixed(2)}%`;
 }
 
 async function getMarketDataFromDatabase(zipCode: string): Promise<MarketData | null> {
@@ -50,12 +85,44 @@ async function getMarketDataFromDatabase(zipCode: string): Promise<MarketData | 
 
     console.log(`Found market data for ZIP ${zipCode}: $${marketData.median_value}, ${marketData.value_change}`)
 
+    // Extract comprehensive data from raw_data JSONB
+    const rawData = marketData.raw_data || {};
+    
     return {
+      // Core metrics
       medianValue: marketData.median_value,
       valueChange: marketData.value_change,
       areaName: marketData.area_name,
-      source: `CSV: ${csvFile.filename}`,
-      lastUpdated: marketData.created_at
+      source: 'Realtor.com Monthly Housing Inventory Data',
+      lastUpdated: marketData.created_at,
+      
+      // Inventory & Supply Metrics
+      activeListings: rawData.active_listing_count || 0,
+      activeListingsChange: formatPercentage(rawData.active_listing_count_yy),
+      newListings: rawData.new_listing_count || 0,
+      totalListings: rawData.total_listing_count || 0,
+      
+      // Market Velocity Indicators
+      medianDaysOnMarket: rawData.median_days_on_market || 0,
+      daysOnMarketChange: formatPercentage(rawData.median_days_on_market_yy),
+      pendingListings: rawData.pending_listing_count || 0,
+      pendingRatio: rawData.pending_ratio || 0,
+      
+      // Pricing Intelligence
+      averageListingPrice: rawData.average_listing_price || 0,
+      pricePerSquareFoot: rawData.median_listing_price_per_square_foot || 0,
+      pricePerSqFtChange: formatPercentage(rawData.median_listing_price_per_square_foot_yy),
+      
+      // Market Pressure Indicators
+      priceReducedCount: rawData.price_reduced_count || 0,
+      priceReducedShare: rawData.price_reduced_share || 0,
+      priceIncreasedCount: rawData.price_increased_count || 0,
+      
+      // Property Characteristics
+      medianSquareFeet: rawData.median_square_feet || 0,
+      
+      // Period identifier
+      monthDate: rawData.month_date_yyyymm || ''
     }
   } catch (error) {
     console.error('Database market data error:', error)
@@ -95,44 +162,83 @@ async function generateProfessionalNewsletter(
         messages: [
           {
             role: 'system',
-            content: `You are a professional real estate market analyst creating personalized newsletters for homeowners.
+            content: `You are a professional real estate market analyst creating personalized, data-driven newsletters for homeowners.
 
-REAL CSV MARKET DATA FOR ZIP ${zipCode}:
+COMPREHENSIVE MARKET DATA FOR ZIP ${zipCode} (${marketData.areaName}):
+
+📊 PRICING METRICS:
 - Median Home Value: $${marketData.medianValue.toLocaleString()}
 - 1-Year Change: ${marketData.valueChange}
-- Area: ${marketData.areaName}
-- Data Source: ${marketData.source}
-- Last Updated: ${marketData.lastUpdated}
+- Average Listing Price: $${marketData.averageListingPrice.toLocaleString()}
+- Price per Square Foot: $${marketData.pricePerSquareFoot} (${marketData.pricePerSqFtChange} YoY)
+- Median Property Size: ${marketData.medianSquareFeet} sq ft
 
-CRITICAL RULE: USE ONLY THIS EXACT DATA. DO NOT MODIFY, ESTIMATE, OR FABRICATE ANY NUMBERS.
-If you cannot create a valuable newsletter with this data, refuse to generate content.
+📈 INVENTORY & SUPPLY:
+- Active Listings: ${marketData.activeListings} (${marketData.activeListingsChange} YoY)
+- New Listings: ${marketData.newListings}
+- Total Market Inventory: ${marketData.totalListings}
 
-Create a personalized market update email that includes:
+⚡ MARKET VELOCITY & DEMAND:
+- Median Days on Market: ${marketData.medianDaysOnMarket} days (${marketData.daysOnMarketChange} YoY)
+- Pending Sales: ${marketData.pendingListings}
+- Pending Ratio: ${(marketData.pendingRatio * 100).toFixed(1)}% (buyer demand indicator)
 
-1. **Personal Greeting** using recipient's name
-2. **Market Overview** with ZIP-specific data (if available)
-3. **Key Insights** and local market context
-4. **Professional Recommendations**
-5. **Call-to-Action** for consultation
+💰 PRICE PRESSURE INDICATORS:
+- Listings with Price Reductions: ${marketData.priceReducedCount} (${(marketData.priceReducedShare * 100).toFixed(1)}% of market)
+- Listings with Price Increases: ${marketData.priceIncreasedCount}
 
-Format as clean HTML email content. Keep it concise and professional.`
+📅 Data Period: ${marketData.monthDate}
+📋 Data Source: ${marketData.source}
+🕒 Last Updated: ${new Date(marketData.lastUpdated).toLocaleDateString()}
+
+CRITICAL INSTRUCTIONS:
+1. USE ONLY THIS EXACT DATA - DO NOT FABRICATE OR ESTIMATE ANY NUMBERS
+2. Analyze these metrics holistically to determine market conditions:
+   - Is it a seller's market, buyer's market, or balanced?
+   - Are homes selling quickly (low days on market) or slowly?
+   - Is inventory tight (low listings) or abundant?
+   - Are buyers competing (high pending ratio) or hesitant?
+   - Are sellers confident (price increases) or desperate (price reductions)?
+
+3. Provide SPECIFIC, ACTIONABLE recommendations based on the data:
+   - For SELLERS: When to list, pricing strategy, market timing based on days on market and inventory
+   - For BUYERS: Negotiation opportunities based on price reduction rates, competition level from pending ratio
+   - For HOMEOWNERS: Property value trends, market timing insights
+
+4. Connect multiple metrics to tell a compelling market story - don't just list numbers
+
+5. Email structure:
+   - Personal Greeting using recipient name
+   - Market Overview (3-4 key headline metrics)
+   - Deep Market Analysis (connect data points to reveal insights about market conditions)
+   - Actionable Recommendations (specific, data-driven advice tailored to market conditions)
+   - Clear Call-to-Action for consultation
+
+Format as clean, professional HTML email. Be conversational but authoritative. Show expertise through data interpretation.`
           },
           {
             role: 'user',
-            content: `Generate a comprehensive real estate market report email.
+            content: `Generate a highly valuable real estate market analysis email.
 
-RECIPIENT: ${contactInfo.first_name} ${contactInfo.last_name} (${contactInfo.email})
+RECIPIENT: ${contactInfo.first_name} ${contactInfo.last_name}
 ADDRESS: ${contactInfo.address}
-AGENT: ${agentInfo.agent_name} - ${agentInfo.agent_info}
+AGENT: ${agentInfo.agent_name}
+CONTACT: ${agentInfo.agent_info}
 
-REAL CSV DATA TO USE:
-- Median Home Value: $${marketData.medianValue.toLocaleString()}
-- 1-Year Change: ${marketData.valueChange}
-- Area: ${marketData.areaName}
-- Source: ${marketData.source}
-- Last Updated: ${marketData.lastUpdated}
+ANALYSIS REQUIREMENTS:
+1. Start with warm, personalized greeting to ${contactInfo.first_name}
+2. Present 3-4 headline metrics that tell the market story (choose the most impactful ones)
+3. Provide deep analysis connecting:
+   - Price trends (${marketData.valueChange} change) + inventory levels (${marketData.activeListings} active)
+   - Days on market (${marketData.medianDaysOnMarket} days) + pending ratio (${(marketData.pendingRatio * 100).toFixed(0)}%)
+   - Price reduction patterns (${(marketData.priceReducedShare * 100).toFixed(0)}% of listings) + overall demand
+4. Give SPECIFIC recommendations with numbers:
+   - Example: "With ${marketData.medianDaysOnMarket} days average market time and ${(marketData.pendingRatio * 100).toFixed(0)}% pending ratio, sellers should..."
+   - Example: "The ${(marketData.priceReducedShare * 100).toFixed(0)}% price reduction rate indicates buyers can..."
+5. End with clear, compelling call-to-action
+6. Professional signature with agent contact details
 
-Build your newsletter around this real data with professional analysis and insights.`
+Make this newsletter valuable enough that ${contactInfo.first_name} would save and reference it when making real estate decisions.`
           }
         ],
         max_completion_tokens: 3000
@@ -155,7 +261,20 @@ Build your newsletter around this real data with professional analysis and insig
     }
 
     const grokData = await grokResponse.json();
-    return grokData.choices?.[0]?.message?.content || '';
+    let emailContent = grokData.choices?.[0]?.message?.content || '';
+    
+    // Add compliance footer
+    const complianceFooter = `
+<div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #6b7280; line-height: 1.6;">
+  <p><strong>Data Source:</strong> ${marketData.source}</p>
+  <p><strong>Disclaimer:</strong> This market analysis is provided for informational purposes only and should not be construed as financial, legal, or investment advice. Market data reflects past performance and may not be indicative of future results. Individual property values may vary significantly based on condition, location, and other factors.</p>
+  <p><strong>License Information:</strong> ${agentInfo.agent_name} | ${agentInfo.agent_info}</p>
+  <p style="margin-top: 10px; font-size: 10px;">© ${new Date().getFullYear()} ${agentInfo.agent_name}. All rights reserved.</p>
+</div>
+`;
+    
+    emailContent = emailContent + complianceFooter;
+    return emailContent;
 
   } catch (error) {
     console.error('Newsletter generation error:', error);
@@ -198,7 +317,13 @@ serve(async (req) => {
           value_change: marketData.valueChange,
           area_name: marketData.areaName,
           source: marketData.source,
-          last_updated: marketData.lastUpdated
+          last_updated: marketData.lastUpdated,
+          // Include key metrics for preview
+          active_listings: marketData.activeListings,
+          median_days_on_market: marketData.medianDaysOnMarket,
+          pending_ratio: marketData.pendingRatio,
+          price_reduced_share: marketData.priceReducedShare,
+          price_per_sqft: marketData.pricePerSquareFoot
         } : null
       }),
       { 
