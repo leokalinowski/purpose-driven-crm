@@ -16,17 +16,31 @@ export const useUserRole = () => {
       }
 
       try {
-        const { data, error } = await supabase
-          .from('profiles')
+        // Query the new user_roles table
+        const { data: rolesData, error: rolesError } = await supabase
+          .from('user_roles')
           .select('role')
           .eq('user_id', user.id)
+          .order('role', { ascending: true }) // Admin comes before agent alphabetically
+          .limit(1)
           .single();
 
-        if (error) {
-          console.error('Error fetching user role:', error);
-          setRole('agent'); // Default to agent
+        if (rolesError) {
+          // Fallback to profiles.role for backwards compatibility
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('user_id', user.id)
+            .single();
+
+          if (profileError) {
+            console.error('Error fetching user role:', profileError);
+            setRole('agent'); // Default to agent
+          } else {
+            setRole(profileData?.role || 'agent');
+          }
         } else {
-          setRole(data?.role || 'agent');
+          setRole(rolesData?.role || 'agent');
         }
       } catch (error) {
         console.error('Error fetching user role:', error);
