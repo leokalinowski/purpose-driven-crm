@@ -67,9 +67,6 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      // Ensure no stale sessions interfere with sign-in
-      await supabase.auth.signOut({ scope: 'global' }).catch(() => {});
-
       const { error } = await signIn(email, password);
 
       if (error) {
@@ -79,8 +76,7 @@ const Auth = () => {
           variant: 'destructive',
         });
       } else {
-        // Hard redirect to reload app state with fresh session
-        window.location.href = '/';
+        navigate('/');
         return;
       }
     } catch (err: any) {

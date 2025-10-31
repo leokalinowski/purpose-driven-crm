@@ -36,15 +36,7 @@ export function cleanupAuthState(): void {
       history.replaceState({}, '', `${url.pathname}${url.search ? `?${url.searchParams.toString()}` : ''}`);
     }
 
-    // Remove known stale supabase auth storage keys
-    const toRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (!k) continue;
-      if (k.startsWith('supabase.auth.')) toRemove.push(k);
-      if (k.startsWith('sb-') && (k.endsWith('-auth-token') || k.includes('-auth-token.'))) toRemove.push(k);
-    }
-    toRemove.forEach((k) => localStorage.removeItem(k));
+    // DO NOT delete localStorage - let Supabase manage its own session storage
   } catch (_) {
     // no-op
   }
