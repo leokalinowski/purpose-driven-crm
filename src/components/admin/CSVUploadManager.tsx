@@ -66,7 +66,7 @@ export function CSVUploadManager() {
         return
       }
       
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-csv`, {
+      const response = await fetch(`https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/upload-csv`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,

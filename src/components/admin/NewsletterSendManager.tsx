@@ -96,7 +96,7 @@ export function NewsletterSendManager() {
         return
       }
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/newsletter-send`, {
+      const response = await fetch(`https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/newsletter-send`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
