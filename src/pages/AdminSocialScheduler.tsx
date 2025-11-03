@@ -1,52 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { BarChart3, Settings, Users, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Layout } from '@/components/layout/Layout';
 import { MetricoolDashboard } from '@/components/metricool/MetricoolDashboard';
 import { MetricoolAnalytics } from '@/components/metricool/MetricoolAnalytics';
 import { MetricoolSettings } from '@/components/metricool/MetricoolSettings';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-
-interface Agent {
-  id: string;
-  user_id: string;
-  first_name?: string;
-  last_name?: string;
-  email?: string;
-}
+import { AgentSelector } from '@/components/admin/AgentSelector';
+import { useAgents } from '@/hooks/useAgents';
 
 export default function AdminSocialScheduler() {
-  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const { agents, getAgentDisplayName, fetchAgents } = useAgents();
 
-  // Fetch all agents
-  const { data: agents = [], isLoading: agentsLoading } = useQuery({
-    queryKey: ['agents'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, user_id, first_name, last_name, email')
-        .eq('role', 'agent')
-        .order('first_name');
-
-      if (error) throw error;
-      return data as Agent[];
-    },
-  });
+  useEffect(() => {
+    fetchAgents();
+  }, [fetchAgents]);
 
   const selectedAgent = agents.find(agent => agent.user_id === selectedAgentId);
-
-  const getAgentDisplayName = (agent: Agent) => {
-    if (agent.first_name || agent.last_name) {
-      return `${agent.first_name || ''} ${agent.last_name || ''}`.trim();
-    }
-    return agent.email || 'Unknown Agent';
-  };
 
   return (
     <Layout>
@@ -79,30 +53,12 @@ export default function AdminSocialScheduler() {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <Users className="h-4 w-4" />
-              <Label htmlFor="agent-select">Select Agent:</Label>
+              <Label>Select Person:</Label>
             </div>
-            <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
-              <SelectTrigger id="agent-select" className="w-64">
-                <SelectValue placeholder="Choose an agent..." />
-              </SelectTrigger>
-              <SelectContent>
-                {agentsLoading ? (
-                  <SelectItem value="loading" disabled>
-                    Loading agents...
-                  </SelectItem>
-                ) : agents.length === 0 ? (
-                  <SelectItem value="no-agents" disabled>
-                    No agents found
-                  </SelectItem>
-                ) : (
-                  agents.map((agent) => (
-                    <SelectItem key={agent.user_id} value={agent.user_id}>
-                      {getAgentDisplayName(agent)}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            <AgentSelector 
+              selectedAgentId={selectedAgentId} 
+              onAgentSelect={setSelectedAgentId}
+            />
           </div>
 
           {selectedAgentId ? (

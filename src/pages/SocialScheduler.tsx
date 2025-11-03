@@ -1,8 +1,14 @@
 import { Helmet } from 'react-helmet-async';
 import { Layout } from '@/components/layout/Layout';
 import { MetricoolIframe } from '@/components/metricool/MetricoolIframe';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useUserRole } from '@/hooks/useUserRole';
+import { Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export default function SocialScheduler() {
+  const { isAdmin } = useUserRole();
+
   return (
     <Layout>
       <div className="container mx-auto py-6 px-4 space-y-6">
@@ -22,6 +28,18 @@ export default function SocialScheduler() {
             </p>
           </div>
         </div>
+
+        {isAdmin && (
+          <Alert>
+            <Settings className="h-4 w-4" />
+            <AlertDescription>
+              Looking to manage team Metricool settings?{' '}
+              <Link to="/admin/social-scheduler" className="text-primary hover:underline font-medium">
+                Go to Admin Social Media Management
+              </Link>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <MetricoolIframe />
       </div>

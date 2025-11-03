@@ -30,11 +30,13 @@ export function AgentSelector({ selectedAgentId, onAgentSelect }: AgentSelectorP
         const { data, error } = await supabase
           .from('profiles')
           .select('user_id, first_name, last_name, email')
-          .eq('role', 'agent')
           .order('first_name');
 
         if (error) throw error;
         setAgents(data || []);
+        if (!data || data.length === 0) {
+          console.warn('No profiles found in the database');
+        }
       } catch (error) {
         console.error('Failed to fetch agents:', error);
       } finally {
@@ -56,10 +58,21 @@ export function AgentSelector({ selectedAgentId, onAgentSelect }: AgentSelectorP
     return name || agent.email || 'Unknown Agent';
   };
 
+  if (agents.length === 0) {
+    return (
+      <div className="text-sm text-muted-foreground">
+        No profiles available. <a href="/admin/invitations" className="text-primary hover:underline">Invite team members</a>
+      </div>
+    );
+  }
+
   return (
-    <Select value={selectedAgentId || 'all'} onValueChange={(value) => onAgentSelect(value === 'all' ? null : value)}>
+    <Select value={selectedAgentId || 'all'} onValueChange={(value) => {
+      console.info('Agent selected:', value);
+      onAgentSelect(value === 'all' ? null : value);
+    }}>
       <SelectTrigger className="w-64">
-        <SelectValue placeholder="Select an agent to analyze" />
+        <SelectValue placeholder="Select a person" />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="all">All Agents</SelectItem>
