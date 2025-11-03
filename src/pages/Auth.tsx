@@ -132,12 +132,8 @@ const Auth = () => {
           variant: 'destructive',
         });
       } else {
-        // Mark invitation as used
-        await supabase
-          .from('invitations' as any)
-          .update({ used: true })
-          .eq('id', (invitation as any).id);
-
+        // Invitation is automatically marked as used by the database trigger
+        
         toast({
           title: 'Success',
           description: 'Account created! Please check your email to confirm your account.',
