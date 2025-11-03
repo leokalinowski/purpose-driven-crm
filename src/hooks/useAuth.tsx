@@ -77,7 +77,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const signUp = async (email: string, password: string, profileData?: AgentProfileData) => {
-    const redirectUrl = `${window.location.origin}/`;
+    const redirectUrl = 'https://hub.realestateonpurpose.com/';
     
     const { error } = await supabase.auth.signUp({
       email,

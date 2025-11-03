@@ -92,6 +92,12 @@ const Auth = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Only proceed with signup if we're on step 3
+    if (signupStep !== 3) {
+      return;
+    }
+    
     setLoading(true);
 
     try {
