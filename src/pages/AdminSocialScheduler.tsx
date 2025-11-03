@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { BarChart3, Settings, Users } from 'lucide-react';
+import { BarChart3, Settings, Users, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Layout } from '@/components/layout/Layout';
 import { MetricoolDashboard } from '@/components/metricool/MetricoolDashboard';
 import { MetricoolAnalytics } from '@/components/metricool/MetricoolAnalytics';
+import { MetricoolSettings } from '@/components/metricool/MetricoolSettings';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -106,23 +107,34 @@ export default function AdminSocialScheduler() {
 
           {selectedAgentId ? (
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="dashboard" className="flex items-center space-x-2">
                   <Settings className="h-4 w-4" />
-                  <span>Dashboard {selectedAgent && `- ${getAgentDisplayName(selectedAgent)}`}</span>
+                  <span>Dashboard</span>
                 </TabsTrigger>
                 <TabsTrigger value="analytics" className="flex items-center space-x-2">
                   <BarChart3 className="h-4 w-4" />
-                  <span>Analytics {selectedAgent && `- ${getAgentDisplayName(selectedAgent)}`}</span>
+                  <span>Analytics</span>
+                </TabsTrigger>
+                <TabsTrigger value="settings" className="flex items-center space-x-2">
+                  <Wrench className="h-4 w-4" />
+                  <span>Settings</span>
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="dashboard">
-                <MetricoolDashboard />
+                <MetricoolDashboard userId={selectedAgentId} />
               </TabsContent>
 
               <TabsContent value="analytics">
-                <MetricoolAnalytics />
+                <MetricoolAnalytics agentId={selectedAgentId} />
+              </TabsContent>
+
+              <TabsContent value="settings">
+                <MetricoolSettings 
+                  userId={selectedAgentId} 
+                  agentName={selectedAgent ? getAgentDisplayName(selectedAgent) : undefined}
+                />
               </TabsContent>
             </Tabs>
           ) : (
