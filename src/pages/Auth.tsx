@@ -210,7 +210,15 @@ const Auth = () => {
     switch (signupStep) {
       case 1:
         return (
-          <div className="space-y-4">
+          <div
+            className="space-y-4"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                if (canProceedStep1) nextStep();
+              }
+            }}
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-800">Basic Information</h3>
               <span className="text-sm text-gray-500">Step 1 of 3</span>
@@ -293,7 +301,15 @@ const Auth = () => {
         
       case 2:
         return (
-          <div className="space-y-4">
+          <div
+            className="space-y-4"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                if (canProceedStep2) nextStep();
+              }
+            }}
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-800">Professional Information</h3>
               <span className="text-sm text-gray-500">Step 2 of 3</span>
@@ -359,7 +375,7 @@ const Auth = () => {
         
       case 3:
         return (
-          <div className="space-y-4">
+          <form onSubmit={handleSignUp} noValidate className="space-y-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-800">Location & Licensing</h3>
               <span className="text-sm text-gray-500">Step 3 of 3</span>
@@ -436,7 +452,7 @@ const Auth = () => {
                 )}
               </Button>
             </div>
-          </div>
+          </form>
         );
         
       default:
@@ -558,9 +574,9 @@ const Auth = () => {
                 </div>
               </div>
 
-              <form onSubmit={handleSignUp} className="space-y-4 mt-4">
+              <div className="space-y-4 mt-4">
                 {renderSignupStep()}
-              </form>
+              </div>
             </TabsContent>
           </Tabs>
         </CardContent>
