@@ -120,40 +120,56 @@ const Auth = () => {
           description: 'Invalid or expired invitation code. Please check your code and email.',
           variant: 'destructive',
         });
+        setLoading(false);
         return;
       }
 
       const { error } = await signUp(email, password, profileData);
 
       if (error) {
-        toast({
-          title: 'Sign-up failed',
-          description: `${error.message}. If this persists, verify your Site URL and Allowed Redirect URLs in Supabase.`,
-          variant: 'destructive',
-        });
-      } else {
-        // Invitation is automatically marked as used by the database trigger
-        
-        toast({
-          title: 'Success',
-          description: 'Account created! Please check your email to confirm your account.',
-        });
-        
-        // Reset form
-        setSignupStep(1);
-        setProfileData({
-          firstName: '',
-          lastName: '',
-          teamName: '',
-          brokerage: '',
-          phoneNumber: '',
-          officeAddress: '',
-          officeNumber: '',
-          website: '',
-          stateLicenses: [],
-        });
+        // Detect repeated signup attempt
+        if (error.message?.toLowerCase().includes('user already registered') || 
+            error.message?.toLowerCase().includes('email already exists') ||
+            error.message?.toLowerCase().includes('email address already')) {
+          toast({
+            title: 'Account already exists',
+            description: 'This email is already registered. Please sign in instead.',
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: 'Sign-up failed',
+            description: `${error.message}. If this persists, verify your Site URL and Allowed Redirect URLs in Supabase.`,
+            variant: 'destructive',
+          });
+        }
+        setLoading(false);
+        return;
       }
+      
+      toast({
+        title: 'Success',
+        description: 'Account created! Please check your email to confirm your account.',
+      });
+      
+      // Reset form
+      setSignupStep(1);
+      setEmail('');
+      setPassword('');
+      setInviteCode('');
+      setProfileData({
+        firstName: '',
+        lastName: '',
+        teamName: '',
+        brokerage: '',
+        phoneNumber: '',
+        officeAddress: '',
+        officeNumber: '',
+        website: '',
+        stateLicenses: [],
+      });
     } catch (err: any) {
+      console.error('Signup error:', err);
       toast({
         title: 'Unexpected error',
         description: err?.message ?? 'Please try again.',
