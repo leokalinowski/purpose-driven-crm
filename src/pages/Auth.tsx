@@ -198,7 +198,9 @@ const Auth = () => {
           description: error.message || "Failed to sign in with Google",
           variant: "destructive",
         });
+        setLoading(false); // Only reset on error
       }
+      // If no error, keep loading=true and let redirect happen
     } catch (error: any) {
       console.error('Unexpected error:', error);
       toast({
@@ -206,8 +208,7 @@ const Auth = () => {
         description: "An unexpected error occurred",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
+      setLoading(false); // Only reset on error
     }
   };
 
