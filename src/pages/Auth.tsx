@@ -30,6 +30,7 @@ const Auth = () => {
   const [password, setPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [signupStep, setSignupStep] = useState(1);
   
   // Agent profile data
@@ -181,7 +182,18 @@ const Auth = () => {
   };
 
   const handleGoogleSignIn = async () => {
-    setLoading(true);
+    setGoogleLoading(true);
+    
+    // Set a timeout to reset loading state if redirect doesn't happen
+    const timeoutId = setTimeout(() => {
+      setGoogleLoading(false);
+      toast({
+        title: "Error",
+        description: "Google sign-in took too long. Please check your configuration.",
+        variant: "destructive",
+      });
+    }, 10000);
+    
     try {
       cleanupAuthState();
       try {
@@ -192,23 +204,26 @@ const Auth = () => {
 
       const { error } = await signInWithGoogle();
       if (error) {
+        clearTimeout(timeoutId);
         console.error('Google sign in error:', error);
         toast({
           title: "Error",
           description: error.message || "Failed to sign in with Google",
           variant: "destructive",
         });
-        setLoading(false); // Only reset on error
+        setGoogleLoading(false);
       }
       // If no error, keep loading=true and let redirect happen
+      // Timeout will clear if redirect doesn't occur
     } catch (error: any) {
+      clearTimeout(timeoutId);
       console.error('Unexpected error:', error);
       toast({
         title: "Error",
         description: "An unexpected error occurred",
         variant: "destructive",
       });
-      setLoading(false); // Only reset on error
+      setGoogleLoading(false);
     }
   };
 
@@ -521,10 +536,10 @@ const Auth = () => {
                 onClick={handleGoogleSignIn}
                 variant="outline"
                 className="w-full border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 rounded-lg transition-all duration-300 mb-4"
-                disabled={loading}
+                disabled={googleLoading}
               >
                 <Chrome className="w-5 h-5 mr-2" />
-                {loading ? "Signing In..." : "Continue with Google"}
+                {googleLoading ? "Signing In..." : "Continue with Google"}
               </Button>
               
               <div className="relative">
@@ -576,10 +591,10 @@ const Auth = () => {
                 onClick={handleGoogleSignIn}
                 variant="outline"
                 className="w-full border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 rounded-lg transition-all duration-300 mb-4"
-                disabled={loading}
+                disabled={googleLoading}
               >
                 <Chrome className="w-5 h-5 mr-2" />
-                {loading ? "Signing Up..." : "Continue with Google"}
+                {googleLoading ? "Signing Up..." : "Continue with Google"}
               </Button>
               
               <div className="relative">

@@ -36,7 +36,29 @@ export function cleanupAuthState(): void {
       history.replaceState({}, '', `${url.pathname}${url.search ? `?${url.searchParams.toString()}` : ''}`);
     }
 
-    // DO NOT delete localStorage - let Supabase manage its own session storage
+    // Clear any stale auth-related items that might cause issues
+    try {
+      const storageKeys = Object.keys(localStorage);
+      for (const key of storageKeys) {
+        if (key.includes('sb-') && key.includes('-auth-token')) {
+          const value = localStorage.getItem(key);
+          if (value) {
+            try {
+              const parsed = JSON.parse(value);
+              // If token is expired or invalid, remove it
+              if (parsed.expires_at && parsed.expires_at < Date.now() / 1000) {
+                localStorage.removeItem(key);
+              }
+            } catch {
+              // If we can't parse it, it's corrupted - remove it
+              localStorage.removeItem(key);
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
   } catch (_) {
     // no-op
   }
