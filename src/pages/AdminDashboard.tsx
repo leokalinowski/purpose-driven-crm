@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Layout } from '@/components/layout/Layout';
 import { CompanyMetricsCards } from '@/components/admin/CompanyMetricsCards';
+import { CompanyRevenueCards } from '@/components/admin/CompanyRevenueCards';
 import { TeamManagementWidget } from '@/components/admin/TeamManagementWidget';
 import { CompanyAnalyticsCharts } from '@/components/admin/CompanyAnalyticsCharts';
 import { AgentPerformanceTable } from '@/components/admin/AgentPerformanceTable';
@@ -64,6 +65,9 @@ const AdminDashboard = () => {
           <TabsContent value="company" className="space-y-6">
             {/* Company-wide KPI cards */}
             <CompanyMetricsCards />
+
+            {/* Company revenue from transactions */}
+            <CompanyRevenueCards />
 
             {/* Team management insights */}
             <TeamManagementWidget />
