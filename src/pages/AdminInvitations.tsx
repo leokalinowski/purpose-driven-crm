@@ -26,6 +26,7 @@ const AdminInvitations = () => {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetchingInvitations, setFetchingInvitations] = useState(true);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -136,6 +137,41 @@ const AdminInvitations = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resendInvitationEmail = async (invitation: Invitation) => {
+    setResendingId(invitation.id);
+    try {
+      const { error: emailError } = await supabase.functions.invoke('send-invitation-email', {
+        body: {
+          email: invitation.email,
+          code: invitation.code,
+          expiresAt: invitation.expires_at,
+        },
+      });
+
+      if (emailError) {
+        console.error('Failed to resend invitation email:', emailError);
+        toast({
+          title: 'Error',
+          description: 'Failed to resend invitation email',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Email resent!',
+          description: `Invitation email resent to ${invitation.email}`,
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to resend invitation email',
+        variant: 'destructive',
+      });
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -330,6 +366,16 @@ const AdminInvitations = () => {
                         >
                           <Copy className="h-4 w-4" />
                           Copy Code
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => resendInvitationEmail(invitation)}
+                          disabled={resendingId === invitation.id}
+                          className="gap-2"
+                        >
+                          <Mail className="h-4 w-4" />
+                          {resendingId === invitation.id ? 'Sending...' : 'Resend Email'}
                         </Button>
                         <Button
                           variant="ghost"
