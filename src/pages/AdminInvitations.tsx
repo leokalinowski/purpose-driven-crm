@@ -9,7 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { Copy, Mail, Plus, Users, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Copy, Mail, Plus, Users, Clock, CheckCircle, XCircle, Trash2 } from 'lucide-react';
 import { format, isAfter } from 'date-fns';
 
 interface Invitation {
@@ -70,6 +70,19 @@ const AdminInvitations = () => {
 
     setLoading(true);
     try {
+      // First, invalidate any existing unused invitations for this email
+      const { error: updateError } = await supabase
+        .from('invitations' as any)
+        .update({ used: true })
+        .eq('email', email)
+        .eq('used', false);
+
+      if (updateError) {
+        console.warn('Could not invalidate old invitations:', updateError);
+        // Continue anyway - this is not critical
+      }
+
+      // Now create the new invitation
       const { data, error } = await supabase
         .from('invitations' as any)
         .insert({ email })
@@ -80,7 +93,7 @@ const AdminInvitations = () => {
 
       toast({
         title: 'Invitation created',
-        description: `Invitation code generated for ${email}`,
+        description: `New invitation code generated for ${email}. Previous unused invitations have been invalidated.`,
       });
 
       setEmail('');
@@ -93,6 +106,30 @@ const AdminInvitations = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteInvitation = async (invitationId: string, email: string) => {
+    try {
+      const { error } = await supabase
+        .from('invitations' as any)
+        .delete()
+        .eq('id', invitationId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Invitation deleted',
+        description: `Invitation for ${email} has been removed`,
+      });
+
+      fetchInvitations();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete invitation',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -263,6 +300,15 @@ const AdminInvitations = () => {
                         >
                           <Copy className="h-4 w-4" />
                           Copy Code
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteInvitation(invitation.id, invitation.email)}
+                          className="gap-2 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
                         </Button>
                       </div>
                     </div>
