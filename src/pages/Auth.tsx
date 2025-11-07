@@ -32,6 +32,7 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [signupStep, setSignupStep] = useState(1);
+  const [showSignInSwitch, setShowSignInSwitch] = useState(false);
   
   // Agent profile data
   const [profileData, setProfileData] = useState<AgentProfileData>({
@@ -132,9 +133,10 @@ const Auth = () => {
         if (error.message?.toLowerCase().includes('user already registered') || 
             error.message?.toLowerCase().includes('email already exists') ||
             error.message?.toLowerCase().includes('email address already')) {
+          setShowSignInSwitch(true);
           toast({
             title: 'Account already exists',
-            description: 'This email is already registered. Please sign in instead.',
+            description: 'This email is already registered. Would you like to sign in instead?',
             variant: 'destructive',
           });
         } else {
@@ -455,11 +457,28 @@ const Auth = () => {
               <Input
                 id="stateLicenses"
                 value={profileData.stateLicenses?.join(', ') || ''}
-                onChange={(e) => updateProfileData('stateLicenses', e.target.value.split(',').map(s => s.trim()).filter(s => s))}
+                onChange={(e) => {
+                  const licenses = e.target.value.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
+                  updateProfileData('stateLicenses', licenses);
+                }}
                 className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
                 placeholder="CA, NV, AZ (comma-separated)"
               />
-              <p className="text-xs text-gray-500">Enter state abbreviations separated by commas</p>
+              <p className="text-xs text-gray-500">
+                Example: <span className="font-medium">CA, NV, AZ</span> - Enter state codes separated by commas
+              </p>
+              {profileData.stateLicenses && profileData.stateLicenses.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {profileData.stateLicenses.map((license, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                    >
+                      {license}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             
             <div className="flex gap-2">
@@ -587,6 +606,26 @@ const Auth = () => {
             </TabsContent>
             
             <TabsContent value="signup">
+              {showSignInSwitch && (
+                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800 mb-2">
+                    This email is already registered. Would you like to sign in instead?
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="w-full border-yellow-300 bg-white hover:bg-yellow-50"
+                    onClick={() => {
+                      setShowSignInSwitch(false);
+                      // Switch to sign in tab
+                      const signInTab = document.querySelector('[value="signin"]') as HTMLButtonElement;
+                      signInTab?.click();
+                    }}
+                  >
+                    Switch to Sign In
+                  </Button>
+                </div>
+              )}
+              
               <Button 
                 onClick={handleGoogleSignIn}
                 variant="outline"

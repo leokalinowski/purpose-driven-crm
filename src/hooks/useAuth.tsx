@@ -100,7 +100,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           office_address: profileData?.officeAddress,
           office_number: profileData?.officeNumber,
           website: profileData?.website,
-          state_licenses: profileData?.stateLicenses,
+          state_licenses: profileData?.stateLicenses || [],
         }
       }
     });

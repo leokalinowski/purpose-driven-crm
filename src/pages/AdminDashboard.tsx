@@ -12,6 +12,7 @@ import { DashboardRefreshButton } from '@/components/dashboard/DashboardRefreshB
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AgentSelector } from '@/components/admin/AgentSelector';
 import { AgentSpecificDashboard } from '@/components/admin/AgentSpecificDashboard';
+import { UserManagement } from '@/components/admin/UserManagement';
 
 const AdminDashboard = () => {
   const { user, loading: authLoading } = useAuth();
@@ -57,9 +58,10 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs defaultValue="company" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="company">Company Overview</TabsTrigger>
             <TabsTrigger value="agent">Agent Performance</TabsTrigger>
+            <TabsTrigger value="users">User Management</TabsTrigger>
           </TabsList>
           
           <TabsContent value="company" className="space-y-6">
@@ -94,6 +96,17 @@ const AdminDashboard = () => {
             </div>
             
             <AgentSpecificDashboard selectedAgentId={selectedAgentId} />
+          </TabsContent>
+          
+          <TabsContent value="users" className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">User Management</h2>
+              <p className="text-muted-foreground">
+                Manage user accounts, delete test users, and monitor account status.
+              </p>
+            </div>
+            
+            <UserManagement />
           </TabsContent>
         </Tabs>
       </div>
