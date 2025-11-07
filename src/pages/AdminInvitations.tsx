@@ -90,11 +90,41 @@ const AdminInvitations = () => {
         .single();
 
       if (error) throw error;
+      if (!data) throw new Error('No invitation data returned');
 
-      toast({
-        title: 'Invitation created',
-        description: `New invitation code generated for ${email}. Previous unused invitations have been invalidated.`,
-      });
+      const invitationData = data as any; // Type assertion for invitation data
+
+      // Send invitation email
+      try {
+        const { error: emailError } = await supabase.functions.invoke('send-invitation-email', {
+          body: {
+            email: invitationData.email,
+            code: invitationData.code,
+            expiresAt: invitationData.expires_at,
+          },
+        });
+
+        if (emailError) {
+          console.error('Failed to send invitation email:', emailError);
+          toast({
+            title: 'Invitation created',
+            description: `Invitation code generated for ${email}, but email failed to send. Copy the code manually.`,
+            variant: 'default',
+          });
+        } else {
+          toast({
+            title: 'Invitation sent!',
+            description: `Invitation email sent to ${email} with signup instructions.`,
+          });
+        }
+      } catch (emailError) {
+        console.error('Error sending invitation email:', emailError);
+        toast({
+          title: 'Invitation created',
+          description: `Invitation code generated for ${email}, but email failed to send. Copy the code manually.`,
+          variant: 'default',
+        });
+      }
 
       setEmail('');
       fetchInvitations();

@@ -56,6 +56,18 @@ const Auth = () => {
 
   useEffect(() => {
     cleanupAuthState();
+    
+    // Check URL params for invitation code and email
+    const params = new URLSearchParams(window.location.search);
+    const codeParam = params.get('inviteCode');
+    const emailParam = params.get('email');
+    
+    if (codeParam) {
+      setInviteCode(codeParam);
+    }
+    if (emailParam) {
+      setEmail(decodeURIComponent(emailParam));
+    }
   }, []);
 
   useEffect(() => {
