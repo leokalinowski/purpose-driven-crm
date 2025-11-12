@@ -22,7 +22,14 @@ export const useAgents = () => {
       
       const { data, error } = await supabase
         .from('profiles')
-        .select('user_id, first_name, last_name, email, role')
+        .select(`
+          user_id, 
+          first_name, 
+          last_name, 
+          email,
+          user_roles!inner(role)
+        `)
+        .in('user_roles.role', ['agent', 'admin'])
         .order('first_name', { ascending: true });
 
       if (error) {
@@ -30,9 +37,10 @@ export const useAgents = () => {
       }
       
       // Add the id field as user_id for compatibility with Agent interface
-      const agentsWithId = (data || []).map(agent => ({
+      const agentsWithId = (data || []).map((agent: any) => ({
         ...agent,
-        id: agent.user_id
+        id: agent.user_id,
+        role: agent.user_roles.role
       }));
       
       setAgents(agentsWithId as Agent[]);
