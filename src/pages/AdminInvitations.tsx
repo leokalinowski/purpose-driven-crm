@@ -215,6 +215,33 @@ const AdminInvitations = () => {
     }
   };
 
+  const extendInvitationExpiry = async (invitationId: string) => {
+    try {
+      const newExpiryDate = new Date();
+      newExpiryDate.setDate(newExpiryDate.getDate() + 30);
+
+      const { error } = await supabase
+        .from('invitations' as any)
+        .update({ expires_at: newExpiryDate.toISOString() })
+        .eq('id', invitationId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Expiration extended',
+        description: 'Invitation expiration extended by 30 days',
+      });
+
+      fetchInvitations();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to extend expiration',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const getInvitationStatus = (invitation: Invitation) => {
     if (invitation.used) {
       return { status: 'used', color: 'bg-green-500', icon: CheckCircle };
@@ -371,12 +398,23 @@ const AdminInvitations = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => resendInvitationEmail(invitation)}
-                          disabled={resendingId === invitation.id}
+                          disabled={resendingId === invitation.id || invitation.used}
                           className="gap-2"
                         >
                           <Mail className="h-4 w-4" />
                           {resendingId === invitation.id ? 'Sending...' : 'Resend Email'}
                         </Button>
+                        {!invitation.used && isAfter(new Date(), new Date(invitation.expires_at)) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => extendInvitationExpiry(invitation.id)}
+                            className="gap-2"
+                          >
+                            <Clock className="h-4 w-4" />
+                            Extend
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
