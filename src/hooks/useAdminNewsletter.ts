@@ -8,6 +8,7 @@ export interface AgentProfile {
   first_name: string | null;
   last_name: string | null;
   email: string | null;
+  contact_count?: number;
 }
 
 export interface NewsletterSettings {
@@ -82,6 +83,26 @@ export function useAdminNewsletter() {
     },
   });
 
+  // Fetch contact counts per agent
+  const { data: contactCounts = {} } = useQuery({
+    queryKey: ['agent-contact-counts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('agent_id');
+      
+      if (error) throw error;
+      
+      // Count contacts per agent_id
+      const counts: Record<string, number> = {};
+      data?.forEach((contact) => {
+        counts[contact.agent_id] = (counts[contact.agent_id] || 0) + 1;
+      });
+      
+      return counts;
+    },
+  });
+
   // Fetch monthly runs
   const { data: runs = [], isLoading: runsLoading } = useQuery({
     queryKey: ['monthly-runs'],
@@ -96,6 +117,12 @@ export function useAdminNewsletter() {
       return data as MonthlyRun[];
     },
   });
+
+  // Merge contact counts with agents
+  const agentsWithCounts: AgentProfile[] = agents.map(agent => ({
+    ...agent,
+    contact_count: contactCounts[agent.user_id] || 0,
+  }));
 
   // Update newsletter settings mutation
   const updateSettingsMutation = useMutation({
@@ -172,7 +199,7 @@ export function useAdminNewsletter() {
   });
 
   return {
-    agents,
+    agents: agentsWithCounts,
     settings,
     runs,
     isLoading: agentsLoading || settingsLoading || runsLoading,

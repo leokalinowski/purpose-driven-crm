@@ -184,9 +184,15 @@ export default function AdminNewsletter() {
                   <Card key={agent.user_id}>
                     <CardHeader>
                       <div className="flex items-center justify-between">
-                        <div>
+                        <div className="space-y-1">
                           <CardTitle className="text-lg">{displayName}</CardTitle>
                           <CardDescription>{agent.email}</CardDescription>
+                          <div className="flex items-center gap-1.5">
+                            <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">
+                              {agent.contact_count || 0} {agent.contact_count === 1 ? 'contact' : 'contacts'}
+                            </span>
+                          </div>
                         </div>
                         <div className="flex items-center gap-4">
                           <AlertDialog>
