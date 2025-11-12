@@ -44,8 +44,15 @@ export function useAdminNewsletter() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('user_id, first_name, last_name, email')
-        .in('role', ['agent', 'admin']);
+        .select(`
+          user_id, 
+          first_name, 
+          last_name, 
+          email,
+          user_roles!inner(role)
+        `)
+        .in('user_roles.role', ['agent', 'admin'])
+        .order('first_name');
       
       if (error) throw error;
       return data as AgentProfile[];
