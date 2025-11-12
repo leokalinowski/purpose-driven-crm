@@ -389,6 +389,7 @@ const Database = () => {
             <Button
               onClick={() => setShowCSVUpload(true)}
               variant="outline"
+              disabled={isAdmin && !selectedCleanupAgent}
             >
               <Upload className="h-4 w-4 mr-2" />
               Upload CSV
@@ -508,6 +509,7 @@ const Database = () => {
           open={showCSVUpload}
           onOpenChange={setShowCSVUpload}
           onUpload={handleCSVUpload}
+          agentId={isAdmin ? selectedCleanupAgent : user?.id}
         />
         
         {/* Duplicate Cleanup Dialog */}

@@ -111,11 +111,16 @@ export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({
   useEffect(() => {
     if (open) {
       if (isAdmin && !roleLoading) {
-        // For admins, require explicit selection (don't default to own account)
-        setSelectedAgentId('');
-        // Fetch agents for dropdown
-        console.log('[CSV Upload] Fetching agents for dropdown...');
-        fetchAgents();
+        if (agentId) {
+          // Use agent from header selector (no need to fetch agents)
+          console.log('[CSV Upload] Using pre-selected agent from header:', agentId);
+          setSelectedAgentId(agentId);
+        } else {
+          // No header agent selected, show dropdown in modal
+          console.log('[CSV Upload] No header agent, fetching agents for dropdown...');
+          setSelectedAgentId('');
+          fetchAgents();
+        }
       } else if (!isAdmin && !roleLoading) {
         // For agents, always use their own ID
         setSelectedAgentId(user?.id || '');
@@ -123,7 +128,7 @@ export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({
     } else {
       resetState();
     }
-  }, [open, isAdmin, roleLoading, user?.id, resetState, fetchAgents]);
+  }, [open, isAdmin, roleLoading, user?.id, agentId, resetState, fetchAgents]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -567,8 +572,8 @@ export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({
               </div>
             )}
 
-            {/* Agent Selection (Admin only) */}
-            {isAdmin && !roleLoading && (
+            {/* Agent Selection (Admin only - only show if no header agent) */}
+            {isAdmin && !roleLoading && !agentId && (
               <div className="space-y-2">
                 <label className="text-sm font-medium">
                   Target Agent <span className="text-destructive">*</span>
@@ -593,6 +598,16 @@ export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({
                 )}
               </div>
             )}
+            
+            {/* Show confirmation when agent is pre-selected from header */}
+            {isAdmin && !roleLoading && agentId && (
+              <Alert>
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <AlertDescription>
+                  Contacts will be uploaded to: <strong>{agents.find(a => a.user_id === agentId)?.first_name} {agents.find(a => a.user_id === agentId)?.last_name || 'Selected Agent'}</strong>
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Action Buttons */}
             <div className="flex justify-end gap-2">
@@ -601,7 +616,7 @@ export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({
               </Button>
               <Button 
                 onClick={processContacts} 
-                disabled={loading || rawRows.length === 0 || !selectedAgentId}
+                disabled={loading || rawRows.length === 0 || !(selectedAgentId || agentId)}
                 className="flex items-center gap-2"
               >
                 {loading ? (
