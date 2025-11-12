@@ -38,24 +38,34 @@ export function useAdminNewsletter() {
   const queryClient = useQueryClient();
   const [isDryRun, setIsDryRun] = useState(true);
 
-  // Fetch all agents (including admin users for testing)
+  // Fetch all agents (including admin users for testing) using two-step fetch
   const { data: agents = [], isLoading: agentsLoading } = useQuery({
     queryKey: ['admin-agents'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Step 1: Fetch user_roles for agents and admins
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role')
+        .in('role', ['agent', 'admin']);
+      
+      if (rolesError) throw rolesError;
+
+      const userIds = Array.from(new Set((roles || []).map(r => r.user_id)));
+      
+      if (userIds.length === 0) {
+        return [];
+      }
+
+      // Step 2: Fetch profiles for those user_ids
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select(`
-          user_id, 
-          first_name, 
-          last_name, 
-          email,
-          user_roles!inner(role)
-        `)
-        .in('user_roles.role', ['agent', 'admin'])
+        .select('user_id, first_name, last_name, email')
+        .in('user_id', userIds)
         .order('first_name');
       
-      if (error) throw error;
-      return data as AgentProfile[];
+      if (profilesError) throw profilesError;
+
+      return profiles as AgentProfile[];
     },
   });
 
