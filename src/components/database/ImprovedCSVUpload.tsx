@@ -52,7 +52,7 @@ export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({
 }) => {
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
-  const { agents, loading: agentsLoading } = useAgents();
+  const { agents, loading: agentsLoading, fetchAgents } = useAgents();
   
   const [file, setFile] = useState<File | null>(null);
   const [rawRows, setRawRows] = useState<any[]>([]);
@@ -113,6 +113,9 @@ export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({
       if (isAdmin && !roleLoading) {
         // For admins, require explicit selection (don't default to own account)
         setSelectedAgentId('');
+        // Fetch agents for dropdown
+        console.log('[CSV Upload] Fetching agents for dropdown...');
+        fetchAgents();
       } else if (!isAdmin && !roleLoading) {
         // For agents, always use their own ID
         setSelectedAgentId(user?.id || '');
@@ -120,7 +123,7 @@ export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({
     } else {
       resetState();
     }
-  }, [open, isAdmin, roleLoading, user?.id, resetState]);
+  }, [open, isAdmin, roleLoading, user?.id, resetState, fetchAgents]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -570,9 +573,9 @@ export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({
                 <label className="text-sm font-medium">
                   Target Agent <span className="text-destructive">*</span>
                 </label>
-                <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+                <Select value={selectedAgentId} onValueChange={setSelectedAgentId} disabled={agentsLoading}>
                   <SelectTrigger className="border-2 border-primary/20">
-                    <SelectValue placeholder="Select agent (required)" />
+                    <SelectValue placeholder={agentsLoading ? "Loading agents..." : "Select agent (required)"} />
                   </SelectTrigger>
                   <SelectContent>
                     {agents.map((agent) => (
