@@ -111,8 +111,8 @@ export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({
   useEffect(() => {
     if (open) {
       if (isAdmin && !roleLoading) {
-        // For admins, default to their own account but allow selection
-        setSelectedAgentId(user?.id || '');
+        // For admins, require explicit selection (don't default to own account)
+        setSelectedAgentId('');
       } else if (!isAdmin && !roleLoading) {
         // For agents, always use their own ID
         setSelectedAgentId(user?.id || '');
@@ -567,19 +567,27 @@ export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({
             {/* Agent Selection (Admin only) */}
             {isAdmin && !roleLoading && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Target Agent</label>
+                <label className="text-sm font-medium">
+                  Target Agent <span className="text-destructive">*</span>
+                </label>
                 <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select agent" />
+                  <SelectTrigger className="border-2 border-primary/20">
+                    <SelectValue placeholder="Select agent (required)" />
                   </SelectTrigger>
                   <SelectContent>
                     {agents.map((agent) => (
                       <SelectItem key={agent.user_id} value={agent.user_id}>
-                        {agent.first_name} {agent.last_name}
+                        {agent.first_name} {agent.last_name} ({agent.email})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {selectedAgentId && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                    Ready to upload to {agents.find(a => a.user_id === selectedAgentId)?.first_name} {agents.find(a => a.user_id === selectedAgentId)?.last_name}
+                  </p>
+                )}
               </div>
             )}
 
