@@ -402,6 +402,10 @@ export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({
           notes: c.notes,
           dnc: c.dnc || false
         }));
+        
+        // Update progress to indicate DNC checking
+        setUploadProgress({ stage: 'uploading', progress: 50, message: 'Contacts uploaded, running DNC checks...' });
+        
         await onUpload(formattedContacts, targetAgentId);
       }
       
