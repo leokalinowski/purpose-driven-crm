@@ -150,13 +150,82 @@ serve(async (req) => {
 
     console.log(`Successfully inserted ${insertedContacts?.length || 0} contacts`);
 
-    // Note: DNC checks are now handled by monthly automation only
+    // Run DNC checks on newly imported contacts
+    let dncChecked = 0;
+    let dncFlagged = 0;
+    const dncErrors: string[] = [];
+    
+    if (insertedContacts && insertedContacts.length > 0) {
+      console.log('Starting DNC checks for imported contacts...');
+      const dncApiKey = Deno.env.get('DNC_API_KEY');
+      
+      if (dncApiKey) {
+        // Process in batches of 10 to avoid rate limits
+        const batchSize = 10;
+        for (let i = 0; i < insertedContacts.length; i += batchSize) {
+          const batch = insertedContacts.slice(i, i + batchSize);
+          
+          await Promise.all(batch.map(async (contact) => {
+            // Only check contacts with phone numbers
+            if (!contact.phone) return;
+            
+            try {
+              const phone = contact.phone.replace(/\D/g, '');
+              if (phone.length < 10) return;
+              
+              const dncApiUrl = `https://www.realvalidation.com/api/realvalidation.php?customer=${dncApiKey}&phone=${phone}`;
+              const dncResponse = await fetch(dncApiUrl);
+              
+              if (dncResponse.ok) {
+                const xmlResponse = await dncResponse.text();
+                const nationalDNC = xmlResponse.includes('<national_dnc>Y</national_dnc>');
+                const stateDNC = xmlResponse.includes('<state_dnc>Y</state_dnc>');
+                const dma = xmlResponse.includes('<dma>Y</dma>');
+                const litigator = xmlResponse.includes('<litigator>Y</litigator>');
+                const isDNC = nationalDNC || stateDNC || dma || litigator;
+                
+                // Update contact with DNC status
+                await supabaseServiceRole
+                  .from('contacts')
+                  .update({ 
+                    dnc: isDNC,
+                    dnc_last_checked: new Date().toISOString()
+                  })
+                  .eq('id', contact.id);
+                
+                dncChecked++;
+                if (isDNC) dncFlagged++;
+                
+                console.log(`DNC check for ${phone}: ${isDNC ? 'FLAGGED' : 'CLEAR'}`);
+              }
+            } catch (error) {
+              dncErrors.push(`${contact.phone}: ${error.message}`);
+              console.error(`DNC check failed for ${contact.phone}:`, error);
+            }
+          }));
+          
+          // Small delay between batches
+          if (i + batchSize < insertedContacts.length) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+        
+        console.log(`DNC checks complete: ${dncChecked} checked, ${dncFlagged} flagged`);
+      } else {
+        console.warn('DNC_API_KEY not configured, skipping DNC checks');
+      }
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
         message: `Successfully imported ${insertedContacts?.length || 0} contacts for agent ${targetAgent.first_name} ${targetAgent.last_name}`,
-        contactCount: insertedContacts?.length || 0
+        contactCount: insertedContacts?.length || 0,
+        dncStats: {
+          checked: dncChecked,
+          flagged: dncFlagged,
+          errors: dncErrors.length
+        }
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

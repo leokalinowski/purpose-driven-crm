@@ -35,7 +35,7 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.spheresync-generate-tasks]
-verify_jwt = true
+verify_jwt = false
 
 [functions.dnc-monthly-check]
 verify_jwt = true
@@ -57,3 +57,6 @@ verify_jwt = false
 
 [functions.social-posting]
 verify_jwt = true
+
+[functions.newsletter-monthly]
+verify_jwt = false

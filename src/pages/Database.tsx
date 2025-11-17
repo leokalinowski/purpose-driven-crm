@@ -256,9 +256,18 @@ const Database = () => {
         
         console.log('Edge function response:', data);
         
+        // Build success message with DNC stats
+        let description = data.message || `${data.contactCount ?? csvData.length} contacts uploaded successfully`;
+        if (data.dncStats && data.dncStats.checked > 0) {
+          description += ` | DNC Check: ${data.dncStats.checked} checked, ${data.dncStats.flagged} flagged`;
+          if (data.dncStats.errors > 0) {
+            description += ` (${data.dncStats.errors} errors)`;
+          }
+        }
+        
         toast({
           title: 'Success',
-          description: data.message || `${data.contactCount ?? csvData.length} contacts uploaded successfully`,
+          description,
         });
       } else {
         // Regular upload (agents or admins uploading to their own account)
