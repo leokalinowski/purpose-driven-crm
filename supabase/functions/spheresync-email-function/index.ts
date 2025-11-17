@@ -31,7 +31,7 @@ function formatLeadName(lead: any): string {
 /**
  * Send email using Resend
  */
-async function sendEmail({ to, subject, html, text }: { to: string; subject: string; html: string; text: string }): Promise<void> {
+async function sendEmail({ to, subject, html, text, bcc }: { to: string; subject: string; html: string; text: string; bcc?: string[] }): Promise<void> {
   const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
   const FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'onboarding@resend.dev';
   const FROM_NAME = Deno.env.get('RESEND_FROM_NAME') || 'SphereSync System';
@@ -46,16 +46,26 @@ async function sendEmail({ to, subject, html, text }: { to: string; subject: str
   }
 
   console.log(`Sending email via Resend: ${FROM_NAME} <${FROM_EMAIL}> -> ${to}`);
+  if (bcc && bcc.length > 0) {
+    console.log(`BCC recipients: ${bcc.join(', ')}`);
+  }
   
   const resend = new Resend(RESEND_API_KEY);
 
-  const { data, error } = await resend.emails.send({
+  const emailPayload: any = {
     from: `${FROM_NAME} <${FROM_EMAIL}>`,
     to: [to],
     subject: subject,
     html: html,
     text: text,
-  });
+  };
+
+  // Add BCC if provided
+  if (bcc && bcc.length > 0) {
+    emailPayload.bcc = bcc;
+  }
+
+  const { data, error } = await resend.emails.send(emailPayload);
 
   if (error) {
     console.error('Resend API error details:', {
@@ -249,12 +259,14 @@ const handler = async (req: Request): Promise<Response> => {
           </div>
         `;
 
-        // Send the email
+        // Send the email with admin BCC
+        const adminBCC = Deno.env.get('SPHERESYNC_ADMIN_BCC') || 'leonardo@realestateonpurpose.com';
         await sendEmail({
           to: agent.email,
           subject: `SphereSync Tasks - Week ${currentWeek} (${agentTasks.length} tasks assigned)`,
           html: htmlContent,
-          text: plainTextContent
+          text: plainTextContent,
+          bcc: [adminBCC]
         });
 
         console.log(`Email sent to ${agent.email} (${agentTasks.length} tasks)`);
