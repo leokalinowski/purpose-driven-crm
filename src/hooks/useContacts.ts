@@ -42,6 +42,13 @@ export const useContacts = (viewingAgentId?: string) => {
 
   const ITEMS_PER_PAGE = 25;
   
+  // Reset search and pagination when viewing agent changes
+  useEffect(() => {
+    setSearchTerm('');
+    setDebouncedSearchTerm('');
+    setCurrentPage(1);
+  }, [viewingAgentId]);
+  
   // Use viewingAgentId if provided (admin viewing another agent), otherwise use logged-in user
   const effectiveAgentId = viewingAgentId || user?.id;
   
