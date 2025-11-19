@@ -132,7 +132,7 @@ export const useContacts = (viewingAgentId?: string) => {
               const { data: matchedContacts, error: matchError } = await supabase
                 .from('contacts')
                 .select('*')
-                .eq('agent_id', user.id)
+                .eq('agent_id', effectiveAgentId)
                 .in('id', Array.from(allMatchingIds))
                 .order(sortBy, { ascending: sortOrder === 'asc' });
 
@@ -233,27 +233,27 @@ export const useContacts = (viewingAgentId?: string) => {
             const firstNameQuery = supabase
               .from('contacts')
               .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', user.id)
+              .eq('agent_id', effectiveAgentId)
               .ilike('first_name', `%${first}%`);
 
             // Query 2: contacts with second term in last_name
             const lastNameQuery = supabase
               .from('contacts')
               .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', user.id)
+              .eq('agent_id', effectiveAgentId)
               .ilike('last_name', `%${last}%`);
 
             // Also check reverse order
             const reverseFirstQuery = supabase
               .from('contacts')
               .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', user.id)
+              .eq('agent_id', effectiveAgentId)
               .ilike('first_name', `%${last}%`);
 
             const reverseLastQuery = supabase
               .from('contacts')
               .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', user.id)
+              .eq('agent_id', effectiveAgentId)
               .ilike('last_name', `%${first}%`);
 
             const [firstResults, lastResults, reverseFirstResults, reverseLastResults] = await Promise.all([
@@ -284,7 +284,7 @@ export const useContacts = (viewingAgentId?: string) => {
               const { data: matchedContacts, error: matchError } = await supabase
                 .from('contacts')
                 .select('*', { count: 'exact' })
-                .eq('agent_id', user.id)
+                .eq('agent_id', effectiveAgentId)
                 .in('id', Array.from(allMatchingIds))
                 .order(sortBy, { ascending: sortOrder === 'asc' })
                 .range((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE - 1);
@@ -321,7 +321,7 @@ export const useContacts = (viewingAgentId?: string) => {
             const query = supabase
               .from('contacts')
               .select('*', { count: 'exact' })
-              .eq('agent_id', user.id)
+              .eq('agent_id', effectiveAgentId)
               .or(orConditions.join(','))
               .order(sortBy, { ascending: sortOrder === 'asc' })
               .range((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE - 1);
@@ -340,7 +340,7 @@ export const useContacts = (viewingAgentId?: string) => {
         const query = supabase
           .from('contacts')
           .select('*', { count: 'exact' })
-          .eq('agent_id', user.id)
+          .eq('agent_id', effectiveAgentId)
           .order(sortBy, { ascending: sortOrder === 'asc' })
           .range((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE - 1);
 
@@ -391,7 +391,7 @@ export const useContacts = (viewingAgentId?: string) => {
       .from('contacts')
       .update(contactData)
       .eq('id', id)
-      .eq('agent_id', user.id)
+      .eq('agent_id', effectiveAgentId)
       .select()
       .single();
 
@@ -402,11 +402,11 @@ export const useContacts = (viewingAgentId?: string) => {
   const deleteContact = async (id: string) => {
     if (!user) throw new Error('User not authenticated');
 
-    const { error } = await supabase
-      .from('contacts')
-      .delete()
-      .eq('id', id)
-      .eq('agent_id', user.id);
+      const { error } = await supabase
+        .from('contacts')
+        .delete()
+        .eq('id', id)
+        .eq('agent_id', effectiveAgentId);
 
     if (error) throw error;
   };
@@ -427,7 +427,7 @@ export const useContacts = (viewingAgentId?: string) => {
       
       const contactsWithAgent = batch.map(contact => ({
         ...contact,
-        agent_id: user.id,
+        agent_id: effectiveAgentId,
         category: contact.last_name.charAt(0).toUpperCase() || 'A',
       }));
 
