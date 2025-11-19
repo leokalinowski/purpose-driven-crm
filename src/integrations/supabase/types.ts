@@ -250,8 +250,10 @@ export type Database = {
         Row: {
           agent_id: string
           agreements_signed: number | null
+          appointments_held: number | null
           appointments_set: number
           challenges: string | null
+          closing_amount: number | null
           closings: number | null
           coaching_notes: string | null
           conversations: number | null
@@ -273,8 +275,10 @@ export type Database = {
         Insert: {
           agent_id: string
           agreements_signed?: number | null
+          appointments_held?: number | null
           appointments_set?: number
           challenges?: string | null
+          closing_amount?: number | null
           closings?: number | null
           coaching_notes?: string | null
           conversations?: number | null
@@ -296,8 +300,10 @@ export type Database = {
         Update: {
           agent_id?: string
           agreements_signed?: number | null
+          appointments_held?: number | null
           appointments_set?: number
           challenges?: string | null
+          closing_amount?: number | null
           closings?: number | null
           coaching_notes?: string | null
           conversations?: number | null
