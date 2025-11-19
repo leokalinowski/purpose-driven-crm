@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -125,6 +125,16 @@ export const useDNCStats = (viewingAgentId?: string) => {
       setChecking(false);
     }
   }, [user, fetchDNCStats]);
+
+  // Auto-fetch stats when agent changes or on mount
+  useEffect(() => {
+    console.info('[useDNCStats] Agent changed, fetching stats:', {
+      userId: user?.id,
+      viewingAgentId,
+      effectiveAgentId
+    });
+    fetchDNCStats();
+  }, [effectiveAgentId, fetchDNCStats]);
 
   return {
     stats,
