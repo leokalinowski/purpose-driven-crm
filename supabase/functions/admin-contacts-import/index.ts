@@ -170,19 +170,34 @@ serve(async (req) => {
             if (!contact.phone) return;
             
             try {
-              const phone = contact.phone.replace(/\D/g, '');
-              if (phone.length < 10) return;
+              const phoneDigits = contact.phone.replace(/\D/g, '');
+              let normalizedPhone = phoneDigits;
               
-              const dncApiUrl = `https://www.realvalidation.com/api/realvalidation.php?customer=${dncApiKey}&phone=${phone}`;
+              // Normalize to 10 digits (remove country code if present)
+              if (phoneDigits.length === 11 && phoneDigits.startsWith('1')) {
+                normalizedPhone = phoneDigits.substring(1);
+              } else if (phoneDigits.length !== 10) {
+                console.log(`Skipping invalid phone: ${contact.phone} (${phoneDigits.length} digits)`);
+                return;
+              }
+              
+              // Use correct RealValidation API endpoint
+              const dncApiUrl = `https://api.realvalidation.com/rpvWebService/DNCLookup.php?phone=${normalizedPhone}&token=${dncApiKey}`;
+              console.log(`Checking DNC for contact ${contact.id}, phone: ${normalizedPhone}`);
+              
               const dncResponse = await fetch(dncApiUrl);
               
               if (dncResponse.ok) {
                 const xmlResponse = await dncResponse.text();
+                console.log(`DNC API Response for ${contact.id}: ${xmlResponse}`);
+                
                 const nationalDNC = xmlResponse.includes('<national_dnc>Y</national_dnc>');
                 const stateDNC = xmlResponse.includes('<state_dnc>Y</state_dnc>');
                 const dma = xmlResponse.includes('<dma>Y</dma>');
                 const litigator = xmlResponse.includes('<litigator>Y</litigator>');
                 const isDNC = nationalDNC || stateDNC || dma || litigator;
+                
+                console.log(`DNC Check Result for ${contact.id}: nationalDNC=${nationalDNC}, stateDNC=${stateDNC}, dma=${dma}, litigator=${litigator}, isDNC=${isDNC}`);
                 
                 // Update contact with DNC status
                 await supabaseServiceRole
@@ -196,7 +211,7 @@ serve(async (req) => {
                 dncChecked++;
                 if (isDNC) dncFlagged++;
                 
-                console.log(`DNC check for ${phone}: ${isDNC ? 'FLAGGED' : 'CLEAR'}`);
+                console.log(`DNC check for ${normalizedPhone}: ${isDNC ? 'FLAGGED' : 'CLEAR'}`);
               }
             } catch (error) {
               dncErrors.push(`${contact.phone}: ${error.message}`);
