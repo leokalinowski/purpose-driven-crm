@@ -107,6 +107,14 @@ export const useSubmitCoachingForm = () => {
     mutationFn: async (formData: CoachingFormData) => {
       if (!user) throw new Error('User not authenticated');
 
+      // Fetch total contacts count for auto-populating database_size
+      const { count: contactCount } = await supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', user.id);
+
+      const database_size = contactCount || 0;
+
       // Check if submission already exists for this week
       const { data: existingSubmission } = await supabase
         .from('coaching_submissions')
@@ -114,7 +122,7 @@ export const useSubmitCoachingForm = () => {
         .eq('agent_id', user.id)
         .eq('week_number', formData.week_number)
         .eq('year', formData.year)
-        .single();
+        .maybeSingle();
 
       if (existingSubmission) {
         // Update existing submission
@@ -122,19 +130,22 @@ export const useSubmitCoachingForm = () => {
           .from('coaching_submissions')
           .update({
             week: formData.week || null,
-            database_size: formData.database_size || 0,
+            database_size: database_size,
             dials_made: formData.dials_made || 0,
-            conversations: formData.conversations || 0,
+            conversations: 0,
             leads_contacted: formData.leads_contacted || 0,
             appointments_set: formData.appointments_set || 0,
+            appointments_held: formData.appointments_held || 0,
             agreements_signed: formData.agreements_signed || 0,
             offers_made_accepted: formData.offers_made_accepted || 0,
-            deals_closed: formData.deals_closed || 0,
+            deals_closed: 0,
             closings: formData.closings || 0,
+            closing_amount: formData.closing_amount || 0,
             challenges: formData.challenges || null,
             tasks: formData.tasks || null,
             coaching_notes: formData.coaching_notes || null,
             must_do_task: formData.must_do_task || null,
+            updated_at: new Date().toISOString(),
           })
           .eq('id', existingSubmission.id)
           .select()
@@ -156,16 +167,18 @@ export const useSubmitCoachingForm = () => {
             week_number: formData.week_number,
             year: formData.year,
             week: formData.week || null,
-            week_ending: weekEnd.toISOString().split('T')[0], // Temporary for type compatibility
-            database_size: formData.database_size || 0,
+            week_ending: weekEnd.toISOString().split('T')[0],
+            database_size: database_size,
             dials_made: formData.dials_made || 0,
-            conversations: formData.conversations || 0,
+            conversations: 0,
             leads_contacted: formData.leads_contacted || 0,
             appointments_set: formData.appointments_set || 0,
+            appointments_held: formData.appointments_held || 0,
             agreements_signed: formData.agreements_signed || 0,
             offers_made_accepted: formData.offers_made_accepted || 0,
-            deals_closed: formData.deals_closed || 0,
+            deals_closed: 0,
             closings: formData.closings || 0,
+            closing_amount: formData.closing_amount || 0,
             challenges: formData.challenges || null,
             tasks: formData.tasks || null,
             coaching_notes: formData.coaching_notes || null,
@@ -234,7 +247,7 @@ export const useTeamAverages = () => {
 
       const { data, error } = await supabase
         .from('coaching_submissions')
-        .select('database_size, dials_made, conversations, leads_contacted, appointments_set, agreements_signed, offers_made_accepted, deals_closed, closings')
+        .select('database_size, dials_made, conversations, leads_contacted, appointments_set, appointments_held, agreements_signed, offers_made_accepted, deals_closed, closings, closing_amount')
         .eq('week_number', currentWeekNumber)
         .eq('year', currentYear);
 
@@ -247,10 +260,12 @@ export const useTeamAverages = () => {
           avg_conversations: 0,
           avg_leads_contacted: 0,
           avg_appointments_set: 0,
+          avg_appointments_held: 0,
           avg_agreements_signed: 0,
           avg_offers_made_accepted: 0,
           avg_deals_closed: 0,
           avg_closings: 0,
+          avg_closing_amount: 0,
         };
       }
 
@@ -261,12 +276,14 @@ export const useTeamAverages = () => {
           conversations: acc.conversations + (submission.conversations || 0),
           leads_contacted: acc.leads_contacted + (submission.leads_contacted || 0),
           appointments_set: acc.appointments_set + (submission.appointments_set || 0),
+          appointments_held: acc.appointments_held + (submission.appointments_held || 0),
           agreements_signed: acc.agreements_signed + (submission.agreements_signed || 0),
           offers_made_accepted: acc.offers_made_accepted + (submission.offers_made_accepted || 0),
           deals_closed: acc.deals_closed + (submission.deals_closed || 0),
           closings: acc.closings + (submission.closings || 0),
+          closing_amount: acc.closing_amount + (submission.closing_amount || 0),
         }),
-        { database_size: 0, dials_made: 0, conversations: 0, leads_contacted: 0, appointments_set: 0, agreements_signed: 0, offers_made_accepted: 0, deals_closed: 0, closings: 0 }
+        { database_size: 0, dials_made: 0, conversations: 0, leads_contacted: 0, appointments_set: 0, appointments_held: 0, agreements_signed: 0, offers_made_accepted: 0, deals_closed: 0, closings: 0, closing_amount: 0 }
       );
 
       return {
@@ -275,10 +292,12 @@ export const useTeamAverages = () => {
         avg_conversations: Math.round(totals.conversations / data.length),
         avg_leads_contacted: Math.round(totals.leads_contacted / data.length),
         avg_appointments_set: Math.round(totals.appointments_set / data.length),
+        avg_appointments_held: Math.round(totals.appointments_held / data.length),
         avg_agreements_signed: Math.round(totals.agreements_signed / data.length),
         avg_offers_made_accepted: Math.round(totals.offers_made_accepted / data.length),
         avg_deals_closed: Math.round(totals.deals_closed / data.length),
         avg_closings: Math.round(totals.closings / data.length),
+        avg_closing_amount: Math.round(totals.closing_amount / data.length),
       } as TeamAverages;
     },
     enabled: !!user,
@@ -299,13 +318,13 @@ export const useAgentCurrentWeekMetrics = () => {
 
       const { data, error } = await supabase
         .from('coaching_submissions')
-        .select('database_size, dials_made, conversations, leads_contacted, appointments_set, agreements_signed, offers_made_accepted, deals_closed, closings')
+        .select('database_size, dials_made, conversations, leads_contacted, appointments_set, appointments_held, agreements_signed, offers_made_accepted, deals_closed, closings, closing_amount')
         .eq('agent_id', user.id)
         .eq('week_number', currentWeekNumber)
         .eq('year', currentYear)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "not found"
+      if (error) throw error;
       
       return data || {
         database_size: 0,
@@ -313,10 +332,12 @@ export const useAgentCurrentWeekMetrics = () => {
         conversations: 0,
         leads_contacted: 0,
         appointments_set: 0,
+        appointments_held: 0,
         agreements_signed: 0,
         offers_made_accepted: 0,
         deals_closed: 0,
         closings: 0,
+        closing_amount: 0,
       };
     },
     enabled: !!user,
