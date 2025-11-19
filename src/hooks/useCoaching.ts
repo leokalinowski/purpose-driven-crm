@@ -15,10 +15,12 @@ export interface CoachingSubmission {
   conversations: number;
   leads_contacted: number;
   appointments_set: number;
+  appointments_held: number;
   agreements_signed: number;
   offers_made_accepted: number;
   deals_closed: number;
   closings: number;
+  closing_amount: number;
   challenges?: string;
   tasks?: string;
   coaching_notes?: string;
@@ -31,15 +33,14 @@ export interface CoachingFormData {
   week_number: number;
   year: number;
   week?: string;
-  database_size: number;
   dials_made: number;
-  conversations: number;
   leads_contacted: number;
   appointments_set: number;
+  appointments_held: number;
   agreements_signed: number;
   offers_made_accepted: number;
-  deals_closed: number;
   closings: number;
+  closing_amount: number;
   challenges?: string;
   tasks?: string;
   coaching_notes?: string;
@@ -54,10 +55,12 @@ export interface WeeklyMetrics {
   conversations: number;
   leads_contacted: number;
   appointments_set: number;
+  appointments_held: number;
   agreements_signed: number;
   offers_made_accepted: number;
   deals_closed: number;
   closings: number;
+  closing_amount: number;
 }
 
 export interface TeamAverages {
@@ -66,10 +69,12 @@ export interface TeamAverages {
   avg_conversations: number;
   avg_leads_contacted: number;
   avg_appointments_set: number;
+  avg_appointments_held: number;
   avg_agreements_signed: number;
   avg_offers_made_accepted: number;
   avg_deals_closed: number;
   avg_closings: number;
+  avg_closing_amount: number;
 }
 
 export const useCoachingSubmissions = () => {
