@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Contact, ContactInput } from '@/hooks/useContacts';
+import { supabase } from '@/integrations/supabase/client';
 
 // Comprehensive input validation schema
 const contactSchema = z.object({
@@ -180,6 +181,15 @@ export const ContactForm: React.FC<ContactFormProps> = ({
       };
 
       await onSubmit(contactInput);
+      
+      // If contact has a phone number, trigger DNC check automatically in background
+      if (contactInput.phone && contact?.id) {
+        supabase.functions.invoke('dnc-single-check', {
+          body: { phone: contactInput.phone, contactId: contact.id }
+        }).catch(error => {
+          console.error('Background DNC check failed:', error);
+        });
+      }
       
       onOpenChange(false);
       reset();

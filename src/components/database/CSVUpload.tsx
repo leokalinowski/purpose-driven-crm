@@ -346,8 +346,46 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUplo
           agent_id: targetAgentId,
           category: contact.last_name.charAt(0).toUpperCase() || 'U',
         }));
-        const { error } = await supabase.from('contacts').insert(contactsForDb);
+        
+        const { data: insertedContacts, error } = await supabase
+          .from('contacts')
+          .insert(contactsForDb)
+          .select('id, phone');
+        
         if (error) throw error;
+        
+        // Perform DNC checking on inserted contacts with phone numbers
+        if (insertedContacts) {
+          const contactsWithPhone = insertedContacts.filter(c => c.phone);
+          
+          if (contactsWithPhone.length > 0) {
+            toast({
+              title: 'DNC Check Running',
+              description: `Checking ${contactsWithPhone.length} contacts against DNC list...`
+            });
+            
+            // Run DNC checks in background (don't block UI)
+            let dncChecked = 0;
+            let dncFlagged = 0;
+            
+            for (const contact of contactsWithPhone) {
+              try {
+                await supabase.functions.invoke('dnc-single-check', {
+                  body: { phone: contact.phone, contactId: contact.id }
+                });
+                dncChecked++;
+              } catch (error) {
+                console.error('DNC check failed:', error);
+              }
+            }
+            
+            // Show final results
+            toast({
+              title: 'DNC Check Complete',
+              description: `Checked ${dncChecked} contacts. View Database for flagged contacts.`
+            });
+          }
+        }
       }
       
       // Show success message with target info
