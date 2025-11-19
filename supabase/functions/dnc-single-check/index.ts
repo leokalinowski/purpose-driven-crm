@@ -95,19 +95,31 @@ serve(async (req) => {
 
     console.log(`Checking DNC status for contact ${contactId}, phone: ${phone} (normalized: ${normalizedPhone})`);
 
-    // Call the DNC API with normalized phone
-    const dncApiUrl = `https://www.realvalidation.com/api/realvalidation.php?customer=${dncApiKey}&phone=${normalizedPhone}`;
+    // Call the DNC API with normalized phone (corrected endpoint)
+    const dncApiUrl = `https://api.realvalidation.com/rpvWebService/DNCLookup.php?phone=${normalizedPhone}&token=${dncApiKey}`;
+    
+    console.log(`Calling DNC API: ${dncApiUrl.replace(dncApiKey, 'REDACTED')}`);
     
     const dncResponse = await fetch(dncApiUrl);
     if (!dncResponse.ok) {
+      console.error(`DNC API HTTP Error: ${dncResponse.status} - ${dncResponse.statusText}`);
       throw new Error(`DNC API request failed: ${dncResponse.status}`);
     }
 
     const xmlResponse = await dncResponse.text();
-    console.log(`DNC API Response: ${xmlResponse}`);
+    console.log(`DNC API Raw XML Response: ${xmlResponse}`);
 
     const result = parseXMLResponse(xmlResponse);
-    console.log(`DNC Check Result: nationalDNC=${result.nationalDNC}, stateDNC=${result.stateDNC}, dma=${result.dma}, litigator=${result.litigator}, isDNC=${result.isDNC}`);
+    console.log(`DNC Check Parsed Result:`, {
+      contactId,
+      phone: normalizedPhone,
+      nationalDNC: result.nationalDNC,
+      stateDNC: result.stateDNC,
+      dma: result.dma,
+      litigator: result.litigator,
+      isDNC: result.isDNC,
+      success: result.success
+    });
 
     if (!result.success) {
       throw new Error('DNC API returned error response');
