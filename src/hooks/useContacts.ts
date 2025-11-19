@@ -44,36 +44,46 @@ export const useContacts = (viewingAgentId?: string) => {
   
   // Use viewingAgentId if provided (admin viewing another agent), otherwise use logged-in user
   const effectiveAgentId = viewingAgentId || user?.id;
+  
+  // Check if viewing own contacts (to decide whether to use edge function)
+  const isViewingOwn = !viewingAgentId || viewingAgentId === user?.id;
 
   const fetchAllContacts = async (): Promise<Contact[]> => {
     if (!user || !effectiveAgentId) return [];
 
     try {
       if (debouncedSearchTerm) {
-        try {
-          // Try the advanced search edge function for all contacts too
-          const { data, error } = await supabase.functions.invoke('contact-search', {
-            body: {
-              searchTerm: debouncedSearchTerm,
-              agentId: effectiveAgentId,
-              page: 1,
-              limit: 1000, // Get all for dashboard
-              sortBy,
-              sortOrder
-            }
-          });
+        let edgeFunctionSucceeded = false;
+        
+        // Only use edge function when viewing own contacts
+        if (isViewingOwn) {
+          try {
+            // Try the advanced search edge function for all contacts too
+            const { data, error } = await supabase.functions.invoke('contact-search', {
+              body: {
+                searchTerm: debouncedSearchTerm,
+                agentId: effectiveAgentId,
+                page: 1,
+                limit: 1000, // Get all for dashboard
+                sortBy,
+                sortOrder
+              }
+            });
 
-          if (error) throw error;
+            if (error) throw error;
 
-          return (data?.data as Contact[]) || [];
-        } catch (edgeFunctionError) {
-          console.warn('Edge function search failed for all contacts, falling back to client-side search:', edgeFunctionError);
+            return (data?.data as Contact[]) || [];
+          } catch (edgeFunctionError) {
+            console.warn('Edge function search failed for all contacts, falling back to client-side search:', edgeFunctionError);
+          }
+        }
+        
+        // Client-side search (used when viewing other agents or edge function failed)
+        // Fallback to client-side search with improved logic
+        const trimmedTerm = debouncedSearchTerm.trim();
+        const searchTerms = trimmedTerm.split(/\s+/).filter(term => term.length > 0);
 
-          // Fallback to client-side search with improved logic
-          const trimmedTerm = debouncedSearchTerm.trim();
-          const searchTerms = trimmedTerm.split(/\s+/).filter(term => term.length > 0);
-
-          if (searchTerms.length === 2) {
+        if (searchTerms.length === 2) {
             // Special handling for two terms: use intersection of queries to achieve AND logic
             const [first, last] = searchTerms;
 
@@ -173,21 +183,20 @@ export const useContacts = (viewingAgentId?: string) => {
 
             return (data as Contact[]) || [];
           }
-        }
+        } else {
+        // Regular fetch without search
+        const query = supabase
+          .from('contacts')
+          .select('*')
+          .eq('agent_id', effectiveAgentId)
+          .order(sortBy, { ascending: sortOrder === 'asc' });
+
+        const { data, error } = await query;
+
+        if (error) throw error;
+
+        return (data as Contact[]) || [];
       }
-
-      // Regular fetch without search
-      const query = supabase
-        .from('contacts')
-        .select('*')
-        .eq('agent_id', effectiveAgentId)
-        .order(sortBy, { ascending: sortOrder === 'asc' });
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      return (data as Contact[]) || [];
     } catch (error) {
       console.error('Error fetching all contacts:', error);
       return [];
@@ -197,29 +206,49 @@ export const useContacts = (viewingAgentId?: string) => {
   const fetchContacts = useCallback(async () => {
     if (!user || !effectiveAgentId) return;
 
+    console.log('[useContacts] fetchContacts', {
+      userId: user?.id,
+      viewingAgentId,
+      effectiveAgentId,
+      debouncedSearchTerm,
+      currentPage,
+      isViewingOwn
+    });
+
     setLoading(true);
     try {
       if (debouncedSearchTerm) {
-        try {
-          // Try the advanced search edge function
-          const { data, error } = await supabase.functions.invoke('contact-search', {
-            body: {
-              searchTerm: debouncedSearchTerm,
-              agentId: effectiveAgentId,
-              page: currentPage,
-              limit: ITEMS_PER_PAGE,
-              sortBy,
-              sortOrder
-            }
-          });
+        let edgeFunctionSucceeded = false;
+        
+        // Only use edge function when viewing own contacts
+        if (isViewingOwn) {
+          try {
+            // Try the advanced search edge function
+            const { data, error } = await supabase.functions.invoke('contact-search', {
+              body: {
+                searchTerm: debouncedSearchTerm,
+                agentId: effectiveAgentId,
+                page: currentPage,
+                limit: ITEMS_PER_PAGE,
+                sortBy,
+                sortOrder
+              }
+            });
 
-          if (error) throw error;
+            if (error) throw error;
 
-          setContacts((data?.data as Contact[]) || []);
-          setTotalContacts(data?.count || 0);
-          setTotalPages(data?.totalPages || 1);
-        } catch (edgeFunctionError) {
-          console.warn('Edge function search failed, falling back to client-side search:', edgeFunctionError);
+            console.log('[useContacts] edge function returned contacts:', data?.data?.length);
+            setContacts((data?.data as Contact[]) || []);
+            setTotalContacts(data?.count || 0);
+            setTotalPages(data?.totalPages || 1);
+            edgeFunctionSucceeded = true;
+          } catch (edgeFunctionError) {
+            console.warn('Edge function search failed, falling back to client-side search:', edgeFunctionError);
+          }
+        }
+        
+        // Client-side search (used when viewing other agents or edge function fails)
+        if (!isViewingOwn || !edgeFunctionSucceeded) {
 
           // Fallback to client-side search with improved logic
           const trimmedTerm = debouncedSearchTerm.trim();
