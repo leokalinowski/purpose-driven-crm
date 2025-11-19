@@ -36,15 +36,14 @@ import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
 const formSchema = z.object({
   week_number: z.number().min(1, "Week must be between 1 and 52").max(52, "Week must be between 1 and 52"),
   year: z.number().min(2020, "Year must be valid"),
-  database_size: z.number().min(0, "Must be 0 or greater"),
   dials_made: z.number().min(0, "Must be 0 or greater"),
-  conversations: z.number().min(0, "Must be 0 or greater"),
   leads_contacted: z.number().min(0, "Must be 0 or greater"),
   appointments_set: z.number().min(0, "Must be 0 or greater"),
+  appointments_held: z.number().min(0, "Must be 0 or greater"),
   agreements_signed: z.number().min(0, "Must be 0 or greater"),
   offers_made_accepted: z.number().min(0, "Must be 0 or greater"),
-  deals_closed: z.number().min(0, "Must be 0 or greater"),
   closings: z.number().min(0, "Must be 0 or greater"),
+  closing_amount: z.number().min(0, "Must be 0 or greater"),
   challenges: z.string().optional(),
   tasks: z.string().optional(),
   coaching_notes: z.string().optional(),
@@ -68,15 +67,14 @@ const WeeklySuccessScoreboard = () => {
     defaultValues: {
       week_number: currentWeekNumber,
       year: currentYear,
-      database_size: 0,
       dials_made: 0,
-      conversations: 0,
       leads_contacted: 0,
       appointments_set: 0,
+      appointments_held: 0,
       agreements_signed: 0,
       offers_made_accepted: 0,
-      deals_closed: 0,
       closings: 0,
+      closing_amount: 0,
       challenges: "",
       tasks: "",
       coaching_notes: "",
@@ -93,33 +91,22 @@ const WeeklySuccessScoreboard = () => {
   // Prepare enhanced chart data for personal metrics
   const personalChartData = personalMetrics?.map(metric => ({
     week: `Week ${metric.week_number}`,
-    'Database Size': metric.database_size || 0,
-    'Dials Made': metric.dials_made || 0,
-    'Conversations': metric.conversations || 0,
+    'Attempts Made': metric.dials_made || 0,
     'Leads Contacted': metric.leads_contacted || 0,
     'Appointments Set': metric.appointments_set || 0,
+    'Appointments Held': metric.appointments_held || 0,
     'Agreements Signed': metric.agreements_signed || 0,
-    'Offers Made/Accepted': metric.offers_made_accepted || 0,
-    'Deals Closed': metric.deals_closed || 0,
-    'Closings': metric.closings || 0,
+    'Offers Made': metric.offers_made_accepted || 0,
+    '# of Closings': metric.closings || 0,
+    '$ Closed': metric.closing_amount || 0,
   })) || [];
 
   // Prepare chart data for team comparison (admin only)
   const comparisonChartData = isAdmin && teamAverages && agentCurrentMetrics ? [
     {
-      metric: 'Database Size',
-      'Your Performance': agentCurrentMetrics.database_size || 0,
-      'Team Average': teamAverages.avg_database_size || 0,
-    },
-    {
-      metric: 'Dials Made',
+      metric: 'Attempts Made',
       'Your Performance': agentCurrentMetrics.dials_made || 0,
       'Team Average': teamAverages.avg_dials_made || 0,
-    },
-    {
-      metric: 'Conversations',
-      'Your Performance': agentCurrentMetrics.conversations || 0,
-      'Team Average': teamAverages.avg_conversations || 0,
     },
     {
       metric: 'Leads Contacted',
@@ -132,63 +119,64 @@ const WeeklySuccessScoreboard = () => {
       'Team Average': teamAverages.avg_appointments_set || 0,
     },
     {
+      metric: 'Appointments Held',
+      'Your Performance': agentCurrentMetrics.appointments_held || 0,
+      'Team Average': teamAverages.avg_appointments_held || 0,
+    },
+    {
       metric: 'Agreements Signed',
       'Your Performance': agentCurrentMetrics.agreements_signed || 0,
       'Team Average': teamAverages.avg_agreements_signed || 0,
     },
     {
-      metric: 'Offers Made/Accepted',
+      metric: 'Offers Made',
       'Your Performance': agentCurrentMetrics.offers_made_accepted || 0,
       'Team Average': teamAverages.avg_offers_made_accepted || 0,
     },
     {
-      metric: 'Deals Closed',
-      'Your Performance': agentCurrentMetrics.deals_closed || 0,
-      'Team Average': teamAverages.avg_deals_closed || 0,
-    },
-    {
-      metric: 'Closings',
+      metric: '# of Closings',
       'Your Performance': agentCurrentMetrics.closings || 0,
       'Team Average': teamAverages.avg_closings || 0,
+    },
+    {
+      metric: '$ Closed',
+      'Your Performance': agentCurrentMetrics.closing_amount || 0,
+      'Team Average': teamAverages.avg_closing_amount || 0,
     },
   ] : [];
 
   const chartConfig = {
-    "Database Size": {
-      label: "Database Size",
+    "Attempts Made": {
+      label: "Attempts Made",
       color: "hsl(var(--chart-1))",
-    },
-    "Dials Made": {
-      label: "Dials Made",
-      color: "hsl(var(--chart-2))",
-    },
-    "Conversations": {
-      label: "Conversations",
-      color: "hsl(var(--chart-3))",
     },
     "Leads Contacted": {
       label: "Leads Contacted",
-      color: "hsl(var(--chart-4))",
+      color: "hsl(var(--chart-2))",
     },
     "Appointments Set": {
       label: "Appointments Set", 
-      color: "hsl(var(--chart-5))",
+      color: "hsl(var(--chart-3))",
+    },
+    "Appointments Held": {
+      label: "Appointments Held",
+      color: "hsl(var(--chart-4))",
     },
     "Agreements Signed": {
       label: "Agreements Signed",
+      color: "hsl(var(--chart-5))",
+    },
+    "Offers Made": {
+      label: "Offers Made",
       color: "hsl(var(--chart-1))",
     },
-    "Offers Made/Accepted": {
-      label: "Offers Made/Accepted",
+    "# of Closings": {
+      label: "# of Closings",
       color: "hsl(var(--chart-2))",
     },
-    "Deals Closed": {
-      label: "Deals Closed",
+    "$ Closed": {
+      label: "$ Closed",
       color: "hsl(var(--chart-3))",
-    },
-    "Closings": {
-      label: "Closings",
-      color: "hsl(var(--chart-4))",
     },
     "Your Performance": {
       label: "Your Performance",
@@ -205,25 +193,25 @@ const WeeklySuccessScoreboard = () => {
   const ytdTotals = currentYearMetrics.reduce(
     (acc, metric) => ({
       database_size: Math.max(acc.database_size, metric.database_size || 0),
-      dials_made: acc.dials_made + (metric.dials_made || 0),
-      conversations: acc.conversations + (metric.conversations || 0),
+      attempts_made: acc.attempts_made + (metric.dials_made || 0),
       leads_contacted: acc.leads_contacted + (metric.leads_contacted || 0),
       appointments_set: acc.appointments_set + (metric.appointments_set || 0),
+      appointments_held: acc.appointments_held + (metric.appointments_held || 0),
       agreements_signed: acc.agreements_signed + (metric.agreements_signed || 0),
-      offers_made_accepted: acc.offers_made_accepted + (metric.offers_made_accepted || 0),
-      deals_closed: acc.deals_closed + (metric.deals_closed || 0),
+      offers_made: acc.offers_made + (metric.offers_made_accepted || 0),
       closings: acc.closings + (metric.closings || 0),
+      closing_amount: acc.closing_amount + (metric.closing_amount || 0),
     }),
     {
       database_size: 0,
-      dials_made: 0,
-      conversations: 0,
+      attempts_made: 0,
       leads_contacted: 0,
       appointments_set: 0,
+      appointments_held: 0,
       agreements_signed: 0,
-      offers_made_accepted: 0,
-      deals_closed: 0,
+      offers_made: 0,
       closings: 0,
+      closing_amount: 0,
     }
   );
 
@@ -303,31 +291,13 @@ const WeeklySuccessScoreboard = () => {
 
                     <div className="space-y-4">
                       <h3 className="text-lg font-semibold">Activity Metrics</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="database_size"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Database Size</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  {...field} 
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           control={form.control}
                           name="dials_made"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Dials Made</FormLabel>
+                              <FormLabel>Attempts Made</FormLabel>
                               <FormControl>
                                 <Input 
                                   type="number" 
@@ -342,10 +312,10 @@ const WeeklySuccessScoreboard = () => {
                         
                         <FormField
                           control={form.control}
-                          name="conversations"
+                          name="leads_contacted"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Real Estate Conversations</FormLabel>
+                              <FormLabel>Leads Contacted</FormLabel>
                               <FormControl>
                                 <Input 
                                   type="number" 
@@ -365,10 +335,10 @@ const WeeklySuccessScoreboard = () => {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                           control={form.control}
-                          name="leads_contacted"
+                          name="appointments_set"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Leads Contacted</FormLabel>
+                              <FormLabel>Appointments Set</FormLabel>
                               <FormControl>
                                 <Input 
                                   type="number" 
@@ -383,10 +353,10 @@ const WeeklySuccessScoreboard = () => {
                         
                         <FormField
                           control={form.control}
-                          name="appointments_set"
+                          name="appointments_held"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Appointments Set</FormLabel>
+                              <FormLabel>Appointments Held</FormLabel>
                               <FormControl>
                                 <Input 
                                   type="number" 
@@ -427,25 +397,7 @@ const WeeklySuccessScoreboard = () => {
                           name="offers_made_accepted"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Offers Made/Accepted</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  {...field} 
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="deals_closed"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Deals Closed</FormLabel>
+                              <FormLabel>Offers Made</FormLabel>
                               <FormControl>
                                 <Input 
                                   type="number" 
@@ -463,12 +415,31 @@ const WeeklySuccessScoreboard = () => {
                           name="closings"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Closings</FormLabel>
+                              <FormLabel># of Closings</FormLabel>
                               <FormControl>
                                 <Input 
                                   type="number" 
                                   {...field} 
                                   onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="closing_amount"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>$ Closed (Amount)</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  step="0.01"
+                                  {...field} 
+                                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -566,7 +537,7 @@ const WeeklySuccessScoreboard = () => {
 
           <TabsContent value="dashboard" className="space-y-6">
             {/* YTD Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Database Size</CardTitle>
@@ -578,28 +549,46 @@ const WeeklySuccessScoreboard = () => {
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Dials YTD</CardTitle>
+                  <CardTitle className="text-sm">Attempts YTD</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{ytdTotals.dials_made}</div>
+                  <div className="text-2xl font-bold">{ytdTotals.attempts_made}</div>
                   <p className="text-xs text-muted-foreground">Year to date</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Conversations YTD</CardTitle>
+                  <CardTitle className="text-sm">Leads Contacted YTD</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{ytdTotals.conversations}</div>
+                  <div className="text-2xl font-bold">{ytdTotals.leads_contacted}</div>
                   <p className="text-xs text-muted-foreground">Year to date</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Appointments YTD</CardTitle>
+                  <CardTitle className="text-sm">Appointments Held YTD</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{ytdTotals.appointments_set}</div>
+                  <div className="text-2xl font-bold">{ytdTotals.appointments_held}</div>
+                  <p className="text-xs text-muted-foreground">Year to date</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Agreements YTD</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{ytdTotals.agreements_signed}</div>
+                  <p className="text-xs text-muted-foreground">Year to date</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Offers Made YTD</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{ytdTotals.offers_made}</div>
                   <p className="text-xs text-muted-foreground">Year to date</p>
                 </CardContent>
               </Card>
@@ -609,6 +598,15 @@ const WeeklySuccessScoreboard = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{ytdTotals.closings}</div>
+                  <p className="text-xs text-muted-foreground">Year to date</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">$ Closed YTD</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">${ytdTotals.closing_amount.toLocaleString()}</div>
                   <p className="text-xs text-muted-foreground">Year to date</p>
                 </CardContent>
               </Card>
@@ -639,13 +637,13 @@ const WeeklySuccessScoreboard = () => {
                           <Legend />
                           <Line 
                             type="monotone" 
-                            dataKey="Dials Made" 
+                            dataKey="Attempts Made" 
                             stroke="hsl(var(--chart-1))" 
                             strokeWidth={2}
                           />
                           <Line 
                             type="monotone" 
-                            dataKey="Conversations" 
+                            dataKey="Leads Contacted" 
                             stroke="hsl(var(--chart-2))" 
                             strokeWidth={2}
                           />
@@ -657,8 +655,14 @@ const WeeklySuccessScoreboard = () => {
                           />
                           <Line 
                             type="monotone" 
-                            dataKey="Deals Closed" 
+                            dataKey="Appointments Held" 
                             stroke="hsl(var(--chart-4))" 
+                            strokeWidth={2}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="Agreements Signed" 
+                            stroke="hsl(var(--chart-5))" 
                             strokeWidth={2}
                           />
                         </LineChart>
