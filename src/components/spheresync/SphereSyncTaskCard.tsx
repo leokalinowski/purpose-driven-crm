@@ -4,30 +4,22 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Phone, MessageSquare, User } from 'lucide-react';
+import { Phone, MessageSquare, Pencil } from 'lucide-react';
 import { SphereSyncTask } from '@/hooks/useSphereSyncTasks';
-import { useConfetti } from '@/hooks/useConfetti';
 
 interface SphereSyncTaskCardProps {
   task: SphereSyncTask;
   onUpdate: (taskId: string, updates: Partial<SphereSyncTask>) => void;
+  onEditContact: () => void;
 }
 
-export function SphereSyncTaskCard({ task, onUpdate }: SphereSyncTaskCardProps) {
+export function SphereSyncTaskCard({ task, onUpdate, onEditContact }: SphereSyncTaskCardProps) {
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState(task.notes || '');
-  const { triggerConfetti } = useConfetti();
 
   const handleCompletionChange = (completed: boolean | string) => {
-    // Ensure we always have a boolean value
     const isCompleted = completed === true || completed === "true";
     console.log('Checkbox clicked:', { taskId: task.id, completed: isCompleted, currentStatus: task.completed, originalValue: completed });
-    
-    // Trigger confetti if task is being completed (not uncompleted)
-    if (isCompleted && !task.completed) {
-      triggerConfetti();
-    }
-    
     onUpdate(task.id, { completed: isCompleted });
   };
 
@@ -57,6 +49,15 @@ export function SphereSyncTaskCard({ task, onUpdate }: SphereSyncTaskCardProps) 
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onEditContact}
+              className="h-8 w-8 p-0"
+              title="Edit Contact"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
             <Badge variant="secondary" className="text-xs">
               Category: {task.lead.category}
             </Badge>
@@ -78,7 +79,16 @@ export function SphereSyncTaskCard({ task, onUpdate }: SphereSyncTaskCardProps) 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Phone className="h-3 w-3" />
-            <span>{task.lead.phone || 'No phone number'}</span>
+            {task.lead.phone ? (
+              <a 
+                href={`tel:${task.lead.phone}`}
+                className="hover:text-primary hover:underline transition-colors"
+              >
+                {task.lead.phone}
+              </a>
+            ) : (
+              <span>No phone number</span>
+            )}
           </div>
           <Button
             variant="outline"

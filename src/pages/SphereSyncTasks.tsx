@@ -5,12 +5,15 @@ import { Progress } from '@/components/ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { SphereSyncTaskCard } from '@/components/spheresync/SphereSyncTaskCard';
 import { UpcomingTasksPreview } from '@/components/spheresync/UpcomingTasksPreview';
-import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
+import { ContactForm } from '@/components/database/ContactForm';
+import { useSphereSyncTasks, SphereSyncTask } from '@/hooks/useSphereSyncTasks';
+import { useContacts } from '@/hooks/useContacts';
 import { useConfetti } from '@/hooks/useConfetti';
 import { useAuth } from '@/hooks/useAuth';
 import { Layout } from '@/components/layout/Layout';
 import { Phone, MessageSquare, Calendar, BarChart3 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 export default function SphereSyncTasks() {
   const { user } = useAuth();
@@ -22,8 +25,13 @@ export default function SphereSyncTasks() {
     loading,
     currentWeek,
     historicalStats,
-    updateTask
+    updateTask,
+    refreshTasks
   } = useSphereSyncTasks();
+  
+  const { updateContact } = useContacts();
+  const [editingContact, setEditingContact] = useState<any | null>(null);
+  const [contactFormOpen, setContactFormOpen] = useState(false);
 
   const previousCompletionRate = useRef<number>(0);
   const hasTriggeredConfetti = useRef<boolean>(false);
@@ -31,6 +39,42 @@ export default function SphereSyncTasks() {
   const totalTasks = callTasks.length + textTasks.length;
   const completedTasks = [...callTasks, ...textTasks].filter(task => task.completed).length;
   const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+
+  const handleEditContact = (task: SphereSyncTask) => {
+    const contactForEdit = {
+      id: task.lead_id,
+      first_name: task.lead.first_name,
+      last_name: task.lead.last_name,
+      phone: task.lead.phone,
+      email: '',
+      category: task.lead.category,
+      dnc: task.lead.dnc,
+      address_1: '',
+      address_2: '',
+      city: '',
+      state: '',
+      zip_code: '',
+      notes: '',
+      tags: [],
+      agent_id: user?.id
+    };
+    
+    setEditingContact(contactForEdit);
+    setContactFormOpen(true);
+  };
+
+  const handleContactUpdate = async (contactData: any) => {
+    try {
+      await updateContact(editingContact.id, contactData);
+      toast.success('Contact updated successfully');
+      setContactFormOpen(false);
+      setEditingContact(null);
+      await refreshTasks();
+    } catch (error) {
+      console.error('Error updating contact:', error);
+      toast.error('Failed to update contact');
+    }
+  };
 
   // Trigger confetti when completion reaches 100%
   useEffect(() => {
@@ -190,6 +234,7 @@ export default function SphereSyncTasks() {
                   key={task.id}
                   task={task}
                   onUpdate={updateTask}
+                  onEditContact={() => handleEditContact(task)}
                 />
               ))}
             </div>
@@ -216,6 +261,7 @@ export default function SphereSyncTasks() {
                   key={task.id}
                   task={task}
                   onUpdate={updateTask}
+                  onEditContact={() => handleEditContact(task)}
                 />
               ))}
             </div>
@@ -265,6 +311,14 @@ export default function SphereSyncTasks() {
         </Card>
       )}
       </div>
+      
+      <ContactForm
+        open={contactFormOpen}
+        onOpenChange={setContactFormOpen}
+        contact={editingContact}
+        onSubmit={handleContactUpdate}
+        title="Edit Contact"
+      />
     </Layout>
   );
 }
