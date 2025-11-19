@@ -48,11 +48,24 @@ serve(async (req) => {
     
     console.log(`Checking for submissions for week ${currentWeek}, year ${currentYear}`);
 
-    // Get all agents (users with 'agent' role)
+    // Get all agents and admins from user_roles table
+    const { data: userRoles, error: rolesError } = await supabase
+      .from('user_roles')
+      .select('user_id, role')
+      .in('role', ['agent', 'admin']);
+
+    if (rolesError) {
+      console.error("Error fetching user roles:", rolesError);
+      throw rolesError;
+    }
+
+    const userIds = userRoles?.map(r => r.user_id) || [];
+
+    // Get profiles for these users
     const { data: agents, error: agentsError } = await supabase
       .from('profiles')
       .select('user_id, first_name, last_name, email')
-      .eq('role', 'agent');
+      .in('user_id', userIds);
 
     if (agentsError) {
       console.error("Error fetching agents:", agentsError);
@@ -105,7 +118,7 @@ serve(async (req) => {
       try {
         const emailHtml = `
           <div style="font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333;">
-            <h2 style="color: #2563eb; margin-bottom: 24px;">Weekly Performance Submission Reminder</h2>
+            <h2 style="color: #2563eb; margin-bottom: 24px;">Weekly Success Scoreboard Reminder</h2>
             
             <p>Hi ${agent.first_name || 'there'},</p>
             
@@ -114,11 +127,9 @@ serve(async (req) => {
             <div style="background-color: #f8fafc; border-left: 4px solid #2563eb; padding: 16px; margin: 20px 0;">
               <p style="margin: 0; font-weight: 600;">What to submit in your scorecard:</p>
               <ul style="margin: 8px 0 0 16px;">
-                <li>Database size and dials made</li>
-                <li>Real estate conversations</li>
-                <li>Leads contacted and appointments set</li>
-                <li>Agreements signed and offers made/accepted</li>
-                <li>Deals closed and closings</li>
+                <li>Attempts Made and Leads Contacted</li>
+                <li>Appointments Set, Appointments Held, and Agreements Signed</li>
+                <li>Offers Made, # of Closings, and $ Closed (Amount)</li>
                 <li>Challenges and coaching notes</li>
                 <li>Your ONE must-do task for next week</li>
               </ul>
@@ -127,7 +138,7 @@ serve(async (req) => {
             <p>Please log in to the coaching system and submit your weekly data at your earliest convenience.</p>
             
             <div style="margin: 24px 0;">
-              <a href="https://cguoaokqwgqvzkqqezcq.supabase.co/coaching" 
+              <a href="https://hub.realestateonpurpose.com/coaching" 
                  style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
                 Submit Weekly Data
               </a>
