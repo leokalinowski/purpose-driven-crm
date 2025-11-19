@@ -96,6 +96,12 @@ const Database = () => {
     }
   }, [isAdmin, fetchAgents]);
 
+  // Reset search and pagination when switching agents
+  useEffect(() => {
+    handleSearch('');
+    goToPage(1);
+  }, [selectedViewingAgent, handleSearch, goToPage]);
+
 
   const handleAddContact = async (contactData: ContactInput) => {
     try {
