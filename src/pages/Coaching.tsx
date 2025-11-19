@@ -218,11 +218,13 @@ const WeeklySuccessScoreboard = () => {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground">Weekly Success Scoreboard</h1>
-          <p className="text-muted-foreground mt-2">
-            Track your performance and prepare for Thursday coaching sessions
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Weekly Success Scoreboard</h1>
+            <p className="text-muted-foreground text-sm sm:text-base">
+              Track your performance and prepare for Thursday coaching sessions
+            </p>
+          </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
