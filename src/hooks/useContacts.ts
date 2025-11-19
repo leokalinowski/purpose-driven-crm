@@ -25,7 +25,17 @@ export interface Contact {
   updated_at: string;
 }
 
-export type ContactInput = Omit<Contact, 'id' | 'agent_id' | 'category' | 'created_at' | 'updated_at' | 'dnc_last_checked' | 'last_activity_date' | 'activity_count'>;
+export type ContactInput = Omit<
+  Contact,
+  | 'id'
+  | 'agent_id'
+  | 'category'
+  | 'created_at'
+  | 'updated_at'
+  | 'dnc_last_checked'
+  | 'last_activity_date'
+  | 'activity_count'
+>;
 
 export const useContacts = (viewingAgentId?: string) => {
   const { user } = useAuth();
@@ -41,374 +51,133 @@ export const useContacts = (viewingAgentId?: string) => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const ITEMS_PER_PAGE = 25;
-  
+
   // Reset search and pagination when viewing agent changes
   useEffect(() => {
     setSearchTerm('');
     setDebouncedSearchTerm('');
     setCurrentPage(1);
   }, [viewingAgentId]);
-  
+
   // Use viewingAgentId if provided (admin viewing another agent), otherwise use logged-in user
   const effectiveAgentId = viewingAgentId || user?.id;
-  
-  // Check if viewing own contacts (to decide whether to use edge function)
-  const isViewingOwn = !viewingAgentId || viewingAgentId === user?.id;
 
-  const fetchAllContacts = async (): Promise<Contact[]> => {
+  const fetchAllContacts = useCallback(async (): Promise<Contact[]> => {
     if (!user || !effectiveAgentId) return [];
 
     try {
-      if (debouncedSearchTerm) {
-        let edgeFunctionSucceeded = false;
-        
-        // Only use edge function when viewing own contacts
-        if (isViewingOwn) {
-          try {
-            // Try the advanced search edge function for all contacts too
-            const { data, error } = await supabase.functions.invoke('contact-search', {
-              body: {
-                searchTerm: debouncedSearchTerm,
-                agentId: effectiveAgentId,
-                page: 1,
-                limit: 1000, // Get all for dashboard
-                sortBy,
-                sortOrder
-              }
-            });
+      let query = supabase
+        .from('contacts')
+        .select('*')
+        .eq('agent_id', effectiveAgentId)
+        .order(sortBy, { ascending: sortOrder === 'asc' })
+        .limit(5000); // safety cap
 
-            if (error) throw error;
-
-            return (data?.data as Contact[]) || [];
-          } catch (edgeFunctionError) {
-            console.warn('Edge function search failed for all contacts, falling back to client-side search:', edgeFunctionError);
-          }
-        }
-        
-        // Client-side search (used when viewing other agents or edge function failed)
-        // Fallback to client-side search with improved logic
-        const trimmedTerm = debouncedSearchTerm.trim();
-        const searchTerms = trimmedTerm.split(/\s+/).filter(term => term.length > 0);
-
-        if (searchTerms.length === 2) {
-            // Special handling for two terms: use intersection of queries to achieve AND logic
-            const [first, last] = searchTerms;
-
-            // Query 1: contacts with first term in first_name
-            const firstNameQuery = supabase
-              .from('contacts')
-              .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', effectiveAgentId)
-              .ilike('first_name', `%${first}%`);
-
-            // Query 2: contacts with second term in last_name
-            const lastNameQuery = supabase
-              .from('contacts')
-              .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', effectiveAgentId)
-              .ilike('last_name', `%${last}%`);
-
-            // Also check reverse order
-            const reverseFirstQuery = supabase
-              .from('contacts')
-              .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', effectiveAgentId)
-              .ilike('first_name', `%${last}%`);
-
-            const reverseLastQuery = supabase
-              .from('contacts')
-              .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', effectiveAgentId)
-              .ilike('last_name', `%${first}%`);
-
-            const [firstResults, lastResults, reverseFirstResults, reverseLastResults] = await Promise.all([
-              firstNameQuery,
-              lastNameQuery,
-              reverseFirstQuery,
-              reverseLastQuery
-            ]);
-
-            if (firstResults.error || lastResults.error || reverseFirstResults.error || reverseLastResults.error) {
-              throw firstResults.error || lastResults.error || reverseFirstResults.error || reverseLastResults.error;
-            }
-
-            // Find intersection: contacts that appear in both queries
-            const firstNameIds = new Set(firstResults.data?.map(c => c.id) || []);
-            const lastNameIds = new Set(lastResults.data?.map(c => c.id) || []);
-            const intersectionIds = new Set([...firstNameIds].filter(id => lastNameIds.has(id)));
-
-            const reverseFirstIds = new Set(reverseFirstResults.data?.map(c => c.id) || []);
-            const reverseLastIds = new Set(reverseLastResults.data?.map(c => c.id) || []);
-            const reverseIntersectionIds = new Set([...reverseFirstIds].filter(id => reverseLastIds.has(id)));
-
-            // Combine both orderings
-            const allMatchingIds = new Set([...intersectionIds, ...reverseIntersectionIds]);
-
-            if (allMatchingIds.size > 0) {
-              // Get full contact data for matching IDs
-              const { data: matchedContacts, error: matchError } = await supabase
-                .from('contacts')
-                .select('*')
-                .eq('agent_id', effectiveAgentId)
-                .in('id', Array.from(allMatchingIds))
-                .order(sortBy, { ascending: sortOrder === 'asc' });
-
-              if (matchError) throw matchError;
-
-              return (matchedContacts as Contact[]) || [];
-            } else {
-              return [];
-            }
-          } else {
-            // Single term or multiple terms: use regular OR search
-            let orConditions = [
-              `first_name.ilike.%${trimmedTerm}%`,
-              `last_name.ilike.%${trimmedTerm}%`,
-              `email.ilike.%${trimmedTerm}%`,
-              `phone.ilike.%${trimmedTerm}%`
-            ];
-
-            if (searchTerms.length === 1) {
-              const term = searchTerms[0];
-              orConditions.push(`first_name.ilike.%${term}%`, `last_name.ilike.%${term}%`);
-            } else {
-              searchTerms.forEach(term => {
-                orConditions.push(`first_name.ilike.%${term}%`, `last_name.ilike.%${term}%`);
-              });
-            }
-
-            const query = supabase
-              .from('contacts')
-              .select('*')
-              .eq('agent_id', effectiveAgentId)
-              .or(orConditions.join(','))
-              .order(sortBy, { ascending: sortOrder === 'asc' });
-
-            const { data, error } = await query;
-
-            if (error) throw error;
-
-            return (data as Contact[]) || [];
-          }
-        } else {
-        // Regular fetch without search
-        const query = supabase
-          .from('contacts')
-          .select('*')
-          .eq('agent_id', effectiveAgentId)
-          .order(sortBy, { ascending: sortOrder === 'asc' });
-
-        const { data, error } = await query;
-
-        if (error) throw error;
-
-        return (data as Contact[]) || [];
+      const trimmed = debouncedSearchTerm.trim();
+      if (trimmed) {
+        query = query.or(
+          [
+            `first_name.ilike.%${trimmed}%`,
+            `last_name.ilike.%${trimmed}%`,
+            `email.ilike.%${trimmed}%`,
+            `phone.ilike.%${trimmed}%`,
+          ].join(','),
+        );
       }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      return (data as Contact[]) || [];
     } catch (error) {
-      console.error('Error fetching all contacts:', error);
+      console.error('[useContacts] Error fetching all contacts:', error);
       return [];
     }
-  };
+  }, [user, effectiveAgentId, debouncedSearchTerm, sortBy, sortOrder]);
 
   const fetchContacts = useCallback(async () => {
-    if (!user || !effectiveAgentId) return;
+    if (!user || !effectiveAgentId) {
+      setContacts([]);
+      setAllContacts([]);
+      setTotalContacts(0);
+      setTotalPages(1);
+      setLoading(false);
+      return;
+    }
 
-    console.log('[useContacts] fetchContacts', {
-      userId: user?.id,
+    setLoading(true);
+    console.info('[useContacts] fetchContacts', {
+      userId: user.id,
       viewingAgentId,
       effectiveAgentId,
       debouncedSearchTerm,
       currentPage,
-      isViewingOwn
+      sortBy,
+      sortOrder,
     });
 
-    setLoading(true);
     try {
-      if (debouncedSearchTerm) {
-        let edgeFunctionSucceeded = false;
-        
-        // Only use edge function when viewing own contacts
-        if (isViewingOwn) {
-          try {
-            // Try the advanced search edge function
-            const { data, error } = await supabase.functions.invoke('contact-search', {
-              body: {
-                searchTerm: debouncedSearchTerm,
-                agentId: effectiveAgentId,
-                page: currentPage,
-                limit: ITEMS_PER_PAGE,
-                sortBy,
-                sortOrder
-              }
-            });
+      let query = supabase
+        .from('contacts')
+        .select('*', { count: 'exact' })
+        .eq('agent_id', effectiveAgentId)
+        .order(sortBy, { ascending: sortOrder === 'asc' })
+        .range(
+          (currentPage - 1) * ITEMS_PER_PAGE,
+          currentPage * ITEMS_PER_PAGE - 1,
+        );
 
-            if (error) throw error;
-
-            console.log('[useContacts] edge function returned contacts:', data?.data?.length);
-            setContacts((data?.data as Contact[]) || []);
-            setTotalContacts(data?.count || 0);
-            setTotalPages(data?.totalPages || 1);
-            edgeFunctionSucceeded = true;
-          } catch (edgeFunctionError) {
-            console.warn('Edge function search failed, falling back to client-side search:', edgeFunctionError);
-          }
-        }
-        
-        // Client-side search (used when viewing other agents or edge function fails)
-        if (!isViewingOwn || !edgeFunctionSucceeded) {
-
-          // Fallback to client-side search with improved logic
-          const trimmedTerm = debouncedSearchTerm.trim();
-          const searchTerms = trimmedTerm.split(/\s+/).filter(term => term.length > 0);
-
-          if (searchTerms.length === 2) {
-            // Special handling for two terms: use intersection of queries to achieve AND logic
-            const [first, last] = searchTerms;
-
-            // Query 1: contacts with first term in first_name
-            const firstNameQuery = supabase
-              .from('contacts')
-              .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', effectiveAgentId)
-              .ilike('first_name', `%${first}%`);
-
-            // Query 2: contacts with second term in last_name
-            const lastNameQuery = supabase
-              .from('contacts')
-              .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', effectiveAgentId)
-              .ilike('last_name', `%${last}%`);
-
-            // Also check reverse order
-            const reverseFirstQuery = supabase
-              .from('contacts')
-              .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', effectiveAgentId)
-              .ilike('first_name', `%${last}%`);
-
-            const reverseLastQuery = supabase
-              .from('contacts')
-              .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', effectiveAgentId)
-              .ilike('last_name', `%${first}%`);
-
-            const [firstResults, lastResults, reverseFirstResults, reverseLastResults] = await Promise.all([
-              firstNameQuery,
-              lastNameQuery,
-              reverseFirstQuery,
-              reverseLastQuery
-            ]);
-
-            if (firstResults.error || lastResults.error || reverseFirstResults.error || reverseLastResults.error) {
-              throw firstResults.error || lastResults.error || reverseFirstResults.error || reverseLastResults.error;
-            }
-
-            // Find intersection: contacts that appear in both queries
-            const firstNameIds = new Set(firstResults.data?.map(c => c.id) || []);
-            const lastNameIds = new Set(lastResults.data?.map(c => c.id) || []);
-            const intersectionIds = new Set([...firstNameIds].filter(id => lastNameIds.has(id)));
-
-            const reverseFirstIds = new Set(reverseFirstResults.data?.map(c => c.id) || []);
-            const reverseLastIds = new Set(reverseLastResults.data?.map(c => c.id) || []);
-            const reverseIntersectionIds = new Set([...reverseFirstIds].filter(id => reverseLastIds.has(id)));
-
-            // Combine both orderings
-            const allMatchingIds = new Set([...intersectionIds, ...reverseIntersectionIds]);
-
-            if (allMatchingIds.size > 0) {
-              // Get full contact data for matching IDs
-              const { data: matchedContacts, error: matchError } = await supabase
-                .from('contacts')
-                .select('*', { count: 'exact' })
-                .eq('agent_id', effectiveAgentId)
-                .in('id', Array.from(allMatchingIds))
-                .order(sortBy, { ascending: sortOrder === 'asc' })
-                .range((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE - 1);
-
-              if (matchError) throw matchError;
-
-              setContacts((matchedContacts as Contact[]) || []);
-              setTotalContacts(allMatchingIds.size);
-              setTotalPages(Math.ceil(allMatchingIds.size / ITEMS_PER_PAGE));
-            } else {
-              // No matches found
-              setContacts([]);
-              setTotalContacts(0);
-              setTotalPages(0);
-            }
-          } else {
-            // Single term or multiple terms: use regular OR search
-            let orConditions = [
-              `first_name.ilike.%${trimmedTerm}%`,
-              `last_name.ilike.%${trimmedTerm}%`,
-              `email.ilike.%${trimmedTerm}%`,
-              `phone.ilike.%${trimmedTerm}%`
-            ];
-
-            if (searchTerms.length === 1) {
-              const term = searchTerms[0];
-              orConditions.push(`first_name.ilike.%${term}%`, `last_name.ilike.%${term}%`);
-            } else {
-              searchTerms.forEach(term => {
-                orConditions.push(`first_name.ilike.%${term}%`, `last_name.ilike.%${term}%`);
-              });
-            }
-
-            const query = supabase
-              .from('contacts')
-              .select('*', { count: 'exact' })
-              .eq('agent_id', effectiveAgentId)
-              .or(orConditions.join(','))
-              .order(sortBy, { ascending: sortOrder === 'asc' })
-              .range((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE - 1);
-
-            const { data, error, count } = await query;
-
-            if (error) throw error;
-
-            setContacts((data as Contact[]) || []);
-            setTotalContacts(count || 0);
-            setTotalPages(Math.ceil((count || 0) / ITEMS_PER_PAGE));
-          }
-        }
-      } else {
-        // Regular fetch without search
-        const query = supabase
-          .from('contacts')
-          .select('*', { count: 'exact' })
-          .eq('agent_id', effectiveAgentId)
-          .order(sortBy, { ascending: sortOrder === 'asc' })
-          .range((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE - 1);
-
-        const { data, error, count } = await query;
-
-        if (error) throw error;
-
-        setContacts((data as Contact[]) || []);
-        setTotalContacts(count || 0);
-        setTotalPages(Math.ceil((count || 0) / ITEMS_PER_PAGE));
+      const trimmed = debouncedSearchTerm.trim();
+      if (trimmed) {
+        query = query.or(
+          [
+            `first_name.ilike.%${trimmed}%`,
+            `last_name.ilike.%${trimmed}%`,
+            `email.ilike.%${trimmed}%`,
+            `phone.ilike.%${trimmed}%`,
+          ].join(','),
+        );
       }
 
+      const { data, error, count } = await query;
+      if (error) throw error;
+
+      setContacts((data as Contact[]) || []);
+      const total = count || 0;
+      setTotalContacts(total);
+      setTotalPages(Math.max(1, Math.ceil(total / ITEMS_PER_PAGE)));
+
       // Also fetch all contacts for dashboard/enrichment functions
-      const allContactsData = await fetchAllContacts();
-      setAllContacts(allContactsData);
+      const all = await fetchAllContacts();
+      setAllContacts(all);
     } catch (error) {
-      console.error('Error fetching contacts:', error);
+      console.error('[useContacts] Error fetching contacts:', error);
     } finally {
       setLoading(false);
     }
-  }, [user, effectiveAgentId, debouncedSearchTerm, currentPage, sortBy, sortOrder, viewingAgentId]);
+  }, [
+    user,
+    effectiveAgentId,
+    debouncedSearchTerm,
+    currentPage,
+    sortBy,
+    sortOrder,
+    viewingAgentId,
+    fetchAllContacts,
+  ]);
 
   const addContact = async (contactData: ContactInput) => {
     if (!user || !effectiveAgentId) throw new Error('User not authenticated');
 
     const { data, error } = await supabase
       .from('contacts')
-      .insert([{
-        ...contactData,
-        agent_id: effectiveAgentId,
-        category: contactData.last_name.charAt(0).toUpperCase() || 'A',
-      }])
+      .insert([
+        {
+          ...contactData,
+          agent_id: effectiveAgentId,
+          category: contactData.last_name.charAt(0).toUpperCase() || 'A',
+        },
+      ])
       .select()
       .single();
 
@@ -421,7 +190,7 @@ export const useContacts = (viewingAgentId?: string) => {
   };
 
   const updateContact = async (id: string, contactData: Partial<ContactInput>) => {
-    if (!user) throw new Error('User not authenticated');
+    if (!user || !effectiveAgentId) throw new Error('User not authenticated');
 
     const { data, error } = await supabase
       .from('contacts')
@@ -436,32 +205,36 @@ export const useContacts = (viewingAgentId?: string) => {
   };
 
   const deleteContact = async (id: string) => {
-    if (!user) throw new Error('User not authenticated');
+    if (!user || !effectiveAgentId) throw new Error('User not authenticated');
 
-      const { error } = await supabase
-        .from('contacts')
-        .delete()
-        .eq('id', id)
-        .eq('agent_id', effectiveAgentId);
+    const { error } = await supabase
+      .from('contacts')
+      .delete()
+      .eq('id', id)
+      .eq('agent_id', effectiveAgentId);
 
     if (error) throw error;
   };
 
   const uploadCSV = async (csvData: ContactInput[]) => {
-    if (!user) throw new Error('User not authenticated');
+    if (!user || !effectiveAgentId) throw new Error('User not authenticated');
 
     console.log(`Processing ${csvData.length} contacts for upload`);
 
     // Use batch processing for large uploads
     const BATCH_SIZE = 100;
-    const results = [];
+    const results: Contact[] = [];
 
     for (let i = 0; i < csvData.length; i += BATCH_SIZE) {
       const batch = csvData.slice(i, i + BATCH_SIZE);
-      
-      console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(csvData.length / BATCH_SIZE)}`);
-      
-      const contactsWithAgent = batch.map(contact => ({
+
+      console.log(
+        `Processing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(
+          csvData.length / BATCH_SIZE,
+        )}`,
+      );
+
+      const contactsWithAgent = batch.map((contact) => ({
         ...contact,
         agent_id: effectiveAgentId,
         category: contact.last_name.charAt(0).toUpperCase() || 'A',
@@ -473,11 +246,14 @@ export const useContacts = (viewingAgentId?: string) => {
         .select();
 
       if (error) {
-        console.error(`Error in batch ${Math.floor(i / BATCH_SIZE) + 1}:`, error);
+        console.error(
+          `Error in batch ${Math.floor(i / BATCH_SIZE) + 1}:`,
+          error,
+        );
         throw error;
       }
 
-      results.push(...(data || []));
+      results.push(...((data as Contact[]) || []));
     }
 
     console.log(`Successfully uploaded ${results.length} contacts`);
