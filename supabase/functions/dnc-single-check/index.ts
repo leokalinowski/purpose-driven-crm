@@ -77,13 +77,13 @@ serve(async (req) => {
     
     if (phoneDigits.length === 11 && phoneDigits.startsWith('1')) {
       normalizedPhone = phoneDigits.substring(1); // Remove US country code
-    }
-    
-    if (normalizedPhone.length !== 10) {
-      console.error(`Invalid phone format: ${phone} (normalized to ${normalizedPhone})`);
+    } else if (phoneDigits.length === 10) {
+      normalizedPhone = phoneDigits; // Already 10 digits
+    } else {
+      console.error(`Invalid phone format: ${phone} (${phoneDigits.length} digits after normalization)`);
       return new Response(
         JSON.stringify({ 
-          error: `Phone number must be 10 digits (normalized to ${normalizedPhone.length} digits)`,
+          error: `Phone number must be 10 or 11 digits, got ${phoneDigits.length} digits`,
           success: false 
         }),
         { 
