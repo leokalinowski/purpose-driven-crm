@@ -263,14 +263,20 @@ serve(async (req) => {
               // Add small delay to avoid rate limiting
               await new Promise(resolve => setTimeout(resolve, 100));
 
-              // Validate phone number format (10 digits only)
+              // Normalize phone number (handle both 10 and 11 digit formats)
               const phoneDigits = contact.phone.replace(/\D/g, '');
-              if (phoneDigits.length !== 10) {
-                throw new Error(`Invalid phone format: ${contact.phone}`);
+              let normalizedPhone = phoneDigits;
+              
+              if (phoneDigits.length === 11 && phoneDigits.startsWith('1')) {
+                normalizedPhone = phoneDigits.substring(1); // Remove US country code
+              }
+              
+              if (normalizedPhone.length !== 10) {
+                throw new Error(`Invalid phone format: ${contact.phone} (normalized to ${normalizedPhone})`);
               }
 
-              // Call RealValidation DNC API
-              const response = await fetch(`https://api.realvalidation.com/rpvWebService/DNCLookup.php?phone=${phoneDigits}&token=${dncApiKey}`, {
+              // Call RealValidation DNC API with normalized phone
+              const response = await fetch(`https://api.realvalidation.com/rpvWebService/DNCLookup.php?phone=${normalizedPhone}&token=${dncApiKey}`, {
                 method: 'GET',
                 headers: {
                   'User-Agent': 'Real Estate DNC Checker/1.0'
