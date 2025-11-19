@@ -86,7 +86,6 @@ const Database = () => {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
   const [viewingTouchpointsContact, setViewingTouchpointsContact] = useState<Contact | null>(null);
-  const [selectedCleanupAgent, setSelectedCleanupAgent] = useState<string>('');
   const [showDuplicateCleanup, setShowDuplicateCleanup] = useState(false);
 
   // Fetch agents for admin cleanup selector
@@ -410,34 +409,14 @@ const Database = () => {
          
           <div className="flex items-center gap-2 sm:gap-4 self-start sm:self-auto">
             {/* Admin Duplicate Cleanup Section */}
-            {isAdmin && (
-              <div className="flex items-center gap-2 mr-4">
-                <Select value={selectedCleanupAgent} onValueChange={setSelectedCleanupAgent}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Select agent for cleanup" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {agents.map((agent) => (
-                      <SelectItem key={agent.id} value={agent.id}>
-                        {getAgentDisplayName(agent)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {selectedCleanupAgent && (
-                  <DuplicateCleanupButton
-                    agentId={selectedCleanupAgent}
-                    agentName={getAgentDisplayName(agents.find(a => a.id === selectedCleanupAgent)!)}
-                    onCleanupComplete={() => {
-                      // Refresh contacts if cleaned up own account
-                      if (selectedCleanupAgent === user?.id) {
-                        fetchContacts();
-                      }
-                      setSelectedCleanupAgent('');
-                    }}
-                  />
-                )}
-              </div>
+            {isAdmin && selectedViewingAgent && selectedViewingAgent !== '' && (
+              <DuplicateCleanupButton
+                agentId={selectedViewingAgent}
+                agentName={getAgentDisplayName(agents.find(a => a.user_id === selectedViewingAgent)!)}
+                onCleanupComplete={() => {
+                  fetchContacts();
+                }}
+              />
             )}
             
             <Button
@@ -450,7 +429,7 @@ const Database = () => {
             <Button
               onClick={() => setShowCSVUpload(true)}
               variant="outline"
-              disabled={isAdmin && !selectedCleanupAgent}
+              disabled={isAdmin && !selectedViewingAgent}
             >
               <Upload className="h-4 w-4 mr-2" />
               Upload CSV
@@ -570,7 +549,7 @@ const Database = () => {
           open={showCSVUpload}
           onOpenChange={setShowCSVUpload}
           onUpload={handleCSVUpload}
-          agentId={isAdmin ? selectedCleanupAgent : user?.id}
+          agentId={isAdmin && selectedViewingAgent ? selectedViewingAgent : user?.id}
         />
         
         {/* Duplicate Cleanup Dialog */}
