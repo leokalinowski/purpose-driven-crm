@@ -11,7 +11,7 @@ export default function SocialScheduler() {
 
   return (
     <Layout>
-      <div className="container mx-auto py-6 px-4 space-y-6">
+      <div className="space-y-6">
         <Helmet>
           <title>Social Media Management | Real Estate on Purpose</title>
           <meta

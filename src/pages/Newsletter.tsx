@@ -41,7 +41,7 @@ export default function Newsletter() {
         <link rel="canonical" href={`${window.location.origin}/newsletter`} />
       </Helmet>
 
-      <div className="mx-auto w-full max-w-6xl">
+      <div className="space-y-6">
         <header className="mb-4 flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Newsletter Analytics</h1>
           <Button 
