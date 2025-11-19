@@ -8,14 +8,16 @@ interface DNCCheckButtonProps {
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
   size?: 'default' | 'sm' | 'lg';
   forceRecheck?: boolean;
+  viewingAgentId?: string;
 }
 
-export const DNCCheckButton: React.FC<DNCCheckButtonProps> = ({ 
+export const DNCCheckButton: React.FC<DNCCheckButtonProps> = ({
   variant = 'outline',
   size = 'default',
-  forceRecheck = false
+  forceRecheck = false,
+  viewingAgentId
 }) => {
-  const { triggerDNCCheck, checking } = useDNCStats();
+  const { triggerDNCCheck, checking } = useDNCStats(viewingAgentId);
   const { toast } = useToast();
   const [isRunning, setIsRunning] = useState(false);
 

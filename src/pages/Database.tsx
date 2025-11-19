@@ -448,8 +448,8 @@ const Database = () => {
           {/* DNC Check Buttons - Admin Only */}
           {isAdmin && (
             <div className="flex justify-center gap-4">
-              <DNCCheckButton variant="default" size="lg" />
-              <DNCCheckButton variant="destructive" size="lg" forceRecheck={true} />
+              <DNCCheckButton variant="default" size="lg" viewingAgentId={selectedViewingAgent} />
+              <DNCCheckButton variant="destructive" size="lg" forceRecheck={true} viewingAgentId={selectedViewingAgent} />
             </div>
           )}
         </div>
