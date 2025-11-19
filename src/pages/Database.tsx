@@ -28,6 +28,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const Database = () => {
+  const [selectedViewingAgent, setSelectedViewingAgent] = useState<string>('');
+  
   const {
     contacts,
     allContacts,
@@ -46,13 +48,13 @@ const Database = () => {
     handleSearch,
     goToPage,
     fetchContacts,
-  } = useContacts();
+  } = useContacts(selectedViewingAgent);
   
   const {
     stats,
     loading: dncLoading,
     fetchDNCStats,
-  } = useDNCStats();
+  } = useDNCStats(selectedViewingAgent);
   
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
@@ -347,16 +349,58 @@ const Database = () => {
     return pages;
   };
 
+  // Helper to get agent display name by user_id
+  const getViewingAgentName = (userId: string) => {
+    if (!userId) return '';
+    const agent = agents.find(a => a.user_id === userId);
+    return agent ? getAgentDisplayName(agent) : 'Unknown Agent';
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Contact Database</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
-              Manage your contacts and leads
+              {isAdmin && selectedViewingAgent 
+                ? `Viewing: ${getViewingAgentName(selectedViewingAgent)}'s Database`
+                : isAdmin 
+                ? 'Your Database (Admin View)'
+                : 'Manage your contacts and leads'
+              }
             </p>
+            {isAdmin && selectedViewingAgent && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedViewingAgent('')}
+                className="mt-1 h-7 text-xs"
+              >
+                Clear Selection
+              </Button>
+            )}
           </div>
+          
+          {/* Admin Viewing Agent Selector */}
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <Select value={selectedViewingAgent} onValueChange={setSelectedViewingAgent}>
+                <SelectTrigger className="w-56">
+                  <SelectValue placeholder="Select agent to view" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">My Database</SelectItem>
+                  {agents.map((agent) => (
+                    <SelectItem key={agent.user_id} value={agent.user_id}>
+                      {getAgentDisplayName(agent)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
          
           <div className="flex items-center gap-2 sm:gap-4 self-start sm:self-auto">
             {/* Admin Duplicate Cleanup Section */}

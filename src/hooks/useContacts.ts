@@ -27,7 +27,7 @@ export interface Contact {
 
 export type ContactInput = Omit<Contact, 'id' | 'agent_id' | 'category' | 'created_at' | 'updated_at' | 'dnc_last_checked' | 'last_activity_date' | 'activity_count'>;
 
-export const useContacts = () => {
+export const useContacts = (viewingAgentId?: string) => {
   const { user } = useAuth();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [allContacts, setAllContacts] = useState<Contact[]>([]);
@@ -41,9 +41,12 @@ export const useContacts = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const ITEMS_PER_PAGE = 25;
+  
+  // Use viewingAgentId if provided (admin viewing another agent), otherwise use logged-in user
+  const effectiveAgentId = viewingAgentId || user?.id;
 
   const fetchAllContacts = async (): Promise<Contact[]> => {
-    if (!user) return [];
+    if (!user || !effectiveAgentId) return [];
 
     try {
       if (debouncedSearchTerm) {
@@ -52,7 +55,7 @@ export const useContacts = () => {
           const { data, error } = await supabase.functions.invoke('contact-search', {
             body: {
               searchTerm: debouncedSearchTerm,
-              agentId: user.id,
+              agentId: effectiveAgentId,
               page: 1,
               limit: 1000, // Get all for dashboard
               sortBy,
@@ -78,27 +81,27 @@ export const useContacts = () => {
             const firstNameQuery = supabase
               .from('contacts')
               .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', user.id)
+              .eq('agent_id', effectiveAgentId)
               .ilike('first_name', `%${first}%`);
 
             // Query 2: contacts with second term in last_name
             const lastNameQuery = supabase
               .from('contacts')
               .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', user.id)
+              .eq('agent_id', effectiveAgentId)
               .ilike('last_name', `%${last}%`);
 
             // Also check reverse order
             const reverseFirstQuery = supabase
               .from('contacts')
               .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', user.id)
+              .eq('agent_id', effectiveAgentId)
               .ilike('first_name', `%${last}%`);
 
             const reverseLastQuery = supabase
               .from('contacts')
               .select('id, first_name, last_name, email, phone')
-              .eq('agent_id', user.id)
+              .eq('agent_id', effectiveAgentId)
               .ilike('last_name', `%${first}%`);
 
             const [firstResults, lastResults, reverseFirstResults, reverseLastResults] = await Promise.all([
@@ -160,7 +163,7 @@ export const useContacts = () => {
             const query = supabase
               .from('contacts')
               .select('*')
-              .eq('agent_id', user.id)
+              .eq('agent_id', effectiveAgentId)
               .or(orConditions.join(','))
               .order(sortBy, { ascending: sortOrder === 'asc' });
 
@@ -177,7 +180,7 @@ export const useContacts = () => {
       const query = supabase
         .from('contacts')
         .select('*')
-        .eq('agent_id', user.id)
+        .eq('agent_id', effectiveAgentId)
         .order(sortBy, { ascending: sortOrder === 'asc' });
 
       const { data, error } = await query;
@@ -192,7 +195,7 @@ export const useContacts = () => {
   };
 
   const fetchContacts = useCallback(async () => {
-    if (!user) return;
+    if (!user || !effectiveAgentId) return;
 
     setLoading(true);
     try {
@@ -202,7 +205,7 @@ export const useContacts = () => {
           const { data, error } = await supabase.functions.invoke('contact-search', {
             body: {
               searchTerm: debouncedSearchTerm,
-              agentId: user.id,
+              agentId: effectiveAgentId,
               page: currentPage,
               limit: ITEMS_PER_PAGE,
               sortBy,
@@ -358,16 +361,16 @@ export const useContacts = () => {
     } finally {
       setLoading(false);
     }
-  }, [user, debouncedSearchTerm, currentPage, sortBy, sortOrder]);
+  }, [user, effectiveAgentId, debouncedSearchTerm, currentPage, sortBy, sortOrder]);
 
   const addContact = async (contactData: ContactInput) => {
-    if (!user) throw new Error('User not authenticated');
+    if (!user || !effectiveAgentId) throw new Error('User not authenticated');
 
     const { data, error } = await supabase
       .from('contacts')
       .insert([{
         ...contactData,
-        agent_id: user.id,
+        agent_id: effectiveAgentId,
         category: contactData.last_name.charAt(0).toUpperCase() || 'A',
       }])
       .select()

@@ -12,7 +12,7 @@ export interface DNCStats {
   lastChecked: string | null;
 }
 
-export const useDNCStats = () => {
+export const useDNCStats = (viewingAgentId?: string) => {
   const { user } = useAuth();
   const [stats, setStats] = useState<DNCStats>({
     totalContacts: 0,
@@ -26,8 +26,11 @@ export const useDNCStats = () => {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
 
+  // Use viewingAgentId if provided (admin viewing another agent), otherwise use logged-in user
+  const effectiveAgentId = viewingAgentId || user?.id;
+
   const fetchDNCStats = useCallback(async () => {
-    if (!user) return;
+    if (!user || !effectiveAgentId) return;
 
     setLoading(true);
     try {
@@ -35,20 +38,20 @@ export const useDNCStats = () => {
       const { count: totalContacts } = await supabase
         .from('contacts')
         .select('*', { count: 'exact', head: true })
-        .eq('agent_id', user.id);
+        .eq('agent_id', effectiveAgentId);
 
       // Get DNC contacts
       const { count: dncContacts } = await supabase
         .from('contacts')
         .select('*', { count: 'exact', head: true })
-        .eq('agent_id', user.id)
+        .eq('agent_id', effectiveAgentId)
         .eq('dnc', true);
 
       // Get contacts WITH phone numbers that have never been checked
       const { count: neverChecked } = await supabase
         .from('contacts')
         .select('*', { count: 'exact', head: true })
-        .eq('agent_id', user.id)
+        .eq('agent_id', effectiveAgentId)
         .is('dnc_last_checked', null)
         .not('phone', 'is', null)
         .neq('phone', '');
@@ -57,7 +60,7 @@ export const useDNCStats = () => {
       const { count: missingPhone } = await supabase
         .from('contacts')
         .select('*', { count: 'exact', head: true })
-        .eq('agent_id', user.id)
+        .eq('agent_id', effectiveAgentId)
         .or('phone.is.null,phone.eq.');
 
       // Get contacts that need rechecking (older than 30 days)
@@ -67,7 +70,7 @@ export const useDNCStats = () => {
       const { count: needsRecheck } = await supabase
         .from('contacts')
         .select('*', { count: 'exact', head: true })
-        .eq('agent_id', user.id)
+        .eq('agent_id', effectiveAgentId)
         .eq('dnc', false)
         .not('dnc_last_checked', 'is', null)
         .lt('dnc_last_checked', thirtyDaysAgo.toISOString());
@@ -76,7 +79,7 @@ export const useDNCStats = () => {
       const { data: lastLog } = await supabase
         .from('dnc_logs')
         .select('run_date')
-        .eq('agent_id', user.id)
+        .eq('agent_id', effectiveAgentId)
         .order('run_date', { ascending: false })
         .limit(1)
         .single();
@@ -95,7 +98,7 @@ export const useDNCStats = () => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, effectiveAgentId]);
 
   const triggerDNCCheck = useCallback(async (forceRecheck: boolean = false) => {
     if (!user) throw new Error('User not authenticated');
