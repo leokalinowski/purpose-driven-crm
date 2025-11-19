@@ -7,6 +7,7 @@ export interface DNCStats {
   dncContacts: number;
   nonDncContacts: number;
   neverChecked: number;
+  missingPhone: number;
   needsRecheck: number;
   lastChecked: string | null;
 }
@@ -18,6 +19,7 @@ export const useDNCStats = () => {
     dncContacts: 0,
     nonDncContacts: 0,
     neverChecked: 0,
+    missingPhone: 0,
     needsRecheck: 0,
     lastChecked: null,
   });
@@ -42,12 +44,21 @@ export const useDNCStats = () => {
         .eq('agent_id', user.id)
         .eq('dnc', true);
 
-      // Get never checked contacts
+      // Get contacts WITH phone numbers that have never been checked
       const { count: neverChecked } = await supabase
         .from('contacts')
         .select('*', { count: 'exact', head: true })
         .eq('agent_id', user.id)
-        .is('dnc_last_checked', null);
+        .is('dnc_last_checked', null)
+        .not('phone', 'is', null)
+        .neq('phone', '');
+
+      // Get contacts WITHOUT phone numbers
+      const { count: missingPhone } = await supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', user.id)
+        .or('phone.is.null,phone.eq.');
 
       // Get contacts that need rechecking (older than 30 days)
       const thirtyDaysAgo = new Date();
@@ -75,6 +86,7 @@ export const useDNCStats = () => {
         dncContacts: dncContacts || 0,
         nonDncContacts: (totalContacts || 0) - (dncContacts || 0),
         neverChecked: neverChecked || 0,
+        missingPhone: missingPhone || 0,
         needsRecheck: needsRecheck || 0,
         lastChecked: lastLog?.run_date || null,
       });

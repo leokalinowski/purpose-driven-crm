@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Shield, ShieldCheck, ShieldX, Clock, AlertTriangle } from 'lucide-react';
+import { Shield, ShieldCheck, ShieldX, Clock, AlertTriangle, PhoneOff } from 'lucide-react';
 import { DNCStats } from '@/hooks/useDNCStats';
 
 interface DNCStatsCardProps {
@@ -46,7 +46,7 @@ export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading }) =>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Overview Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold">{stats.totalContacts}</div>
             <div className="text-sm text-muted-foreground">Total Contacts</div>
@@ -61,7 +61,11 @@ export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading }) =>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-warning">{stats.neverChecked}</div>
-            <div className="text-sm text-muted-foreground">Unchecked</div>
+            <div className="text-sm text-muted-foreground">Never Checked</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-muted-foreground">{stats.missingPhone}</div>
+            <div className="text-sm text-muted-foreground">Missing Phone</div>
           </div>
         </div>
 
@@ -87,7 +91,13 @@ export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading }) =>
           {stats.neverChecked > 0 && (
             <Badge variant="secondary" className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              {stats.neverChecked} Never Checked ({uncheckedPercentage.toFixed(0)}%)
+              {stats.neverChecked} Never Checked
+            </Badge>
+          )}
+          {stats.missingPhone > 0 && (
+            <Badge variant="outline" className="flex items-center gap-1 border-muted-foreground/30">
+              <PhoneOff className="h-3 w-3" />
+              {stats.missingPhone} Missing Phone Data
             </Badge>
           )}
           {stats.needsRecheck > 0 && (
@@ -103,9 +113,17 @@ export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading }) =>
           Last DNC check: {formatDate(stats.lastChecked)}
         </div>
         
-        {/* Monthly Automation Info */}
-        <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-          💡 DNC checks run automatically on the 1st of each month for all accounts. Only contacts not already marked as DNC are checked.
+        {/* Info Banners */}
+        <div className="space-y-2">
+          {stats.missingPhone > 0 && (
+            <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded border border-border">
+              <div className="font-medium mb-1">⚠️ {stats.missingPhone} contacts need phone enrichment</div>
+              <div>These contacts cannot be checked against the DNC list. Use the Bulk Contact Enrichment feature to add missing phone numbers.</div>
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+            💡 DNC checks run automatically on the 1st of each month. Only contacts with phone numbers and not already marked as DNC are checked.
+          </div>
         </div>
       </CardContent>
     </Card>
