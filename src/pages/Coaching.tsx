@@ -217,7 +217,7 @@ const WeeklySuccessScoreboard = () => {
 
   return (
     <Layout>
-      <div className="container mx-auto p-6">
+      <div className="space-y-6">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground">Weekly Success Scoreboard</h1>
           <p className="text-muted-foreground mt-2">
