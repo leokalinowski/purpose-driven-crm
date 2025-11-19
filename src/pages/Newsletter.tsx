@@ -42,17 +42,24 @@ export default function Newsletter() {
       </Helmet>
 
       <div className="space-y-6">
-        <header className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-tight">Newsletter Analytics</h1>
-          <Button 
-            onClick={() => setShowPreview(true)}
-            variant="outline"
-            size="sm"
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            Preview Newsletter
-          </Button>
-        </header>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Newsletter Analytics</h1>
+            <p className="text-muted-foreground text-sm sm:text-base">
+              Track campaign performance and audience engagement
+            </p>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-4 self-start sm:self-auto">
+            <Button 
+              onClick={() => setShowPreview(true)}
+              variant="outline"
+              size="sm"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Preview Newsletter
+            </Button>
+          </div>
+        </div>
 
         {error ? (
           <Card className="mb-4">

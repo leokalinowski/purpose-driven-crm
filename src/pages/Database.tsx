@@ -350,13 +350,15 @@ const Database = () => {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Contact Database</h1>
-            <p className="text-muted-foreground">Manage your contacts and leads</p>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Contact Database</h1>
+            <p className="text-muted-foreground text-sm sm:text-base">
+              Manage your contacts and leads
+            </p>
           </div>
          
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2 sm:gap-4 self-start sm:self-auto">
             {/* Admin Duplicate Cleanup Section */}
             {isAdmin && (
               <div className="flex items-center gap-2 mr-4">
