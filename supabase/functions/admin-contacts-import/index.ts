@@ -87,42 +87,52 @@ serve(async (req) => {
     console.log(`CSV contains ${csvEmails.length} emails and ${csvPhones.length} phones`);
     
     if (csvEmails.length > 0 || csvPhones.length > 0) {
-      // Build OR conditions for all emails and phones
-      const orConditions = [];
+      console.log(`Checking ${csvEmails.length} emails and ${csvPhones.length} phones for duplicates`);
       
-      // Add email conditions
-      csvEmails.forEach(email => {
-        orConditions.push(`email.eq.${email}`);
-      });
+      const duplicates = new Map(); // Use Map to deduplicate by contact ID
       
-      // Add phone conditions  
-      csvPhones.forEach(phone => {
-        orConditions.push(`phone.eq.${phone}`);
-      });
-      
-      if (orConditions.length > 0) {
-        console.log(`Checking ${orConditions.length} potential duplicates in database`);
-        
-        const { data: existingContacts, error: duplicateError } = await supabaseServiceRole
+      // Check email duplicates
+      if (csvEmails.length > 0) {
+        const { data: emailDupes, error: emailError } = await supabaseServiceRole
           .from('contacts')
           .select('id, email, phone, first_name, last_name')
           .eq('agent_id', agentId)
-          .or(orConditions.join(','));
-          
-        if (duplicateError) {
-          console.error('Error checking for duplicates:', duplicateError);
-          throw new Error(`Failed to check for duplicates: ${duplicateError.message}`);
+          .in('email', csvEmails);
+        
+        if (emailError) {
+          console.error('Error checking email duplicates:', emailError);
+          throw new Error(`Failed to check for duplicate emails: ${emailError.message}`);
         }
         
-        if (existingContacts && existingContacts.length > 0) {
-          const duplicateInfo = existingContacts.map(d => {
-            const name = `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'Unknown';
-            return `${name} (Email: ${d.email || 'N/A'}, Phone: ${d.phone || 'N/A'})`;
-          }).join('; ');
-          
-          console.error('Duplicates found:', duplicateInfo);
-          throw new Error(`Duplicate contacts found: ${duplicateInfo}. Please remove these duplicates from your CSV and try again.`);
+        emailDupes?.forEach(contact => duplicates.set(contact.id, contact));
+      }
+      
+      // Check phone duplicates
+      if (csvPhones.length > 0) {
+        const { data: phoneDupes, error: phoneError } = await supabaseServiceRole
+          .from('contacts')
+          .select('id, email, phone, first_name, last_name')
+          .eq('agent_id', agentId)
+          .in('phone', csvPhones);
+        
+        if (phoneError) {
+          console.error('Error checking phone duplicates:', phoneError);
+          throw new Error(`Failed to check for duplicate phones: ${phoneError.message}`);
         }
+        
+        phoneDupes?.forEach(contact => duplicates.set(contact.id, contact));
+      }
+      
+      // Report duplicates if found
+      if (duplicates.size > 0) {
+        const existingContacts = Array.from(duplicates.values());
+        const duplicateInfo = existingContacts.map(d => {
+          const name = `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'Unknown';
+          return `${name} (Email: ${d.email || 'N/A'}, Phone: ${d.phone || 'N/A'})`;
+        }).join('; ');
+        
+        console.error('Duplicates found:', duplicateInfo);
+        throw new Error(`Duplicate contacts found: ${duplicateInfo}. Please remove these duplicates from your CSV and try again.`);
       }
     }
 
