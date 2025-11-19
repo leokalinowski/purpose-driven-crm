@@ -397,7 +397,7 @@ export const useContacts = (viewingAgentId?: string) => {
     } finally {
       setLoading(false);
     }
-  }, [user, effectiveAgentId, debouncedSearchTerm, currentPage, sortBy, sortOrder]);
+  }, [user, effectiveAgentId, debouncedSearchTerm, currentPage, sortBy, sortOrder, viewingAgentId]);
 
   const addContact = async (contactData: ContactInput) => {
     if (!user || !effectiveAgentId) throw new Error('User not authenticated');
