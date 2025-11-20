@@ -12,7 +12,6 @@ import { ImprovedCSVUpload } from '@/components/database/ImprovedCSVUpload';
 import { DNCStatsCard } from '@/components/database/DNCStatsCard';
 import { ContactActivitiesDialog } from '@/components/database/ContactActivitiesDialog';
 import { DuplicateCleanupButton } from '@/components/admin/DuplicateCleanupButton';
-import { DuplicateCleanup } from '@/components/database/DuplicateCleanup';
 import { DNCCheckButton } from '@/components/database/DNCCheckButton';
 import { DataQualityDashboard } from '@/components/database/DataQualityDashboard';
 import { EnrichedContact } from '@/utils/dataEnrichment';
@@ -440,7 +439,6 @@ const AdminDatabaseManagement = () => {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
   const [viewingTouchpointsContact, setViewingTouchpointsContact] = useState<Contact | null>(null);
-  const [showDuplicateCleanup, setShowDuplicateCleanup] = useState(false);
 
   // Fetch agents for admin selector
   useEffect(() => {
@@ -709,8 +707,8 @@ const AdminDatabaseManagement = () => {
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Database Management</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
               {selectedViewingAgent
-                ? `Managing: ${getViewingAgentName(selectedViewingAgent)}'s Database`
-                : 'Select an agent to manage their database'
+                ? `Managing ${getViewingAgentName(selectedViewingAgent)}'s contact database and compliance tools`
+                : 'Select an agent to access their complete database management suite'
               }
             </p>
             {selectedViewingAgent && (
@@ -754,16 +752,10 @@ const AdminDatabaseManagement = () => {
             )}
 
             <Button
-              onClick={() => setShowDuplicateCleanup(true)}
-              variant="outline"
-            >
-              <Users className="h-4 w-4 mr-2" />
-              Clean Duplicates
-            </Button>
-            <Button
               onClick={() => setShowCSVUpload(true)}
               variant="outline"
               disabled={!selectedViewingAgent}
+              title="Upload multiple contacts from a CSV file"
             >
               <Upload className="h-4 w-4 mr-2" />
               Upload CSV
@@ -771,6 +763,7 @@ const AdminDatabaseManagement = () => {
             <Button
               onClick={() => setShowContactForm(true)}
               disabled={!selectedViewingAgent}
+              title="Add a single contact manually"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Contact
@@ -784,10 +777,17 @@ const AdminDatabaseManagement = () => {
             <CardContent className="flex items-center justify-center py-12">
               <div className="text-center">
                 <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Select an Agent</h3>
-                <p className="text-muted-foreground">
-                  Choose an agent from the dropdown above to manage their database, view statistics, and upload contacts.
+                <h3 className="text-lg font-semibold mb-2">Select an Agent to Manage</h3>
+                <p className="text-muted-foreground mb-4">
+                  Choose an agent from the dropdown above to access their complete database management tools.
                 </p>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>• View and manage all contacts</p>
+                  <p>• Monitor DNC compliance status</p>
+                  <p>• Upload bulk contacts via CSV</p>
+                  <p>• Remove duplicate entries</p>
+                  <p>• Enrich contact data quality</p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -798,9 +798,15 @@ const AdminDatabaseManagement = () => {
               <DNCStatsCard stats={stats} loading={dncLoading} />
 
               {/* DNC Check Buttons */}
-              <div className="flex justify-center gap-4">
-                <DNCCheckButton variant="default" size="lg" />
-                <DNCCheckButton variant="destructive" size="lg" forceRecheck={true} />
+              <div className="flex flex-col sm:flex-row justify-center gap-4">
+                <div className="text-center">
+                  <DNCCheckButton variant="default" size="lg" />
+                  <p className="text-xs text-muted-foreground mt-1">Check new contacts only</p>
+                </div>
+                <div className="text-center">
+                  <DNCCheckButton variant="destructive" size="lg" forceRecheck={true} />
+                  <p className="text-xs text-muted-foreground mt-1">Recheck all contacts</p>
+                </div>
               </div>
             </div>
 
@@ -908,25 +914,6 @@ const AdminDatabaseManagement = () => {
           />
         )}
 
-        {/* Duplicate Cleanup Dialog */}
-        {showDuplicateCleanup && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-background rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-2xl font-bold">Duplicate Contact Cleanup</h2>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowDuplicateCleanup(false)}
-                  >
-                    Close
-                  </Button>
-                </div>
-                <DuplicateCleanup />
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Contact Touchpoints Dialog */}
         {viewingTouchpointsContact && (

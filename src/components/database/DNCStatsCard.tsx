@@ -118,12 +118,12 @@ export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading, agen
         <div className="space-y-2">
           {stats.missingPhone > 0 && (
             <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded border border-border">
-              <div className="font-medium mb-1">⚠️ {stats.missingPhone} contacts need phone enrichment</div>
-              <div>These contacts cannot be checked against the DNC list. Use the Bulk Contact Enrichment feature to add missing phone numbers.</div>
+              <div className="font-medium mb-1">📞 {stats.missingPhone} contacts missing phone numbers</div>
+              <div>These contacts cannot be checked against the DNC list. Use the contact enrichment feature below to add missing phone numbers.</div>
             </div>
           )}
           <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-            💡 DNC checks run automatically on the 1st of each month. Only contacts with phone numbers and not already marked as DNC are checked.
+            🔄 DNC checks run automatically on the 1st of each month. Manual checks can be run using the buttons above.
           </div>
         </div>
       </CardContent>
