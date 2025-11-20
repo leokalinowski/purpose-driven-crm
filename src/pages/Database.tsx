@@ -27,6 +27,10 @@ import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
 import { supabase } from '@/integrations/supabase/client';
 
 const Database = () => {
+  const { user, loading: authLoading } = useAuth();
+  const { isAdmin, loading: roleLoading } = useUserRole();
+  
+  // Ensure user is loaded before initializing hooks
   const {
     contacts,
     allContacts,
@@ -55,8 +59,6 @@ const Database = () => {
     triggerDNCCheck,
   } = useDNCStats();
 
-  const { user } = useAuth();
-  const { isAdmin } = useUserRole();
   const { toast } = useToast();
   const { generateTasksForNewContacts } = useSphereSyncTasks();
 
@@ -316,6 +318,27 @@ const Database = () => {
     return pages;
   };
 
+
+  // Show loading state while auth is being checked
+  if (authLoading || roleLoading) {
+    return (
+      <Layout>
+        <div className="space-y-6">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-sm text-muted-foreground">Loading database...</p>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Redirect to auth if not logged in
+  if (!user) {
+    return null;
+  }
 
   return (
     <Layout>

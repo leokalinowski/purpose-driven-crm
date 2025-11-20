@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Target, Briefcase, DollarSign, Calendar, Mail, TrendingUp, TrendingDown } from 'lucide-react';
-import { useAdminMetrics } from '@/hooks/useAdminMetrics';
+import { useDashboardData } from '@/hooks/useDashboardData';
 
 const ADMIN_KPI_CONFIG = [
   { key: 'totalCompanyContacts', title: 'Total Company Contacts', icon: Users },
@@ -12,9 +12,9 @@ const ADMIN_KPI_CONFIG = [
 ] as const;
 
 export function AdminMetricsCards() {
-  const { data, loading } = useAdminMetrics();
+  const { data, loading, isAdmin } = useDashboardData();
 
-  if (loading || !data) {
+  if (loading || !data || !isAdmin) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {Array.from({ length: 6 }).map((_, i) => (
@@ -31,11 +31,40 @@ export function AdminMetricsCards() {
     );
   }
 
+  // Extract KPIs from dashboard data (for admin)
+  const adminKPIs = isAdmin && data && 'kpis' in data ? data.kpis : null;
+  
+  if (!adminKPIs) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Card key={i}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">No Data</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-6 w-24 rounded bg-muted animate-pulse" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  // Helper to determine trend from deltaPct
+  const getTrend = (deltaPct?: number): 'up' | 'down' | 'neutral' => {
+    if (deltaPct === undefined) return 'neutral';
+    return deltaPct > 0 ? 'up' : deltaPct < 0 ? 'down' : 'neutral';
+  };
+
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {ADMIN_KPI_CONFIG.map(({ key, title, icon: Icon }) => {
-        const kpi = data.kpis[key];
-        const TrendIcon = kpi.trend === 'up' ? TrendingUp : kpi.trend === 'down' ? TrendingDown : null;
+        const kpi = adminKPIs[key];
+        if (!kpi) return null;
+        
+        const trend = getTrend(kpi.deltaPct);
+        const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : null;
         
         return (
           <Card key={key}>
@@ -52,12 +81,12 @@ export function AdminMetricsCards() {
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 {TrendIcon && (
                   <TrendIcon className={`h-3 w-3 ${
-                    kpi.trend === 'up' ? 'text-green-500' : 
-                    kpi.trend === 'down' ? 'text-red-500' : 
+                    trend === 'up' ? 'text-green-500' : 
+                    trend === 'down' ? 'text-red-500' : 
                     'text-muted-foreground'
                   }`} />
                 )}
-                <span>{kpi.change || kpi.subtext}</span>
+                <span>{kpi.subtext}</span>
               </p>
             </CardContent>
           </Card>

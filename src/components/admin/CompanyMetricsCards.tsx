@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Target, Briefcase, DollarSign, Calendar, Mail, TrendingUp, TrendingDown, MessageSquare, Building } from 'lucide-react';
-import { useAdminMetrics } from '@/hooks/useAdminMetrics';
+import { useDashboardData } from '@/hooks/useDashboardData';
 
 const COMPANY_KPI_CONFIG = [
   { key: 'totalCompanyContacts', title: 'Total Company Contacts', icon: Users },
@@ -12,9 +12,9 @@ const COMPANY_KPI_CONFIG = [
 ] as const;
 
 export function CompanyMetricsCards() {
-  const { data, loading } = useAdminMetrics();
+  const { data, loading, isAdmin } = useDashboardData();
 
-  if (loading || !data) {
+  if (loading || !data || !isAdmin) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {Array.from({ length: 6 }).map((_, i) => (
@@ -31,12 +31,61 @@ export function CompanyMetricsCards() {
     );
   }
 
+  // Extract KPIs from dashboard data (for admin)
+  const adminKPIs = isAdmin && data && 'kpis' in data ? data.kpis : null;
+  
+  if (!adminKPIs) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Card key={i}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">No Data</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-6 w-24 rounded bg-muted animate-pulse" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  // Helper to determine trend from deltaPct
+  const getTrend = (deltaPct?: number): 'up' | 'down' | 'neutral' => {
+    if (deltaPct === undefined) return 'neutral';
+    return deltaPct > 0 ? 'up' : deltaPct < 0 ? 'down' : 'neutral';
+  };
+
   // Enhanced KPIs with additional calculations
   const enhancedKpis = {
-    ...data.kpis,
+    totalCompanyContacts: {
+      ...adminKPIs.totalCompanyContacts,
+      trend: getTrend(adminKPIs.totalCompanyContacts.deltaPct)
+    },
+    overallTaskCompletion: {
+      ...adminKPIs.overallTaskCompletion,
+      trend: getTrend(adminKPIs.overallTaskCompletion.deltaPct)
+    },
+    totalActiveTransactions: {
+      ...adminKPIs.totalActiveTransactions,
+      trend: getTrend(adminKPIs.totalActiveTransactions.deltaPct)
+    },
+    totalMonthlyRevenue: {
+      ...adminKPIs.totalMonthlyRevenue,
+      trend: getTrend(adminKPIs.totalMonthlyRevenue.deltaPct)
+    },
+    companyEventAttendance: {
+      ...adminKPIs.companyEventAttendance,
+      trend: getTrend(adminKPIs.companyEventAttendance.deltaPct)
+    },
+    avgNewsletterPerformance: {
+      ...adminKPIs.avgNewsletterPerformance,
+      trend: getTrend(adminKPIs.avgNewsletterPerformance.deltaPct)
+    },
     teamSocialEngagement: {
       label: 'Social Media Engagement',
-      value: '0%', // Placeholder - would need social analytics integration
+      value: '0%',
       subtext: 'No social data available',
       trend: 'neutral' as const
     }
@@ -68,7 +117,7 @@ export function CompanyMetricsCards() {
                     'text-muted-foreground'
                   }`} />
                 )}
-                <span>{('change' in kpi ? kpi.change : null) || kpi.subtext}</span>
+                <span>{kpi.subtext}</span>
               </p>
             </CardContent>
           </Card>

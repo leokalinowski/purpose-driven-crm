@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Target, Briefcase, DollarSign, Calendar, Mail, TrendingUp, TrendingDown, Phone, MessageSquare } from 'lucide-react';
-import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
+import { useDashboardData } from '@/hooks/useDashboardData';
 import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useEvents } from '@/hooks/useEvents';
@@ -17,7 +17,7 @@ const AGENT_KPI_CONFIG = [
 ] as const;
 
 export function AgentMetricsCards() {
-  const { data: dashboardData, loading: dashboardLoading } = useDashboardMetrics();
+  const { data: dashboardData, loading: dashboardLoading, isAgent } = useDashboardData();
   const { tasks: sphereSyncTasks, callTasks, textTasks, contacts } = useSphereSyncTasks();
   const { metrics: transactionMetrics } = useTransactions();
   const { tasks: eventTasks } = useEvents();
@@ -41,33 +41,62 @@ export function AgentMetricsCards() {
     );
   }
 
-  // Calculate metrics
+  // Extract data from dashboardData if available (for agent)
+  const dashboardKPIs = isAgent && dashboardData && 'kpis' in dashboardData ? dashboardData.kpis : null;
+
+  // Calculate metrics from individual hooks (for real-time updates)
   const completedSphereSync = sphereSyncTasks.filter(t => t.completed).length;
   const totalSphereSync = sphereSyncTasks.length;
   const sphereSyncCompletion = totalSphereSync > 0 ? Math.round((completedSphereSync / totalSphereSync) * 100) : 0;
   
+  // Use dashboard data if available, otherwise calculate from hooks
+  const totalContactsValue = dashboardKPIs?.totalContacts?.value ?? contacts.length;
+  const activeTransactionsValue = typeof dashboardKPIs?.activeTransactions?.value === 'number' 
+    ? dashboardKPIs.activeTransactions.value 
+    : transactionMetrics.ongoing;
+  
   const pendingEventTasks = eventTasks.filter(t => t.status === 'pending').length;
+  const upcomingEventsValue = typeof dashboardKPIs?.upcomingEvents?.value === 'number'
+    ? dashboardKPIs.upcomingEvents.value
+    : pendingEventTasks;
+  
+  // Determine trends from dashboard data deltaPct or calculate from hooks
+  const getTrend = (deltaPct?: number, fallback?: number): 'up' | 'down' | 'neutral' => {
+    if (deltaPct !== undefined) {
+      return deltaPct > 0 ? 'up' : deltaPct < 0 ? 'down' : 'neutral';
+    }
+    if (fallback !== undefined) {
+      return fallback > 0 ? 'up' : fallback < 0 ? 'down' : 'neutral';
+    }
+    return 'neutral';
+  };
   
   const agentKpis = {
     sphereSyncProgress: {
-      value: `${sphereSyncCompletion}%`,
+      value: dashboardKPIs?.sphereSyncCompletionRate?.value ?? `${sphereSyncCompletion}%`,
       subtext: `${completedSphereSync}/${totalSphereSync} tasks completed`,
-      trend: sphereSyncCompletion > 70 ? 'up' : sphereSyncCompletion > 30 ? 'neutral' : 'down' as 'up' | 'down' | 'neutral'
+      trend: getTrend(
+        dashboardKPIs?.sphereSyncCompletionRate?.deltaPct,
+        sphereSyncCompletion > 70 ? 1 : sphereSyncCompletion > 30 ? 0 : -1
+      )
     },
     pipelineValue: {
       value: `$${Math.round(transactionMetrics.pipelineValue).toLocaleString()}`,
-      subtext: `${transactionMetrics.ongoing} active transactions`,
-      trend: transactionMetrics.monthlyChange > 0 ? 'up' : transactionMetrics.monthlyChange < 0 ? 'down' : 'neutral' as 'up' | 'down' | 'neutral'
+      subtext: `${activeTransactionsValue} active transactions`,
+      trend: getTrend(
+        dashboardKPIs?.activeTransactions?.deltaPct,
+        transactionMetrics.monthlyChange
+      )
     },
     contactsDatabase: {
-      value: contacts.length,
-      subtext: 'Total contacts in database',
-      trend: 'neutral' as const
+      value: typeof totalContactsValue === 'number' ? totalContactsValue : parseInt(totalContactsValue) || 0,
+      subtext: dashboardKPIs?.totalContacts?.subtext ?? 'Total contacts in database',
+      trend: getTrend(dashboardKPIs?.totalContacts?.deltaPct)
     },
     upcomingTasks: {
-      value: pendingEventTasks,
-      subtext: 'Event tasks pending',
-      trend: pendingEventTasks > 5 ? 'down' : 'neutral' as 'up' | 'down' | 'neutral'
+      value: typeof upcomingEventsValue === 'number' ? upcomingEventsValue : parseInt(upcomingEventsValue) || 0,
+      subtext: dashboardKPIs?.upcomingEvents?.subtext ?? 'Event tasks pending',
+      trend: getTrend(dashboardKPIs?.upcomingEvents?.deltaPct, pendingEventTasks > 5 ? -1 : 0)
     },
     monthlyGCI: {
       value: `$${Math.round(transactionMetrics.gciMonth).toLocaleString()}`,
