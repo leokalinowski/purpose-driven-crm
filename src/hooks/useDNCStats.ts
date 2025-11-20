@@ -148,7 +148,7 @@ export const useDNCStats = () => {
   }, [effectiveAgentId]);
 
   // Auto-refresh DNC stats every 30 seconds when checking is active
-  React.useEffect(() => {
+  useEffect(() => {
     if (checking) {
       console.log('[DNC Stats] Starting auto-refresh polling...');
       const interval = setInterval(() => {

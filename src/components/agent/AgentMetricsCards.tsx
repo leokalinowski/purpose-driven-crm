@@ -41,8 +41,13 @@ export function AgentMetricsCards() {
     );
   }
 
+  // Type guard to check if this is agent data
+  const isAgentData = (d: typeof dashboardData): d is Extract<typeof dashboardData, { charts: any }> => {
+    return 'charts' in d;
+  };
+  
   // Extract data from dashboardData if available (for agent)
-  const dashboardKPIs = isAgent && dashboardData && 'kpis' in dashboardData ? dashboardData.kpis : null;
+  const dashboardKPIs = isAgent && dashboardData && isAgentData(dashboardData) ? dashboardData.kpis : null;
 
   // Calculate metrics from individual hooks (for real-time updates)
   const completedSphereSync = sphereSyncTasks.filter(t => t.completed).length;
