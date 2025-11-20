@@ -31,8 +31,13 @@ export function CompanyMetricsCards() {
     );
   }
 
+  // Type guard to check if this is admin data
+  const isAdminData = (d: typeof data): d is Extract<typeof data, { agentPerformance: any }> => {
+    return 'agentPerformance' in d;
+  };
+  
   // Extract KPIs from dashboard data (for admin)
-  const adminKPIs = isAdmin && data && 'kpis' in data ? data.kpis : null;
+  const adminKPIs = isAdmin && data && isAdminData(data) ? data.kpis : null;
   
   if (!adminKPIs) {
     return (

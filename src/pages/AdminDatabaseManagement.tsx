@@ -868,11 +868,22 @@ const AdminDatabaseManagement = () => {
               {/* DNC Check Buttons */}
               <div className="flex flex-col sm:flex-row justify-center gap-4">
                 <div className="text-center">
-                  <DNCCheckButton variant="default" size="lg" />
+                  <DNCCheckButton 
+                    variant="default" 
+                    size="lg" 
+                    onRun={triggerDNCCheck}
+                    checking={dncChecking}
+                  />
                   <p className="text-xs text-muted-foreground mt-1">Check new contacts only</p>
                 </div>
                 <div className="text-center">
-                  <DNCCheckButton variant="destructive" size="lg" forceRecheck={true} />
+                  <DNCCheckButton 
+                    variant="destructive" 
+                    size="lg" 
+                    forceRecheck={true}
+                    onRun={triggerDNCCheck}
+                    checking={dncChecking}
+                  />
                   <p className="text-xs text-muted-foreground mt-1">Recheck all contacts</p>
                 </div>
               </div>
