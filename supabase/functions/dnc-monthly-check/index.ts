@@ -127,8 +127,7 @@ serve(async (req) => {
   }
 
   const forceRecheck = (requestData as any)?.forceRecheck || false;
-  const targetAgentId = (requestData as any)?.agentId; // Optional: if specified, only process this agent
-  console.log(`Starting DNC check automation... Force recheck: ${forceRecheck}, Target agent: ${targetAgentId || 'ALL'}`);
+  console.log(`Starting DNC check automation... Force recheck: ${forceRecheck}`);
 
   try {
     const supabase = createClient(
@@ -177,32 +176,24 @@ serve(async (req) => {
       console.log(`Checking contacts not checked since: ${cutoffDate}`);
     }
 
-    // Get agents to process
-    let agentsToProcess;
-    if (targetAgentId) {
-      // If target agent specified, only process that agent
-      agentsToProcess = [{ user_id: targetAgentId }];
-      console.log(`Processing single target agent: ${targetAgentId}`);
-    } else {
-      // Otherwise, get all agents
-      const { data: agents, error: agentsError } = await supabase
-        .from('profiles')
-        .select('user_id')
-        .eq('role', 'agent');
+    // Get all agents
+    const { data: agents, error: agentsError } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('role', 'agent');
 
-      if (agentsError) {
-        throw new Error(`Failed to fetch agents: ${agentsError.message}`);
-      }
-      agentsToProcess = agents || [];
-      console.log(`Found ${agentsToProcess.length} agents to process`);
+    if (agentsError) {
+      throw new Error(`Failed to fetch agents: ${agentsError.message}`);
     }
+
+    console.log(`Found ${agents?.length || 0} agents to process`);
 
     let totalChecked = 0;
     let totalFlagged = 0;
     let totalErrors = 0;
 
     // Process each agent
-    for (const agent of agentsToProcess) {
+    for (const agent of agents || []) {
       console.log(`Processing agent: ${agent.user_id}`);
       
       let agentChecked = 0;

@@ -1,4 +1,3 @@
-// Trigger deployment after hitting limit yesterday
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -68,11 +67,15 @@ const Database = () => {
   const {
     stats,
     loading: dncLoading,
+    checking: dncChecking,
     fetchDNCStats,
+    triggerDNCCheck,
   } = useDNCStats(selectedViewingAgent);
   
+  const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const { toast } = useToast();
-  const { fetchAgents, getAgentDisplayName } = useAgents();
+  const { agents, fetchAgents, getAgentDisplayName } = useAgents();
   const { generateTasksForNewContacts } = useSphereSyncTasks();
 
   // Prevent scrolling to top when search changes
@@ -107,12 +110,6 @@ const Database = () => {
       fetchAgents();
     }
   }, [isAdmin, fetchAgents]);
-
-  // Reset search and pagination when switching agents
-  useEffect(() => {
-    handleSearch('');
-    goToPage(1);
-  }, [selectedViewingAgent, handleSearch, goToPage]);
 
 
   const handleAddContact = async (contactData: ContactInput) => {
@@ -344,12 +341,6 @@ const Database = () => {
     setEditingContact(null);
   };
 
-
-  // Fetch DNC stats when component mounts
-  useEffect(() => {
-    fetchDNCStats();
-  }, [fetchDNCStats]);
-
   const generatePageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
@@ -461,8 +452,19 @@ const Database = () => {
           {/* DNC Check Buttons - Admin Only */}
           {isAdmin && (
             <div className="flex justify-center gap-4">
-              <DNCCheckButton variant="default" size="lg" viewingAgentId={selectedViewingAgent} />
-              <DNCCheckButton variant="destructive" size="lg" forceRecheck={true} viewingAgentId={selectedViewingAgent} />
+              <DNCCheckButton 
+                variant="default" 
+                size="lg"
+                onRun={triggerDNCCheck}
+                checking={dncChecking}
+              />
+              <DNCCheckButton 
+                variant="destructive" 
+                size="lg" 
+                forceRecheck={true}
+                onRun={triggerDNCCheck}
+                checking={dncChecking}
+              />
             </div>
           )}
         </div>

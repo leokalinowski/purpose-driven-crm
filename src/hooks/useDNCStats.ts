@@ -105,18 +105,11 @@ export const useDNCStats = (viewingAgentId?: string) => {
 
     setChecking(true);
     try {
-      const body: any = {
-        manualTrigger: true,
-        forceRecheck
-      };
-
-      // If we have a viewing agent ID (admin viewing another agent), pass it to only check that agent
-      if (viewingAgentId && viewingAgentId !== user.id) {
-        body.agentId = viewingAgentId;
-      }
-
       const { data, error } = await supabase.functions.invoke('dnc-monthly-check', {
-        body
+        body: { 
+          manualTrigger: true,
+          forceRecheck 
+        }
       });
 
       if (error) throw error;
@@ -136,7 +129,9 @@ export const useDNCStats = (viewingAgentId?: string) => {
   // Auto-fetch stats when agent changes or on mount
   useEffect(() => {
     fetchDNCStats();
-  }, [effectiveAgentId, fetchDNCStats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveAgentId]);
+
 
   return {
     stats,

@@ -8,9 +8,10 @@ import { DNCStats } from '@/hooks/useDNCStats';
 interface DNCStatsCardProps {
   stats: DNCStats;
   loading: boolean;
+  agentLabel?: string;
 }
 
-export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading }) => {
+export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading, agentLabel }) => {
   const dncPercentage = stats.totalContacts > 0 ? (stats.dncContacts / stats.totalContacts) * 100 : 0;
   const safePercentage = stats.totalContacts > 0 ? (stats.nonDncContacts / stats.totalContacts) * 100 : 0;
   const uncheckedPercentage = stats.totalContacts > 0 ? (stats.neverChecked / stats.totalContacts) * 100 : 0;
