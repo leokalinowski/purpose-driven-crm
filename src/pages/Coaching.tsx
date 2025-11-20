@@ -23,6 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { 
   useSubmitCoachingForm, 
@@ -625,8 +626,8 @@ const WeeklySuccessScoreboard = () => {
                 </CardHeader>
                 <CardContent>
                   {personalLoading ? (
-                    <div className="flex items-center justify-center h-64">
-                      <p className="text-muted-foreground">Loading...</p>
+                    <div className="space-y-4">
+                      <Skeleton className="h-64 w-full" />
                     </div>
                   ) : personalChartData.length > 0 ? (
                      <ChartContainer config={chartConfig} className="h-80">
@@ -689,8 +690,8 @@ const WeeklySuccessScoreboard = () => {
                   </CardHeader>
                   <CardContent>
                     {teamLoading ? (
-                      <div className="flex items-center justify-center h-64">
-                        <p className="text-muted-foreground">Loading...</p>
+                      <div className="space-y-4">
+                        <Skeleton className="h-64 w-full" />
                       </div>
                     ) : comparisonChartData.length > 0 ? (
                       <ChartContainer config={chartConfig} className="h-80">

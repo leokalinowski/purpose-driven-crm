@@ -41,7 +41,7 @@ const menuItems = [
   { title: 'E-Newsletter', url: '/newsletter', icon: Mail },
   { title: 'Social Media', url: '/social-scheduler', icon: Share },
   { title: 'Success Scoreboard', url: '/coaching', icon: TrendingUp },
-  { title: 'Transaction Coordination', url: '/transactions', icon: FileBarChart },
+  // Transaction Coordination hidden from menu but route remains accessible via direct URL
 ];
 
 export function AppSidebar() {
@@ -81,9 +81,10 @@ export function AppSidebar() {
                   <SidebarMenuButton 
                     asChild
                     isActive={location.pathname === item.url}
+                    aria-label={`Navigate to ${item.title}`}
                   >
                     <Link to={item.url}>
-                      <item.icon />
+                      <item.icon aria-hidden="true" />
                       <span>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -164,8 +165,9 @@ export function AppSidebar() {
           variant="secondary"
           onClick={handleSignOut}
           className="w-full justify-start"
+          aria-label="Sign out of your account"
         >
-          <LogOut className="mr-2 h-4 w-4" />
+          <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
           Sign Out
         </Button>
       </SidebarFooter>

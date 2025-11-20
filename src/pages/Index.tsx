@@ -7,6 +7,8 @@ import { AgentActivityWidget } from '@/components/agent/AgentActivityWidget';
 import { AgentPerformanceCharts } from '@/components/agent/AgentPerformanceCharts';
 import { ExportButtons } from '@/components/dashboard/ExportButtons';
 import { DashboardRefreshButton } from '@/components/dashboard/DashboardRefreshButton';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
 const Index = () => {
   const { user, loading } = useAuth();
@@ -22,11 +24,41 @@ const Index = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <h1 className="text-2xl font-semibold">Loading...</h1>
+      <Layout>
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-9 w-64" />
+              <Skeleton className="h-5 w-96" />
+            </div>
+            <div className="flex items-center gap-2 sm:gap-4">
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-10 w-32" />
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-4 w-24" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-16 mb-2" />
+                  <Skeleton className="h-3 w-32" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-48" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-64 w-full" />
+            </CardContent>
+          </Card>
         </div>
-      </div>
+      </Layout>
     );
   }
 

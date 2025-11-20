@@ -83,6 +83,15 @@ export const ContactTable: React.FC<ContactTableProps> = ({
                   key={key}
                   className="cursor-pointer hover:bg-muted/50 select-none whitespace-nowrap"
                   onClick={() => onSort(key)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Sort by ${label}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSort(key);
+                    }
+                  }}
                 >
                   {label}
                   {getSortIcon(key)}

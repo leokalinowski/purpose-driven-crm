@@ -13,6 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AgentSelector } from '@/components/admin/AgentSelector';
 import { AgentSpecificDashboard } from '@/components/admin/AgentSpecificDashboard';
 import { UserManagement } from '@/components/admin/UserManagement';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
 const AdminDashboard = () => {
   const { user, loading: authLoading } = useAuth();
@@ -32,11 +34,33 @@ const AdminDashboard = () => {
 
   if (authLoading || roleLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <h1 className="text-2xl font-semibold">Loading...</h1>
+      <Layout>
+        <div className="space-y-6">
+          <div className="flex items-start justify-between">
+            <div className="space-y-2">
+              <Skeleton className="h-9 w-64" />
+              <Skeleton className="h-5 w-96" />
+            </div>
+            <Skeleton className="h-10 w-32" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-10 w-full max-w-md" />
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => (
+                <Card key={i}>
+                  <CardHeader>
+                    <Skeleton className="h-4 w-24" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-8 w-16 mb-2" />
+                    <Skeleton className="h-3 w-32" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import { useMetricoolLink } from '@/hooks/useMetricool';
 
 interface MetricoolIframeProps {
@@ -45,7 +46,17 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Metricool Social Media Dashboard</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>Metricool Social Media Dashboard</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.open(metricoolLink.iframe_url, '_blank')}
+          >
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Open in New Tab
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="w-full">
