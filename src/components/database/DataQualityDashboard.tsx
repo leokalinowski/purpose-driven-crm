@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -13,8 +13,8 @@ interface DataQualityDashboardProps {
   onBulkEnriched?: (enrichedContacts: EnrichedContact[]) => void;
 }
 
-export const DataQualityDashboard: React.FC<DataQualityDashboardProps> = ({ contacts, onBulkEnriched }) => {
-  const [showBulkEnricher, setShowBulkEnricher] = React.useState(false);
+export const DataQualityDashboard = ({ contacts, onBulkEnriched }: DataQualityDashboardProps) => {
+  const [showBulkEnricher, setShowBulkEnricher] = useState(false);
   
   // Ensure contacts is always an array
   const safeContacts = Array.isArray(contacts) ? contacts : [];
