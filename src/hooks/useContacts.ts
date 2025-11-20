@@ -37,7 +37,7 @@ export type ContactInput = Omit<
   | 'activity_count'
 >;
 
-export const useContacts = (viewingAgentId?: string) => {
+export const useContacts = () => {
   const { user } = useAuth();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [allContacts, setAllContacts] = useState<Contact[]>([]);
@@ -52,15 +52,8 @@ export const useContacts = (viewingAgentId?: string) => {
 
   const ITEMS_PER_PAGE = 25;
 
-  // Reset search and pagination when viewing agent changes
-  useEffect(() => {
-    setSearchTerm('');
-    setDebouncedSearchTerm('');
-    setCurrentPage(1);
-  }, [viewingAgentId]);
-
-  // Use viewingAgentId if provided (admin viewing another agent), otherwise use logged-in user
-  const effectiveAgentId = viewingAgentId || user?.id;
+  // Use the logged-in user
+  const effectiveAgentId = user?.id;
 
   const fetchAllContacts = useCallback(async (): Promise<Contact[]> => {
     if (!user || !effectiveAgentId) return [];
@@ -153,7 +146,6 @@ export const useContacts = (viewingAgentId?: string) => {
     currentPage,
     sortBy,
     sortOrder,
-    viewingAgentId,
     fetchAllContacts,
   ]);
 

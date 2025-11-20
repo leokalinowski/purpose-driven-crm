@@ -12,7 +12,7 @@ export interface DNCStats {
   lastChecked: string | null;
 }
 
-export const useDNCStats = (viewingAgentId?: string) => {
+export const useDNCStats = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState<DNCStats>({
     totalContacts: 0,
@@ -26,8 +26,8 @@ export const useDNCStats = (viewingAgentId?: string) => {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
 
-  // Use viewingAgentId if provided (admin viewing another agent), otherwise use logged-in user
-  const effectiveAgentId = viewingAgentId || user?.id;
+  // Use the logged-in user
+  const effectiveAgentId = user?.id;
 
   const fetchDNCStats = useCallback(async () => {
     if (!user || !effectiveAgentId) return;

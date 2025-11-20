@@ -22,28 +22,10 @@ import { useDNCStats } from '@/hooks/useDNCStats';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
-import { useAgents } from '@/hooks/useAgents';
 import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
 import { supabase } from '@/integrations/supabase/client';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const Database = () => {
-  const [selectedViewingAgent, setSelectedViewingAgent] = useState<string>('');
-
-  const { user } = useAuth();
-  const { isAdmin } = useUserRole();
-  const { agents } = useAgents();
-
-  // Safe debugging - only log when values change
-  useEffect(() => {
-    console.log('[Database] State changed:', {
-      selectedViewingAgent,
-      isAdmin,
-      userId: user?.id,
-      agentsCount: agents.length
-    });
-  }, [selectedViewingAgent, isAdmin, user?.id, agents.length]);
-  
   const {
     contacts,
     allContacts,
@@ -62,18 +44,19 @@ const Database = () => {
     handleSearch,
     goToPage,
     fetchContacts,
-  } = useContacts(selectedViewingAgent);
-  
+  } = useContacts();
+
   const {
     stats,
     loading: dncLoading,
     checking: dncChecking,
     fetchDNCStats,
     triggerDNCCheck,
-  } = useDNCStats(selectedViewingAgent);
+  } = useDNCStats();
 
+  const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const { toast } = useToast();
-  const { fetchAgents, getAgentDisplayName } = useAgents();
   const { generateTasksForNewContacts } = useSphereSyncTasks();
 
   // Prevent scrolling to top when search changes
@@ -102,12 +85,6 @@ const Database = () => {
   const [viewingTouchpointsContact, setViewingTouchpointsContact] = useState<Contact | null>(null);
   const [showDuplicateCleanup, setShowDuplicateCleanup] = useState(false);
 
-  // Fetch agents for admin cleanup selector
-  useEffect(() => {
-    if (isAdmin) {
-      fetchAgents();
-    }
-  }, [isAdmin, fetchAgents]);
 
 
   const handleAddContact = async (contactData: ContactInput) => {
@@ -248,58 +225,20 @@ const Database = () => {
     }
   };
 
-  const handleCSVUpload = async (csvData: ContactInput[], agentId?: string) => {
+  const handleCSVUpload = async (csvData: ContactInput[]) => {
     try {
-      console.log('CSV Upload - isAdmin:', isAdmin, 'agentId:', agentId, 'contacts count:', csvData.length);
-      
-      // For admins: use edge function if uploading to someone else, regular upload for own account
-      if (isAdmin && agentId && agentId !== user?.id) {
-        console.log('Admin uploading for another agent via edge function:', agentId);
-        
-        const { data, error } = await supabase.functions.invoke('admin-contacts-import', {
-          body: { 
-            contacts: csvData, 
-            agentId: agentId,
-            adminUserId: user?.id 
-          }
-        });
+      const insertedContacts = await uploadCSV(csvData);
 
-        if (error) throw error;
-        if (!data || data.success !== true) {
-          throw new Error(data?.error || 'Import failed.');
-        }
-        
-        console.log('Edge function response:', data);
-        
-        // Build success message with DNC stats
-        let description = data.message || `${data.contactCount ?? csvData.length} contacts uploaded successfully`;
-        if (data.dncStats && data.dncStats.checked > 0) {
-          description += ` | DNC Check: ${data.dncStats.checked} checked, ${data.dncStats.flagged} flagged`;
-          if (data.dncStats.errors > 0) {
-            description += ` (${data.dncStats.errors} errors)`;
-          }
-        }
-        
-        toast({
-          title: 'Success',
-          description,
-        });
-      } else {
-        // Regular upload (agents or admins uploading to their own account)
-        console.log('Regular upload using uploadCSV hook');
-        const insertedContacts = await uploadCSV(csvData);
-        
-        toast({
-          title: 'Success',
-          description: `${insertedContacts.length} contacts uploaded successfully`,
-        });
+      toast({
+        title: 'Success',
+        description: `${insertedContacts.length} contacts uploaded successfully`,
+      });
 
-        // Refresh the list for the uploading user
-        await fetchContacts();
+      // Refresh the list
+      await fetchContacts();
 
-        // Generate tasks for new contacts if they match current week's categories
-        await generateTasksForNewContacts(insertedContacts);
-      }
+      // Generate tasks for new contacts if they match current week's categories
+      await generateTasksForNewContacts(insertedContacts);
       
       setShowCSVUpload(false);
       goToPage(1);
@@ -356,12 +295,6 @@ const Database = () => {
     return pages;
   };
 
-  // Helper to get agent display name by user_id
-  const getViewingAgentName = (userId: string) => {
-    if (!userId) return '';
-    const agent = agents.find(a => a.user_id === userId);
-    return agent ? getAgentDisplayName(agent) : 'Unknown Agent';
-  };
 
   return (
     <Layout>
@@ -370,57 +303,14 @@ const Database = () => {
           <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Contact Database</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
-              {isAdmin && selectedViewingAgent 
-                ? `Viewing: ${getViewingAgentName(selectedViewingAgent)}'s Database`
-                : isAdmin 
+              {isAdmin
                 ? 'Your Database (Admin View)'
                 : 'Manage your contacts and leads'
               }
             </p>
-            {isAdmin && selectedViewingAgent && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedViewingAgent('')}
-                className="mt-1 h-7 text-xs"
-              >
-                Clear Selection
-              </Button>
-            )}
           </div>
-          
-          {/* Admin Viewing Agent Selector */}
-          {isAdmin && (
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <Select value={selectedViewingAgent} onValueChange={setSelectedViewingAgent}>
-                <SelectTrigger className="w-56">
-                  <SelectValue placeholder="Select agent to view" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">My Database</SelectItem>
-                  {agents.map((agent) => (
-                    <SelectItem key={agent.user_id} value={agent.user_id}>
-                      {getAgentDisplayName(agent)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
          
           <div className="flex items-center gap-2 sm:gap-4 self-start sm:self-auto">
-            {/* Admin Duplicate Cleanup Section */}
-            {isAdmin && selectedViewingAgent && selectedViewingAgent !== '' && (
-              <DuplicateCleanupButton
-                agentId={selectedViewingAgent}
-                agentName={getAgentDisplayName(agents.find(a => a.user_id === selectedViewingAgent)!)}
-                onCleanupComplete={() => {
-                  fetchContacts();
-                }}
-              />
-            )}
-            
             <Button
               onClick={() => setShowDuplicateCleanup(true)}
               variant="outline"
@@ -431,7 +321,6 @@ const Database = () => {
             <Button
               onClick={() => setShowCSVUpload(true)}
               variant="outline"
-              disabled={isAdmin && !selectedViewingAgent}
             >
               <Upload className="h-4 w-4 mr-2" />
               Upload CSV
@@ -562,7 +451,6 @@ const Database = () => {
           open={showCSVUpload}
           onOpenChange={setShowCSVUpload}
           onUpload={handleCSVUpload}
-          agentId={isAdmin && selectedViewingAgent ? selectedViewingAgent : user?.id}
         />
         
         {/* Duplicate Cleanup Dialog */}
