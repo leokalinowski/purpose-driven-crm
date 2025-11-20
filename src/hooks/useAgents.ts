@@ -20,30 +20,19 @@ export const useAgents = () => {
       setLoading(true);
       setError(null);
       
-      console.log('[useAgents] Starting agent fetch...');
-      
       // Step 1: Fetch user_roles for agents and admins
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, role')
         .in('role', ['agent', 'admin']);
       
-      console.log('[useAgents] Step 1 - Roles fetched:', { 
-        count: roles?.length || 0, 
-        error: rolesError?.message,
-        roles: roles 
-      });
-      
       if (rolesError) {
         throw rolesError;
       }
 
       const userIds = Array.from(new Set((roles || []).map(r => r.user_id)));
-      
-      console.log('[useAgents] Unique user IDs:', userIds.length);
-      
+
       if (userIds.length === 0) {
-        console.warn('[useAgents] No user_roles found for agents/admins');
         setAgents([]);
         setLoading(false);
         return;
@@ -54,12 +43,6 @@ export const useAgents = () => {
         .from('profiles')
         .select('user_id, first_name, last_name, email')
         .in('user_id', userIds);
-      
-      console.log('[useAgents] Step 2 - Profiles fetched:', { 
-        count: profiles?.length || 0, 
-        error: profilesError?.message,
-        profiles: profiles 
-      });
       
       if (profilesError) {
         throw profilesError;
@@ -88,7 +71,6 @@ export const useAgents = () => {
         (a.last_name || '').localeCompare(b.last_name || '')
       );
 
-      console.log('[useAgents] Step 3 - Merged agents:', merged.length);
       setAgents(merged as Agent[]);
     } catch (error: any) {
       console.error('[useAgents] Error fetching agents:', error);

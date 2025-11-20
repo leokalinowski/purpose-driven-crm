@@ -135,11 +135,6 @@ export const useDNCStats = (viewingAgentId?: string) => {
 
   // Auto-fetch stats when agent changes or on mount
   useEffect(() => {
-    console.info('[useDNCStats] Agent changed, fetching stats:', {
-      userId: user?.id,
-      viewingAgentId,
-      effectiveAgentId
-    });
     fetchDNCStats();
   }, [effectiveAgentId, fetchDNCStats]);
 

@@ -106,15 +106,6 @@ export const useContacts = (viewingAgentId?: string) => {
     }
 
     setLoading(true);
-    console.info('[useContacts] fetchContacts', {
-      userId: user.id,
-      viewingAgentId,
-      effectiveAgentId,
-      debouncedSearchTerm,
-      currentPage,
-      sortBy,
-      sortOrder,
-    });
 
     try {
       let query = supabase

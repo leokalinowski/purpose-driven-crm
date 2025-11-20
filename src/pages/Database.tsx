@@ -35,13 +35,15 @@ const Database = () => {
   const { isAdmin } = useUserRole();
   const { agents } = useAgents();
 
-  // Debug logging
-  console.log('Database component render:', {
-    selectedViewingAgent,
-    isAdmin,
-    userId: user?.id,
-    agentsCount: agents.length
-  });
+  // Safe debugging - only log when values change
+  useEffect(() => {
+    console.log('[Database] State changed:', {
+      selectedViewingAgent,
+      isAdmin,
+      userId: user?.id,
+      agentsCount: agents.length
+    });
+  }, [selectedViewingAgent, isAdmin, user?.id, agents.length]);
   
   const {
     contacts,
