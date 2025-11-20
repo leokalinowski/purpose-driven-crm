@@ -62,6 +62,8 @@ const Database = () => {
     fetchDNCStats,
   } = useDNCStats(selectedViewingAgent);
 
+  const { generateTasksForNewContacts } = useSphereSyncTasks();
+
   // Debug logging - after all hooks
   console.log('Database component render:', {
     selectedViewingAgent,
@@ -71,7 +73,6 @@ const Database = () => {
     contactsLoaded: contacts.length,
     effectiveAgentId: selectedViewingAgent || user?.id
   });
-  const { generateTasksForNewContacts } = useSphereSyncTasks();
 
   // Prevent scrolling to top when search changes
   const scrollPositionRef = React.useRef<number>(0);
