@@ -134,7 +134,9 @@ export const useDNCStats = (viewingAgentId?: string) => {
       effectiveAgentId
     });
     fetchDNCStats();
-  }, [effectiveAgentId, fetchDNCStats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveAgentId]);
+
 
   return {
     stats,
