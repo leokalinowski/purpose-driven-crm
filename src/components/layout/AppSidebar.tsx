@@ -11,7 +11,8 @@ import {
   BarChart3,
   UserPlus,
   Settings,
-  Share
+  Share,
+  Database
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -120,13 +121,24 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton 
+                  <SidebarMenuButton
                     asChild
                     isActive={location.pathname === '/admin/newsletter'}
                   >
                     <Link to="/admin/newsletter">
                       <Mail />
                       <span>Newsletter Management</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location.pathname === '/admin/database'}
+                  >
+                    <Link to="/admin/database">
+                      <Database />
+                      <span>Database Management</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
