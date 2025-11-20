@@ -11,7 +11,6 @@ import { ContactForm } from '@/components/database/ContactForm';
 import { ImprovedCSVUpload } from '@/components/database/ImprovedCSVUpload';
 import { DNCStatsCard } from '@/components/database/DNCStatsCard';
 import { ContactActivitiesDialog } from '@/components/database/ContactActivitiesDialog';
-import { DuplicateCleanupButton } from '@/components/admin/DuplicateCleanupButton';
 import { DuplicateCleanup } from '@/components/database/DuplicateCleanup';
 import { DNCCheckButton } from '@/components/database/DNCCheckButton';
 import { DataQualityDashboard } from '@/components/database/DataQualityDashboard';
@@ -386,7 +385,18 @@ const Database = () => {
         
         {/* DNC Statistics Dashboard */}
         <div className="space-y-4">
-          <DNCStatsCard stats={stats} loading={dncLoading} />
+          <DNCStatsCard 
+            stats={stats || {
+              totalContacts: 0,
+              dncContacts: 0,
+              nonDncContacts: 0,
+              neverChecked: 0,
+              missingPhone: 0,
+              needsRecheck: 0,
+              lastChecked: null,
+            }} 
+            loading={dncLoading} 
+          />
           
           {/* DNC Check Buttons - Admin Only */}
           {isAdmin && (
@@ -437,7 +447,7 @@ const Database = () => {
               <>
                 <div className="w-full overflow-x-auto">
                       <ContactTable
-                        contacts={contacts}
+                        contacts={contacts || []}
                         sortBy={sortBy}
                         sortOrder={sortOrder}
                         onSort={handleSort}
@@ -446,7 +456,7 @@ const Database = () => {
                         onViewActivities={setViewingTouchpointsContact}
                         onEnriched={handleContactEnriched}
                         showSelection={true}
-                        selectedContacts={selectedContacts}
+                        selectedContacts={selectedContacts || []}
                         onSelectionChange={setSelectedContacts}
                       />
                 </div>

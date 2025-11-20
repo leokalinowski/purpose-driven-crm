@@ -37,6 +37,9 @@ export const ContactTable: React.FC<ContactTableProps> = ({
   onSelectionChange,
   showSelection = false,
 }) => {
+  // Ensure contacts is always an array
+  const safeContacts = Array.isArray(contacts) ? contacts : [];
+  const safeSelectedContacts = Array.isArray(selectedContacts) ? selectedContacts : [];
 
   const getSortIcon = (column: keyof Contact) => {
     if (sortBy !== column) return null;
@@ -67,10 +70,10 @@ export const ContactTable: React.FC<ContactTableProps> = ({
                   <input
                     type="checkbox"
                     className="rounded border-gray-300"
-                    checked={selectedContacts.length === contacts.length && contacts.length > 0}
+                    checked={safeSelectedContacts.length === safeContacts.length && safeContacts.length > 0}
                     onChange={(e) => {
                       if (e.target.checked) {
-                        onSelectionChange?.(contacts);
+                        onSelectionChange?.(safeContacts);
                       } else {
                         onSelectionChange?.([]);
                       }
@@ -105,14 +108,14 @@ export const ContactTable: React.FC<ContactTableProps> = ({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {contacts.length === 0 ? (
+            {safeContacts.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={showSelection ? 10 : 9} className="text-center py-8 text-muted-foreground">
                   No contacts found
                 </TableCell>
               </TableRow>
             ) : (
-              contacts.map((contact) => (
+              safeContacts.map((contact) => (
                 <TableRow
                   key={contact.id}
                   className={contact.dnc ? "bg-destructive/10 hover:bg-destructive/20" : "hover:bg-muted/50"}
@@ -122,12 +125,12 @@ export const ContactTable: React.FC<ContactTableProps> = ({
                       <input
                         type="checkbox"
                         className="rounded border-gray-300"
-                        checked={selectedContacts.some(c => c.id === contact.id)}
+                        checked={safeSelectedContacts.some(c => c.id === contact.id)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            onSelectionChange?.([...selectedContacts, contact]);
+                            onSelectionChange?.([...safeSelectedContacts, contact]);
                           } else {
-                            onSelectionChange?.(selectedContacts.filter(c => c.id !== contact.id));
+                            onSelectionChange?.(safeSelectedContacts.filter(c => c.id !== contact.id));
                           }
                         }}
                       />

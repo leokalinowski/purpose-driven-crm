@@ -15,8 +15,12 @@ interface DataQualityDashboardProps {
 
 export const DataQualityDashboard: React.FC<DataQualityDashboardProps> = ({ contacts, onBulkEnriched }) => {
   const [showBulkEnricher, setShowBulkEnricher] = React.useState(false);
+  
+  // Ensure contacts is always an array
+  const safeContacts = Array.isArray(contacts) ? contacts : [];
+  
   // Calculate quality scores and suggestions for all contacts
-  const contactsWithQuality = contacts.map(contact => ({
+  const contactsWithQuality = safeContacts.map(contact => ({
     ...contact,
     quality_score: calculateDataQualityScore(contact),
     suggestions: generateEnrichmentSuggestions(contact)
