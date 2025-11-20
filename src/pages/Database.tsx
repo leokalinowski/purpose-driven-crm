@@ -53,7 +53,9 @@ const Database = () => {
   const {
     stats,
     loading: dncLoading,
+    checking: dncChecking,
     fetchDNCStats,
+    triggerDNCCheck,
   } = useDNCStats(selectedViewingAgent);
   
   const { user } = useAuth();
@@ -442,8 +444,19 @@ const Database = () => {
           {/* DNC Check Buttons - Admin Only */}
           {isAdmin && (
             <div className="flex justify-center gap-4">
-              <DNCCheckButton variant="default" size="lg" />
-              <DNCCheckButton variant="destructive" size="lg" forceRecheck={true} />
+              <DNCCheckButton 
+                variant="default" 
+                size="lg"
+                onRun={triggerDNCCheck}
+                checking={dncChecking}
+              />
+              <DNCCheckButton 
+                variant="destructive" 
+                size="lg" 
+                forceRecheck={true}
+                onRun={triggerDNCCheck}
+                checking={dncChecking}
+              />
             </div>
           )}
         </div>
