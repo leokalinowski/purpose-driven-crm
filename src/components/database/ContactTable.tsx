@@ -18,6 +18,10 @@ interface ContactTableProps {
   onDelete: (contact: Contact) => void;
   onViewActivities: (contact: Contact) => void;
   onEnriched?: (enrichedContact: EnrichedContact) => void;
+  // Selection props
+  selectedContacts?: Contact[];
+  onSelectionChange?: (selectedContacts: Contact[]) => void;
+  showSelection?: boolean;
 }
 
 export const ContactTable: React.FC<ContactTableProps> = ({
@@ -29,6 +33,9 @@ export const ContactTable: React.FC<ContactTableProps> = ({
   onDelete,
   onViewActivities,
   onEnriched,
+  selectedContacts = [],
+  onSelectionChange,
+  showSelection = false,
 }) => {
 
   const getSortIcon = (column: keyof Contact) => {
@@ -55,6 +62,22 @@ export const ContactTable: React.FC<ContactTableProps> = ({
         <Table className="min-w-full w-full">
           <TableHeader>
             <TableRow>
+              {showSelection && (
+                <TableHead className="w-12">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300"
+                    checked={selectedContacts.length === contacts.length && contacts.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        onSelectionChange?.(contacts);
+                      } else {
+                        onSelectionChange?.([]);
+                      }
+                    }}
+                  />
+                </TableHead>
+              )}
               {sortableColumns.map(({ key, label }) => (
                 <TableHead
                   key={key}
@@ -75,7 +98,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({
           <TableBody>
             {contacts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={showSelection ? 10 : 9} className="text-center py-8 text-muted-foreground">
                   No contacts found
                 </TableCell>
               </TableRow>
@@ -85,6 +108,22 @@ export const ContactTable: React.FC<ContactTableProps> = ({
                   key={contact.id}
                   className={contact.dnc ? "bg-destructive/10 hover:bg-destructive/20" : "hover:bg-muted/50"}
                 >
+                  {showSelection && (
+                    <TableCell className="w-12">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300"
+                        checked={selectedContacts.some(c => c.id === contact.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            onSelectionChange?.([...selectedContacts, contact]);
+                          } else {
+                            onSelectionChange?.(selectedContacts.filter(c => c.id !== contact.id));
+                          }
+                        }}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell className="whitespace-nowrap">{renderCell(contact, 'first_name')}</TableCell>
                   <TableCell className="whitespace-nowrap">{renderCell(contact, 'last_name')}</TableCell>
                   <TableCell className="whitespace-nowrap">{renderCell(contact, 'phone')}</TableCell>

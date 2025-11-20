@@ -14,6 +14,7 @@ import { ContactActivitiesDialog } from '@/components/database/ContactActivities
 import { DuplicateCleanupButton } from '@/components/admin/DuplicateCleanupButton';
 import { DNCCheckButton } from '@/components/database/DNCCheckButton';
 import { DataQualityDashboard } from '@/components/database/DataQualityDashboard';
+import { BulkContactEditor } from '@/components/database/BulkContactEditor';
 import { EnrichedContact } from '@/utils/dataEnrichment';
 
 import { Contact, ContactInput } from '@/hooks/useContacts';
@@ -339,6 +340,12 @@ const useAdminDNCStats = (selectedAgentId?: string) => {
   const triggerDNCCheck = React.useCallback(async (forceRecheck: boolean = false) => {
     if (!user) throw new Error('User not authenticated');
 
+    console.log('[Admin DNC Check] Starting check:', {
+      agentId: effectiveAgentId,
+      forceRecheck,
+      isCurrentUser: effectiveAgentId === user.id
+    });
+
     setChecking(true);
     try {
       const body: any = {
@@ -348,17 +355,33 @@ const useAdminDNCStats = (selectedAgentId?: string) => {
 
       if (effectiveAgentId && effectiveAgentId !== user.id) {
         body.agentId = effectiveAgentId;
+        console.log('[Admin DNC Check] Targeting specific agent:', effectiveAgentId);
       }
+
+      console.log('[Admin DNC Check] Calling edge function with body:', body);
 
       const { data, error } = await supabase.functions.invoke('dnc-monthly-check', {
         body
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Admin DNC Check] Edge function error:', error);
+        throw error;
+      }
+
+      console.log('[Admin DNC Check] Edge function response:', data);
+
+      // Wait a moment for the database to update, then refresh stats
+      console.log('[Admin DNC Check] Waiting for database update...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      console.log('[Admin DNC Check] Refreshing DNC stats...');
       await fetchDNCStats();
+
+      console.log('[Admin DNC Check] Stats refreshed successfully');
       return data;
     } catch (error) {
-      console.error('Error triggering DNC check:', error);
+      console.error('[Admin DNC Check] Failed:', error);
       throw error;
     } finally {
       setChecking(false);
@@ -368,6 +391,22 @@ const useAdminDNCStats = (selectedAgentId?: string) => {
   useEffect(() => {
     fetchDNCStats();
   }, [effectiveAgentId, fetchDNCStats]);
+
+  // Auto-refresh DNC stats every 30 seconds when checking is active
+  React.useEffect(() => {
+    if (checking) {
+      console.log('[Admin DNC Stats] Starting auto-refresh polling...');
+      const interval = setInterval(() => {
+        console.log('[Admin DNC Stats] Auto-refreshing stats...');
+        fetchDNCStats();
+      }, 30000); // Every 30 seconds
+
+      return () => {
+        console.log('[Admin DNC Stats] Stopping auto-refresh polling');
+        clearInterval(interval);
+      };
+    }
+  }, [checking, fetchDNCStats]);
 
   return {
     stats,
@@ -439,6 +478,8 @@ const AdminDatabaseManagement = () => {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
   const [viewingTouchpointsContact, setViewingTouchpointsContact] = useState<Contact | null>(null);
+  const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
+  const [showBulkEditor, setShowBulkEditor] = useState(false);
 
   // Fetch agents for admin selector
   useEffect(() => {
@@ -580,6 +621,24 @@ const AdminDatabaseManagement = () => {
         description: "Failed to save some enriched contact data.",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleBulkUpdate = async (updates: Partial<Contact>, contactIds: string[]) => {
+    try {
+      // Update all selected contacts with the same changes
+      const updatePromises = contactIds.map(contactId =>
+        updateContact(contactId, updates)
+      );
+
+      await Promise.all(updatePromises);
+      await fetchContacts();
+      await fetchDNCStats();
+
+      setSelectedContacts([]); // Clear selection after update
+    } catch (error) {
+      console.error('Bulk update error:', error);
+      throw error;
     }
   };
 
@@ -768,6 +827,15 @@ const AdminDatabaseManagement = () => {
               <Plus className="h-4 w-4 mr-2" />
               Add Contact
             </Button>
+            <Button
+              onClick={() => setShowBulkEditor(true)}
+              disabled={!selectedViewingAgent || selectedContacts.length === 0}
+              variant="outline"
+              title="Edit multiple selected contacts at once"
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Bulk Edit ({selectedContacts.length})
+            </Button>
           </div>
         </div>
 
@@ -847,6 +915,9 @@ const AdminDatabaseManagement = () => {
                         onDelete={setDeletingContact}
                         onViewActivities={setViewingTouchpointsContact}
                         onEnriched={handleContactEnriched}
+                        showSelection={true}
+                        selectedContacts={selectedContacts}
+                        onSelectionChange={setSelectedContacts}
                       />
                     </div>
                     {totalPages > 1 && (
@@ -941,6 +1012,13 @@ const AdminDatabaseManagement = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <BulkContactEditor
+          open={showBulkEditor}
+          onOpenChange={setShowBulkEditor}
+          selectedContacts={selectedContacts}
+          onBulkUpdate={handleBulkUpdate}
+        />
       </div>
     </Layout>
   );

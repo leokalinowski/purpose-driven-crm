@@ -28,6 +28,7 @@ export const BulkContactEnricher: React.FC<BulkContactEnricherProps> = ({
     enriched: number;
     skipped: number;
     enrichedContacts: EnrichedContact[];
+    enrichmentDetails: string[];
   } | null>(null);
 
   const handleBulkEnrich = async () => {
@@ -46,6 +47,7 @@ export const BulkContactEnricher: React.FC<BulkContactEnricherProps> = ({
     const enrichedContacts: EnrichedContact[] = [];
     let enriched = 0;
     let skipped = 0;
+    const enrichmentDetails: string[] = [];
 
     // Process contacts in batches to avoid blocking the UI
     const batchSize = 10;
@@ -75,10 +77,15 @@ export const BulkContactEnricher: React.FC<BulkContactEnricherProps> = ({
             return (score / totalFields) * 100;
           })()));
 
-          // Only count as enriched if there were actual improvements made AND quality improved
-          if (result.changes_made.length > 0 && newQuality > originalQuality) {
+          // Count as enriched if there were changes made or quality improved
+          if (result.changes_made.length > 0 || newQuality > originalQuality) {
             enrichedContacts.push(result.contact);
             enriched++;
+
+            // Track what was enriched
+            if (result.changes_made.length > 0) {
+              enrichmentDetails.push(`${contact.first_name || 'Unknown'} ${contact.last_name || 'Contact'}: ${result.changes_made.join(', ')}`);
+            }
           } else {
             skipped++;
           }
@@ -99,7 +106,8 @@ export const BulkContactEnricher: React.FC<BulkContactEnricherProps> = ({
       total: contacts.length,
       enriched,
       skipped,
-      enrichedContacts
+      enrichedContacts,
+      enrichmentDetails
     });
 
     setProcessing(false);
@@ -108,7 +116,7 @@ export const BulkContactEnricher: React.FC<BulkContactEnricherProps> = ({
     toast({
       title: "Bulk Enrichment Complete",
       description: enriched > 0
-        ? `Successfully enriched ${enriched} contacts. ${skipped} contacts were already complete or couldn't be improved automatically.`
+        ? `Successfully enriched ${enriched} contacts with improved data quality. Check the results below for details.`
         : `All ${contacts.length} contacts are already complete or can't be improved automatically.`,
     });
   };
@@ -198,6 +206,23 @@ export const BulkContactEnricher: React.FC<BulkContactEnricherProps> = ({
                       <div className="text-green-600">• Enriched: {results.enriched}</div>
                       <div className="text-gray-500">• Already optimal: {results.skipped}</div>
                     </div>
+                    {results.enrichmentDetails && results.enrichmentDetails.length > 0 && (
+                      <div className="mt-3 pt-3 border-t">
+                        <div className="text-xs font-medium mb-2">What was improved:</div>
+                        <div className="max-h-32 overflow-y-auto space-y-1">
+                          {results.enrichmentDetails.slice(0, 10).map((detail, index) => (
+                            <div key={index} className="text-xs text-muted-foreground">
+                              • {detail}
+                            </div>
+                          ))}
+                          {results.enrichmentDetails.length > 10 && (
+                            <div className="text-xs text-muted-foreground italic">
+                              ... and {results.enrichmentDetails.length - 10} more improvements
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </AlertDescription>
               </Alert>

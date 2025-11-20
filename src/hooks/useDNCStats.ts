@@ -103,23 +103,38 @@ export const useDNCStats = () => {
   const triggerDNCCheck = useCallback(async (forceRecheck: boolean = false) => {
     if (!user) throw new Error('User not authenticated');
 
+    console.log('[DNC Check] Starting check for current user:', {
+      userId: user.id,
+      forceRecheck
+    });
+
     setChecking(true);
     try {
       const { data, error } = await supabase.functions.invoke('dnc-monthly-check', {
-        body: { 
+        body: {
           manualTrigger: true,
-          forceRecheck 
+          forceRecheck
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[DNC Check] Edge function error:', error);
+        throw error;
+      }
 
-      // Refresh stats after check
+      console.log('[DNC Check] Edge function response:', data);
+
+      // Wait a moment for the database to update, then refresh stats
+      console.log('[DNC Check] Waiting for database update...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      console.log('[DNC Check] Refreshing DNC stats...');
       await fetchDNCStats();
-      
+
+      console.log('[DNC Check] Stats refreshed successfully');
       return data;
     } catch (error) {
-      console.error('Error triggering DNC check:', error);
+      console.error('[DNC Check] Failed:', error);
       throw error;
     } finally {
       setChecking(false);
@@ -131,6 +146,22 @@ export const useDNCStats = () => {
     fetchDNCStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveAgentId]);
+
+  // Auto-refresh DNC stats every 30 seconds when checking is active
+  React.useEffect(() => {
+    if (checking) {
+      console.log('[DNC Stats] Starting auto-refresh polling...');
+      const interval = setInterval(() => {
+        console.log('[DNC Stats] Auto-refreshing stats...');
+        fetchDNCStats();
+      }, 30000); // Every 30 seconds
+
+      return () => {
+        console.log('[DNC Stats] Stopping auto-refresh polling');
+        clearInterval(interval);
+      };
+    }
+  }, [checking, fetchDNCStats]);
 
 
   return {

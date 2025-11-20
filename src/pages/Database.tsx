@@ -15,6 +15,7 @@ import { DuplicateCleanupButton } from '@/components/admin/DuplicateCleanupButto
 import { DuplicateCleanup } from '@/components/database/DuplicateCleanup';
 import { DNCCheckButton } from '@/components/database/DNCCheckButton';
 import { DataQualityDashboard } from '@/components/database/DataQualityDashboard';
+import { BulkContactEditor } from '@/components/database/BulkContactEditor';
 import { EnrichedContact } from '@/utils/dataEnrichment';
 
 import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
@@ -84,6 +85,8 @@ const Database = () => {
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
   const [viewingTouchpointsContact, setViewingTouchpointsContact] = useState<Contact | null>(null);
   const [showDuplicateCleanup, setShowDuplicateCleanup] = useState(false);
+  const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
+  const [showBulkEditor, setShowBulkEditor] = useState(false);
 
 
 
@@ -225,6 +228,24 @@ const Database = () => {
     }
   };
 
+  const handleBulkUpdate = async (updates: Partial<Contact>, contactIds: string[]) => {
+    try {
+      // Update all selected contacts with the same changes
+      const updatePromises = contactIds.map(contactId =>
+        updateContact(contactId, updates)
+      );
+
+      await Promise.all(updatePromises);
+      await fetchContacts();
+      await fetchDNCStats();
+
+      setSelectedContacts([]); // Clear selection after update
+    } catch (error) {
+      console.error('Bulk update error:', error);
+      throw error;
+    }
+  };
+
   const handleCSVUpload = async (csvData: ContactInput[]) => {
     try {
       const insertedContacts = await uploadCSV(csvData);
@@ -329,6 +350,15 @@ const Database = () => {
               <Plus className="h-4 w-4 mr-2" />
               Add Contact
             </Button>
+            <Button
+              onClick={() => setShowBulkEditor(true)}
+              disabled={selectedContacts.length === 0}
+              variant="outline"
+              title="Edit multiple selected contacts at once"
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Bulk Edit ({selectedContacts.length})
+            </Button>
           </div>
         </div>
         
@@ -384,16 +414,19 @@ const Database = () => {
             ) : (
               <>
                 <div className="w-full overflow-x-auto">
-                  <ContactTable
-                    contacts={contacts}
-                    sortBy={sortBy}
-                    sortOrder={sortOrder}
-                    onSort={handleSort}
-                    onOpenEdit={openEditForm}
-                    onDelete={setDeletingContact}
-                    onViewActivities={setViewingTouchpointsContact}
-                    onEnriched={handleContactEnriched}
-                  />
+                      <ContactTable
+                        contacts={contacts}
+                        sortBy={sortBy}
+                        sortOrder={sortOrder}
+                        onSort={handleSort}
+                        onOpenEdit={openEditForm}
+                        onDelete={setDeletingContact}
+                        onViewActivities={setViewingTouchpointsContact}
+                        onEnriched={handleContactEnriched}
+                        showSelection={true}
+                        selectedContacts={selectedContacts}
+                        onSelectionChange={setSelectedContacts}
+                      />
                 </div>
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between">
@@ -499,6 +532,13 @@ const Database = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <BulkContactEditor
+          open={showBulkEditor}
+          onOpenChange={setShowBulkEditor}
+          selectedContacts={selectedContacts}
+          onBulkUpdate={handleBulkUpdate}
+        />
       </div>
     </Layout>
   );
