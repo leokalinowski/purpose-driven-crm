@@ -106,12 +106,12 @@ export const useContacts = (viewingAgentId?: string) => {
     }
 
     setLoading(true);
-    console.info('[useContacts] Fetching contacts:', {
-      currentUserId: user.id,
-      viewingAgentId: viewingAgentId || '(none - viewing own)',
+    console.info('[useContacts] fetchContacts', {
+      userId: user.id,
+      viewingAgentId,
       effectiveAgentId,
-      searchTerm: debouncedSearchTerm || '(none)',
-      page: currentPage,
+      debouncedSearchTerm,
+      currentPage,
       sortBy,
       sortOrder,
     });
@@ -146,12 +146,6 @@ export const useContacts = (viewingAgentId?: string) => {
       const total = count || 0;
       setTotalContacts(total);
       setTotalPages(Math.max(1, Math.ceil(total / ITEMS_PER_PAGE)));
-
-      console.info('[useContacts] Fetch complete:', {
-        effectiveAgentId,
-        contactsReturned: data?.length || 0,
-        totalCount: total,
-      });
 
       // Also fetch all contacts for dashboard/enrichment functions
       const all = await fetchAllContacts();

@@ -84,7 +84,7 @@ export const useDNCStats = (viewingAgentId?: string) => {
         .limit(1)
         .single();
 
-      const statsResult = {
+      setStats({
         totalContacts: totalContacts || 0,
         dncContacts: dncContacts || 0,
         nonDncContacts: (totalContacts || 0) - (dncContacts || 0),
@@ -92,16 +92,7 @@ export const useDNCStats = (viewingAgentId?: string) => {
         missingPhone: missingPhone || 0,
         needsRecheck: needsRecheck || 0,
         lastChecked: lastLog?.run_date || null,
-      };
-
-      console.info('[useDNCStats] Stats fetched:', {
-        effectiveAgentId,
-        totalContacts: statsResult.totalContacts,
-        dncContacts: statsResult.dncContacts,
-        missingPhone: statsResult.missingPhone,
       });
-
-      setStats(statsResult);
     } catch (error) {
       console.error('Error fetching DNC stats:', error);
     } finally {
@@ -114,18 +105,11 @@ export const useDNCStats = (viewingAgentId?: string) => {
 
     setChecking(true);
     try {
-      const body: any = {
-        manualTrigger: true,
-        forceRecheck
-      };
-
-      // If we have a viewing agent ID (admin viewing another agent), pass it to only check that agent
-      if (viewingAgentId && viewingAgentId !== user.id) {
-        body.agentId = viewingAgentId;
-      }
-
       const { data, error } = await supabase.functions.invoke('dnc-monthly-check', {
-        body
+        body: { 
+          manualTrigger: true,
+          forceRecheck 
+        }
       });
 
       if (error) throw error;
@@ -144,10 +128,10 @@ export const useDNCStats = (viewingAgentId?: string) => {
 
   // Auto-fetch stats when agent changes or on mount
   useEffect(() => {
-    console.info('[useDNCStats] Fetching DNC stats:', {
-      currentUserId: user?.id,
-      viewingAgentId: viewingAgentId || '(none - viewing own)',
-      effectiveAgentId,
+    console.info('[useDNCStats] Agent changed, fetching stats:', {
+      userId: user?.id,
+      viewingAgentId,
+      effectiveAgentId
     });
     fetchDNCStats();
   }, [effectiveAgentId, fetchDNCStats]);

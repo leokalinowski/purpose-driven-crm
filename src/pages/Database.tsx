@@ -1,4 +1,3 @@
-// Trigger deployment after hitting limit yesterday
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,11 +29,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const Database = () => {
   const [selectedViewingAgent, setSelectedViewingAgent] = useState<string>('');
-
-  const { user } = useAuth();
-  const { isAdmin } = useUserRole();
-  const { toast } = useToast();
-  const { agents, fetchAgents, getAgentDisplayName } = useAgents();
   
   const {
     contacts,
@@ -61,18 +55,12 @@ const Database = () => {
     loading: dncLoading,
     fetchDNCStats,
   } = useDNCStats(selectedViewingAgent);
-
+  
+  const { user } = useAuth();
+  const { isAdmin } = useUserRole();
+  const { toast } = useToast();
+  const { agents, fetchAgents, getAgentDisplayName } = useAgents();
   const { generateTasksForNewContacts } = useSphereSyncTasks();
-
-  // Debug logging - after all hooks
-  console.log('Database component render:', {
-    selectedViewingAgent,
-    isAdmin,
-    userId: user?.id,
-    agentsCount: agents.length,
-    contactsLoaded: contacts.length,
-    effectiveAgentId: selectedViewingAgent || user?.id
-  });
 
   // Prevent scrolling to top when search changes
   const scrollPositionRef = React.useRef<number>(0);
@@ -254,15 +242,7 @@ const Database = () => {
 
   const handleCSVUpload = async (csvData: ContactInput[], agentId?: string) => {
     try {
-      const targetAgentId = agentId || selectedViewingAgent || user?.id;
-      console.info('CSV Upload initiated:', { 
-        isAdmin, 
-        providedAgentId: agentId,
-        selectedViewingAgent,
-        targetAgentId,
-        contactCount: csvData.length,
-        willUseEdgeFunction: isAdmin && agentId && agentId !== user?.id
-      });
+      console.log('CSV Upload - isAdmin:', isAdmin, 'agentId:', agentId, 'contacts count:', csvData.length);
       
       // For admins: use edge function if uploading to someone else, regular upload for own account
       if (isAdmin && agentId && agentId !== user?.id) {
@@ -463,17 +443,13 @@ const Database = () => {
         
         {/* DNC Statistics Dashboard */}
         <div className="space-y-4">
-          <DNCStatsCard 
-            stats={stats} 
-            loading={dncLoading} 
-            agentName={selectedViewingAgent ? getViewingAgentName(selectedViewingAgent) : undefined}
-          />
+          <DNCStatsCard stats={stats} loading={dncLoading} />
           
           {/* DNC Check Buttons - Admin Only */}
           {isAdmin && (
             <div className="flex justify-center gap-4">
-              <DNCCheckButton variant="default" size="lg" viewingAgentId={selectedViewingAgent} />
-              <DNCCheckButton variant="destructive" size="lg" forceRecheck={true} viewingAgentId={selectedViewingAgent} />
+              <DNCCheckButton variant="default" size="lg" />
+              <DNCCheckButton variant="destructive" size="lg" forceRecheck={true} />
             </div>
           )}
         </div>
@@ -490,11 +466,6 @@ const Database = () => {
               <span>Contacts</span>
               <Badge variant="secondary">{totalContacts} contacts</Badge>
             </CardTitle>
-            {isAdmin && selectedViewingAgent && contacts.length === 0 && !loading && (
-              <p className="text-sm text-muted-foreground mt-2">
-                No contacts found for {getViewingAgentName(selectedViewingAgent)}. Try uploading a CSV or adding a contact.
-              </p>
-            )}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center space-x-2">
