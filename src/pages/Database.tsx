@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -62,15 +62,15 @@ const Database = () => {
   const { generateTasksForNewContacts } = useSphereSyncTasks();
 
   // Prevent scrolling to top when search changes
-  const scrollPositionRef = React.useRef<number>(0);
+  const scrollPositionRef = useRef<number>(0);
 
-  const handleSearchNoScroll = React.useCallback((term: string) => {
+  const handleSearchNoScroll = useCallback((term: string) => {
     scrollPositionRef.current = window.scrollY;
     handleSearch(term);
   }, [handleSearch]);
 
   // Restore scroll position after search results load
-  React.useEffect(() => {
+  useEffect(() => {
     if (!loading && scrollPositionRef.current > 0) {
       const timeoutId = setTimeout(() => {
         window.scrollTo({ top: scrollPositionRef.current, behavior: 'instant' });
