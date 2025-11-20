@@ -30,7 +30,7 @@ const Database = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   
-  // Ensure user is loaded before initializing hooks
+  // All hooks must be called unconditionally (Rules of Hooks)
   const {
     contacts,
     allContacts,
@@ -318,7 +318,6 @@ const Database = () => {
     return pages;
   };
 
-
   // Show loading state while auth is being checked
   if (authLoading || roleLoading) {
     return (
@@ -411,7 +410,7 @@ const Database = () => {
         
         {/* Data Quality Dashboard */}
         <DataQualityDashboard
-          contacts={allContacts}
+          contacts={allContacts || []}
           onBulkEnriched={handleBulkContactsEnriched}
         />
 
