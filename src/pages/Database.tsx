@@ -33,15 +33,8 @@ const Database = () => {
 
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
-  const { agents } = useAgents();
-
-  // Debug logging
-  console.log('Database component render:', {
-    selectedViewingAgent,
-    isAdmin,
-    userId: user?.id,
-    agentsCount: agents.length
-  });
+  const { toast } = useToast();
+  const { agents, fetchAgents, getAgentDisplayName } = useAgents();
   
   const {
     contacts,
@@ -68,9 +61,16 @@ const Database = () => {
     loading: dncLoading,
     fetchDNCStats,
   } = useDNCStats(selectedViewingAgent);
-  
-  const { toast } = useToast();
-  const { fetchAgents, getAgentDisplayName } = useAgents();
+
+  // Debug logging - after all hooks
+  console.log('Database component render:', {
+    selectedViewingAgent,
+    isAdmin,
+    userId: user?.id,
+    agentsCount: agents.length,
+    contactsLoaded: contacts.length,
+    effectiveAgentId: selectedViewingAgent || user?.id
+  });
   const { generateTasksForNewContacts } = useSphereSyncTasks();
 
   // Prevent scrolling to top when search changes
@@ -253,7 +253,15 @@ const Database = () => {
 
   const handleCSVUpload = async (csvData: ContactInput[], agentId?: string) => {
     try {
-      console.log('CSV Upload - isAdmin:', isAdmin, 'agentId:', agentId, 'contacts count:', csvData.length);
+      const targetAgentId = agentId || selectedViewingAgent || user?.id;
+      console.info('CSV Upload initiated:', { 
+        isAdmin, 
+        providedAgentId: agentId,
+        selectedViewingAgent,
+        targetAgentId,
+        contactCount: csvData.length,
+        willUseEdgeFunction: isAdmin && agentId && agentId !== user?.id
+      });
       
       // For admins: use edge function if uploading to someone else, regular upload for own account
       if (isAdmin && agentId && agentId !== user?.id) {
@@ -454,7 +462,11 @@ const Database = () => {
         
         {/* DNC Statistics Dashboard */}
         <div className="space-y-4">
-          <DNCStatsCard stats={stats} loading={dncLoading} />
+          <DNCStatsCard 
+            stats={stats} 
+            loading={dncLoading} 
+            agentName={selectedViewingAgent ? getViewingAgentName(selectedViewingAgent) : undefined}
+          />
           
           {/* DNC Check Buttons - Admin Only */}
           {isAdmin && (
@@ -477,6 +489,11 @@ const Database = () => {
               <span>Contacts</span>
               <Badge variant="secondary">{totalContacts} contacts</Badge>
             </CardTitle>
+            {isAdmin && selectedViewingAgent && contacts.length === 0 && !loading && (
+              <p className="text-sm text-muted-foreground mt-2">
+                No contacts found for {getViewingAgentName(selectedViewingAgent)}. Try uploading a CSV or adding a contact.
+              </p>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center space-x-2">

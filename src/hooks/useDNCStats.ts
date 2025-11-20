@@ -84,7 +84,7 @@ export const useDNCStats = (viewingAgentId?: string) => {
         .limit(1)
         .single();
 
-      setStats({
+      const statsResult = {
         totalContacts: totalContacts || 0,
         dncContacts: dncContacts || 0,
         nonDncContacts: (totalContacts || 0) - (dncContacts || 0),
@@ -92,7 +92,16 @@ export const useDNCStats = (viewingAgentId?: string) => {
         missingPhone: missingPhone || 0,
         needsRecheck: needsRecheck || 0,
         lastChecked: lastLog?.run_date || null,
+      };
+
+      console.info('[useDNCStats] Stats fetched:', {
+        effectiveAgentId,
+        totalContacts: statsResult.totalContacts,
+        dncContacts: statsResult.dncContacts,
+        missingPhone: statsResult.missingPhone,
       });
+
+      setStats(statsResult);
     } catch (error) {
       console.error('Error fetching DNC stats:', error);
     } finally {
@@ -135,10 +144,10 @@ export const useDNCStats = (viewingAgentId?: string) => {
 
   // Auto-fetch stats when agent changes or on mount
   useEffect(() => {
-    console.info('[useDNCStats] Agent changed, fetching stats:', {
-      userId: user?.id,
-      viewingAgentId,
-      effectiveAgentId
+    console.info('[useDNCStats] Fetching DNC stats:', {
+      currentUserId: user?.id,
+      viewingAgentId: viewingAgentId || '(none - viewing own)',
+      effectiveAgentId,
     });
     fetchDNCStats();
   }, [effectiveAgentId, fetchDNCStats]);

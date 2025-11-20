@@ -8,9 +8,10 @@ import { DNCStats } from '@/hooks/useDNCStats';
 interface DNCStatsCardProps {
   stats: DNCStats;
   loading: boolean;
+  agentName?: string;
 }
 
-export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading }) => {
+export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading, agentName }) => {
   const dncPercentage = stats.totalContacts > 0 ? (stats.dncContacts / stats.totalContacts) * 100 : 0;
   const safePercentage = stats.totalContacts > 0 ? (stats.nonDncContacts / stats.totalContacts) * 100 : 0;
   const uncheckedPercentage = stats.totalContacts > 0 ? (stats.neverChecked / stats.totalContacts) * 100 : 0;
@@ -43,6 +44,11 @@ export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading }) =>
           <Shield className="h-5 w-5" />
           Do Not Call (DNC) Status
         </CardTitle>
+        {agentName && (
+          <p className="text-sm text-muted-foreground mt-1">
+            Stats for: {agentName}
+          </p>
+        )}
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Overview Stats */}
