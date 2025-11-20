@@ -19,7 +19,6 @@ import { EnrichedContact } from '@/utils/dataEnrichment';
 
 import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useDNCStats } from '@/hooks/useDNCStats';
-import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
@@ -27,7 +26,6 @@ import { supabase } from '@/integrations/supabase/client';
 
 const Database = () => {
   const { user, loading: authLoading } = useAuth();
-  const { isAdmin, loading: roleLoading } = useUserRole();
   
   // All hooks must be called unconditionally (Rules of Hooks)
   const {
@@ -318,7 +316,7 @@ const Database = () => {
   };
 
   // Show loading state while auth is being checked
-  if (authLoading || roleLoading) {
+  if (authLoading) {
     return (
       <Layout>
         <div className="space-y-6">
@@ -345,10 +343,7 @@ const Database = () => {
           <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Contact Database</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
-              {isAdmin
-                ? 'Your Database (Admin View)'
-                : 'Manage your contacts and leads'
-              }
+              Manage your contacts and leads
             </p>
           </div>
          
@@ -384,39 +379,18 @@ const Database = () => {
         </div>
         
         {/* DNC Statistics Dashboard */}
-        <div className="space-y-4">
-          <DNCStatsCard 
-            stats={stats || {
-              totalContacts: 0,
-              dncContacts: 0,
-              nonDncContacts: 0,
-              neverChecked: 0,
-              missingPhone: 0,
-              needsRecheck: 0,
-              lastChecked: null,
-            }} 
-            loading={dncLoading} 
-          />
-          
-          {/* DNC Check Buttons - Admin Only */}
-          {isAdmin && (
-            <div className="flex justify-center gap-4">
-              <DNCCheckButton 
-                variant="default" 
-                size="lg"
-                onRun={triggerDNCCheck}
-                checking={dncChecking}
-              />
-              <DNCCheckButton 
-                variant="destructive" 
-                size="lg" 
-                forceRecheck={true}
-                onRun={triggerDNCCheck}
-                checking={dncChecking}
-              />
-            </div>
-          )}
-        </div>
+        <DNCStatsCard 
+          stats={stats || {
+            totalContacts: 0,
+            dncContacts: 0,
+            nonDncContacts: 0,
+            neverChecked: 0,
+            missingPhone: 0,
+            needsRecheck: 0,
+            lastChecked: null,
+          }} 
+          loading={dncLoading} 
+        />
         
         {/* Data Quality Dashboard */}
         <DataQualityDashboard
