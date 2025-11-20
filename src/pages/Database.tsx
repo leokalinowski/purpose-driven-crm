@@ -30,6 +30,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const Database = () => {
   const [selectedViewingAgent, setSelectedViewingAgent] = useState<string>('');
+
+  const { user } = useAuth();
+  const { isAdmin } = useUserRole();
+  const { agents } = useAgents();
+
+  // Debug logging
+  console.log('Database component render:', {
+    selectedViewingAgent,
+    isAdmin,
+    userId: user?.id,
+    agentsCount: agents.length
+  });
   
   const {
     contacts,
@@ -57,10 +69,8 @@ const Database = () => {
     fetchDNCStats,
   } = useDNCStats(selectedViewingAgent);
   
-  const { user } = useAuth();
-  const { isAdmin } = useUserRole();
   const { toast } = useToast();
-  const { agents, fetchAgents, getAgentDisplayName } = useAgents();
+  const { fetchAgents, getAgentDisplayName } = useAgents();
   const { generateTasksForNewContacts } = useSphereSyncTasks();
 
   // Prevent scrolling to top when search changes
