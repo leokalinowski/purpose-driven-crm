@@ -71,11 +71,9 @@ const Database = () => {
     fetchDNCStats,
     triggerDNCCheck,
   } = useDNCStats(selectedViewingAgent);
-  
-  const { user } = useAuth();
-  const { isAdmin } = useUserRole();
+
   const { toast } = useToast();
-  const { agents, fetchAgents, getAgentDisplayName } = useAgents();
+  const { fetchAgents, getAgentDisplayName } = useAgents();
   const { generateTasksForNewContacts } = useSphereSyncTasks();
 
   // Prevent scrolling to top when search changes
