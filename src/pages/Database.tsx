@@ -327,12 +327,6 @@ const Database = () => {
     setEditingContact(null);
   };
 
-
-  // Fetch DNC stats when component mounts
-  useEffect(() => {
-    fetchDNCStats();
-  }, [fetchDNCStats]);
-
   const generatePageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
