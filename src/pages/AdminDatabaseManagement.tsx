@@ -987,7 +987,7 @@ const AdminDatabaseManagement = () => {
           title={editingContact ? "Edit Contact" : "Add New Contact"}
         />
 
-        {selectedViewingAgent && (
+        {selectedViewingAgent && showCSVUpload && (
           <ImprovedCSVUpload
             open={showCSVUpload}
             onOpenChange={setShowCSVUpload}

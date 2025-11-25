@@ -160,35 +160,47 @@ export const ImprovedCSVUpload = ({
       
       setUploadProgress({ stage: 'parsing', progress: 50, message: 'Analyzing CSV structure...' });
       
-      const result = Papa.parse(text, {
+      // Use Papa.parse synchronously and handle results immediately
+      const results = Papa.parse(text, {
         header: true,
         skipEmptyLines: true,
         transformHeader: (header) => header.trim(),
-        complete: (results) => {
-          if (results.errors.length > 0) {
-            console.warn('CSV parsing errors:', results.errors);
-          }
-          
-          const newHeaders = Object.keys(results.data[0] || {});
-          setRawRows(results.data);
-          setHeaders(newHeaders);
-          
-          // Auto-map headers
-          const autoMapping: Record<string, string> = {};
-          newHeaders.forEach(header => {
-            const field = ALL_FIELDS.find(f => 
-              f.label.toLowerCase().includes(header.toLowerCase()) ||
-              header.toLowerCase().includes(f.key.replace('_', ' '))
-            );
-            if (field) {
-              autoMapping[field.key] = header;
-            }
-          });
-          setMapping(autoMapping as any);
-          
-          setUploadProgress({ stage: 'parsing', progress: 100, message: 'CSV parsed successfully' });
+      });
+      
+      if (results.errors.length > 0) {
+        console.warn('CSV parsing errors:', results.errors);
+      }
+      
+      const data = results.data || [];
+      if (data.length === 0) {
+        toast({
+          title: 'Error',
+          description: 'CSV file appears to be empty or has no valid rows',
+          variant: 'destructive'
+        });
+        setLoading(false);
+        setUploadProgress(null);
+        return;
+      }
+      
+      const newHeaders = Object.keys(data[0] || {});
+      setRawRows(data);
+      setHeaders(newHeaders);
+      
+      // Auto-map headers
+      const autoMapping: Record<string, string> = {};
+      newHeaders.forEach(header => {
+        const field = ALL_FIELDS.find(f => 
+          f.label.toLowerCase().includes(header.toLowerCase()) ||
+          header.toLowerCase().includes(f.key.replace('_', ' '))
+        );
+        if (field) {
+          autoMapping[field.key] = header;
         }
       });
+      setMapping(autoMapping as any);
+      
+      setUploadProgress({ stage: 'parsing', progress: 100, message: 'CSV parsed successfully' });
       
     } catch (error) {
       console.error('File upload error:', error);
@@ -199,9 +211,12 @@ export const ImprovedCSVUpload = ({
       });
     } finally {
       setLoading(false);
-      setUploadProgress(null);
+      // Keep progress visible briefly to show completion
+      setTimeout(() => {
+        setUploadProgress(null);
+      }, 1000);
     }
-  }, [loading, ALL_FIELDS]);
+  }, [loading, ALL_FIELDS, toast]);
 
   const processContacts = useCallback(async () => {
     if (loading || rawRows.length === 0) return;
