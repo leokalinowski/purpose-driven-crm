@@ -212,4 +212,3 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
     </Card>
   );
 }
-/* Deployment trigger */
