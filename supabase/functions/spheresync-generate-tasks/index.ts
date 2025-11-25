@@ -47,11 +47,6 @@ const SPHERESYNC_TEXTS: Record<number, string> = {
   48: 'Z', 49: 'M', 50: 'B', 51: 'C', 52: 'H'
 };
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 /**
  * Calculate the current week number of the year (1-52) using ISO 8601 standard
  */
@@ -160,8 +155,6 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
     // Parse request body
     const body = await req.json();
     const { mode = 'global', agentId = null } = body;
@@ -175,11 +168,24 @@ const handler = async (req: Request): Promise<Response> => {
     let agents: Agent[] = [];
 
     if (mode === 'global') {
-      // Get all agents
+      // Get all agents from user_roles table
+      const { data: userRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .in('role', ['agent', 'admin']);
+
+      if (rolesError) {
+        console.error('Error fetching user roles:', rolesError);
+        throw rolesError;
+      }
+
+      const agentIds = userRoles?.map(r => r.user_id) || [];
+
+      // Fetch profiles for these users
       const { data: agentsData, error: agentsError } = await supabase
         .from('profiles')
         .select('user_id, first_name, last_name, email')
-        .eq('role', 'agent');
+        .in('user_id', agentIds);
 
       if (agentsError) {
         console.error('Error fetching agents:', agentsError);
