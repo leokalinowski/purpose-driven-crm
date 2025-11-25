@@ -356,42 +356,79 @@ export const ImprovedCSVUpload = ({
     const normalized = contacts.map(normalizeContact);
     const dbDuplicates: Array<{ contact: ContactInputType; reason: string }> = [];
 
-    // Check in batches to avoid query limits
-    const batchSize = 50;
-    for (let i = 0; i < normalized.length; i += batchSize) {
-      const batch = normalized.slice(i, i + batchSize);
-      
-      const emails = batch.filter(c => c.normalized_email).map(c => c.normalized_email!);
-      const phones = batch.filter(c => c.normalized_phone).map(c => c.normalized_phone!);
-      
-      if (emails.length > 0 || phones.length > 0) {
-        const orConditions = [
-          ...emails.map(email => `email.eq.${email}`),
-          ...phones.map(phone => `phone.eq.${phone}`)
-        ];
+    try {
+      // Check in batches to avoid query limits (reduced from 50 to 25)
+      const batchSize = 25;
+      for (let i = 0; i < normalized.length; i += batchSize) {
+        const batch = normalized.slice(i, i + batchSize);
         
-        const { data: existingContacts } = await supabase
-          .from('contacts')
-          .select('id, email, phone, first_name, last_name')
-          .eq('agent_id', agentId)
-          .or(orConditions.join(','));
+        const emails = batch.filter(c => c.normalized_email).map(c => c.normalized_email!);
+        const phones = batch.filter(c => c.normalized_phone).map(c => c.normalized_phone!);
         
-        if (existingContacts) {
-          batch.forEach(contact => {
-            const existing = existingContacts.find(e => 
-              e.email === contact.normalized_email || 
-              e.phone === contact.normalized_phone
-            );
-            
-            if (existing) {
-              dbDuplicates.push({
-                contact: contacts[i + batch.indexOf(contact)],
-                reason: `Existing: ${existing.first_name} ${existing.last_name}`
-              });
-            }
-          });
+        // Skip empty batches
+        if (emails.length === 0 && phones.length === 0) {
+          continue;
         }
+
+        // Use separate .in() queries instead of .or() to avoid URL length limits
+        const existingContactsMap = new Map<string, any>();
+
+        // Query 1: Check emails
+        if (emails.length > 0) {
+          const { data: emailMatches, error: emailError } = await supabase
+            .from('contacts')
+            .select('id, email, phone, first_name, last_name')
+            .eq('agent_id', agentId)
+            .in('email', emails);
+          
+          if (emailError) {
+            console.error('Email duplicate check error:', emailError);
+            throw emailError;
+          }
+
+          emailMatches?.forEach(c => existingContactsMap.set(c.id, c));
+        }
+
+        // Query 2: Check phones
+        if (phones.length > 0) {
+          const { data: phoneMatches, error: phoneError } = await supabase
+            .from('contacts')
+            .select('id, email, phone, first_name, last_name')
+            .eq('agent_id', agentId)
+            .in('phone', phones);
+          
+          if (phoneError) {
+            console.error('Phone duplicate check error:', phoneError);
+            throw phoneError;
+          }
+
+          phoneMatches?.forEach(c => existingContactsMap.set(c.id, c));
+        }
+
+        // Check for duplicates in merged results
+        const existingContacts = Array.from(existingContactsMap.values());
+        batch.forEach(contact => {
+          const existing = existingContacts.find(e => 
+            e.email === contact.normalized_email || 
+            e.phone === contact.normalized_phone
+          );
+          
+          if (existing) {
+            dbDuplicates.push({
+              contact: contacts[i + batch.indexOf(contact)],
+              reason: `Existing: ${existing.first_name} ${existing.last_name}`
+            });
+          }
+        });
       }
+    } catch (error) {
+      console.error('Database duplicate check failed:', error);
+      toast({
+        title: 'Duplicate Check Error',
+        description: 'Failed to check for existing contacts. Please try again with a smaller file.',
+        variant: 'destructive'
+      });
+      throw error;
     }
     
     return dbDuplicates;
