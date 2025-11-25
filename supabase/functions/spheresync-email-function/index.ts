@@ -89,6 +89,14 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     console.log('SphereSync email function started');
 
+    // Check if this is a forced send (admin override)
+    const requestBody = await req.json().catch(() => ({}));
+    const forceSend = requestBody.force === true;
+    
+    if (forceSend) {
+      console.log('Force send enabled - will send emails even if already sent this week');
+    }
+
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -158,6 +166,9 @@ const handler = async (req: Request): Promise<Response> => {
     });
 
     let emailsSent = 0;
+    let emailsSkipped = 0;
+    const agentsProcessed: string[] = [];
+    const agentsSkipped: string[] = [];
 
     // Send email to each agent
     for (const [agentId, agentTasks] of tasksByAgent) {
@@ -168,7 +179,28 @@ const handler = async (req: Request): Promise<Response> => {
         continue;
       }
 
+      // Check if we've already sent an email to this agent for this week (unless forced)
+      if (!forceSend) {
+        const { data: existingLog, error: logError } = await supabase
+          .from('spheresync_email_logs')
+          .select('id, sent_at')
+          .eq('agent_id', agentId)
+          .eq('week_number', currentWeek)
+          .eq('year', currentYear)
+          .maybeSingle();
+
+        if (existingLog) {
+          const agentName = agent.first_name ? `${agent.first_name} ${agent.last_name}`.trim() : agent.email;
+          console.log(`Skipping ${agentName} - already sent email for week ${currentWeek}/${currentYear} at ${existingLog.sent_at}`);
+          agentsSkipped.push(`${agentName} (already sent)`);
+          emailsSkipped++;
+          continue;
+        }
+      }
+
       try {
+        const agentName = agent.first_name ? `${agent.first_name} ${agent.last_name}`.trim() : agent.email;
+        agentsProcessed.push(`${agentName} (${agentTasks.length} tasks)`);
         // Separate call and text tasks
         const callTasks = agentTasks.filter(task => task.task_type === 'call');
         const textTasks = agentTasks.filter(task => task.task_type === 'text');
@@ -270,6 +302,23 @@ const handler = async (req: Request): Promise<Response> => {
         });
 
         console.log(`Email sent to ${agent.email} (${agentTasks.length} tasks)`);
+        
+        // Log the email send to prevent duplicates
+        const { error: logInsertError } = await supabase
+          .from('spheresync_email_logs')
+          .insert({
+            agent_id: agentId,
+            week_number: currentWeek,
+            year: currentYear,
+            task_count: agentTasks.length
+          });
+
+        if (logInsertError) {
+          console.error(`Failed to log email send for agent ${agentId}:`, logInsertError);
+        } else {
+          console.log(`Logged email send for agent ${agentId}`);
+        }
+        
         emailsSent++;
 
         // Rate limiting: Resend has 2 requests/second limit, so wait 1000ms between emails
@@ -281,15 +330,18 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    console.log(`SphereSync email function completed. Sent ${emailsSent} emails.`);
+    console.log(`SphereSync email function completed. Sent ${emailsSent} emails, skipped ${emailsSkipped}.`);
 
     return new Response(JSON.stringify({
       success: true,
-      message: `SphereSync weekly task emails sent successfully`,
+      message: `Sent ${emailsSent} emails, skipped ${emailsSkipped} (already sent)`,
       week_number: currentWeek,
       year: currentYear,
       emails_sent: emailsSent,
-      agents_processed: tasksByAgent.size
+      emails_skipped: emailsSkipped,
+      agents_processed: agentsProcessed,
+      agents_skipped: agentsSkipped,
+      force_send: forceSend
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
