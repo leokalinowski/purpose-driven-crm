@@ -82,7 +82,7 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
     }
   }, []);
 
-  // Set up timeout for iframe loading - only when iframeSrc changes
+  // Set up iframe loading state
   useEffect(() => {
     if (!iframeSrc) {
       setIsLoadingIframe(false);
@@ -92,26 +92,7 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
     console.log(`[MetricoolDashboard] Approach ${currentApproach} - Setting up iframe with src:`, iframeSrc);
     setIsLoadingIframe(true);
     setLoadError(null);
-
-    // Clear any existing timeout
-    if (loadTimeoutRef.current) {
-      clearTimeout(loadTimeoutRef.current);
-      loadTimeoutRef.current = null;
-    }
-
-    // Set timeout to detect if iframe never loads (15 seconds - reduced from 30)
-    loadTimeoutRef.current = setTimeout(() => {
-      console.warn(`[MetricoolDashboard] Approach ${currentApproach} - Iframe load timeout after 15 seconds`);
-      handleApproachFailure();
-    }, 15000);
-
-    return () => {
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-        loadTimeoutRef.current = null;
-      }
-    };
-  }, [iframeSrc, currentApproach, handleApproachFailure]);
+  }, [iframeSrc, currentApproach]);
 
   return (
     <Card>
@@ -174,59 +155,8 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
                 sandbox={currentApproach === 1 ? undefined : "allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-popups-to-escape-sandbox"}
             onLoad={() => {
               console.log(`[MetricoolDashboard] Approach ${currentApproach} - Iframe loaded`);
-
-              // Check if the iframe actually loaded valid content (not an error page)
-              // This is a best-effort check - we can't always access iframe content due to CORS
-              try {
-                const iframe = iframeRef.current;
-                if (iframe && iframe.contentWindow) {
-                  // Try to detect if it's an error page by checking the URL or content
-                  // If we can't access it, assume it loaded successfully
-                  setTimeout(() => {
-                    try {
-                      // Check if iframe document is accessible and not an error
-                      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-                      if (iframeDoc) {
-                        const bodyText = iframeDoc.body?.innerText || '';
-                        // Check for common error indicators
-                        if (bodyText.includes('401') || bodyText.includes('Missing authorization') ||
-                            bodyText.includes('{"code":401') || bodyText.includes('error')) {
-                          console.warn(`[MetricoolDashboard] Approach ${currentApproach} - Detected error page in iframe`);
-                          handleApproachFailure();
-                          return;
-                        }
-                      }
-                    } catch (e) {
-                      // CORS - can't access iframe content, assume it's working
-                      console.log(`[MetricoolDashboard] Approach ${currentApproach} - Cannot access iframe content (CORS), assuming success`);
-                    }
-
-                    // If we get here, assume it loaded successfully
-                    setIsLoadingIframe(false);
-                    setLoadError(null);
-                    if (loadTimeoutRef.current) {
-                      clearTimeout(loadTimeoutRef.current);
-                      loadTimeoutRef.current = null;
-                    }
-                  }, 2000); // Wait 2 seconds to check content
-                } else {
-                  setIsLoadingIframe(false);
-                  setLoadError(null);
-                  if (loadTimeoutRef.current) {
-                    clearTimeout(loadTimeoutRef.current);
-                    loadTimeoutRef.current = null;
-                  }
-                }
-              } catch (e) {
-                console.error(`[MetricoolDashboard] Error checking iframe content:`, e);
-                // Assume it loaded if we can't check
-                setIsLoadingIframe(false);
-                setLoadError(null);
-                if (loadTimeoutRef.current) {
-                  clearTimeout(loadTimeoutRef.current);
-                  loadTimeoutRef.current = null;
-                }
-              }
+              setIsLoadingIframe(false);
+              setLoadError(null);
             }}
             onError={(e) => {
               console.error(`[MetricoolDashboard] Approach ${currentApproach} - Iframe error event:`, e);
