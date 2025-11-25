@@ -70,7 +70,7 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
           title="Metricool Dashboard"
           allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
           sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts allow-top-navigation"
-          referrerPolicy="no-referrer"
+          referrerPolicy="strict-origin-when-cross-origin"
         />
       </CardContent>
     </Card>
