@@ -17,14 +17,15 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Set up iframe source using Approach 3 (wrapper) directly
-  // Reset state when userId changes to load correct agent link
+  // Reset state when userId changes (before setting new iframe source)
   useEffect(() => {
-    // Reset state when userId changes
     setIframeSrc('');
     setIsLoadingIframe(true);
     setLoadError(null);
-    
+  }, [userId]);
+
+  // Set up iframe source using Approach 3 (wrapper) directly
+  useEffect(() => {
     if (!metricoolLink) {
       return;
     }
