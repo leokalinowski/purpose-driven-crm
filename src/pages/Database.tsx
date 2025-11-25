@@ -391,34 +391,48 @@ const Database = () => {
             </p>
           </div>
          
-          <div className="flex items-center gap-2 sm:gap-4 self-start sm:self-auto">
-            <Button
-              onClick={() => setShowDuplicateCleanup(true)}
-              variant="outline"
-            >
-              <Users className="h-4 w-4 mr-2" />
-              Clean Duplicates
-            </Button>
-            <Button
-              onClick={() => setShowCSVUpload(true)}
-              variant="outline"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload CSV
-            </Button>
-            <Button onClick={() => setShowContactForm(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Contact
-            </Button>
-            <Button
-              onClick={() => setShowBulkEditor(true)}
-              disabled={selectedContacts.length === 0}
-              variant="outline"
-              title="Edit multiple selected contacts at once"
-            >
-              <Users className="h-4 w-4 mr-2" />
-              Bulk Edit ({selectedContacts.length})
-            </Button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 self-start sm:self-auto">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button
+                onClick={() => setShowContactForm(true)}
+                className="sm:w-auto"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                <span className="hidden xs:inline">Add Contact</span>
+                <span className="xs:hidden">Add</span>
+              </Button>
+              <Button
+                onClick={() => setShowCSVUpload(true)}
+                variant="outline"
+                className="sm:w-auto"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                <span className="hidden xs:inline">Upload CSV</span>
+                <span className="xs:hidden">Upload</span>
+              </Button>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button
+                onClick={() => setShowDuplicateCleanup(true)}
+                variant="outline"
+                className="sm:w-auto"
+              >
+                <Users className="h-4 w-4 mr-2" />
+                <span className="hidden xs:inline">Clean Duplicates</span>
+                <span className="xs:hidden">Clean</span>
+              </Button>
+              <Button
+                onClick={() => setShowBulkEditor(true)}
+                disabled={selectedContacts.length === 0}
+                variant="outline"
+                className="sm:w-auto"
+                title="Edit multiple selected contacts at once"
+              >
+                <Users className="h-4 w-4 mr-2" />
+                <span className="hidden xs:inline">Bulk Edit ({selectedContacts.length})</span>
+                <span className="xs:hidden">Bulk ({selectedContacts.length})</span>
+              </Button>
+            </div>
           </div>
         </div>
         
@@ -477,13 +491,13 @@ const Database = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Search className="h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center space-x-2 w-full sm:w-auto">
+              <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <Input
                 placeholder="Search contacts by name, email, or phone..."
                 value={searchTerm}
                 onChange={(e) => handleSearchNoScroll(e.target.value)}
-                className="max-w-sm"
+                className="flex-1 sm:max-w-sm"
               />
             </div>
             {loading ? (
@@ -506,41 +520,53 @@ const Database = () => {
                       />
                 </div>
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-muted-foreground">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="text-sm text-muted-foreground text-center sm:text-left">
                       Page {currentPage} of {totalPages}
                     </div>
-                   
+
                     <div className="flex items-center space-x-2">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => goToPage(currentPage - 1)}
                         disabled={currentPage === 1}
+                        className="flex-shrink-0"
                       >
                         <ChevronLeft className="h-4 w-4" />
-                        Previous
+                        <span className="hidden sm:inline ml-1">Previous</span>
                       </Button>
-                     
-                      {generatePageNumbers().map((page) => (
-                        <Button
-                          key={page}
-                          variant={page === currentPage ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => goToPage(page)}
-                          className="min-w-[2.5rem]"
-                        >
-                          {page}
-                        </Button>
-                      ))}
-                     
+
+                      {/* Mobile: Show fewer page numbers */}
+                      <div className="hidden sm:flex items-center space-x-1">
+                        {generatePageNumbers().map((page) => (
+                          <Button
+                            key={page}
+                            variant={page === currentPage ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => goToPage(page)}
+                            className="min-w-[2.5rem]"
+                          >
+                            {page}
+                          </Button>
+                        ))}
+                      </div>
+
+                      {/* Mobile: Simple current page indicator */}
+                      <div className="sm:hidden flex items-center space-x-2">
+                        <span className="text-sm font-medium px-3 py-1 bg-muted rounded">
+                          {currentPage}
+                        </span>
+                      </div>
+
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => goToPage(currentPage + 1)}
                         disabled={currentPage === totalPages}
+                        className="flex-shrink-0"
                       >
-                        Next
+                        <span className="hidden sm:inline mr-1">Next</span>
                         <ChevronRight className="h-4 w-4" />
                       </Button>
                     </div>

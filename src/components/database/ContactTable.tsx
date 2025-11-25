@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, ChevronUp, ChevronDown, Activity } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Edit, Trash2, ChevronUp, ChevronDown, Activity, MapPin, Tag, Phone, Mail, User } from 'lucide-react';
 import { Contact } from '@/hooks/useContacts';
 import { ContactEnricher } from './ContactEnricher';
 import { EnrichedContact } from '@/utils/dataEnrichment';
@@ -40,6 +41,19 @@ export const ContactTable = ({
   const safeContacts = Array.isArray(contacts) ? contacts : [];
   const safeSelectedContacts = Array.isArray(selectedContacts) ? selectedContacts : [];
 
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const getSortIcon = (column: keyof Contact) => {
     if (sortBy !== column) return null;
     return sortOrder === 'asc' ? <ChevronUp className="h-4 w-4 inline ml-1" /> : <ChevronDown className="h-4 w-4 inline ml-1" />;
@@ -58,6 +72,156 @@ export const ContactTable = ({
     return contact[field] as string || '—';
   };
 
+  // Mobile card component
+  const ContactCard = ({ contact }: { contact: Contact }) => (
+    <Card className={`mb-4 ${contact.dnc ? "border-destructive/50 bg-destructive/5" : ""}`}>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            {showSelection && (
+              <input
+                type="checkbox"
+                className="rounded border-gray-300"
+                checked={safeSelectedContacts.some(c => c.id === contact.id)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    onSelectionChange?.([...safeSelectedContacts, contact]);
+                  } else {
+                    onSelectionChange?.(safeSelectedContacts.filter(c => c.id !== contact.id));
+                  }
+                }}
+              />
+            )}
+            <div>
+              <h3 className="font-medium flex items-center gap-2">
+                <User className="h-4 w-4" />
+                {contact.first_name} {contact.last_name}
+              </h3>
+              {contact.dnc && (
+                <Badge variant="destructive" className="text-xs mt-1">
+                  DNC
+                </Badge>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-1">
+            {onEnriched && (
+              <ContactEnricher
+                contact={contact}
+                onEnriched={onEnriched}
+              />
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onViewActivities(contact)}
+              className="h-8 w-8 p-0"
+              title="View Touchpoints"
+            >
+              <Activity className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenEdit(contact)}
+              className="h-8 w-8 p-0"
+              title="Edit Contact"
+            >
+              <Edit className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onDelete(contact)}
+              className="h-8 w-8 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              title="Delete Contact"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 text-sm">
+          {contact.phone && (
+            <div className="flex items-center gap-2">
+              <Phone className="h-3 w-3 text-muted-foreground" />
+              <span>{contact.phone}</span>
+            </div>
+          )}
+          {contact.email && (
+            <div className="flex items-center gap-2">
+              <Mail className="h-3 w-3 text-muted-foreground" />
+              <span className="truncate">{contact.email}</span>
+            </div>
+          )}
+          {(contact.city || contact.state || contact.address_1) && (
+            <div className="flex items-start gap-2">
+              <MapPin className="h-3 w-3 text-muted-foreground mt-0.5" />
+              <div className="flex-1">
+                {contact.address_1 && <div className="truncate">{contact.address_1}</div>}
+                {contact.address_2 && <div className="truncate text-muted-foreground">{contact.address_2}</div>}
+                {(contact.city || contact.state || contact.zip_code) && (
+                  <div className="text-muted-foreground truncate">
+                    {[contact.city, contact.state, contact.zip_code].filter(Boolean).join(', ')}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {contact.tags && contact.tags.length > 0 && (
+            <div className="flex items-start gap-2">
+              <Tag className="h-3 w-3 text-muted-foreground mt-0.5" />
+              <div className="flex flex-wrap gap-1">
+                {contact.tags.slice(0, 3).map((tag, index) => (
+                  <Badge key={index} variant="secondary" className="text-xs">
+                    {tag}
+                  </Badge>
+                ))}
+                {contact.tags.length > 3 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{contact.tags.length - 3}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+          <div className="flex items-center justify-between pt-2 border-t">
+            <div className="text-xs text-muted-foreground">
+              {contact.activity_count || 0} touchpoints
+              {contact.last_activity_date && (
+                <span className="ml-2">
+                  • Last: {formatDistanceToNow(new Date(contact.last_activity_date), { addSuffix: true })}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  // Render mobile cards or desktop table
+  if (isMobile) {
+    return (
+      <div className="space-y-4">
+        {safeContacts.length === 0 ? (
+          <Card>
+            <CardContent className="text-center py-8 text-muted-foreground">
+              No contacts found
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {safeContacts.map((contact) => (
+              <ContactCard key={contact.id} contact={contact} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Desktop table view
   return (
     <div className="border rounded-lg overflow-hidden">
       <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
