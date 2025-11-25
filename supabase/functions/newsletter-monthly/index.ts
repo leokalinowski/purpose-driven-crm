@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient, User } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { Resend } from 'npm:resend@3.2.0';
+import { Resend } from 'https://esm.sh/resend@3.2.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
