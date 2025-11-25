@@ -19,21 +19,16 @@ export const useMetricoolLink = (userId?: string) => {
         .eq('is_active', true)
         .single();
 
+      // If there's any error (including auth errors), just return null
+      // The link is just a URL - if we can't fetch it, we'll show "no link configured"
       if (error) {
-        // Handle authentication errors gracefully
-        if (error.code === 'PGRST116') {
-          // Not found - this is fine, just means no link configured
-          return null;
-        }
-        // For other errors, check if it's an auth error
-        if (error.message?.includes('JWT') || error.message?.includes('authentication') || error.message?.includes('not authenticated')) {
-          throw new Error('Authentication error. Please refresh the page or log in again.');
-        }
-        throw error;
+        // PGRST116 is "not found" - this is fine
+        // Any other error (including auth) - just treat as "no link configured"
+        return null;
       }
       return data as MetricoolLink | null;
     },
     enabled: !!actualUserId,
-    retry: false, // Don't retry on auth errors
+    retry: false,
   });
 };
