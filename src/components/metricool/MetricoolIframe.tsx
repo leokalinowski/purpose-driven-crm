@@ -179,7 +179,7 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
             allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
             referrerPolicy={currentApproach === 1 ? "origin" : "no-referrer"}
             loading="lazy"
-            sandbox={currentApproach === 1 ? undefined : "allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-orientation-lock allow-popups-to-escape-sandbox"}
+            sandbox={currentApproach === 1 ? undefined : "allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-popups-to-escape-sandbox"}
             onLoad={() => {
               console.log(`[MetricoolIframe] Approach ${currentApproach} - Iframe loaded`);
               

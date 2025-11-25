@@ -59,7 +59,7 @@
             class="hidden"
             allowfullscreen
             allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-orientation-lock allow-popups-to-escape-sandbox"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-popups-to-escape-sandbox"
         ></iframe>
     </div>
 
@@ -70,97 +70,96 @@
 
         if (!metricoolUrl) {
             document.getElementById('loading').innerHTML = '<p>Error: No URL provided</p>';
-            return;
-        }
+        } else {
+            console.log('Loading Metricool URL:', metricoolUrl);
 
-        console.log('Loading Metricool URL:', metricoolUrl);
+            const iframe = document.getElementById('metricool-iframe');
+            const loading = document.getElementById('loading');
 
-        const iframe = document.getElementById('metricool-iframe');
-        const loading = document.getElementById('loading');
-
-        // Override window.top and other iframe detection methods
-        try {
-            // Override common iframe detection methods
-            Object.defineProperty(window, 'top', {
-                get: function() { return window; },
-                configurable: false
-            });
-
-            Object.defineProperty(window, 'parent', {
-                get: function() { return window; },
-                configurable: false
-            });
-
-            // Override frameElement
-            Object.defineProperty(window, 'frameElement', {
-                get: function() { return null; },
-                configurable: false
-            });
-
-            // Override length (frames collection)
-            Object.defineProperty(window, 'length', {
-                get: function() { return 0; },
-                configurable: false
-            });
-
-            console.log('Applied iframe detection bypasses');
-        } catch (e) {
-            console.log('Could not override iframe detection:', e);
-        }
-
-        // Set iframe source
-        iframe.src = metricoolUrl;
-
-        // Handle iframe load
-        iframe.onload = function() {
-            console.log('Iframe loaded successfully');
-            loading.classList.add('hidden');
-            iframe.classList.remove('hidden');
-
+            // Override window.top and other iframe detection methods
             try {
-                // Try to communicate with the iframe
-                const iframeWindow = iframe.contentWindow;
-                if (iframeWindow) {
-                    console.log('Iframe window accessible');
+                // Override common iframe detection methods
+                Object.defineProperty(window, 'top', {
+                    get: function() { return window; },
+                    configurable: false
+                });
 
-                    // Send message to iframe to indicate it's not in a frame
-                    iframeWindow.postMessage({
-                        type: 'FRAME_BYPASS',
+                Object.defineProperty(window, 'parent', {
+                    get: function() { return window; },
+                    configurable: false
+                });
+
+                // Override frameElement
+                Object.defineProperty(window, 'frameElement', {
+                    get: function() { return null; },
+                    configurable: false
+                });
+
+                // Override length (frames collection)
+                Object.defineProperty(window, 'length', {
+                    get: function() { return 0; },
+                    configurable: false
+                });
+
+                console.log('Applied iframe detection bypasses');
+            } catch (e) {
+                console.log('Could not override iframe detection:', e);
+            }
+
+            // Set iframe source
+            iframe.src = metricoolUrl;
+
+            // Handle iframe load
+            iframe.onload = function() {
+                console.log('Iframe loaded successfully');
+                loading.classList.add('hidden');
+                iframe.classList.remove('hidden');
+
+                try {
+                    // Try to communicate with the iframe
+                    const iframeWindow = iframe.contentWindow;
+                    if (iframeWindow) {
+                        console.log('Iframe window accessible');
+
+                        // Send message to iframe to indicate it's not in a frame
+                        iframeWindow.postMessage({
+                            type: 'FRAME_BYPASS',
+                            isTop: true,
+                            parent: window
+                        }, '*');
+                    }
+                } catch (e) {
+                    console.log('Could not access iframe window:', e);
+                }
+            };
+
+            iframe.onerror = function() {
+                console.error('Iframe failed to load');
+                loading.innerHTML = '<p>Failed to load Metricool. Please try opening it directly.</p>';
+            };
+
+            // Listen for messages from the iframe
+            window.addEventListener('message', function(event) {
+                console.log('Received message from iframe:', event.data);
+
+                // If iframe detects it's in a frame and asks for bypass
+                if (event.data && event.data.type === 'FRAME_DETECTED') {
+                    console.log('Iframe detected frame, sending bypass response');
+                    event.source.postMessage({
+                        type: 'FRAME_BYPASS_RESPONSE',
                         isTop: true,
-                        parent: window
+                        bypassFrameDetection: true
                     }, '*');
                 }
-            } catch (e) {
-                console.log('Could not access iframe window:', e);
-            }
-        };
+            });
 
-        iframe.onerror = function() {
-            console.error('Iframe failed to load');
-            loading.innerHTML = '<p>Failed to load Metricool. Please try opening it directly.</p>';
-        };
-
-        // Listen for messages from the iframe
-        window.addEventListener('message', function(event) {
-            console.log('Received message from iframe:', event.data);
-
-            // If iframe detects it's in a frame and asks for bypass
-            if (event.data && event.data.type === 'FRAME_DETECTED') {
-                console.log('Iframe detected frame, sending bypass response');
-                event.source.postMessage({
-                    type: 'FRAME_BYPASS_RESPONSE',
-                    isTop: true,
-                    bypassFrameDetection: true
-                }, '*');
-            }
-        });
-
-        // Fallback: show iframe after 3 seconds regardless
-        setTimeout(function() {
-            loading.classList.add('hidden');
-            iframe.classList.remove('hidden');
-            console.log('Fallback: showing iframe after timeout');
-        }, 3000);
+            // Fallback: show iframe after 3 seconds regardless
+            setTimeout(function() {
+                loading.classList.add('hidden');
+                iframe.classList.remove('hidden');
+                console.log('Fallback: showing iframe after timeout');
+            }, 3000);
+        }
     </script>
 </body>
 </html>
