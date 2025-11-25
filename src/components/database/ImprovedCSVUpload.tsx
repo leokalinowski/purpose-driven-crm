@@ -217,7 +217,7 @@ export const ImprovedCSVUpload = ({
         setUploadProgress(null);
       }, 1000);
     }
-  }, [loading, ALL_FIELDS, toast]);
+  }, [loading, toast]);
 
   const processContacts = useCallback(async () => {
     if (loading || rawRows.length === 0) return;
