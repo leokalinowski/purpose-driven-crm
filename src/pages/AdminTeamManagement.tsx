@@ -39,7 +39,15 @@ const AdminTeamManagement = () => {
   const [editLastName, setEditLastName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<'agent' | 'admin'>('agent');
+  const [editTeamName, setEditTeamName] = useState('');
+  const [editBrokerage, setEditBrokerage] = useState('');
+  const [editPhoneNumber, setEditPhoneNumber] = useState('');
+  const [editOfficeAddress, setEditOfficeAddress] = useState('');
+  const [editOfficeNumber, setEditOfficeNumber] = useState('');
+  const [editWebsite, setEditWebsite] = useState('');
+  const [editStateLicenses, setEditStateLicenses] = useState<string[]>([]);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
 
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -232,18 +240,45 @@ const AdminTeamManagement = () => {
   };
 
   // Agent management functions
-  const handleEditAgent = (agent: Agent) => {
+  const handleEditAgent = async (agent: Agent) => {
     setEditingAgent(agent);
     setEditFirstName(agent.first_name || '');
     setEditLastName(agent.last_name || '');
     setEditEmail(agent.email || '');
     setEditRole(agent.role as 'agent' | 'admin');
+
+    // Fetch additional profile data from auth.users.raw_user_meta_data
+    try {
+      const { data: userData, error } = await supabase.auth.admin.getUserById(agent.user_id);
+      if (error) throw error;
+
+      const metaData = userData.user?.raw_user_meta_data || {};
+      setEditTeamName(metaData.team_name || '');
+      setEditBrokerage(metaData.brokerage || '');
+      setEditPhoneNumber(metaData.phone_number || '');
+      setEditOfficeAddress(metaData.office_address || '');
+      setEditOfficeNumber(metaData.office_number || '');
+      setEditWebsite(metaData.website || '');
+      setEditStateLicenses(Array.isArray(metaData.state_licenses) ? metaData.state_licenses : []);
+    } catch (error) {
+      console.error('Error fetching user metadata:', error);
+      // Set defaults if we can't fetch metadata
+      setEditTeamName('');
+      setEditBrokerage('');
+      setEditPhoneNumber('');
+      setEditOfficeAddress('');
+      setEditOfficeNumber('');
+      setEditWebsite('');
+      setEditStateLicenses([]);
+    }
+
     setEditDialogOpen(true);
   };
 
   const handleSaveAgentChanges = async () => {
     if (!editingAgent) return;
 
+    setEditLoading(true);
     try {
       // Update profile
       const { error: profileError } = await supabase
@@ -276,10 +311,35 @@ const AdminTeamManagement = () => {
         if (roleError) throw roleError;
       }
 
-      toast({
-        title: 'Success',
-        description: 'Agent information updated successfully',
+      // Update user metadata (additional profile fields)
+      const { error: metadataError } = await supabase.functions.invoke('admin-update-user-metadata', {
+        body: {
+          userId: editingAgent.user_id,
+          metadata: {
+            team_name: editTeamName.trim() || null,
+            brokerage: editBrokerage.trim() || null,
+            phone_number: editPhoneNumber.trim() || null,
+            office_address: editOfficeAddress.trim() || null,
+            office_number: editOfficeNumber.trim() || null,
+            website: editWebsite.trim() || null,
+            state_licenses: editStateLicenses,
+          }
+        }
       });
+
+      if (metadataError) {
+        console.error('Metadata update error:', metadataError);
+        toast({
+          title: 'Warning',
+          description: 'Basic info updated, but additional profile details may not have been saved',
+          variant: 'default',
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: 'Agent information updated successfully',
+        });
+      }
 
       setEditDialogOpen(false);
       setEditingAgent(null);
@@ -291,29 +351,60 @@ const AdminTeamManagement = () => {
         description: error.message || 'Failed to update agent',
         variant: 'destructive',
       });
+    } finally {
+      setEditLoading(false);
     }
   };
 
   const handleDeleteAgent = async (agent: Agent) => {
     try {
+      // Prevent deleting yourself
+      if (agent.user_id === user?.id) {
+        toast({
+          title: 'Error',
+          description: 'You cannot delete your own account',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       // Delete from user_roles first (due to foreign key constraint)
-      await supabase
+      const { error: roleError } = await supabase
         .from('user_roles')
         .delete()
         .eq('user_id', agent.user_id);
 
+      if (roleError) {
+        console.error('Error deleting user roles:', roleError);
+        throw new Error('Failed to remove user roles');
+      }
+
       // Delete from profiles
-      await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
         .delete()
         .eq('user_id', agent.user_id);
 
+      if (profileError) {
+        console.error('Error deleting user profile:', profileError);
+        throw new Error('Failed to remove user profile');
+      }
+
       // Delete from auth.users (this requires admin privileges)
-      const { error } = await supabase.functions.invoke('admin-delete-user', {
+      const { data, error } = await supabase.functions.invoke('admin-delete-user', {
         body: { userId: agent.user_id }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(`Failed to delete user account: ${error.message}`);
+      }
+
+      // Check if the function returned an error in the response
+      if (data?.error) {
+        console.error('Function returned error:', data.error);
+        throw new Error(data.error);
+      }
 
       toast({
         title: 'Success',
@@ -323,6 +414,7 @@ const AdminTeamManagement = () => {
       fetchAgents(); // Refresh the agents list
 
     } catch (error: any) {
+      console.error('Delete agent error:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to remove agent',
@@ -668,60 +760,153 @@ const AdminTeamManagement = () => {
 
         {/* Edit Agent Dialog */}
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Team Member</DialogTitle>
               <DialogDescription>
                 Update information for {editingAgent ? getAgentDisplayName(editingAgent) : ''}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-6">
+              {/* Basic Information */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Basic Information</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">First Name</label>
+                    <Input
+                      value={editFirstName}
+                      onChange={(e) => setEditFirstName(e.target.value)}
+                      placeholder="Enter first name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Last Name</label>
+                    <Input
+                      value={editLastName}
+                      onChange={(e) => setEditLastName(e.target.value)}
+                      placeholder="Enter last name"
+                    />
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">First Name</label>
+                  <label className="text-sm font-medium">Email</label>
                   <Input
-                    value={editFirstName}
-                    onChange={(e) => setEditFirstName(e.target.value)}
-                    placeholder="Enter first name"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="Enter email address"
+                    type="email"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Last Name</label>
-                  <Input
-                    value={editLastName}
-                    onChange={(e) => setEditLastName(e.target.value)}
-                    placeholder="Enter last name"
-                  />
+                  <label className="text-sm font-medium">Role</label>
+                  <Select value={editRole} onValueChange={(value: 'agent' | 'admin') => setEditRole(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="agent">Agent</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Email</label>
-                <Input
-                  value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
-                  placeholder="Enter email address"
-                  type="email"
-                />
+
+              {/* Professional Information */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Professional Information</h4>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Team Name</label>
+                  <Input
+                    value={editTeamName}
+                    onChange={(e) => setEditTeamName(e.target.value)}
+                    placeholder="Enter team name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Brokerage</label>
+                  <Input
+                    value={editBrokerage}
+                    onChange={(e) => setEditBrokerage(e.target.value)}
+                    placeholder="Enter brokerage name"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Phone Number</label>
+                    <Input
+                      value={editPhoneNumber}
+                      onChange={(e) => setEditPhoneNumber(e.target.value)}
+                      placeholder="(555) 123-4567"
+                      type="tel"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Office Number</label>
+                    <Input
+                      value={editOfficeNumber}
+                      onChange={(e) => setEditOfficeNumber(e.target.value)}
+                      placeholder="(555) 123-4567"
+                      type="tel"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Role</label>
-                <Select value={editRole} onValueChange={(value: 'agent' | 'admin') => setEditRole(value)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="agent">Agent</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
+
+              {/* Location & Licensing */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Location & Licensing</h4>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Office Address</label>
+                  <Input
+                    value={editOfficeAddress}
+                    onChange={(e) => setEditOfficeAddress(e.target.value)}
+                    placeholder="Enter office address"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Website</label>
+                  <Input
+                    value={editWebsite}
+                    onChange={(e) => setEditWebsite(e.target.value)}
+                    placeholder="https://yourwebsite.com"
+                    type="url"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">State Licenses</label>
+                  <Input
+                    value={editStateLicenses?.join(', ') || ''}
+                    onChange={(e) => {
+                      const licenses = e.target.value.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
+                      setEditStateLicenses(licenses);
+                    }}
+                    placeholder="CA, NV, AZ (comma-separated)"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter state codes separated by commas
+                  </p>
+                  {editStateLicenses && editStateLicenses.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {editStateLicenses.map((license, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                        >
+                          {license}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleSaveAgentChanges}>
-                Save Changes
+              <Button onClick={handleSaveAgentChanges} disabled={editLoading}>
+                {editLoading ? 'Saving...' : 'Save Changes'}
               </Button>
             </DialogFooter>
           </DialogContent>
