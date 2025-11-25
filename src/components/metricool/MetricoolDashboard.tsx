@@ -10,7 +10,7 @@ interface MetricoolIframeProps {
 }
 
 export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
-  const { data: metricoolLink, isLoading } = useMetricoolLink(userId);
+  const { data: metricoolLink, isLoading, error: metricoolError } = useMetricoolLink(userId);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoadingIframe, setIsLoadingIframe] = useState(true);
   const [iframeSrc, setIframeSrc] = useState<string>('');
@@ -101,6 +101,26 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
             <p className="mt-2 text-sm text-muted-foreground">Loading Metricool...</p>
           </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (metricoolError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Metricool Social Media Management</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {metricoolError.message?.includes('authentication') || metricoolError.message?.includes('not authenticated')
+                ? 'Authentication error. Please refresh the page or log in again.'
+                : `Error loading Metricool: ${metricoolError.message || 'Unknown error'}`}
+            </AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
     );
