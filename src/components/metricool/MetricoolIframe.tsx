@@ -77,6 +77,23 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
     };
   }, [iframeSrc, handleLoadFailure]);
 
+  // Define all callbacks before any early returns
+  const handleIframeLoad = useCallback(() => {
+    // Simple timeout to hide loading spinner after iframe loads
+    setTimeout(() => {
+      setIsLoadingIframe(false);
+      setLoadError(null);
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+        loadTimeoutRef.current = null;
+      }
+    }, 1000);
+  }, []);
+
+  const handleIframeError = useCallback(() => {
+    handleLoadFailure();
+  }, [handleLoadFailure]);
+
   // Early returns after all hooks
   if (isLoading) {
     return (
@@ -109,22 +126,6 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
       </Card>
     );
   }
-
-  const handleIframeLoad = useCallback(() => {
-    // Simple timeout to hide loading spinner after iframe loads
-    setTimeout(() => {
-      setIsLoadingIframe(false);
-      setLoadError(null);
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-        loadTimeoutRef.current = null;
-      }
-    }, 1000);
-  }, []);
-
-  const handleIframeError = useCallback(() => {
-    handleLoadFailure();
-  }, [handleLoadFailure]);
 
   return (
     <Card>
