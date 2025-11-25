@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Settings, ExternalLink, Edit, Trash2, Plus, Users, CheckCircle, XCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,8 +18,12 @@ export function MetricoolGlobalSettings() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const { data: metricoolLinks, isLoading: linksLoading } = useAllMetricoolLinks();
-  const { agents, getAgentDisplayName } = useAgents();
+  const { agents, getAgentDisplayName, fetchAgents } = useAgents();
   const { createMetricoolLink, toggleMetricoolLinkStatus, deleteMetricoolLink } = useMetricoolManagement();
+
+  useEffect(() => {
+    fetchAgents();
+  }, [fetchAgents]);
 
   const handleCreateLink = async () => {
     if (!selectedAgentId || !newUrl.trim()) return;
