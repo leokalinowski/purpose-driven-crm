@@ -103,7 +103,8 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
             className={`w-full h-[800px] border-0 rounded-lg ${isLoadingIframe ? 'hidden' : ''}`}
             title="Metricool Dashboard"
             allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
-            sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+            referrerPolicy="no-referrer"
+            sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts allow-top-navigation"
             loading="lazy"
             onLoad={handleIframeLoad}
           />
