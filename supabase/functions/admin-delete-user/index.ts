@@ -38,13 +38,13 @@ serve(async (req) => {
     }
 
     // Check if user is admin
-    const { data: profile } = await supabaseClient
-      .from('profiles')
+    const { data: userRole } = await supabaseClient
+      .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
       .single();
 
-    if (!profile || profile.role !== 'admin') {
+    if (!userRole || userRole.role !== 'admin') {
       throw new Error('Unauthorized - Admin access required');
     }
 
