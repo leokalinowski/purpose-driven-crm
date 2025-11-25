@@ -89,12 +89,17 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     console.log('SphereSync email function started');
 
-    // Check if this is a forced send (admin override)
+    // Check if this is a forced send (admin override) or test mode
     const requestBody = await req.json().catch(() => ({}));
     const forceSend = requestBody.force === true;
+    const testEmail = requestBody.testEmail; // If provided, send only to this email as a test
     
     if (forceSend) {
       console.log('Force send enabled - will send emails even if already sent this week');
+    }
+    
+    if (testEmail) {
+      console.log(`Test mode enabled - will send sample email only to ${testEmail}`);
     }
 
     // Initialize Supabase client
@@ -179,8 +184,14 @@ const handler = async (req: Request): Promise<Response> => {
         continue;
       }
 
-      // Check if we've already sent an email to this agent for this week (unless forced)
-      if (!forceSend) {
+      // In test mode, only process the first agent (we'll override the email address)
+      if (testEmail && emailsSent > 0) {
+        console.log('Test mode: skipping remaining agents after first email');
+        break;
+      }
+
+      // Check if we've already sent an email to this agent for this week (unless forced or test mode)
+      if (!forceSend && !testEmail) {
         const { data: existingLog, error: logError } = await supabase
           .from('spheresync_email_logs')
           .select('id, sent_at')
@@ -206,8 +217,6 @@ const handler = async (req: Request): Promise<Response> => {
         const textTasks = agentTasks.filter(task => task.task_type === 'text');
 
         // Create email content
-        const agentName = agent.first_name ? `${agent.first_name} ${agent.last_name}`.trim() : 'Agent';
-        
         let plainTextContent = `Hello ${agentName},\n\n`;
         plainTextContent += `Your SphereSync tasks for Week ${currentWeek} (${currentYear}) are ready!\n\n`;
         
@@ -338,32 +347,39 @@ const handler = async (req: Request): Promise<Response> => {
           </div>
         `;
 
-        // Send the email with admin BCC
+        // Send the email with admin BCC (or to test email in test mode)
         const adminBCC = Deno.env.get('SPHERESYNC_ADMIN_BCC') || 'leonardo@realestateonpurpose.com';
+        const recipientEmail = testEmail || agent.email;
+        const emailSubject = testEmail 
+          ? `[TEST] SphereSync Tasks - Week ${currentWeek} (${agentTasks.length} tasks assigned)` 
+          : `SphereSync Tasks - Week ${currentWeek} (${agentTasks.length} tasks assigned)`;
+        
         await sendEmail({
-          to: agent.email,
-          subject: `SphereSync Tasks - Week ${currentWeek} (${agentTasks.length} tasks assigned)`,
+          to: recipientEmail,
+          subject: emailSubject,
           html: htmlContent,
           text: plainTextContent,
-          bcc: [adminBCC]
+          bcc: testEmail ? undefined : [adminBCC] // No BCC in test mode to avoid duplicate
         });
 
-        console.log(`Email sent to ${agent.email} (${agentTasks.length} tasks)`);
+        console.log(`Email sent to ${recipientEmail} (${agentTasks.length} tasks)${testEmail ? ' [TEST MODE]' : ''}`);
         
-        // Log the email send to prevent duplicates
-        const { error: logInsertError } = await supabase
-          .from('spheresync_email_logs')
-          .insert({
-            agent_id: agentId,
-            week_number: currentWeek,
-            year: currentYear,
-            task_count: agentTasks.length
-          });
+        // Only log the email send in non-test mode to prevent duplicates
+        if (!testEmail) {
+          const { error: logInsertError } = await supabase
+            .from('spheresync_email_logs')
+            .insert({
+              agent_id: agentId,
+              week_number: currentWeek,
+              year: currentYear,
+              task_count: agentTasks.length
+            });
 
-        if (logInsertError) {
-          console.error(`Failed to log email send for agent ${agentId}:`, logInsertError);
-        } else {
-          console.log(`Logged email send for agent ${agentId}`);
+          if (logInsertError) {
+            console.error(`Failed to log email send for agent ${agentId}:`, logInsertError);
+          } else {
+            console.log(`Logged email send for agent ${agentId}`);
+          }
         }
         
         emailsSent++;
