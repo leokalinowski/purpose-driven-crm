@@ -13,41 +13,62 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
   const { data: metricoolLink, isLoading } = useMetricoolLink(userId);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoadingIframe, setIsLoadingIframe] = useState(true);
+  const [currentApproach, setCurrentApproach] = useState<1 | 2 | 3>(3);
   const [iframeSrc, setIframeSrc] = useState<string>('');
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Handle iframe load timeout
-  const handleLoadTimeout = useCallback(() => {
+  // Set up iframe source based on current approach
+  useEffect(() => {
+    if (!metricoolLink) {
+      setIframeSrc('');
+      return;
+    }
+
+    // Skip Approach 2 entirely - go directly from 1 to 3
+    if (currentApproach === 1) {
+      // Approach 1: Direct iframe embedding
+      console.log('[MetricoolDashboard] Approach 1 - Using direct iframe URL:', metricoolLink.iframe_url);
+      setIframeSrc(metricoolLink.iframe_url);
+    } else if (currentApproach === 3) {
+      // Approach 3: Enhanced wrapper HTML
+      const wrapperUrl = `/metricool-test.html?url=${encodeURIComponent(metricoolLink.iframe_url)}`;
+      console.log('[MetricoolDashboard] Approach 3 - Using wrapper URL:', wrapperUrl);
+      setIframeSrc(wrapperUrl);
+    }
+    // Approach 2 is skipped entirely - never set currentApproach to 2
+  }, [metricoolLink?.iframe_url, currentApproach]);
+
+  // Helper function to handle approach failure
+  const handleApproachFailure = useCallback(() => {
     setIsLoadingIframe(false);
-    setLoadError('Failed to load Metricool dashboard. Please try opening in a new tab instead.');
+    
+    // Try next approach if current one failed
+    // Skip Approach 2 (proxy) as it requires auth and causes 401 errors
+    if (currentApproach === 1) {
+      console.log('[MetricoolDashboard] Approach 1 failed, skipping proxy (auth issues), trying Approach 3 (wrapper)...');
+      // Use setTimeout to avoid triggering useEffect during render
+      setTimeout(() => {
+        setCurrentApproach(3);
+      }, 0);
+    } else {
+      setLoadError('All embedding approaches failed. The Metricool dashboard cannot be embedded due to browser security restrictions. Please use "Open in New Tab" instead.');
+    }
     
     if (loadTimeoutRef.current) {
       clearTimeout(loadTimeoutRef.current);
       loadTimeoutRef.current = null;
     }
-  }, []);
+  }, [currentApproach]);
 
-  // Set up iframe source using wrapper
-  useEffect(() => {
-    if (!metricoolLink) {
-      setIframeSrc('');
-      setIsLoadingIframe(true);
-      setLoadError(null);
-      return;
-    }
-
-    const wrapperUrl = `/metricool-test.html?url=${encodeURIComponent(metricoolLink.iframe_url)}`;
-    setIframeSrc(wrapperUrl);
-  }, [metricoolLink?.iframe_url, userId]);
-
-  // Set up timeout for iframe loading
+  // Set up timeout for iframe loading - only when iframeSrc changes
   useEffect(() => {
     if (!iframeSrc) {
       setIsLoadingIframe(false);
       return;
     }
 
+    console.log(`[MetricoolDashboard] Approach ${currentApproach} - Setting up iframe with src:`, iframeSrc);
     setIsLoadingIframe(true);
     setLoadError(null);
     
@@ -57,9 +78,10 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
       loadTimeoutRef.current = null;
     }
     
-    // Set timeout to detect if iframe never loads
+    // Set timeout to detect if iframe never loads (15 seconds - reduced from 30)
     loadTimeoutRef.current = setTimeout(() => {
-      handleLoadTimeout();
+      console.warn(`[MetricoolDashboard] Approach ${currentApproach} - Iframe load timeout after 15 seconds`);
+      handleApproachFailure();
     }, 15000);
 
     return () => {
@@ -68,29 +90,7 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
         loadTimeoutRef.current = null;
       }
     };
-  }, [iframeSrc, handleLoadTimeout]);
-
-  const handleIframeLoad = useCallback(() => {
-    // Simple timeout to hide loading spinner after iframe loads
-    setTimeout(() => {
-      setIsLoadingIframe(false);
-      setLoadError(null);
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-        loadTimeoutRef.current = null;
-      }
-    }, 1000);
-  }, []);
-
-  const handleIframeError = useCallback(() => {
-    setIsLoadingIframe(false);
-    setLoadError('Failed to load Metricool dashboard. Please use "Open in New Tab" instead.');
-    
-    if (loadTimeoutRef.current) {
-      clearTimeout(loadTimeoutRef.current);
-      loadTimeoutRef.current = null;
-    }
-  }, []);
+  }, [iframeSrc, currentApproach, handleApproachFailure]);
 
   // Early returns after all hooks
   if (isLoading) {
@@ -105,7 +105,6 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
       </Card>
     );
   }
-
 
   if (!metricoolLink) {
     return (
@@ -194,6 +193,16 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
           </div>
         )}
         <div className="w-full">
+          {currentApproach === 1 && (
+            <div className="text-xs text-muted-foreground mb-2">
+              Trying Approach 1: Direct iframe embedding...
+            </div>
+          )}
+          {currentApproach === 3 && (
+            <div className="text-xs text-muted-foreground mb-2">
+              Approach 1 failed. Trying Approach 3: Enhanced wrapper...
+            </div>
+          )}
           <iframe
             ref={iframeRef}
             src={iframeSrc}
@@ -202,9 +211,62 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
             allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
             referrerPolicy="origin"
             loading="lazy"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-popups-to-escape-sandbox"
-            onLoad={handleIframeLoad}
-            onError={handleIframeError}
+            sandbox={currentApproach === 1 ? undefined : "allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-popups-to-escape-sandbox"}
+            onLoad={() => {
+              console.log(`[MetricoolDashboard] Approach ${currentApproach} - Iframe loaded`);
+              
+              // Check if the iframe actually loaded valid content (not an error page)
+              try {
+                const iframe = iframeRef.current;
+                if (iframe && iframe.contentWindow) {
+                  setTimeout(() => {
+                    try {
+                      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                      if (iframeDoc) {
+                        const bodyText = iframeDoc.body?.innerText || '';
+                        // Check for common error indicators
+                        if (bodyText.includes('401') || bodyText.includes('Missing authorization') || 
+                            bodyText.includes('{"code":401') || bodyText.includes('"code":401') ||
+                            (bodyText.includes('error') && bodyText.length < 500)) {
+                          console.warn(`[MetricoolDashboard] Approach ${currentApproach} - Detected error page in iframe:`, bodyText.substring(0, 200));
+                          handleApproachFailure();
+                          return;
+                        }
+                      }
+                    } catch (e) {
+                      // CORS - can't access iframe content, assume it's working
+                      console.log(`[MetricoolDashboard] Approach ${currentApproach} - Cannot access iframe content (CORS), assuming success`);
+                    }
+                    
+                    setIsLoadingIframe(false);
+                    setLoadError(null);
+                    if (loadTimeoutRef.current) {
+                      clearTimeout(loadTimeoutRef.current);
+                      loadTimeoutRef.current = null;
+                    }
+                  }, 2000);
+                } else {
+                  setIsLoadingIframe(false);
+                  setLoadError(null);
+                  if (loadTimeoutRef.current) {
+                    clearTimeout(loadTimeoutRef.current);
+                    loadTimeoutRef.current = null;
+                  }
+                }
+              } catch (e) {
+                console.error(`[MetricoolDashboard] Error checking iframe content:`, e);
+                setIsLoadingIframe(false);
+                setLoadError(null);
+                if (loadTimeoutRef.current) {
+                  clearTimeout(loadTimeoutRef.current);
+                  loadTimeoutRef.current = null;
+                }
+              }
+            }}
+            onError={(e) => {
+              console.error(`[MetricoolDashboard] Approach ${currentApproach} - Iframe error event:`, e);
+              handleApproachFailure();
+            }}
           />
         </div>
       </CardContent>

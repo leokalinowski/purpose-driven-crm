@@ -19,16 +19,9 @@ export const useMetricoolLink = (userId?: string) => {
         .eq('is_active', true)
         .single();
 
-      // If there's any error (including auth errors), just return null
-      // The link is just a URL - if we can't fetch it, we'll show "no link configured"
-      if (error) {
-        // PGRST116 is "not found" - this is fine
-        // Any other error (including auth) - just treat as "no link configured"
-        return null;
-      }
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "not found"
       return data as MetricoolLink | null;
     },
     enabled: !!actualUserId,
-    retry: false,
   });
 };
