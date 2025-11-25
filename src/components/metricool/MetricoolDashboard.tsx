@@ -11,7 +11,6 @@ interface MetricoolIframeProps {
 
 export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
   const { data: metricoolLink, isLoading } = useMetricoolLink(userId);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoadingIframe, setIsLoadingIframe] = useState(true);
   const [iframeSrc, setIframeSrc] = useState<string>('');
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -21,7 +20,6 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
   useEffect(() => {
     setIframeSrc('');
     setIsLoadingIframe(true);
-    setLoadError(null);
   }, [userId]);
 
   // Set up iframe source using Approach 3 (wrapper) directly
@@ -36,18 +34,7 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
     setIframeSrc(wrapperUrl);
   }, [metricoolLink?.iframe_url, userId]);
 
-  // Helper function to handle iframe load failure
-  const handleLoadFailure = useCallback(() => {
-    setIsLoadingIframe(false);
-    setLoadError('Failed to load Metricool dashboard. Please use "Open in New Tab" instead.');
-    
-    if (loadTimeoutRef.current) {
-      clearTimeout(loadTimeoutRef.current);
-      loadTimeoutRef.current = null;
-    }
-  }, []);
-
-  // Set up timeout for iframe loading
+  // Set up timeout for iframe loading (just to hide loading spinner, not to show errors)
   useEffect(() => {
     if (!iframeSrc) {
       setIsLoadingIframe(false);
@@ -63,14 +50,12 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
       loadTimeoutRef.current = null;
     }
     
-    // Set timeout to detect if iframe never loads (increased to 20 seconds to account for slow Metricool loading)
+    // Set a generous timeout to hide loading spinner as fallback
+    // Don't show error - just hide spinner and show iframe
     loadTimeoutRef.current = setTimeout(() => {
-      console.warn('[MetricoolDashboard] Iframe load timeout after 20 seconds');
-      // Only show error if iframe still hasn't loaded
-      if (isLoadingIframe) {
-        handleLoadFailure();
-      }
-    }, 20000);
+      console.log('[MetricoolDashboard] Hiding loading spinner after 30 seconds (fallback)');
+      setIsLoadingIframe(false);
+    }, 30000);
 
     return () => {
       if (loadTimeoutRef.current) {
@@ -78,7 +63,7 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
         loadTimeoutRef.current = null;
       }
     };
-  }, [iframeSrc, handleLoadFailure]);
+  }, [iframeSrc]);
 
   // Define all callbacks before any early returns
   const handleIframeLoad = useCallback(() => {
@@ -91,13 +76,15 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
     // Hide loading spinner after a short delay to ensure content is visible
     setTimeout(() => {
       setIsLoadingIframe(false);
-      setLoadError(null);
     }, 500);
   }, []);
 
   const handleIframeError = useCallback(() => {
-    handleLoadFailure();
-  }, [handleLoadFailure]);
+    // Silently handle errors - don't show error message
+    // Just hide loading spinner and let iframe show what it can
+    console.warn('[MetricoolDashboard] Iframe error event detected, hiding spinner');
+    setIsLoadingIframe(false);
+  }, []);
 
   // Early returns after all hooks
   if (isLoading) {
@@ -171,27 +158,7 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
         </div>
       </CardHeader>
       <CardContent>
-        {loadError && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <div className="font-semibold mb-2">Failed to load Metricool embed</div>
-              <div className="text-sm mb-2">{loadError}</div>
-              <div className="text-xs text-muted-foreground mb-2">
-                This may be due to browser security restrictions or authentication issues.
-              </div>
-              <div className="text-xs text-muted-foreground">
-                <strong>Tip:</strong> If you see a 401 login page, try:
-                <ol className="list-decimal list-inside mt-1 space-y-1">
-                  <li>Click "Open in New Tab" to authenticate in a new window</li>
-                  <li>After logging in, return here and click "Retry"</li>
-                  <li>Or use the Metricool dashboard directly in the new tab</li>
-                </ol>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-        {isLoadingIframe && !loadError && (
+        {isLoadingIframe && (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground mb-2" />
