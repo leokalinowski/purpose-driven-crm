@@ -17,37 +17,16 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="mt-2 text-sm text-muted-foreground">Loading Metricool...</p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!metricoolLink) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Metricool Social Media Management</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              No Metricool link has been configured for your account yet.
-              Please contact your administrator to set up your Metricool integration.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-    );
-  }
+  // Handle iframe load timeout
+  const handleLoadTimeout = useCallback(() => {
+    setIsLoadingIframe(false);
+    setLoadError('Failed to load Metricool dashboard. Please try opening in a new tab instead.');
+    
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+      loadTimeoutRef.current = null;
+    }
+  }, []);
 
   // Set up iframe source using wrapper
   useEffect(() => {
@@ -61,17 +40,6 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
     const wrapperUrl = `/metricool-test.html?url=${encodeURIComponent(metricoolLink.iframe_url)}`;
     setIframeSrc(wrapperUrl);
   }, [metricoolLink?.iframe_url, userId]);
-
-  // Handle iframe load timeout
-  const handleLoadTimeout = useCallback(() => {
-    setIsLoadingIframe(false);
-    setLoadError('Failed to load Metricool dashboard. Please try opening in a new tab instead.');
-    
-    if (loadTimeoutRef.current) {
-      clearTimeout(loadTimeoutRef.current);
-      loadTimeoutRef.current = null;
-    }
-  }, []);
 
   // Set up timeout for iframe loading
   useEffect(() => {
@@ -123,6 +91,39 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
       loadTimeoutRef.current = null;
     }
   }, []);
+
+  // Early returns after all hooks
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="mt-2 text-sm text-muted-foreground">Loading Metricool...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!metricoolLink) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Metricool Social Media Management</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              No Metricool link has been configured for your account yet.
+              Please contact your administrator to set up your Metricool integration.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
