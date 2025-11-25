@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertCircle, ExternalLink, RefreshCw, Monitor, Maximize2 } from 'lucide-react';
+import { Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import { useMetricoolLink } from '@/hooks/useMetricool';
 
 interface MetricoolIframeProps {
@@ -11,87 +11,21 @@ interface MetricoolIframeProps {
 
 export function MetricoolIframe({ userId }: MetricoolIframeProps) {
   const { data: metricoolLink, isLoading } = useMetricoolLink(userId);
-  const [popupWindow, setPopupWindow] = useState<Window | null>(null);
-  const [isPopupOpen, setIsPopupOpen] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const openPopup = () => {
-    if (!metricoolLink) return;
-
-    const width = 1400;
-    const height = 900;
-    const left = (window.screen.width - width) / 2;
-    const top = (window.screen.height - height) / 2;
-
-    const popup = window.open(
-      metricoolLink.iframe_url,
-      'metricool-dashboard',
-      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes,status=yes,toolbar=no,menubar=no,location=no`
-    );
-
-    if (popup) {
-      setPopupWindow(popup);
-      setIsPopupOpen(true);
-
-      // Check if popup is closed
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          setPopupWindow(null);
-          setIsPopupOpen(false);
-          clearInterval(checkClosed);
-        }
-      }, 1000);
-
-      // Focus the popup
-      popup.focus();
-    }
-  };
-
-  const closePopup = () => {
-    if (popupWindow && !popupWindow.closed) {
-      popupWindow.close();
-    }
-    setPopupWindow(null);
-    setIsPopupOpen(false);
-  };
-
-  const toggleFullscreen = () => {
-    if (!popupWindow || popupWindow.closed) {
-      openPopup();
-      setIsFullscreen(true);
-      return;
-    }
-
-    if (isFullscreen) {
-      // Restore to normal size
-      popupWindow.resizeTo(1400, 900);
-      popupWindow.moveTo((window.screen.width - 1400) / 2, (window.screen.height - 900) / 2);
-      setIsFullscreen(false);
-    } else {
-      // Make fullscreen
-      popupWindow.moveTo(0, 0);
-      popupWindow.resizeTo(window.screen.width, window.screen.height);
-      setIsFullscreen(true);
-    }
-    popupWindow.focus();
-  };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (popupWindow && !popupWindow.closed) {
-        popupWindow.close();
-      }
-    };
-  }, [popupWindow]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isLoadingIframe, setIsLoadingIframe] = useState(true);
+  const [currentApproach, setCurrentApproach] = useState<1 | 2 | 3>(3);
+  const [iframeSrc, setIframeSrc] = useState<string>('');
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   if (isLoading) {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-sm text-muted-foreground">Loading...</span>
+          <div className="text-center">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="mt-2 text-sm text-muted-foreground">Loading Metricool...</p>
+          </div>
         </CardContent>
       </Card>
     );
@@ -100,11 +34,15 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
   if (!metricoolLink) {
     return (
       <Card>
-        <CardContent className="py-6">
+        <CardHeader>
+          <CardTitle>Metricool Social Media Management</CardTitle>
+        </CardHeader>
+        <CardContent>
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              No Metricool link found for this user.
+              No Metricool link has been configured for your account yet.
+              Please contact your administrator to set up your Metricool integration.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -112,11 +50,74 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
     );
   }
 
+  // Set up iframe source based on current approach
+  // Reset state when userId changes
+  useEffect(() => {
+    if (!metricoolLink) {
+      setIframeSrc('');
+      setIsLoadingIframe(true);
+      setLoadError(null);
+      return;
+    }
+
+    // Always use Approach 3 (wrapper) directly
+    if (currentApproach === 3) {
+      // Approach 3: Enhanced wrapper HTML
+      const wrapperUrl = `/metricool-test.html?url=${encodeURIComponent(metricoolLink.iframe_url)}`;
+      console.log('[MetricoolIframe] Approach 3 - Using wrapper URL for user:', userId, wrapperUrl);
+      setIframeSrc(wrapperUrl);
+    }
+  }, [metricoolLink?.iframe_url, currentApproach, userId]);
+
+  // Helper function to handle approach failure
+  const handleApproachFailure = useCallback(() => {
+    setIsLoadingIframe(false);
+
+    // Since we're using Approach 3 directly, if it fails, show error
+    setLoadError('Failed to load Metricool dashboard. The Metricool dashboard cannot be embedded due to browser security restrictions. Please use "Open in New Tab" instead.');
+
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+      loadTimeoutRef.current = null;
+    }
+  }, []);
+
+  // Set up timeout for iframe loading - only when iframeSrc changes
+  useEffect(() => {
+    if (!iframeSrc) {
+      setIsLoadingIframe(false);
+      return;
+    }
+
+    console.log(`[MetricoolIframe] Approach ${currentApproach} - Setting up iframe with src:`, iframeSrc);
+    setIsLoadingIframe(true);
+    setLoadError(null);
+
+    // Clear any existing timeout
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+      loadTimeoutRef.current = null;
+    }
+
+    // Set timeout to detect if iframe never loads (15 seconds - reduced from 30)
+    loadTimeoutRef.current = setTimeout(() => {
+      console.warn(`[MetricoolIframe] Approach ${currentApproach} - Iframe load timeout after 15 seconds`);
+      handleApproachFailure();
+    }, 15000);
+
+    return () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+        loadTimeoutRef.current = null;
+      }
+    };
+  }, [iframeSrc, currentApproach, handleApproachFailure]);
+
   return (
-    <Card className="h-full" ref={containerRef}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-xl font-bold">Metricool Dashboard</CardTitle>
-        <div className="flex gap-2">
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Metricool Social Media Dashboard</CardTitle>
           <Button
             variant="outline"
             size="sm"
@@ -125,54 +126,113 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
             <ExternalLink className="h-4 w-4 mr-2" />
             Open in New Tab
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={isPopupOpen ? closePopup : openPopup}
-          >
-            <Monitor className="h-4 w-4 mr-2" />
-            {isPopupOpen ? 'Close Popup' : 'Open in Popup'}
-          </Button>
-          {isPopupOpen && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleFullscreen}
-            >
-              <Maximize2 className="h-4 w-4 mr-2" />
-              {isFullscreen ? 'Restore' : 'Fullscreen'}
-            </Button>
-          )}
         </div>
       </CardHeader>
-      <CardContent className="p-6">
-        <div className="text-center space-y-4">
-          <div className="text-lg font-medium">Social Media Management</div>
-          <p className="text-muted-foreground">
-            Access your Metricool dashboard to manage your social media accounts and campaigns.
-          </p>
-
-          {isPopupOpen ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-center gap-2 text-green-600">
-                <Monitor className="h-5 w-5" />
-                <span className="font-medium">Metricool dashboard is open in popup window</span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                The popup window provides full access to Metricool's features with proper authentication.
-              </p>
+      <CardContent>
+            {loadError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="font-semibold mb-2">Failed to load Metricool embed</div>
+                  <div className="text-sm mb-2">{loadError}</div>
+                  <div className="text-xs text-muted-foreground mb-2">
+                    This may be due to browser security restrictions or authentication issues.
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    <strong>Tip:</strong> If you see a 401 login page, try:
+                    <ol className="list-decimal list-inside mt-1 space-y-1">
+                      <li>Click "Open in New Tab" to authenticate in a new window</li>
+                      <li>After logging in, return here and click "Retry"</li>
+                      <li>Or use the Metricool dashboard directly in the new tab</li>
+                    </ol>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+        {isLoadingIframe && !loadError && (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">Loading Metricool dashboard...</p>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <Button onClick={openPopup} size="lg" className="px-8">
-                <Monitor className="h-5 w-5 mr-2" />
-                Launch Metricool Dashboard
-              </Button>
-              <p className="text-sm text-muted-foreground">
-                Click to open Metricool in a popup window with full functionality.
-              </p>
+          </div>
+        )}
+        <div className="w-full">
+          {currentApproach === 3 && (
+            <div className="text-xs text-muted-foreground mb-2">
+              Loading Metricool dashboard via wrapper...
             </div>
           )}
+              <iframe
+                ref={iframeRef}
+                src={iframeSrc}
+                className={`w-full h-[800px] border-0 rounded-lg ${isLoadingIframe ? 'hidden' : ''}`}
+                title="Metricool Dashboard"
+                allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
+                referrerPolicy="origin"
+                loading="lazy"
+                sandbox={currentApproach === 1 ? undefined : "allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-popups-to-escape-sandbox"}
+            onLoad={() => {
+              console.log(`[MetricoolIframe] Approach ${currentApproach} - Iframe loaded`);
+
+              // Check if the iframe actually loaded valid content (not an error page)
+              // This is a best-effort check - we can't always access iframe content due to CORS
+              try {
+                const iframe = iframeRef.current;
+                if (iframe && iframe.contentWindow) {
+                  // Try to detect if it's an error page by checking the URL or content
+                  // If we can't access it, assume it loaded successfully
+                  setTimeout(() => {
+                    try {
+                      // Check if iframe document is accessible and not an error
+                      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                      if (iframeDoc) {
+                        const bodyText = iframeDoc.body?.innerText || '';
+                        // Check for common error indicators
+                        if (bodyText.includes('401') || bodyText.includes('Missing authorization') ||
+                            bodyText.includes('{"code":401') || bodyText.includes('error')) {
+                          console.warn(`[MetricoolIframe] Approach ${currentApproach} - Detected error page in iframe`);
+                          handleApproachFailure();
+                          return;
+                        }
+                      }
+                    } catch (e) {
+                      // CORS - can't access iframe content, assume it's working
+                      console.log(`[MetricoolIframe] Approach ${currentApproach} - Cannot access iframe content (CORS), assuming success`);
+                    }
+
+                    // If we get here, assume it loaded successfully
+                    setIsLoadingIframe(false);
+                    setLoadError(null);
+                    if (loadTimeoutRef.current) {
+                      clearTimeout(loadTimeoutRef.current);
+                      loadTimeoutRef.current = null;
+                    }
+                  }, 2000); // Wait 2 seconds to check content
+                } else {
+                  setIsLoadingIframe(false);
+                  setLoadError(null);
+                  if (loadTimeoutRef.current) {
+                    clearTimeout(loadTimeoutRef.current);
+                    loadTimeoutRef.current = null;
+                  }
+                }
+              } catch (e) {
+                console.error(`[MetricoolIframe] Error checking iframe content:`, e);
+                // Assume it loaded if we can't check
+                setIsLoadingIframe(false);
+                setLoadError(null);
+                if (loadTimeoutRef.current) {
+                  clearTimeout(loadTimeoutRef.current);
+                  loadTimeoutRef.current = null;
+                }
+              }
+            }}
+            onError={(e) => {
+              console.error(`[MetricoolIframe] Approach ${currentApproach} - Iframe error event:`, e);
+              handleApproachFailure();
+            }}
+          />
         </div>
       </CardContent>
     </Card>
