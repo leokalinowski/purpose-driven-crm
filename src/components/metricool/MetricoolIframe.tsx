@@ -53,68 +53,77 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
 
   // Set up iframe source based on current approach
   useEffect(() => {
-    if (!metricoolLink) return;
+    if (!metricoolLink) {
+      setIframeSrc('');
+      return;
+    }
 
-    const setupIframe = async () => {
+    if (currentApproach === 1) {
+      // Approach 1: Direct iframe embedding
+      console.log('[MetricoolIframe] Approach 1 - Using direct iframe URL:', metricoolLink.iframe_url);
+      setIframeSrc(metricoolLink.iframe_url);
+    } else if (currentApproach === 2) {
+      // Approach 2: Use Supabase proxy function
+      try {
+        // Get Supabase URL from the client
+        const supabaseUrl = 'https://cguoaokqwgqvzkqqezcq.supabase.co';
+        const proxyUrl = `${supabaseUrl}/functions/v1/metricool-proxy?url=${encodeURIComponent(metricoolLink.iframe_url)}`;
+        console.log('[MetricoolIframe] Approach 2 - Using proxy URL:', proxyUrl);
+        setIframeSrc(proxyUrl);
+      } catch (error) {
+        console.error('[MetricoolIframe] Approach 2 - Failed to create proxy URL:', error);
+        // Don't set currentApproach here to avoid infinite loop - let timeout handle it
+        setIframeSrc('');
+      }
+    } else if (currentApproach === 3) {
+      // Approach 3: Enhanced wrapper HTML
+      const wrapperUrl = `/metricool-test.html?url=${encodeURIComponent(metricoolLink.iframe_url)}`;
+      console.log('[MetricoolIframe] Approach 3 - Using wrapper URL:', wrapperUrl);
+      setIframeSrc(wrapperUrl);
+    }
+  }, [metricoolLink?.iframe_url, currentApproach]);
+
+  // Set up timeout for iframe loading - only when iframeSrc changes
+  useEffect(() => {
+    if (!iframeSrc) {
+      setIsLoadingIframe(false);
+      return;
+    }
+
+    console.log(`[MetricoolIframe] Approach ${currentApproach} - Setting up iframe with src:`, iframeSrc);
+    setIsLoadingIframe(true);
+    setLoadError(null);
+    
+    // Clear any existing timeout
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+      loadTimeoutRef.current = null;
+    }
+    
+    // Set timeout to detect if iframe never loads (30 seconds)
+    loadTimeoutRef.current = setTimeout(() => {
+      console.warn(`[MetricoolIframe] Approach ${currentApproach} - Iframe load timeout after 30 seconds`);
+      setIsLoadingIframe(false);
+      
+      // Try next approach if current one failed
       if (currentApproach === 1) {
-        // Approach 1: Direct iframe embedding
-        console.log('[MetricoolIframe] Approach 1 - Using direct iframe URL:', metricoolLink.iframe_url);
-        setIframeSrc(metricoolLink.iframe_url);
+        console.log('[MetricoolIframe] Approach 1 failed, trying Approach 2 (proxy)...');
+        setCurrentApproach(2);
       } else if (currentApproach === 2) {
-        // Approach 2: Use Supabase proxy function
-        try {
-          // Get Supabase URL from the client
-          const supabaseUrl = 'https://cguoaokqwgqvzkqqezcq.supabase.co';
-          const proxyUrl = `${supabaseUrl}/functions/v1/metricool-proxy?url=${encodeURIComponent(metricoolLink.iframe_url)}`;
-          console.log('[MetricoolIframe] Approach 2 - Using proxy URL:', proxyUrl);
-          setIframeSrc(proxyUrl);
-        } catch (error) {
-          console.error('[MetricoolIframe] Approach 2 - Failed to create proxy URL:', error);
-          setCurrentApproach(3);
-        }
-      } else if (currentApproach === 3) {
-        // Approach 3: Enhanced wrapper HTML
-        const wrapperUrl = `/metricool-test.html?url=${encodeURIComponent(metricoolLink.iframe_url)}`;
-        console.log('[MetricoolIframe] Approach 3 - Using wrapper URL:', wrapperUrl);
-        setIframeSrc(wrapperUrl);
+        console.log('[MetricoolIframe] Approach 2 failed, trying Approach 3 (wrapper)...');
+        setCurrentApproach(3);
+      } else {
+        setLoadError('All embedding approaches failed. The Metricool dashboard cannot be embedded due to browser security restrictions. Please use "Open in New Tab" instead.');
+      }
+    }, 30000);
+
+    return () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+        loadTimeoutRef.current = null;
       }
     };
-
-    setupIframe();
-  }, [metricoolLink, currentApproach]);
-
-  // Set up timeout for iframe loading
-  useEffect(() => {
-    if (metricoolLink && iframeSrc) {
-      console.log(`[MetricoolIframe] Approach ${currentApproach} - Setting up iframe with src:`, iframeSrc);
-      setIsLoadingIframe(true);
-      setLoadError(null);
-      
-      // Set timeout to detect if iframe never loads (30 seconds)
-      loadTimeoutRef.current = setTimeout(() => {
-        console.warn(`[MetricoolIframe] Approach ${currentApproach} - Iframe load timeout after 30 seconds`);
-        setIsLoadingIframe(false);
-        
-        // Try next approach if current one failed
-        if (currentApproach === 1) {
-          console.log('[MetricoolIframe] Approach 1 failed, trying Approach 2 (proxy)...');
-          setCurrentApproach(2);
-        } else if (currentApproach === 2) {
-          console.log('[MetricoolIframe] Approach 2 failed, trying Approach 3 (wrapper)...');
-          setCurrentApproach(3);
-        } else {
-          setLoadError('All embedding approaches failed. The Metricool dashboard cannot be embedded due to browser security restrictions. Please use "Open in New Tab" instead.');
-        }
-      }, 30000);
-
-      return () => {
-        if (loadTimeoutRef.current) {
-          clearTimeout(loadTimeoutRef.current);
-          loadTimeoutRef.current = null;
-        }
-      };
-    }
-  }, [metricoolLink, iframeSrc, currentApproach]);
+  }, [iframeSrc, currentApproach]);
 
   return (
     <Card>
