@@ -646,45 +646,61 @@ const AdminDatabaseManagement = () => {
     try {
       const effectiveAgentId = selectedViewingAgent || user?.id;
 
+      // Step 1: Upload contacts first (NO DNC checks during upload)
+      let insertedContacts: Contact[] = [];
+      
       if (isAdmin && selectedViewingAgent && selectedViewingAgent !== user?.id) {
-        const { data, error } = await supabase.functions.invoke('admin-contacts-import', {
-          body: {
-            contacts: csvData,
-            agentId: selectedViewingAgent,
-            adminUserId: user?.id
-          }
-        });
+        // For admin uploading to another agent, use direct insert to skip DNC checks
+        const BATCH_SIZE = 100;
+        for (let i = 0; i < csvData.length; i += BATCH_SIZE) {
+          const batch = csvData.slice(i, i + BATCH_SIZE);
+          const contactsWithAgent = batch.map((contact) => ({
+            ...contact,
+            agent_id: selectedViewingAgent,
+            category: contact.last_name.charAt(0).toUpperCase() || 'A',
+          }));
 
-        if (error) throw error;
-        if (!data || data.success !== true) {
-          throw new Error(data?.error || 'Import failed.');
+          const { data, error } = await supabase
+            .from('contacts')
+            .insert(contactsWithAgent)
+            .select();
+
+          if (error) throw error;
+          insertedContacts.push(...((data as Contact[]) || []));
         }
-
-        let description = data.message || `${data.contactCount ?? csvData.length} contacts uploaded successfully`;
-        if (data.dncStats && data.dncStats.checked > 0) {
-          description += ` | DNC Check: ${data.dncStats.checked} checked, ${data.dncStats.flagged} flagged`;
-          if (data.dncStats.errors > 0) {
-            description += ` (${data.dncStats.errors} errors)`;
-          }
-        }
-
-        toast({
-          title: 'Success',
-          description,
-        });
       } else {
-        const insertedContacts = await uploadCSV(csvData);
-        toast({
-          title: 'Success',
-          description: `${insertedContacts.length} contacts uploaded successfully`,
-        });
-
-        await generateTasksForNewContacts(insertedContacts);
+        // For regular agent uploads, use uploadCSV
+        insertedContacts = await uploadCSV(csvData);
       }
 
+      toast({
+        title: 'Success',
+        description: `${insertedContacts.length} contacts uploaded successfully. DNC checks will run separately.`,
+      });
+
+      // Step 2: Generate tasks for new contacts
+      await generateTasksForNewContacts(insertedContacts);
+
+      // Step 3: Refresh data
       setShowCSVUpload(false);
       goToPage(1);
+      await fetchContacts();
       await fetchDNCStats();
+
+      // Step 4: Trigger DNC check separately AFTER upload completes
+      // This runs in the background and doesn't block the UI
+      if (effectiveAgentId) {
+        // Trigger DNC check asynchronously - don't wait for it
+        supabase.functions.invoke('dnc-monthly-check', {
+          body: {
+            manualTrigger: true,
+            forceRecheck: false,
+            agentId: effectiveAgentId
+          }
+        }).catch((dncError) => {
+          console.warn('DNC check triggered in background, may take a few minutes:', dncError);
+        });
+      }
     } catch (error: any) {
       console.error('CSV Upload error:', error);
 

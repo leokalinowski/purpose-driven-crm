@@ -247,23 +247,38 @@ const Database = () => {
 
   const handleCSVUpload = async (csvData: ContactInput[]) => {
     try {
+      // Step 1: Upload contacts first (NO DNC checks during upload)
       const insertedContacts = await uploadCSV(csvData);
 
       toast({
         title: 'Success',
-        description: `${insertedContacts.length} contacts uploaded successfully`,
+        description: `${insertedContacts.length} contacts uploaded successfully. DNC checks will run separately.`,
       });
 
-      // Refresh the list
+      // Step 2: Refresh the list
       await fetchContacts();
 
-      // Generate tasks for new contacts if they match current week's categories
+      // Step 3: Generate tasks for new contacts if they match current week's categories
       await generateTasksForNewContacts(insertedContacts);
       
       setShowCSVUpload(false);
       goToPage(1);
-      // Refresh DNC stats after upload
+      
+      // Step 4: Refresh DNC stats after upload
       await fetchDNCStats();
+
+      // Step 5: Trigger DNC check separately AFTER upload completes
+      // This runs in the background and doesn't block the UI
+      if (user?.id) {
+        supabase.functions.invoke('dnc-monthly-check', {
+          body: {
+            manualTrigger: true,
+            forceRecheck: false
+          }
+        }).catch((dncError) => {
+          console.warn('DNC check triggered in background, may take a few minutes:', dncError);
+        });
+      }
     } catch (error: any) {
       console.error('CSV Upload error:', error);
       

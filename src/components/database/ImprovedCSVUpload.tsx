@@ -450,13 +450,16 @@ export const ImprovedCSVUpload = ({
           dnc: c.dnc || false
         }));
         
-        // Update progress to indicate DNC checking
-        setUploadProgress({ stage: 'uploading', progress: 50, message: 'Contacts uploaded, running DNC checks...' });
+        // Upload contacts first - NO DNC checks during upload
+        setUploadProgress({ stage: 'uploading', progress: 50, message: 'Saving contacts to database...' });
         
         await onUpload(formattedContacts, targetAgentId);
+        
+        // Upload complete - DNC checks will be triggered separately by the parent component
+        setUploadProgress({ stage: 'uploading', progress: 100, message: `Successfully saved ${contacts.length} contacts` });
       }
       
-      setUploadProgress({ stage: 'complete', progress: 100, message: `Successfully uploaded ${contacts.length} contacts` });
+      setUploadProgress({ stage: 'complete', progress: 100, message: `Successfully uploaded ${contacts.length} contacts. DNC checks will run separately.` });
       
       const timeout = setTimeout(() => {
         onOpenChange(false);
