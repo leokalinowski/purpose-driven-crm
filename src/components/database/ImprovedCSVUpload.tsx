@@ -44,6 +44,22 @@ interface DuplicateGroup {
   action: 'keep_original' | 'merge' | 'skip_all';
 }
 
+// Move ALL_FIELDS outside component to prevent recreation on every render
+const ALL_FIELDS: Array<{ key: keyof ContactInput; label: string; required: boolean }> = [
+  { key: 'first_name', label: 'First Name', required: false },
+  { key: 'last_name', label: 'Last Name', required: true },
+  { key: 'phone', label: 'Phone', required: false },
+  { key: 'email', label: 'Email', required: false },
+  { key: 'address_1', label: 'Address 1', required: false },
+  { key: 'address_2', label: 'Address 2', required: false },
+  { key: 'city', label: 'City', required: false },
+  { key: 'state', label: 'State', required: false },
+  { key: 'zip_code', label: 'ZIP Code', required: false },
+  { key: 'tags', label: 'Tags (comma-separated)', required: false },
+  { key: 'dnc', label: 'Do Not Call', required: false },
+  { key: 'notes', label: 'Notes', required: false },
+];
+
 export const ImprovedCSVUpload = ({ 
   open, 
   onOpenChange, 
@@ -70,21 +86,6 @@ export const ImprovedCSVUpload = ({
   const [processedContacts, setProcessedContacts] = useState<ContactInputType[]>([]);
   const [showDuplicateResolution, setShowDuplicateResolution] = useState(false);
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
-
-  const ALL_FIELDS: Array<{ key: keyof ContactInput; label: string; required: boolean }> = [
-    { key: 'first_name', label: 'First Name', required: false },
-    { key: 'last_name', label: 'Last Name', required: true },
-    { key: 'phone', label: 'Phone', required: false },
-    { key: 'email', label: 'Email', required: false },
-    { key: 'address_1', label: 'Address 1', required: false },
-    { key: 'address_2', label: 'Address 2', required: false },
-    { key: 'city', label: 'City', required: false },
-    { key: 'state', label: 'State', required: false },
-    { key: 'zip_code', label: 'ZIP Code', required: false },
-    { key: 'tags', label: 'Tags (comma-separated)', required: false },
-    { key: 'dnc', label: 'Do Not Call', required: false },
-    { key: 'notes', label: 'Notes', required: false },
-  ];
 
   // Reset all state when dialog closes
   const resetState = useCallback(() => {
@@ -303,12 +304,6 @@ export const ImprovedCSVUpload = ({
       // Step 3: Check for duplicates in database
       setUploadProgress({ stage: 'checking_duplicates', progress: 75, message: 'Checking against existing database...' });
       
-      const targetAgentId = selectedAgentId || agentId;
-      if (!targetAgentId) {
-        toast({ title: 'Error', description: 'Unable to determine target agent for import.' });
-        return;
-      }
-
       // Check database duplicates
       const dbDuplicates = await checkDatabaseDuplicates(unique, targetAgentId);
       
