@@ -720,7 +720,8 @@ const AdminDatabaseManagement = () => {
   // Fetch DNC stats when component mounts
   useEffect(() => {
     fetchDNCStats();
-  }, [fetchDNCStats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const generatePageNumbers = () => {
     const pages = [];
