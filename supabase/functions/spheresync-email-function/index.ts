@@ -271,6 +271,17 @@ const handler = async (req: Request): Promise<Response> => {
         }
 
         plainTextContent += `Total Tasks: ${agentTasks.length}\n\n`;
+        
+        // Add conversation starters to plain text
+        plainTextContent += `CONVERSATION STARTERS:\n`;
+        plainTextContent += `Not sure what to say? Try one of these proven openers:\n\n`;
+        plainTextContent += `🐸 FROG Call: "Hey, how's the family? What have you been doing for fun? How's work? Do you have any goals you're working on?"\n\n`;
+        plainTextContent += `📅 Upcoming Event: "We have an exciting event coming up! Be on the lookout for the official invitation." or "Have you had a chance to RSVP for our upcoming event?"\n\n`;
+        plainTextContent += `🏠 Real Estate Market: "I have so many people reaching out about the market - it seems confusing right now. Did you have any questions? Who do you know thinking about buying or selling?"\n\n`;
+        plainTextContent += `☕ Coffee Catch-Up: "I was thinking about you! Would love to grab coffee and catch up. What does your schedule look like?"\n\n`;
+        plainTextContent += `🎁 Referral Ask: "I really appreciate you thinking of me. Do you know anyone right now who might be thinking about making a move?"\n\n`;
+        plainTextContent += `📊 Market Report Offer: "I just put together a market report for our area. Would you like me to send it over? It's eye-opening!"\n\n`;
+        
         plainTextContent += `Remember to log your completed tasks in the SphereSync system for accurate tracking.\n\n`;
         plainTextContent += `Best regards,\nSphereSync Automation System`;
 
@@ -280,6 +291,42 @@ const handler = async (req: Request): Promise<Response> => {
               <p style="margin: 5px 0;">📊 Call Tasks: ${callTasks.length}</p>
               <p style="margin: 5px 0;">📱 Text Tasks: ${textTasks.length}</p>
             </div>
+
+            <div style="background: #eff6ff; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #2563eb;">
+              <h3 style="color: #1e40af; margin-top: 0;">💡 Conversation Starters</h3>
+              <p style="color: #374151; margin-bottom: 15px;">Not sure what to say? Try one of these proven openers:</p>
+              
+              <div style="margin-bottom: 15px;">
+                <strong style="color: #059669;">🐸 FROG Call</strong>
+                <p style="color: #6b7280; margin: 5px 0; font-style: italic;">"Hey, how's the family? What have you been doing for fun? How's work? Do you have any goals you're working on?"</p>
+              </div>
+              
+              <div style="margin-bottom: 15px;">
+                <strong style="color: #7c3aed;">📅 Upcoming Event</strong>
+                <p style="color: #6b7280; margin: 5px 0; font-style: italic;">"We have an exciting event coming up! Be on the lookout for the official invitation." or "Have you had a chance to RSVP for our upcoming event?"</p>
+              </div>
+              
+              <div style="margin-bottom: 15px;">
+                <strong style="color: #dc2626;">🏠 Real Estate Market</strong>
+                <p style="color: #6b7280; margin: 5px 0; font-style: italic;">"I have so many people reaching out about the market - it seems confusing right now. Did you have any questions? Who do you know thinking about buying or selling?"</p>
+              </div>
+              
+              <div style="margin-bottom: 15px;">
+                <strong style="color: #ca8a04;">☕ Coffee Catch-Up</strong>
+                <p style="color: #6b7280; margin: 5px 0; font-style: italic;">"I was thinking about you! Would love to grab coffee and catch up. What does your schedule look like?"</p>
+              </div>
+              
+              <div style="margin-bottom: 15px;">
+                <strong style="color: #db2777;">🎁 Referral Ask</strong>
+                <p style="color: #6b7280; margin: 5px 0; font-style: italic;">"I really appreciate you thinking of me. Do you know anyone right now who might be thinking about making a move?"</p>
+              </div>
+              
+              <div>
+                <strong style="color: #0891b2;">📊 Market Report Offer</strong>
+                <p style="color: #6b7280; margin: 5px 0; font-style: italic;">"I just put together a market report for our area. Would you like me to send it over? It's eye-opening!"</p>
+              </div>
+            </div>
+
             <p style="color: #6b7280; font-size: 14px;">
               Remember to mark your completed tasks in the SphereSync system for accurate tracking and performance analytics.
             </p>
