@@ -224,7 +224,15 @@ export default function SphereSyncTasks() {
           ) : callTasks.length === 0 ? (
             <Card>
               <CardContent className="p-6">
-                <p>No call tasks for this week. Tasks are automatically generated every Monday.</p>
+                <div className="space-y-3">
+                  <p className="font-medium">No call tasks this week</p>
+                  <p className="text-sm text-muted-foreground">
+                    Your contacts don't match this week's call categories ({currentWeek.callCategories.join(', ')}). 
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Tasks are assigned based on the first letter of your contacts' last names. Add more contacts or wait for the next week's rotation to see tasks here.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           ) : (
@@ -251,7 +259,15 @@ export default function SphereSyncTasks() {
           ) : textTasks.length === 0 ? (
             <Card>
               <CardContent className="p-6">
-                <p>No text tasks for this week. Tasks are automatically generated every Monday.</p>
+                <div className="space-y-3">
+                  <p className="font-medium">No text tasks this week</p>
+                  <p className="text-sm text-muted-foreground">
+                    Your contacts don't match this week's text category ({currentWeek.textCategory}). 
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Tasks are assigned based on the first letter of your contacts' last names. Add more contacts or wait for the next week's rotation to see tasks here.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           ) : (

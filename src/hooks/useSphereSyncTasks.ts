@@ -176,11 +176,18 @@ export function useSphereSyncTasks() {
       // Use provided contacts or fall back to state
       const contactsToFilter = contactsToUse || contacts;
 
+      // CRITICAL: Validate all contacts belong to current user to prevent cross-agent contamination
+      const validContacts = contactsToFilter.filter(contact => contact.agent_id === user.id);
+      
+      if (validContacts.length < contactsToFilter.length) {
+        console.warn(`Filtered out ${contactsToFilter.length - validContacts.length} contacts not owned by user ${user.id}`);
+      }
+
       // Filter contacts by categories
-      const callContacts = contactsToFilter.filter(contact => 
+      const callContacts = validContacts.filter(contact => 
         callCategories.includes(contact.category)
       );
-      const textContacts = contactsToFilter.filter(contact => 
+      const textContacts = validContacts.filter(contact => 
         contact.category === textCategory
       );
 
