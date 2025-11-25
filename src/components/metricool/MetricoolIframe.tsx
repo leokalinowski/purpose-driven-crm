@@ -57,21 +57,18 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
       return;
     }
 
+    // Skip Approach 2 entirely - go directly from 1 to 3
     if (currentApproach === 1) {
       // Approach 1: Direct iframe embedding
       console.log('[MetricoolIframe] Approach 1 - Using direct iframe URL:', metricoolLink.iframe_url);
       setIframeSrc(metricoolLink.iframe_url);
-    } else if (currentApproach === 2) {
-      // Approach 2: Skip proxy (it requires auth) and go straight to wrapper
-      // The proxy approach causes 401 errors because Supabase edge functions require auth
-      console.log('[MetricoolIframe] Skipping Approach 2 (proxy requires auth), going to Approach 3 (wrapper)...');
-      setCurrentApproach(3);
     } else if (currentApproach === 3) {
       // Approach 3: Enhanced wrapper HTML
       const wrapperUrl = `/metricool-test.html?url=${encodeURIComponent(metricoolLink.iframe_url)}`;
       console.log('[MetricoolIframe] Approach 3 - Using wrapper URL:', wrapperUrl);
       setIframeSrc(wrapperUrl);
     }
+    // Approach 2 is skipped entirely - never set currentApproach to 2
   }, [metricoolLink?.iframe_url, currentApproach]);
 
   // Helper function to handle approach failure
@@ -82,7 +79,10 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
     // Skip Approach 2 (proxy) as it requires auth and causes 401 errors
     if (currentApproach === 1) {
       console.log('[MetricoolIframe] Approach 1 failed, skipping proxy (auth issues), trying Approach 3 (wrapper)...');
-      setCurrentApproach(3);
+      // Use setTimeout to avoid triggering useEffect during render
+      setTimeout(() => {
+        setCurrentApproach(3);
+      }, 0);
     } else {
       setLoadError('All embedding approaches failed. The Metricool dashboard cannot be embedded due to browser security restrictions. Please use "Open in New Tab" instead.');
     }
