@@ -1581,6 +1581,44 @@ export type Database = {
         }
         Relationships: []
       }
+      spheresync_email_logs: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          sent_at: string
+          task_count: number | null
+          week_number: number
+          year: number
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          sent_at?: string
+          task_count?: number | null
+          week_number: number
+          year: number
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          sent_at?: string
+          task_count?: number | null
+          week_number?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spheresync_email_logs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       spheresync_tasks: {
         Row: {
           agent_id: string
