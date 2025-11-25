@@ -257,9 +257,12 @@ export const ImprovedCSVUpload = ({
         throw new Error('CSV file does not have valid headers');
       }
       
-      const newHeaders = Object.keys(firstRow);
+      // Extract headers and filter out empty ones
+      const rawHeaders = Object.keys(firstRow);
+      const newHeaders = rawHeaders.filter(header => header && header.trim() !== '');
+      
       if (newHeaders.length === 0) {
-        throw new Error('CSV file does not have any columns');
+        throw new Error('CSV file does not have any valid columns (all headers are empty)');
       }
       
       if (!isMountedRef.current) {
@@ -783,11 +786,18 @@ export const ImprovedCSVUpload = ({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__ignore__">Ignore</SelectItem>
-                          {headers.map((header) => (
-                            <SelectItem key={header} value={header}>
-                              {header}
-                            </SelectItem>
-                          ))}
+                          {headers
+                            .filter(header => header && header.trim() !== '') // Filter out empty headers
+                            .map((header, index) => {
+                              // Ensure we have a valid non-empty value (should already be filtered, but safety check)
+                              const trimmedHeader = header.trim();
+                              const safeValue = trimmedHeader || `column_${index}`;
+                              return (
+                                <SelectItem key={`${safeValue}-${index}`} value={safeValue}>
+                                  {trimmedHeader || `Column ${index + 1}`}
+                                </SelectItem>
+                              );
+                            })}
                         </SelectContent>
                       </Select>
                     </div>
