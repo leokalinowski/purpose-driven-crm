@@ -406,6 +406,12 @@ const AdminTeamManagement = () => {
         throw new Error(data.error);
       }
 
+      // Check if the function indicates success
+      if (!data?.success) {
+        console.error('Function did not return success:', data);
+        throw new Error('Failed to delete user account: Unknown error');
+      }
+
       toast({
         title: 'Success',
         description: `${getAgentDisplayName(agent)} has been removed from the team`,
