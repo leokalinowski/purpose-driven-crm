@@ -62,18 +62,10 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
       console.log('[MetricoolDashboard] Approach 1 - Using direct iframe URL:', metricoolLink.iframe_url);
       setIframeSrc(metricoolLink.iframe_url);
     } else if (currentApproach === 2) {
-      // Approach 2: Use Supabase proxy function
-      try {
-        // Get Supabase URL from the client
-        const supabaseUrl = 'https://cguoaokqwgqvzkqqezcq.supabase.co';
-        const proxyUrl = `${supabaseUrl}/functions/v1/metricool-proxy?url=${encodeURIComponent(metricoolLink.iframe_url)}`;
-        console.log('[MetricoolDashboard] Approach 2 - Using proxy URL:', proxyUrl);
-        setIframeSrc(proxyUrl);
-      } catch (error) {
-        console.error('[MetricoolDashboard] Approach 2 - Failed to create proxy URL:', error);
-        // Don't set currentApproach here to avoid infinite loop - let timeout handle it
-        setIframeSrc('');
-      }
+      // Approach 2: Skip proxy (it requires auth) and go straight to wrapper
+      // The proxy approach causes 401 errors because Supabase edge functions require auth
+      console.log('[MetricoolDashboard] Skipping Approach 2 (proxy requires auth), going to Approach 3 (wrapper)...');
+      setCurrentApproach(3);
     } else if (currentApproach === 3) {
       // Approach 3: Enhanced wrapper HTML
       const wrapperUrl = `/metricool-test.html?url=${encodeURIComponent(metricoolLink.iframe_url)}`;
@@ -87,11 +79,9 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
     setIsLoadingIframe(false);
     
     // Try next approach if current one failed
+    // Skip Approach 2 (proxy) as it requires auth and causes 401 errors
     if (currentApproach === 1) {
-      console.log('[MetricoolDashboard] Approach 1 failed, trying Approach 2 (proxy)...');
-      setCurrentApproach(2);
-    } else if (currentApproach === 2) {
-      console.log('[MetricoolDashboard] Approach 2 failed, trying Approach 3 (wrapper)...');
+      console.log('[MetricoolDashboard] Approach 1 failed, skipping proxy (auth issues), trying Approach 3 (wrapper)...');
       setCurrentApproach(3);
     } else {
       setLoadError('All embedding approaches failed. The Metricool dashboard cannot be embedded due to browser security restrictions. Please use "Open in New Tab" instead.');
@@ -176,14 +166,9 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
               Trying Approach 1: Direct iframe embedding...
             </div>
           )}
-          {currentApproach === 2 && (
-            <div className="text-xs text-muted-foreground mb-2">
-              Approach 1 failed. Trying Approach 2: Proxy function...
-            </div>
-          )}
           {currentApproach === 3 && (
             <div className="text-xs text-muted-foreground mb-2">
-              Approach 2 failed. Trying Approach 3: Enhanced wrapper...
+              Approach 1 failed. Trying Approach 3: Enhanced wrapper...
             </div>
           )}
           <iframe
