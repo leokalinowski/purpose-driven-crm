@@ -140,18 +140,26 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
         </div>
       </CardHeader>
       <CardContent>
-        {loadError && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <div className="font-semibold mb-2">Failed to load Metricool embed</div>
-              <div className="text-sm mb-2">{loadError}</div>
-              <div className="text-xs text-muted-foreground">
-                This may be due to browser security restrictions. Try opening in a new tab instead.
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
+            {loadError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="font-semibold mb-2">Failed to load Metricool embed</div>
+                  <div className="text-sm mb-2">{loadError}</div>
+                  <div className="text-xs text-muted-foreground mb-2">
+                    This may be due to browser security restrictions or authentication issues.
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    <strong>Tip:</strong> If you see a 401 login page, try:
+                    <ol className="list-decimal list-inside mt-1 space-y-1">
+                      <li>Click "Open in New Tab" to authenticate in a new window</li>
+                      <li>After logging in, return here and click "Retry"</li>
+                      <li>Or use the Metricool dashboard directly in the new tab</li>
+                    </ol>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
         {isLoadingIframe && !loadError && (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
@@ -171,15 +179,15 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
               Approach 1 failed. Trying Approach 3: Enhanced wrapper...
             </div>
           )}
-          <iframe
-            ref={iframeRef}
-            src={iframeSrc}
-            className={`w-full h-[800px] border-0 rounded-lg ${isLoadingIframe ? 'hidden' : ''}`}
-            title="Metricool Dashboard"
-            allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
-            referrerPolicy={currentApproach === 1 ? "origin" : "no-referrer"}
-            loading="lazy"
-            sandbox={currentApproach === 1 ? undefined : "allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-popups-to-escape-sandbox"}
+              <iframe
+                ref={iframeRef}
+                src={iframeSrc}
+                className={`w-full h-[800px] border-0 rounded-lg ${isLoadingIframe ? 'hidden' : ''}`}
+                title="Metricool Dashboard"
+                allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
+                referrerPolicy="origin"
+                loading="lazy"
+                sandbox={currentApproach === 1 ? undefined : "allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-popups-to-escape-sandbox"}
             onLoad={() => {
               console.log(`[MetricoolIframe] Approach ${currentApproach} - Iframe loaded`);
               

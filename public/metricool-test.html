@@ -60,6 +60,8 @@
             allowfullscreen
             allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-popups-to-escape-sandbox"
+            referrerpolicy="origin"
+            credentialless="false"
         ></iframe>
     </div>
 
@@ -76,44 +78,81 @@
             const iframe = document.getElementById('metricool-iframe');
             const loading = document.getElementById('loading');
 
-            // Override window.top and other iframe detection methods
+            // Override window.top and other iframe detection methods BEFORE setting iframe src
+            // This must happen before the iframe loads to prevent detection
             try {
-                // Override common iframe detection methods
-                Object.defineProperty(window, 'top', {
-                    get: function() { return window; },
-                    configurable: false
-                });
+                // Override common iframe detection methods using Object.defineProperty
+                // Note: These may fail in strict mode, but we'll try anyway
+                if (Object.defineProperty) {
+                    try {
+                        Object.defineProperty(window, 'top', {
+                            get: function() { return window; },
+                            configurable: true
+                        });
+                    } catch (e) {
+                        console.log('Could not override window.top:', e);
+                    }
 
-                Object.defineProperty(window, 'parent', {
-                    get: function() { return window; },
-                    configurable: false
-                });
+                    try {
+                        Object.defineProperty(window, 'parent', {
+                            get: function() { return window; },
+                            configurable: true
+                        });
+                    } catch (e) {
+                        console.log('Could not override window.parent:', e);
+                    }
 
-                // Override frameElement
-                Object.defineProperty(window, 'frameElement', {
-                    get: function() { return null; },
-                    configurable: false
-                });
+                    try {
+                        Object.defineProperty(window, 'frameElement', {
+                            get: function() { return null; },
+                            configurable: true
+                        });
+                    } catch (e) {
+                        console.log('Could not override window.frameElement:', e);
+                    }
 
-                // Override length (frames collection)
-                Object.defineProperty(window, 'length', {
-                    get: function() { return 0; },
-                    configurable: false
-                });
+                    try {
+                        Object.defineProperty(window, 'length', {
+                            get: function() { return 0; },
+                            configurable: true
+                        });
+                    } catch (e) {
+                        console.log('Could not override window.length:', e);
+                    }
+                }
+
+                // Also try to override self
+                try {
+                    Object.defineProperty(window, 'self', {
+                        get: function() { return window; },
+                        configurable: true
+                    });
+                } catch (e) {
+                    console.log('Could not override window.self:', e);
+                }
 
                 console.log('Applied iframe detection bypasses');
             } catch (e) {
                 console.log('Could not override iframe detection:', e);
             }
 
-            // Set iframe source
+            // Set iframe source with proper attributes for authentication
+            // Metricool requires referrerpolicy="origin" for proper authentication
+            iframe.setAttribute('referrerpolicy', 'origin');
+            iframe.setAttribute('allow', 'clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment');
+            
+            // Set the source - this will trigger the load
             iframe.src = metricoolUrl;
 
             // Handle iframe load
             iframe.onload = function() {
                 console.log('Iframe loaded successfully');
-                loading.classList.add('hidden');
-                iframe.classList.remove('hidden');
+                
+                // Wait a moment to see if it's actually loaded or if it's a 401 page
+                setTimeout(function() {
+                    loading.classList.add('hidden');
+                    iframe.classList.remove('hidden');
+                }, 500);
 
                 try {
                     // Try to communicate with the iframe
@@ -122,14 +161,18 @@
                         console.log('Iframe window accessible');
 
                         // Send message to iframe to indicate it's not in a frame
-                        iframeWindow.postMessage({
-                            type: 'FRAME_BYPASS',
-                            isTop: true,
-                            parent: window
-                        }, '*');
+                        try {
+                            iframeWindow.postMessage({
+                                type: 'FRAME_BYPASS',
+                                isTop: true,
+                                parent: window
+                            }, '*');
+                        } catch (e) {
+                            console.log('Could not postMessage to iframe:', e);
+                        }
                     }
                 } catch (e) {
-                    console.log('Could not access iframe window:', e);
+                    console.log('Could not access iframe window (CORS):', e);
                 }
             };
 

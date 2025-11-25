@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertCircle, ExternalLink } from 'lucide-react';
+import { Loader2, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
 import { useMetricoolLink } from '@/hooks/useMetricool';
 
 interface MetricoolIframeProps {
@@ -171,15 +171,15 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
               Approach 1 failed. Trying Approach 3: Enhanced wrapper...
             </div>
           )}
-          <iframe
-            ref={iframeRef}
-            src={iframeSrc}
-            className={`w-full h-[800px] border-0 rounded-lg ${isLoadingIframe ? 'hidden' : ''}`}
-            title="Metricool Dashboard"
-            allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
-            referrerPolicy={currentApproach === 1 ? "origin" : "no-referrer"}
-            loading="lazy"
-            sandbox={currentApproach === 1 ? undefined : "allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-popups-to-escape-sandbox"}
+              <iframe
+                ref={iframeRef}
+                src={iframeSrc}
+                className={`w-full h-[800px] border-0 rounded-lg ${isLoadingIframe ? 'hidden' : ''}`}
+                title="Metricool Dashboard"
+                allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
+                referrerPolicy="origin"
+                loading="lazy"
+                sandbox={currentApproach === 1 ? undefined : "allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-modals allow-downloads allow-pointer-lock allow-popups-to-escape-sandbox"}
             onLoad={() => {
               console.log(`[MetricoolDashboard] Approach ${currentApproach} - Iframe loaded`);
               
