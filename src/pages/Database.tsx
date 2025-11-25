@@ -268,6 +268,33 @@ const Database = () => {
     }
   };
 
+  const handleBulkDelete = async (contactIds: string[]) => {
+    try {
+      // Delete all selected contacts
+      const deletePromises = contactIds.map(contactId =>
+        deleteContact(contactId)
+      );
+
+      await Promise.all(deletePromises);
+      await fetchContacts();
+      await fetchDNCStats();
+
+      setSelectedContacts([]); // Clear selection after delete
+      toast({
+        title: "Bulk Delete Complete",
+        description: `Successfully deleted ${contactIds.length} contacts.`,
+      });
+    } catch (error) {
+      console.error('Bulk delete error:', error);
+      toast({
+        title: "Delete Failed",
+        description: "Failed to delete some contacts. Please try again.",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
   const handleCSVUpload = async (csvData: ContactInput[]) => {
     try {
       // Step 1: Upload contacts first (NO DNC checks during upload)
@@ -439,27 +466,23 @@ const Database = () => {
         {/* DNC Statistics Dashboard */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                DNC Management
-              </span>
+            <div className="flex items-center justify-between">
               <div className="flex gap-2">
-                <DNCCheckButton 
-                  variant="default" 
-                  size="default" 
+                <DNCCheckButton
+                  variant="default"
+                  size="default"
                   onRun={handleDNCCheck}
                   checking={dncChecking}
                 />
-                <DNCCheckButton 
-                  variant="destructive" 
-                  size="default" 
+                <DNCCheckButton
+                  variant="destructive"
+                  size="default"
                   forceRecheck={true}
                   onRun={handleDNCCheck}
                   checking={dncChecking}
                 />
               </div>
-            </CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             <DNCStatsCard 
@@ -643,6 +666,7 @@ const Database = () => {
           onOpenChange={setShowBulkEditor}
           selectedContacts={selectedContacts}
           onBulkUpdate={handleBulkUpdate}
+          onBulkDelete={handleBulkDelete}
         />
       </div>
     </Layout>
