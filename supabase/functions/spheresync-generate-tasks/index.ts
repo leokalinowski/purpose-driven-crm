@@ -287,11 +287,18 @@ const handler = async (req: Request): Promise<Response> => {
           }
         }
 
+        // CRITICAL: Validate all contacts belong to this agent
+        const validContacts = allContacts.filter((contact: Contact) => contact.agent_id === agent.user_id);
+        
+        if (validContacts.length < allContacts.length) {
+          console.warn(`Agent ${agent.user_id}: Filtered out ${allContacts.length - validContacts.length} contacts not owned by agent`);
+        }
+
         // Filter contacts by categories
-        const callContacts = allContacts.filter((contact: Contact) => 
+        const callContacts = validContacts.filter((contact: Contact) => 
           currentWeekTasks.callCategories.includes(contact.category)
         );
-        const textContacts = allContacts.filter((contact: Contact) => 
+        const textContacts = validContacts.filter((contact: Contact) => 
           contact.category === currentWeekTasks.textCategory
         );
 
