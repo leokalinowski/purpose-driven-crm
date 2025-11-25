@@ -1,6 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import type { MetricoolLink } from '@/types';
 
 interface CreateMetricoolLinkParams {
   userId: string;
@@ -16,6 +17,21 @@ interface ToggleMetricoolLinkParams {
   linkId: string;
   isActive: boolean;
 }
+
+export const useAllMetricoolLinks = () => {
+  return useQuery({
+    queryKey: ['all-metricool-links'],
+    queryFn: async (): Promise<MetricoolLink[]> => {
+      const { data, error } = await supabase
+        .from('metricool_links')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+      return data as MetricoolLink[];
+    },
+  });
+};
 
 export const useMetricoolManagement = () => {
   const queryClient = useQueryClient();
@@ -37,6 +53,7 @@ export const useMetricoolManagement = () => {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['metricool-link', variables.userId] });
+      queryClient.invalidateQueries({ queryKey: ['all-metricool-links'] });
       toast({
         title: "Success",
         description: "Metricool link created successfully",
@@ -68,6 +85,7 @@ export const useMetricoolManagement = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['metricool-link', data.user_id] });
+      queryClient.invalidateQueries({ queryKey: ['all-metricool-links'] });
       toast({
         title: "Success",
         description: "Metricool link updated successfully",
@@ -99,6 +117,7 @@ export const useMetricoolManagement = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['metricool-link', data.user_id] });
+      queryClient.invalidateQueries({ queryKey: ['all-metricool-links'] });
       toast({
         title: "Success",
         description: `Metricool link ${data.is_active ? 'activated' : 'deactivated'} successfully`,
@@ -125,6 +144,7 @@ export const useMetricoolManagement = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['metricool-link'] });
+      queryClient.invalidateQueries({ queryKey: ['all-metricool-links'] });
       toast({
         title: "Success",
         description: "Metricool link deleted successfully",

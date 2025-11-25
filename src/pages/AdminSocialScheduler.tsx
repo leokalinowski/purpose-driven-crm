@@ -4,15 +4,18 @@ import { Settings, Users, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Layout } from '@/components/layout/Layout';
 import { MetricoolDashboard } from '@/components/metricool/MetricoolDashboard';
 import { MetricoolSettings } from '@/components/metricool/MetricoolSettings';
+import { MetricoolGlobalSettings } from '@/components/metricool/MetricoolGlobalSettings';
 import { AgentSelector } from '@/components/admin/AgentSelector';
 import { useAgents } from '@/hooks/useAgents';
 
 export default function AdminSocialScheduler() {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [showGlobalSettings, setShowGlobalSettings] = useState(false);
   const { agents, getAgentDisplayName, fetchAgents } = useAgents();
 
   useEffect(() => {
@@ -41,10 +44,23 @@ export default function AdminSocialScheduler() {
           </div>
 
           <div className="flex items-center space-x-2">
-            <Button variant="outline">
-              <Settings className="mr-2 h-4 w-4" />
-              Global Settings
-            </Button>
+            <Dialog open={showGlobalSettings} onOpenChange={setShowGlobalSettings}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Global Settings
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Global Metricool Settings</DialogTitle>
+                  <DialogDescription>
+                    Manage Metricool integrations for all agents across the platform.
+                  </DialogDescription>
+                </DialogHeader>
+                <MetricoolGlobalSettings />
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
