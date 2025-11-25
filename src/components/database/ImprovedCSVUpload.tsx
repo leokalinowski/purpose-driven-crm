@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import Papa from 'papaparse';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -85,7 +85,10 @@ export const ImprovedCSVUpload = ({
   const [validationErrors, setValidationErrors] = useState<Array<{ row: number; errors: string[] }>>([]);
   const [processedContacts, setProcessedContacts] = useState<ContactInputType[]>([]);
   const [showDuplicateResolution, setShowDuplicateResolution] = useState(false);
-  const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  
+  // Use ref for timeoutId to avoid dependency issues
+  const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
 
   // Reset all state when dialog closes
   const resetState = useCallback(() => {
@@ -102,11 +105,11 @@ export const ImprovedCSVUpload = ({
     setShowDuplicateResolution(false);
     
     // Clear any pending timeouts
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      setTimeoutId(null);
+    if (timeoutIdRef.current) {
+      clearTimeout(timeoutIdRef.current);
+      timeoutIdRef.current = null;
     }
-  }, [timeoutId]);
+  }, []);
 
   // Set up agent selection when dialog opens
   useEffect(() => {
@@ -114,11 +117,9 @@ export const ImprovedCSVUpload = ({
       if (isAdmin && !roleLoading) {
         if (agentId) {
           // Use agent from header selector (no need to fetch agents)
-          console.log('[CSV Upload] Using pre-selected agent from header:', agentId);
           setSelectedAgentId(agentId);
         } else {
           // No header agent selected, show dropdown in modal
-          console.log('[CSV Upload] No header agent, fetching agents for dropdown...');
           setSelectedAgentId('');
           fetchAgents();
         }
@@ -127,21 +128,69 @@ export const ImprovedCSVUpload = ({
         setSelectedAgentId(user?.id || '');
       }
     } else {
-      resetState();
+      // Reset state when dialog closes
+      setFile(null);
+      setRawRows([]);
+      setHeaders([]);
+      setMapping({} as any);
+      setLoading(false);
+      setSelectedAgentId('');
+      setUploadProgress(null);
+      setDuplicateGroups([]);
+      setValidationErrors([]);
+      setProcessedContacts([]);
+      setShowDuplicateResolution(false);
     }
-  }, [open, isAdmin, roleLoading, user?.id, agentId, resetState, fetchAgents]);
+  }, [open, isAdmin, roleLoading, user?.id, agentId, fetchAgents]);
 
   // Cleanup on unmount
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
+      isMountedRef.current = false;
+      if (timeoutIdRef.current) {
+        clearTimeout(timeoutIdRef.current);
+        timeoutIdRef.current = null;
       }
     };
-  }, [timeoutId]);
+  }, []);
 
   const handleFileUpload = useCallback(async (file: File) => {
-    if (loading) return;
+    // Prevent multiple simultaneous uploads
+    if (loading) {
+      return;
+    }
+
+    // Validate file
+    if (!file) {
+      toast({
+        title: 'Error',
+        description: 'No file selected',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Validate file size (20MB limit)
+    const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+    if (file.size > MAX_FILE_SIZE) {
+      toast({
+        title: 'Error',
+        description: 'File is too large. Maximum size is 20MB.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Validate file type
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      toast({
+        title: 'Error',
+        description: 'Please upload a CSV file',
+        variant: 'destructive'
+      });
+      return;
+    }
     
     // Reset state for new upload
     setFile(file);
@@ -157,16 +206,34 @@ export const ImprovedCSVUpload = ({
     setUploadProgress({ stage: 'parsing', progress: 0, message: 'Parsing CSV file...' });
     
     try {
+      // Read file text
       const text = await file.text();
+      
+      if (!text || text.trim().length === 0) {
+        throw new Error('File is empty');
+      }
+      
+      if (!isMountedRef.current) {
+        return; // Component unmounted, don't update state
+      }
       
       setUploadProgress({ stage: 'parsing', progress: 50, message: 'Analyzing CSV structure...' });
       
       // Use Papa.parse synchronously and handle results immediately
-      const results = Papa.parse(text, {
-        header: true,
-        skipEmptyLines: true,
-        transformHeader: (header) => header.trim(),
-      });
+      let results;
+      try {
+        results = Papa.parse(text, {
+          header: true,
+          skipEmptyLines: true,
+          transformHeader: (header) => header.trim(),
+        });
+      } catch (parseError) {
+        throw new Error(`Failed to parse CSV: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+      }
+      
+      if (!isMountedRef.current) {
+        return; // Component unmounted, don't update state
+      }
       
       if (results.errors.length > 0) {
         console.warn('CSV parsing errors:', results.errors);
@@ -184,43 +251,77 @@ export const ImprovedCSVUpload = ({
         return;
       }
       
-      const newHeaders = Object.keys(data[0] || {});
+      // Validate that we have headers
+      const firstRow = data[0];
+      if (!firstRow || typeof firstRow !== 'object') {
+        throw new Error('CSV file does not have valid headers');
+      }
+      
+      const newHeaders = Object.keys(firstRow);
+      if (newHeaders.length === 0) {
+        throw new Error('CSV file does not have any columns');
+      }
+      
+      if (!isMountedRef.current) {
+        return; // Component unmounted, don't update state
+      }
+      
       setRawRows(data);
       setHeaders(newHeaders);
       
       // Auto-map headers
       const autoMapping: Record<string, string> = {};
       newHeaders.forEach(header => {
-        const field = ALL_FIELDS.find(f => 
-          f.label.toLowerCase().includes(header.toLowerCase()) ||
-          header.toLowerCase().includes(f.key.replace('_', ' '))
-        );
-        if (field) {
-          autoMapping[field.key] = header;
+        if (header && typeof header === 'string') {
+          const field = ALL_FIELDS.find(f => 
+            f.label.toLowerCase().includes(header.toLowerCase()) ||
+            header.toLowerCase().includes(f.key.replace('_', ' '))
+          );
+          if (field) {
+            autoMapping[field.key] = header;
+          }
         }
       });
       setMapping(autoMapping as any);
       
+      if (!isMountedRef.current) {
+        return; // Component unmounted, don't update state
+      }
+      
       setUploadProgress({ stage: 'parsing', progress: 100, message: 'CSV parsed successfully' });
+      
+      // Clear progress after a delay, but only if component is still mounted
+      const progressTimeout = setTimeout(() => {
+        if (isMountedRef.current) {
+          setUploadProgress(null);
+        }
+      }, 2000);
+      timeoutIdRef.current = progressTimeout;
       
     } catch (error) {
       console.error('File upload error:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to read CSV file',
-        variant: 'destructive'
-      });
-    } finally {
-      setLoading(false);
-      // Keep progress visible briefly to show completion
-      setTimeout(() => {
+      if (isMountedRef.current) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to read CSV file';
+        toast({
+          title: 'Error',
+          description: errorMessage,
+          variant: 'destructive'
+        });
+        setLoading(false);
         setUploadProgress(null);
-      }, 1000);
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
-  }, [loading, toast]);
+  }, [loading]);
 
   const processContacts = useCallback(async () => {
-    if (loading || rawRows.length === 0) return;
+    // Prevent multiple simultaneous processing
+    if (loading || rawRows.length === 0) {
+      return;
+    }
     
     // Ensure agent is selected
     const targetAgentId = selectedAgentId || agentId;
@@ -231,6 +332,10 @@ export const ImprovedCSVUpload = ({
         variant: 'destructive'
       });
       return;
+    }
+    
+    if (!isMountedRef.current) {
+      return; // Component unmounted
     }
     
     setLoading(true);
@@ -328,6 +433,10 @@ export const ImprovedCSVUpload = ({
       setDuplicateGroups(duplicateGroups);
       setProcessedContacts(unique);
       
+      if (!isMountedRef.current) {
+        return; // Component unmounted
+      }
+
       if (duplicateGroups.length > 0) {
         setShowDuplicateResolution(true);
       } else {
@@ -336,14 +445,21 @@ export const ImprovedCSVUpload = ({
 
     } catch (error) {
       console.error('Contact processing error:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to process contacts',
-        variant: 'destructive'
-      });
+      if (isMountedRef.current) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to process contacts';
+        toast({
+          title: 'Error',
+          description: errorMessage,
+          variant: 'destructive'
+        });
+        setLoading(false);
+        setUploadProgress(null);
+      }
     } finally {
-      setLoading(false);
-      setUploadProgress(null);
+      if (isMountedRef.current) {
+        setLoading(false);
+        setUploadProgress(null);
+      }
     }
   }, [loading, rawRows, mapping, selectedAgentId, agentId]);
 
@@ -429,7 +545,11 @@ export const ImprovedCSVUpload = ({
     return dbDuplicates;
   };
 
-  const proceedWithUpload = async (contacts: ContactInputType[], targetAgentId: string) => {
+  const proceedWithUpload = useCallback(async (contacts: ContactInputType[], targetAgentId: string) => {
+    if (!isMountedRef.current) {
+      return; // Component unmounted
+    }
+
     setUploadProgress({ stage: 'uploading', progress: 0, message: 'Uploading contacts...' });
     
     try {
@@ -456,31 +576,70 @@ export const ImprovedCSVUpload = ({
         await onUpload(formattedContacts, targetAgentId);
         
         // Upload complete - DNC checks will be triggered separately by the parent component
-        setUploadProgress({ stage: 'uploading', progress: 100, message: `Successfully saved ${contacts.length} contacts` });
+        if (isMountedRef.current) {
+          setUploadProgress({ stage: 'uploading', progress: 100, message: `Successfully saved ${contacts.length} contacts` });
+        }
+      }
+      
+      if (!isMountedRef.current) {
+        return; // Component unmounted
       }
       
       setUploadProgress({ stage: 'complete', progress: 100, message: `Successfully uploaded ${contacts.length} contacts. DNC checks will run separately.` });
       
-      const timeout = setTimeout(() => {
-        onOpenChange(false);
-        resetState();
+      // Clear previous timeout if exists
+      if (timeoutIdRef.current) {
+        clearTimeout(timeoutIdRef.current);
+      }
+      
+      // Set timeout to close dialog after success
+      timeoutIdRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          onOpenChange(false);
+          // Reset state inline to avoid dependency issues
+          setFile(null);
+          setRawRows([]);
+          setHeaders([]);
+          setMapping({} as any);
+          setLoading(false);
+          setSelectedAgentId('');
+          setUploadProgress(null);
+          setDuplicateGroups([]);
+          setValidationErrors([]);
+          setProcessedContacts([]);
+          setShowDuplicateResolution(false);
+        }
       }, 2000);
-      setTimeoutId(timeout);
       
     } catch (error) {
       console.error('Upload error:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to upload contacts',
-        variant: 'destructive'
-      });
+      if (isMountedRef.current) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to upload contacts';
+        toast({
+          title: 'Error',
+          description: errorMessage,
+          variant: 'destructive'
+        });
+        setLoading(false);
+        setUploadProgress(null);
+      }
     } finally {
-      setLoading(false);
-      setUploadProgress(null);
+      if (isMountedRef.current) {
+        setLoading(false);
+        setUploadProgress(null);
+      }
     }
-  };
+  }, [onUpload, onOpenChange]);
 
-  const handleDuplicateResolution = async () => {
+  const handleDuplicateResolution = useCallback(async () => {
+    if (loading) {
+      return; // Prevent multiple clicks
+    }
+
+    if (!isMountedRef.current) {
+      return; // Component unmounted
+    }
+
     const finalContacts: ContactInputType[] = [];
     
     // Process each duplicate group based on user action
@@ -501,7 +660,7 @@ export const ImprovedCSVUpload = ({
     if (targetAgentId) {
       await proceedWithUpload(finalContacts, targetAgentId);
     }
-  };
+  }, [loading, duplicateGroups, processedContacts, selectedAgentId, agentId, proceedWithUpload]);
 
   const downloadTemplate = () => {
     const headers = ALL_FIELDS.map(f => f.label);
@@ -541,11 +700,22 @@ export const ImprovedCSVUpload = ({
                 <Input
                   type="file"
                   accept=".csv"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setFile(file);
-                      handleFileUpload(file);
+                  disabled={loading}
+                  onChange={async (e) => {
+                    try {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        await handleFileUpload(file);
+                        // Reset input to allow re-upload of same file
+                        e.target.value = '';
+                      }
+                    } catch (error) {
+                      console.error('File input error:', error);
+                      toast({
+                        title: 'Error',
+                        description: 'Failed to process file selection',
+                        variant: 'destructive'
+                      });
                     }
                   }}
                   className="flex-1"
