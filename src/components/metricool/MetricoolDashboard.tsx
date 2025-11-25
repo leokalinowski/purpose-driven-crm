@@ -84,7 +84,7 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
 
   // Set up timeout for iframe loading
   useEffect(() => {
-    if (metricoolLink && iframeSrc && iframeRef.current) {
+    if (metricoolLink && iframeSrc) {
       console.log(`[MetricoolDashboard] Approach ${currentApproach} - Setting up iframe with src:`, iframeSrc);
       setIsLoadingIframe(true);
       setLoadError(null);
@@ -109,6 +109,7 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
       return () => {
         if (loadTimeoutRef.current) {
           clearTimeout(loadTimeoutRef.current);
+          loadTimeoutRef.current = null;
         }
       };
     }
