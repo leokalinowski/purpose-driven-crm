@@ -158,14 +158,9 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
           </div>
         )}
         <div className="w-full">
-          {currentApproach === 1 && (
-            <div className="text-xs text-muted-foreground mb-2">
-              Trying Approach 1: Direct iframe embedding...
-            </div>
-          )}
           {currentApproach === 3 && (
             <div className="text-xs text-muted-foreground mb-2">
-              Approach 1 failed. Trying Approach 3: Enhanced wrapper...
+              Loading Metricool dashboard via wrapper...
             </div>
           )}
               <iframe
