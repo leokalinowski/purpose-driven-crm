@@ -272,6 +272,9 @@ const handler = async (req: Request): Promise<Response> => {
         console.log(`Email sent to ${agent.email} (${agentTasks.length} tasks)`);
         emailsSent++;
 
+        // Rate limiting: Resend has 2 requests/second limit, so wait 1000ms between emails
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
       } catch (error) {
         console.error(`Failed to send email to agent ${agentId}:`, error);
         // Continue with other agents even if one fails
