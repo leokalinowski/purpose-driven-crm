@@ -10,13 +10,13 @@ interface DNCCheckButtonProps {
   checking: boolean;
 }
 
-export const DNCCheckButton: React.FC<DNCCheckButtonProps> = ({ 
+export const DNCCheckButton = ({ 
   variant = 'outline',
   size = 'default',
   forceRecheck = false,
   onRun,
   checking
-}) => {
+}: DNCCheckButtonProps) => {
   const handleDNCCheck = async () => {
     if (checking) return;
     await onRun(forceRecheck);

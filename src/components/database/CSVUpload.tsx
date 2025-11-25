@@ -23,7 +23,7 @@ const REQUIRED_FIELDS: Array<keyof ContactInput> = ['last_name'];
 const OPTIONAL_FIELDS: Array<keyof ContactInput> = ['first_name','email','phone','address_1','address_2','city','state','zip_code','tags','dnc','notes'];
 const ALL_FIELDS: Array<keyof ContactInput> = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
 
-export const CSVUpload: React.FC<CSVUploadProps> = ({ open, onOpenChange, onUpload }) => {
+export const CSVUpload = ({ open, onOpenChange, onUpload }: CSVUploadProps) => {
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { agents, loading: agentsLoading, getAgentDisplayName, error: agentsError, fetchAgents } = useAgents();

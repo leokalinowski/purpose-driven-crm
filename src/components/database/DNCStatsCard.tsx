@@ -11,7 +11,7 @@ interface DNCStatsCardProps {
   agentLabel?: string;
 }
 
-export const DNCStatsCard: React.FC<DNCStatsCardProps> = ({ stats, loading, agentLabel }) => {
+export const DNCStatsCard = ({ stats, loading, agentLabel }: DNCStatsCardProps) => {
   const dncPercentage = stats.totalContacts > 0 ? (stats.dncContacts / stats.totalContacts) * 100 : 0;
   const safePercentage = stats.totalContacts > 0 ? (stats.nonDncContacts / stats.totalContacts) * 100 : 0;
   const uncheckedPercentage = stats.totalContacts > 0 ? (stats.neverChecked / stats.totalContacts) * 100 : 0;

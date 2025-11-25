@@ -15,11 +15,11 @@ interface ContactEnricherProps {
   trigger?: React.ReactNode;
 }
 
-export const ContactEnricher: React.FC<ContactEnricherProps> = ({
+export const ContactEnricher = ({
   contact,
   onEnriched,
   trigger
-}) => {
+}: ContactEnricherProps) => {
   const [open, setOpen] = useState(false);
   const [enrichmentResult, setEnrichmentResult] = useState<EnrichmentResult | null>(null);
   const [loading, setLoading] = useState(false);

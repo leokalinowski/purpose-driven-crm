@@ -41,7 +41,7 @@ interface CleanupStats {
   finalContactCount: number;
 }
 
-export const DuplicateCleanup: React.FC = () => {
+export const DuplicateCleanup = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);

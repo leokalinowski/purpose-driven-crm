@@ -53,11 +53,11 @@ const getActivityColor = (type: ContactActivity['activity_type'], isSystemGenera
   }
 };
 
-export const ContactActivitiesDialog: React.FC<ContactActivitiesDialogProps> = ({
+export const ContactActivitiesDialog = ({
   open,
   onOpenChange,
   contact,
-}) => {
+}: ContactActivitiesDialogProps) => {
   const { activities, loading, fetchActivities, addActivity } = useContactActivities(contact.id);
   const [showAddForm, setShowAddForm] = useState(false);
 

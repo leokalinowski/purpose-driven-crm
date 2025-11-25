@@ -17,12 +17,12 @@ interface BulkContactEditorProps {
   onBulkUpdate: (updates: Partial<Contact>, contactIds: string[]) => Promise<void>;
 }
 
-export const BulkContactEditor: React.FC<BulkContactEditorProps> = ({
+export const BulkContactEditor = ({
   open,
   onOpenChange,
   selectedContacts,
   onBulkUpdate,
-}) => {
+}: BulkContactEditorProps) => {
   const [updates, setUpdates] = useState<Partial<Contact>>({});
   const [loading, setLoading] = useState(false);
 

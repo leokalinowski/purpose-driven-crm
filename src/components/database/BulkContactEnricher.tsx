@@ -15,12 +15,12 @@ interface BulkContactEnricherProps {
   onBulkEnriched: (enrichedContacts: EnrichedContact[]) => void;
 }
 
-export const BulkContactEnricher: React.FC<BulkContactEnricherProps> = ({
+export const BulkContactEnricher = ({
   open,
   onOpenChange,
   contacts,
   onBulkEnriched,
-}) => {
+}: BulkContactEnricherProps) => {
   const [progress, setProgress] = useState(0);
   const [processing, setProcessing] = useState(false);
   const [results, setResults] = useState<{

@@ -23,7 +23,7 @@ interface ContactTableProps {
   showSelection?: boolean;
 }
 
-export const ContactTable: React.FC<ContactTableProps> = ({
+export const ContactTable = ({
   contacts,
   sortBy,
   sortOrder,
@@ -35,7 +35,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({
   selectedContacts = [],
   onSelectionChange,
   showSelection = false,
-}) => {
+}: ContactTableProps) => {
   // Ensure contacts is always an array
   const safeContacts = Array.isArray(contacts) ? contacts : [];
   const safeSelectedContacts = Array.isArray(selectedContacts) ? selectedContacts : [];

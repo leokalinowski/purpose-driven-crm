@@ -82,13 +82,13 @@ interface ContactFormProps {
   title: string;
 }
 
-export const ContactForm: React.FC<ContactFormProps> = ({
+export const ContactForm = ({
   open,
   onOpenChange,
   contact,
   onSubmit,
   title,
-}) => {
+}: ContactFormProps) => {
   const [tagsInput, setTagsInput] = useState('');
   const [loading, setLoading] = useState(false);
   

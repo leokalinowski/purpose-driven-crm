@@ -14,12 +14,12 @@ interface AddActivityFormProps {
   contactName: string;
 }
 
-export const AddActivityForm: React.FC<AddActivityFormProps> = ({
+export const AddActivityForm = ({
   open,
   onOpenChange,
   onSubmit,
   contactName,
-}) => {
+}: AddActivityFormProps) => {
   const [formData, setFormData] = useState<ActivityInput>({
     activity_type: 'call',
     activity_date: new Date().toISOString().slice(0, 16),

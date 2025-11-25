@@ -44,12 +44,12 @@ interface DuplicateGroup {
   action: 'keep_original' | 'merge' | 'skip_all';
 }
 
-export const ImprovedCSVUpload: React.FC<CSVUploadProps> = ({ 
+export const ImprovedCSVUpload = ({ 
   open, 
   onOpenChange, 
   onUpload, 
   agentId 
-}) => {
+}: CSVUploadProps) => {
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { agents, loading: agentsLoading, fetchAgents } = useAgents();
