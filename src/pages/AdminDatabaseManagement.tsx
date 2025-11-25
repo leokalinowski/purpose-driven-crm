@@ -213,14 +213,14 @@ const useAdminContacts = (selectedAgentId?: string) => {
     setCurrentPage(1);
   };
 
-  const handleSearch = (term: string) => {
+  const handleSearch = React.useCallback((term: string) => {
     setSearchTerm(term);
     setCurrentPage(1);
-  };
+  }, []);
 
-  const goToPage = (page: number) => {
+  const goToPage = React.useCallback((page: number) => {
     setCurrentPage(page);
-  };
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
