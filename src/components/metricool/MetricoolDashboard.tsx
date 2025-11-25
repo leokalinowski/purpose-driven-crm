@@ -42,7 +42,6 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
     }
 
     setIsLoadingIframe(true);
-    setLoadError(null);
     
     // Clear any existing timeout
     if (loadTimeoutRef.current) {
