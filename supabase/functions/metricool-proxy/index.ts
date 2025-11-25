@@ -17,6 +17,9 @@ serve(async (req) => {
     })
   }
 
+  // This is a public proxy - no authentication required
+  // It only proxies Metricool URLs for iframe embedding
+
   try {
     // Validate the URL is a Metricool URL for security
     if (!targetUrl.includes('metricool.com')) {
