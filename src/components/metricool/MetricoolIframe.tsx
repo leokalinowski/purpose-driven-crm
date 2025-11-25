@@ -13,7 +13,7 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
   const { data: metricoolLink, isLoading } = useMetricoolLink(userId);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoadingIframe, setIsLoadingIframe] = useState(true);
-  const [currentApproach, setCurrentApproach] = useState<1 | 2 | 3>(1);
+  const [currentApproach, setCurrentApproach] = useState<1 | 2 | 3>(3);
   const [iframeSrc, setIframeSrc] = useState<string>('');
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -51,47 +51,36 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
   }
 
   // Set up iframe source based on current approach
+  // Reset state when userId changes
   useEffect(() => {
     if (!metricoolLink) {
       setIframeSrc('');
+      setIsLoadingIframe(true);
+      setLoadError(null);
       return;
     }
 
-    // Skip Approach 2 entirely - go directly from 1 to 3
-    if (currentApproach === 1) {
-      // Approach 1: Direct iframe embedding
-      console.log('[MetricoolIframe] Approach 1 - Using direct iframe URL:', metricoolLink.iframe_url);
-      setIframeSrc(metricoolLink.iframe_url);
-    } else if (currentApproach === 3) {
+    // Always use Approach 3 (wrapper) directly
+    if (currentApproach === 3) {
       // Approach 3: Enhanced wrapper HTML
       const wrapperUrl = `/metricool-test.html?url=${encodeURIComponent(metricoolLink.iframe_url)}`;
-      console.log('[MetricoolIframe] Approach 3 - Using wrapper URL:', wrapperUrl);
+      console.log('[MetricoolIframe] Approach 3 - Using wrapper URL for user:', userId, wrapperUrl);
       setIframeSrc(wrapperUrl);
     }
-    // Approach 2 is skipped entirely - never set currentApproach to 2
-  }, [metricoolLink?.iframe_url, currentApproach]);
+  }, [metricoolLink?.iframe_url, currentApproach, userId]);
 
   // Helper function to handle approach failure
   const handleApproachFailure = useCallback(() => {
     setIsLoadingIframe(false);
     
-    // Try next approach if current one failed
-    // Skip Approach 2 (proxy) as it requires auth and causes 401 errors
-    if (currentApproach === 1) {
-      console.log('[MetricoolIframe] Approach 1 failed, skipping proxy (auth issues), trying Approach 3 (wrapper)...');
-      // Use setTimeout to avoid triggering useEffect during render
-      setTimeout(() => {
-        setCurrentApproach(3);
-      }, 0);
-    } else {
-      setLoadError('All embedding approaches failed. The Metricool dashboard cannot be embedded due to browser security restrictions. Please use "Open in New Tab" instead.');
-    }
+    // Since we're using Approach 3 directly, if it fails, show error
+    setLoadError('Failed to load Metricool dashboard. The Metricool dashboard cannot be embedded due to browser security restrictions. Please use "Open in New Tab" instead.');
     
     if (loadTimeoutRef.current) {
       clearTimeout(loadTimeoutRef.current);
       loadTimeoutRef.current = null;
     }
-  }, [currentApproach]);
+  }, []);
 
   // Set up timeout for iframe loading - only when iframeSrc changes
   useEffect(() => {

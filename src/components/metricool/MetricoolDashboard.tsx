@@ -13,7 +13,7 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
   const { data: metricoolLink, isLoading } = useMetricoolLink(userId);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoadingIframe, setIsLoadingIframe] = useState(true);
-  const [currentApproach, setCurrentApproach] = useState<1 | 2 | 3>(1);
+  const [currentApproach, setCurrentApproach] = useState<1 | 2 | 3>(3);
   const [iframeSrc, setIframeSrc] = useState<string>('');
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);

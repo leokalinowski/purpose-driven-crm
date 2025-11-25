@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { BarChart3, Settings, Users, Wrench } from 'lucide-react';
+import { Settings, Users, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Layout } from '@/components/layout/Layout';
 import { MetricoolDashboard } from '@/components/metricool/MetricoolDashboard';
-import { MetricoolAnalytics } from '@/components/metricool/MetricoolAnalytics';
 import { MetricoolSettings } from '@/components/metricool/MetricoolSettings';
 import { AgentSelector } from '@/components/admin/AgentSelector';
 import { useAgents } from '@/hooks/useAgents';
@@ -63,14 +62,10 @@ export default function AdminSocialScheduler() {
 
           {selectedAgentId ? (
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="dashboard" className="flex items-center space-x-2">
                   <Settings className="h-4 w-4" />
                   <span>Dashboard</span>
-                </TabsTrigger>
-                <TabsTrigger value="analytics" className="flex items-center space-x-2">
-                  <BarChart3 className="h-4 w-4" />
-                  <span>Analytics</span>
                 </TabsTrigger>
                 <TabsTrigger value="settings" className="flex items-center space-x-2">
                   <Wrench className="h-4 w-4" />
@@ -79,15 +74,12 @@ export default function AdminSocialScheduler() {
               </TabsList>
 
               <TabsContent value="dashboard">
-                <MetricoolDashboard userId={selectedAgentId} />
-              </TabsContent>
-
-              <TabsContent value="analytics">
-                <MetricoolAnalytics agentId={selectedAgentId} />
+                <MetricoolDashboard key={selectedAgentId} userId={selectedAgentId} />
               </TabsContent>
 
               <TabsContent value="settings">
                 <MetricoolSettings 
+                  key={selectedAgentId}
                   userId={selectedAgentId} 
                   agentName={selectedAgent ? getAgentDisplayName(selectedAgent) : undefined}
                 />
