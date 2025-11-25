@@ -79,6 +79,7 @@ interface ContactFormProps {
   onOpenChange: (open: boolean) => void;
   contact?: Contact | null;
   onSubmit: (data: ContactInput) => Promise<void>;
+  onDelete?: () => Promise<void>;
   title: string;
 }
 
@@ -87,6 +88,7 @@ export const ContactForm = ({
   onOpenChange,
   contact,
   onSubmit,
+  onDelete,
   title,
 }: ContactFormProps) => {
   const [tagsInput, setTagsInput] = useState('');
@@ -379,13 +381,33 @@ export const ContactForm = ({
             )}
           </div>
 
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Saving...' : 'Save Contact'}
-            </Button>
+          <div className="flex justify-between items-center pt-4">
+            {onDelete && contact && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={async () => {
+                  if (window.confirm('Are you sure you want to delete this contact? This action cannot be undone.')) {
+                    try {
+                      await onDelete();
+                      onOpenChange(false);
+                    } catch (error) {
+                      console.error('Error deleting contact:', error);
+                    }
+                  }
+                }}
+              >
+                Delete Contact
+              </Button>
+            )}
+            <div className="flex space-x-2">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? 'Saving...' : 'Save Contact'}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>

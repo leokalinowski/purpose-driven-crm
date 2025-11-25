@@ -29,7 +29,7 @@ export default function SphereSyncTasks() {
     refreshTasks
   } = useSphereSyncTasks();
   
-  const { updateContact } = useContacts();
+  const { updateContact, deleteContact } = useContacts();
   const [editingContact, setEditingContact] = useState<any | null>(null);
   const [contactFormOpen, setContactFormOpen] = useState(false);
 
@@ -73,6 +73,22 @@ export default function SphereSyncTasks() {
     } catch (error) {
       console.error('Error updating contact:', error);
       toast.error('Failed to update contact');
+    }
+  };
+
+  const handleContactDelete = async () => {
+    if (!editingContact) return;
+
+    try {
+      await deleteContact(editingContact.id);
+      toast.success('Contact deleted successfully');
+      setContactFormOpen(false);
+      setEditingContact(null);
+      await refreshTasks();
+    } catch (error) {
+      console.error('Error deleting contact:', error);
+      toast.error('Failed to delete contact');
+      throw error; // Re-throw to prevent dialog from closing
     }
   };
 
@@ -333,6 +349,7 @@ export default function SphereSyncTasks() {
         onOpenChange={setContactFormOpen}
         contact={editingContact}
         onSubmit={handleContactUpdate}
+        onDelete={handleContactDelete}
         title="Edit Contact"
       />
     </Layout>
