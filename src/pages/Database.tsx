@@ -486,11 +486,13 @@ const Database = () => {
           onSubmit={editingContact ? handleEditContact : handleAddContact}
           title={editingContact ? "Edit Contact" : "Add New Contact"}
         />
-        <ImprovedCSVUpload
-          open={showCSVUpload}
-          onOpenChange={setShowCSVUpload}
-          onUpload={handleCSVUpload}
-        />
+        {showCSVUpload && (
+          <ImprovedCSVUpload
+            open={showCSVUpload}
+            onOpenChange={setShowCSVUpload}
+            onUpload={handleCSVUpload}
+          />
+        )}
         
         {/* Duplicate Cleanup Dialog */}
         {showDuplicateCleanup && (
