@@ -63,11 +63,14 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
       loadTimeoutRef.current = null;
     }
     
-    // Set timeout to detect if iframe never loads
+    // Set timeout to detect if iframe never loads (increased to 20 seconds to account for slow Metricool loading)
     loadTimeoutRef.current = setTimeout(() => {
-      console.warn('[MetricoolIframe] Iframe load timeout after 15 seconds');
-      handleLoadFailure();
-    }, 15000);
+      console.warn('[MetricoolIframe] Iframe load timeout after 20 seconds');
+      // Only show error if iframe still hasn't loaded
+      if (isLoadingIframe) {
+        handleLoadFailure();
+      }
+    }, 20000);
 
     return () => {
       if (loadTimeoutRef.current) {
@@ -79,15 +82,17 @@ export function MetricoolIframe({ userId }: MetricoolIframeProps) {
 
   // Define all callbacks before any early returns
   const handleIframeLoad = useCallback(() => {
-    // Simple timeout to hide loading spinner after iframe loads
+    // Clear the timeout immediately when iframe loads
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+      loadTimeoutRef.current = null;
+    }
+    
+    // Hide loading spinner after a short delay to ensure content is visible
     setTimeout(() => {
       setIsLoadingIframe(false);
       setLoadError(null);
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-        loadTimeoutRef.current = null;
-      }
-    }, 1000);
+    }, 500);
   }, []);
 
   const handleIframeError = useCallback(() => {
