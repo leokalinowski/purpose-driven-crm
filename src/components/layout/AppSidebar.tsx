@@ -111,13 +111,13 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton 
+                  <SidebarMenuButton
                     asChild
-                    isActive={location.pathname === '/admin/invitations'}
+                    isActive={location.pathname === '/admin/team-management'}
                   >
-                    <Link to="/admin/invitations">
+                    <Link to="/admin/team-management">
                       <UserPlus />
-                      <span>Team Invitations</span>
+                      <span>Team Management</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
