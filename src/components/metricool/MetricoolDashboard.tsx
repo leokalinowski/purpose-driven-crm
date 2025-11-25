@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -11,26 +11,14 @@ interface MetricoolIframeProps {
 
 export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
   const { data: metricoolLink, isLoading } = useMetricoolLink(userId);
-  const [isLoadingIframe, setIsLoadingIframe] = useState(true);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  // Reset loading state when userId changes
-  useEffect(() => {
-    setIsLoadingIframe(true);
-  }, [userId]);
-
-  const handleIframeLoad = useCallback(() => {
-    setIsLoadingIframe(false);
-  }, []);
+  const [key, setKey] = useState(0); // Used to force iframe reload
 
   if (isLoading) {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="mt-2 text-sm text-muted-foreground">Loading Metricool...</p>
-          </div>
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-sm text-muted-foreground">Loading...</span>
         </CardContent>
       </Card>
     );
@@ -39,15 +27,11 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
   if (!metricoolLink) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Metricool Social Media Management</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="py-6">
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              No Metricool link has been configured for your account yet.
-              Please contact your administrator to set up your Metricool integration.
+              No Metricool link found for this user.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -56,59 +40,38 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Metricool Social Media Dashboard</CardTitle>
-          <div className="flex gap-2">
-            <Button
+    <Card className="h-full">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-xl font-bold">Social Media Management</CardTitle>
+        <div className="flex gap-2">
+           <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                window.open(metricoolLink.iframe_url, '_blank');
-              }}
+              onClick={() => window.open(metricoolLink.iframe_url, '_blank')}
             >
               <ExternalLink className="h-4 w-4 mr-2" />
               Open in New Tab
             </Button>
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              onClick={() => {
-                if (iframeRef.current) {
-                  setIsLoadingIframe(true);
-                  iframeRef.current.src = iframeRef.current.src;
-                }
-              }}
+              onClick={() => setKey(prev => prev + 1)}
             >
               <RefreshCw className="h-4 w-4 mr-2" />
-              Retry
+              Reload Frame
             </Button>
-          </div>
         </div>
       </CardHeader>
-      <CardContent>
-        {isLoadingIframe && (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground">Loading Metricool dashboard...</p>
-            </div>
-          </div>
-        )}
-        <div className="w-full relative min-h-[800px]">
-          <iframe
-            ref={iframeRef}
-            src={metricoolLink.iframe_url.includes('?') ? `${metricoolLink.iframe_url}&origin=${encodeURIComponent(window.location.origin)}` : `${metricoolLink.iframe_url}?origin=${encodeURIComponent(window.location.origin)}`}
-            className={`w-full h-[800px] border-0 rounded-lg ${isLoadingIframe ? 'hidden' : ''}`}
-            title="Metricool Dashboard"
-            allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
-            referrerPolicy="no-referrer"
-            sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts allow-top-navigation"
-            loading="lazy"
-            onLoad={handleIframeLoad}
-          />
-        </div>
+      <CardContent className="p-0 h-[800px]">
+        <iframe
+          key={key}
+          src={metricoolLink.iframe_url}
+          className="w-full h-full border-0"
+          title="Metricool Dashboard"
+          allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
+          sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts allow-top-navigation"
+          referrerPolicy="no-referrer"
+        />
       </CardContent>
     </Card>
   );
