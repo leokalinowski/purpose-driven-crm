@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Upload, Search, ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import { Plus, Upload, Search, ChevronLeft, ChevronRight, Users, Shield } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { ContactTable } from '@/components/database/ContactTable';
 import { ContactForm } from '@/components/database/ContactForm';
@@ -55,6 +55,29 @@ const Database = () => {
     fetchDNCStats,
     triggerDNCCheck,
   } = useDNCStats();
+
+  const handleDNCCheck = async (forceRecheck: boolean) => {
+    try {
+      await triggerDNCCheck(forceRecheck);
+      toast({
+        title: 'DNC Check Started',
+        description: forceRecheck 
+          ? 'Rechecking all contacts against DNC lists. This may take a few minutes.'
+          : 'Checking new contacts against DNC lists. This may take a few minutes.',
+      });
+      // Refresh stats after a delay to show updated counts
+      setTimeout(() => {
+        fetchDNCStats();
+      }, 5000);
+    } catch (error: any) {
+      console.error('DNC check failed:', error);
+      toast({
+        title: 'DNC Check Failed',
+        description: error?.message || 'Failed to start DNC check. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const { toast } = useToast();
   const { generateTasksForNewContacts } = useSphereSyncTasks();
@@ -268,16 +291,22 @@ const Database = () => {
       await fetchDNCStats();
 
       // Step 5: Trigger DNC check separately AFTER upload completes
-      // This runs in the background and doesn't block the UI
+      // Use the proper triggerDNCCheck function to ensure it works correctly
       if (user?.id) {
-        supabase.functions.invoke('dnc-monthly-check', {
-          body: {
-            manualTrigger: true,
-            forceRecheck: false
-          }
-        }).catch((dncError) => {
-          console.warn('DNC check triggered in background, may take a few minutes:', dncError);
-        });
+        try {
+          await triggerDNCCheck(false);
+          toast({
+            title: 'DNC Check Started',
+            description: 'DNC check is running in the background. Contacts will be updated shortly.',
+          });
+        } catch (dncError: any) {
+          console.error('DNC check failed:', dncError);
+          toast({
+            title: 'DNC Check Failed',
+            description: dncError?.message || 'Failed to start DNC check. You can run it manually using the button above.',
+            variant: 'destructive',
+          });
+        }
       }
     } catch (error: any) {
       console.error('CSV Upload error:', error);
@@ -394,18 +423,45 @@ const Database = () => {
         </div>
         
         {/* DNC Statistics Dashboard */}
-        <DNCStatsCard 
-          stats={stats || {
-            totalContacts: 0,
-            dncContacts: 0,
-            nonDncContacts: 0,
-            neverChecked: 0,
-            missingPhone: 0,
-            needsRecheck: 0,
-            lastChecked: null,
-          }} 
-          loading={dncLoading} 
-        />
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                DNC Management
+              </span>
+              <div className="flex gap-2">
+                <DNCCheckButton 
+                  variant="default" 
+                  size="default" 
+                  onRun={handleDNCCheck}
+                  checking={dncChecking}
+                />
+                <DNCCheckButton 
+                  variant="destructive" 
+                  size="default" 
+                  forceRecheck={true}
+                  onRun={handleDNCCheck}
+                  checking={dncChecking}
+                />
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DNCStatsCard 
+              stats={stats || {
+                totalContacts: 0,
+                dncContacts: 0,
+                nonDncContacts: 0,
+                neverChecked: 0,
+                missingPhone: 0,
+                needsRecheck: 0,
+                lastChecked: null,
+              }} 
+              loading={dncLoading} 
+            />
+          </CardContent>
+        </Card>
         
         {/* Data Quality Dashboard */}
         <DataQualityDashboard

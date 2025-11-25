@@ -338,7 +338,9 @@ const useAdminDNCStats = (selectedAgentId?: string) => {
   }, [user, effectiveAgentId]);
 
   const triggerDNCCheck = React.useCallback(async (forceRecheck: boolean = false) => {
-    if (!user) throw new Error('User not authenticated');
+    if (!user || !effectiveAgentId) {
+      throw new Error('User not authenticated');
+    }
 
     console.log('[Admin DNC Check] Starting check:', {
       agentId: effectiveAgentId,
@@ -350,13 +352,9 @@ const useAdminDNCStats = (selectedAgentId?: string) => {
     try {
       const body: any = {
         manualTrigger: true,
-        forceRecheck
+        forceRecheck,
+        agentId: effectiveAgentId // Always pass agentId explicitly
       };
-
-      if (effectiveAgentId && effectiveAgentId !== user.id) {
-        body.agentId = effectiveAgentId;
-        console.log('[Admin DNC Check] Targeting specific agent:', effectiveAgentId);
-      }
 
       console.log('[Admin DNC Check] Calling edge function with body:', body);
 
@@ -366,14 +364,14 @@ const useAdminDNCStats = (selectedAgentId?: string) => {
 
       if (error) {
         console.error('[Admin DNC Check] Edge function error:', error);
-        throw error;
+        throw new Error(error.message || 'Failed to trigger DNC check');
       }
 
       console.log('[Admin DNC Check] Edge function response:', data);
 
       // Wait a moment for the database to update, then refresh stats
       console.log('[Admin DNC Check] Waiting for database update...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Increased wait time
 
       console.log('[Admin DNC Check] Refreshing DNC stats...');
       await fetchDNCStats();
@@ -382,7 +380,8 @@ const useAdminDNCStats = (selectedAgentId?: string) => {
       return data;
     } catch (error) {
       console.error('[Admin DNC Check] Failed:', error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Failed to trigger DNC check';
+      throw new Error(errorMessage);
     } finally {
       setChecking(false);
     }
@@ -688,18 +687,22 @@ const AdminDatabaseManagement = () => {
       await fetchDNCStats();
 
       // Step 4: Trigger DNC check separately AFTER upload completes
-      // This runs in the background and doesn't block the UI
+      // Use the proper triggerDNCCheck function to ensure it works correctly
       if (effectiveAgentId) {
-        // Trigger DNC check asynchronously - don't wait for it
-        supabase.functions.invoke('dnc-monthly-check', {
-          body: {
-            manualTrigger: true,
-            forceRecheck: false,
-            agentId: effectiveAgentId
-          }
-        }).catch((dncError) => {
-          console.warn('DNC check triggered in background, may take a few minutes:', dncError);
-        });
+        try {
+          await triggerDNCCheck(false);
+          toast({
+            title: 'DNC Check Started',
+            description: 'DNC check is running in the background. Contacts will be updated shortly.',
+          });
+        } catch (dncError: any) {
+          console.error('DNC check failed:', dncError);
+          toast({
+            title: 'DNC Check Failed',
+            description: dncError?.message || 'Failed to start DNC check. You can run it manually using the button above.',
+            variant: 'destructive',
+          });
+        }
       }
     } catch (error: any) {
       console.error('CSV Upload error:', error);
@@ -888,7 +891,28 @@ const AdminDatabaseManagement = () => {
                   <DNCCheckButton 
                     variant="default" 
                     size="lg" 
-                    onRun={triggerDNCCheck}
+                    onRun={async (forceRecheck) => {
+                      try {
+                        await triggerDNCCheck(forceRecheck);
+                        toast({
+                          title: 'DNC Check Started',
+                          description: forceRecheck 
+                            ? 'Rechecking all contacts against DNC lists. This may take a few minutes.'
+                            : 'Checking new contacts against DNC lists. This may take a few minutes.',
+                        });
+                        // Refresh stats after a delay
+                        setTimeout(() => {
+                          fetchDNCStats();
+                        }, 5000);
+                      } catch (error: any) {
+                        console.error('DNC check failed:', error);
+                        toast({
+                          title: 'DNC Check Failed',
+                          description: error?.message || 'Failed to start DNC check. Please try again.',
+                          variant: 'destructive',
+                        });
+                      }
+                    }}
                     checking={dncChecking}
                   />
                   <p className="text-xs text-muted-foreground mt-1">Check new contacts only</p>
@@ -898,7 +922,26 @@ const AdminDatabaseManagement = () => {
                     variant="destructive" 
                     size="lg" 
                     forceRecheck={true}
-                    onRun={triggerDNCCheck}
+                    onRun={async (forceRecheck) => {
+                      try {
+                        await triggerDNCCheck(forceRecheck);
+                        toast({
+                          title: 'DNC Check Started',
+                          description: 'Rechecking all contacts against DNC lists. This may take a few minutes.',
+                        });
+                        // Refresh stats after a delay
+                        setTimeout(() => {
+                          fetchDNCStats();
+                        }, 5000);
+                      } catch (error: any) {
+                        console.error('DNC check failed:', error);
+                        toast({
+                          title: 'DNC Check Failed',
+                          description: error?.message || 'Failed to start DNC check. Please try again.',
+                          variant: 'destructive',
+                        });
+                      }
+                    }}
                     checking={dncChecking}
                   />
                   <p className="text-xs text-muted-foreground mt-1">Recheck all contacts</p>

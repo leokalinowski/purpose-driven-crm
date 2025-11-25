@@ -47,7 +47,7 @@ export const DNCStatsCard = ({ stats, loading, agentLabel }: DNCStatsCardProps) 
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Overview Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold">{stats.totalContacts}</div>
             <div className="text-sm text-muted-foreground">Total Contacts</div>
@@ -59,14 +59,11 @@ export const DNCStatsCard = ({ stats, loading, agentLabel }: DNCStatsCardProps) 
           <div className="text-center">
             <div className="text-2xl font-bold text-primary">{stats.nonDncContacts}</div>
             <div className="text-sm text-muted-foreground">Safe to Call</div>
+            <div className="text-xs text-muted-foreground mt-1">(Checked & Not DNC)</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-warning">{stats.neverChecked}</div>
             <div className="text-sm text-muted-foreground">Never Checked</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-muted-foreground">{stats.missingPhone}</div>
-            <div className="text-sm text-muted-foreground">Missing Phone</div>
           </div>
         </div>
 
@@ -120,6 +117,12 @@ export const DNCStatsCard = ({ stats, loading, agentLabel }: DNCStatsCardProps) 
             <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded border border-border">
               <div className="font-medium mb-1">📞 {stats.missingPhone} contacts missing phone numbers</div>
               <div>These contacts cannot be checked against the DNC list. Use the contact enrichment feature below to add missing phone numbers.</div>
+            </div>
+          )}
+          {stats.neverChecked > 0 && (
+            <div className="text-xs text-muted-foreground bg-yellow-500/10 p-3 rounded border border-yellow-500/20">
+              <div className="font-medium mb-1 text-yellow-700 dark:text-yellow-400">⚠️ {stats.neverChecked} contacts have never been checked</div>
+              <div>These contacts are not marked as "Safe to Call" until they are checked against the DNC list. Use the "Run DNC Check" button above to check them.</div>
             </div>
           )}
           <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">

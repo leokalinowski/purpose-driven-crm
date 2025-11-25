@@ -19,7 +19,12 @@ export const DNCCheckButton = ({
 }: DNCCheckButtonProps) => {
   const handleDNCCheck = async () => {
     if (checking) return;
-    await onRun(forceRecheck);
+    try {
+      await onRun(forceRecheck);
+    } catch (error) {
+      console.error('DNC check button error:', error);
+      // Error is handled by the parent component via toast
+    }
   };
 
   return (

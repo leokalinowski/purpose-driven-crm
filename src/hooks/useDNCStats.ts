@@ -40,7 +40,7 @@ export const useDNCStats = () => {
         .select('*', { count: 'exact', head: true })
         .eq('agent_id', effectiveAgentId);
 
-      // Get DNC contacts
+      // Get DNC contacts (explicitly marked as DNC)
       const { count: dncContacts } = await supabase
         .from('contacts')
         .select('*', { count: 'exact', head: true })
@@ -62,6 +62,14 @@ export const useDNCStats = () => {
         .select('*', { count: 'exact', head: true })
         .eq('agent_id', effectiveAgentId)
         .or('phone.is.null,phone.eq.');
+
+      // Get Safe to Call contacts (checked AND not DNC)
+      const { count: safeToCall } = await supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', effectiveAgentId)
+        .eq('dnc', false)
+        .not('dnc_last_checked', 'is', null);
 
       // Get contacts that need rechecking (older than 30 days)
       const thirtyDaysAgo = new Date();
@@ -87,7 +95,7 @@ export const useDNCStats = () => {
       setStats({
         totalContacts: totalContacts || 0,
         dncContacts: dncContacts || 0,
-        nonDncContacts: (totalContacts || 0) - (dncContacts || 0),
+        nonDncContacts: safeToCall || 0, // Changed: Now only counts checked and safe contacts
         neverChecked: neverChecked || 0,
         missingPhone: missingPhone || 0,
         needsRecheck: needsRecheck || 0,
@@ -101,10 +109,13 @@ export const useDNCStats = () => {
   }, [user, effectiveAgentId]);
 
   const triggerDNCCheck = useCallback(async (forceRecheck: boolean = false) => {
-    if (!user) throw new Error('User not authenticated');
+    if (!user || !effectiveAgentId) {
+      throw new Error('User not authenticated');
+    }
 
     console.log('[DNC Check] Starting check for current user:', {
       userId: user.id,
+      agentId: effectiveAgentId,
       forceRecheck
     });
 
@@ -113,20 +124,21 @@ export const useDNCStats = () => {
       const { data, error } = await supabase.functions.invoke('dnc-monthly-check', {
         body: {
           manualTrigger: true,
-          forceRecheck
+          forceRecheck,
+          agentId: effectiveAgentId // Explicitly pass agentId
         }
       });
 
       if (error) {
         console.error('[DNC Check] Edge function error:', error);
-        throw error;
+        throw new Error(error.message || 'Failed to trigger DNC check');
       }
 
       console.log('[DNC Check] Edge function response:', data);
 
       // Wait a moment for the database to update, then refresh stats
       console.log('[DNC Check] Waiting for database update...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Increased wait time
 
       console.log('[DNC Check] Refreshing DNC stats...');
       await fetchDNCStats();
@@ -135,11 +147,12 @@ export const useDNCStats = () => {
       return data;
     } catch (error) {
       console.error('[DNC Check] Failed:', error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Failed to trigger DNC check';
+      throw new Error(errorMessage);
     } finally {
       setChecking(false);
     }
-  }, [user, fetchDNCStats]);
+  }, [user, effectiveAgentId, fetchDNCStats]);
 
   // Auto-fetch stats when agent changes or on mount
   useEffect(() => {
