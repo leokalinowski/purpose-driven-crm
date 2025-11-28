@@ -21,7 +21,7 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
   }, [userId, retryKey]);
 
   const handleLoad = () => {
-    setIsLoadingIframe(false);
+      setIsLoadingIframe(false);
     setHasError(false);
   };
 
@@ -66,15 +66,15 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
     <Card className="h-full">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-xl font-bold">Social Media Management</CardTitle>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
             onClick={() => window.open(metricoolLink.iframe_url, '_blank')}
-          >
-            <ExternalLink className="h-4 w-4 mr-2" />
-            Open in New Tab
-          </Button>
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Open in New Tab
+            </Button>
           {hasError && (
             <Button
               variant="outline"
@@ -93,7 +93,7 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                <div className="font-semibold mb-2">Unable to load Metricool</div>
+                <div className="font-semibold mb-2">Unable to load dashboard</div>
                 <div className="text-sm mb-4">
                   The dashboard cannot be embedded due to browser security restrictions.
                 </div>
@@ -105,25 +105,25 @@ export function MetricoolDashboard({ userId }: MetricoolIframeProps) {
           </div>
         ) : (
           <div className="relative w-full h-[800px]">
-            {isLoadingIframe && (
+        {isLoadingIframe && (
               <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
-                <div className="text-center">
+            <div className="text-center">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Loading Metricool dashboard...</p>
-                </div>
-              </div>
-            )}
-            <iframe
+              <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+            </div>
+          </div>
+        )}
+          <iframe
               key={retryKey}
               src={wrapperUrl}
               className="w-full h-full border-0"
-              title="Metricool Dashboard"
-              allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
+            title="Social Media Dashboard"
+            allow="clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment"
               referrerPolicy="strict-origin-when-cross-origin"
               onLoad={handleLoad}
               onError={handleError}
-            />
-          </div>
+          />
+        </div>
         )}
       </CardContent>
     </Card>

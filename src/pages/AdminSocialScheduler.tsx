@@ -39,23 +39,23 @@ export default function AdminSocialScheduler() {
           <div>
             <h1 className="text-3xl font-bold">Social Media Management</h1>
             <p className="text-muted-foreground">
-              Manage Metricool accounts and analytics for all agents
+              Manage social media accounts and analytics for all agents
             </p>
           </div>
 
           <div className="flex items-center space-x-2">
             <Dialog open={showGlobalSettings} onOpenChange={setShowGlobalSettings}>
               <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Global Settings
-                </Button>
+            <Button variant="outline">
+              <Settings className="mr-2 h-4 w-4" />
+              Global Settings
+            </Button>
               </DialogTrigger>
               <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Global Metricool Settings</DialogTitle>
+                  <DialogTitle>Global Social Media Settings</DialogTitle>
                   <DialogDescription>
-                    Manage Metricool integrations for all agents across the platform.
+                    Manage social media integrations for all agents across the platform.
                   </DialogDescription>
                 </DialogHeader>
                 <MetricoolGlobalSettings />
@@ -106,7 +106,7 @@ export default function AdminSocialScheduler() {
               <Users className="mx-auto h-12 w-12 text-muted-foreground/50" />
               <h3 className="mt-4 text-lg font-medium">Select an Agent</h3>
               <p className="text-muted-foreground">
-                Choose an agent from the dropdown above to view and manage their Metricool account.
+                Choose an agent from the dropdown above to view and manage their social media account.
               </p>
             </div>
           )}

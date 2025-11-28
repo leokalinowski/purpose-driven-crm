@@ -352,6 +352,7 @@ export const BulkContactEditor = ({
               )}
             </Button>
           </div>
+          </TabsContent>
 
           <TabsContent value="tags" className="space-y-4">
             <div className="space-y-4">
@@ -571,11 +572,11 @@ export const BulkContactEditor = ({
                     <>
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete {selectedContacts.length} Contacts
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
           </TabsContent>
         </Tabs>
       </DialogContent>

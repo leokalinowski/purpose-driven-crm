@@ -16,7 +16,7 @@ export default function SocialScheduler() {
           <title>Social Media Management | Real Estate on Purpose</title>
           <meta
             name="description"
-            content="Manage your social media presence with Metricool. Schedule posts, track analytics, and grow your real estate business online."
+            content="Manage your social media presence. Schedule posts, track analytics, and grow your real estate business online."
           />
         </Helmet>
 
@@ -24,7 +24,7 @@ export default function SocialScheduler() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Social Media Management</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
-              Access your Metricool dashboard to manage your social media accounts and campaigns
+              Access your dashboard to manage your social media accounts and campaigns
             </p>
           </div>
         </div>
@@ -33,7 +33,7 @@ export default function SocialScheduler() {
           <Alert>
             <Settings className="h-4 w-4" />
             <AlertDescription>
-              Looking to manage team Metricool settings?{' '}
+              Looking to manage team social media settings?{' '}
               <Link to="/admin/social-scheduler" className="text-primary hover:underline font-medium">
                 Go to Admin Social Media Management
               </Link>
