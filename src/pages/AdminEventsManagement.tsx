@@ -84,7 +84,7 @@ const AdminEventsManagement = () => {
   const [agentFilter, setAgentFilter] = useState<string>('all');
   const [agents, setAgents] = useState<Array<{ user_id: string; name: string }>>([]);
   const [selectedEvent, setSelectedEvent] = useState<EventWithAgent | null>(null);
-  const [editingEvent, setEditingEvent] = useState<EventWithAgent | null>(null);
+  const [editingEvent, setEditingEvent] = useState<EventWithAgent | null | undefined>(undefined);
   const [deletingEvent, setDeletingEvent] = useState<EventWithAgent | null>(null);
   const [viewingRSVPs, setViewingRSVPs] = useState<string | null>(null);
   const [stats, setStats] = useState<EventStats>({
@@ -572,7 +572,7 @@ const AdminEventsManagement = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setEditingEvent(event)}
+                                onClick={() => setEditingEvent(event as EventWithAgent)}
                               >
                                 <Edit className="h-4 w-4" />
                               </Button>
@@ -597,11 +597,11 @@ const AdminEventsManagement = () => {
         </Card>
 
         {/* Create/Edit Event Dialog */}
-        {(editingEvent !== null) && (
+        {(editingEvent !== undefined) && (
           <EventForm
             event={editingEvent || undefined}
             onClose={() => {
-              setEditingEvent(null);
+              setEditingEvent(undefined);
               fetchEvents();
             }}
             isAdminMode={true}
