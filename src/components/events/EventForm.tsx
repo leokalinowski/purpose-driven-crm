@@ -5,19 +5,25 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useEvents, Event } from '@/hooks/useEvents';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useAgents } from '@/hooks/useAgents';
 import { supabase } from '@/integrations/supabase/client';
 
 interface EventFormProps {
   event?: Event;
   onClose: () => void;
+  isAdminMode?: boolean;
+  adminAgentId?: string;
 }
 
-export const EventForm = ({ event, onClose }: EventFormProps) => {
+export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }: EventFormProps) => {
   const isEditing = !!event;
   const { user } = useAuth();
+  const { agents, fetchAgents, getAgentDisplayName } = useAgents();
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(adminAgentId || event?.agent_id || user?.id || '');
   const [title, setTitle] = useState(event?.title || '');
   const [eventDate, setEventDate] = useState(event?.event_date ? new Date(event.event_date).toISOString().split('T')[0] : '');
   const [location, setLocation] = useState(event?.location || '');
@@ -32,25 +38,44 @@ export const EventForm = ({ event, onClose }: EventFormProps) => {
   const [loading, setLoading] = useState(false);
   const [loadingBranding, setLoadingBranding] = useState(false);
   
-  const { addEvent, updateEvent } = useEvents();
+  const { addEvent, updateEvent, addEventAsAdmin, updateEventAsAdmin } = useEvents();
   const { toast } = useToast();
 
-  // Load agent branding when form opens (for new events)
+  // Fetch agents list if in admin mode
   useEffect(() => {
-    if (!isEditing && user) {
-      loadAgentBranding();
+    if (isAdminMode) {
+      fetchAgents();
     }
-  }, [isEditing, user]);
+  }, [isAdminMode]);
 
-  const loadAgentBranding = async () => {
-    if (!user) return;
+  // Update selected agent when adminAgentId prop changes
+  useEffect(() => {
+    if (adminAgentId) {
+      setSelectedAgentId(adminAgentId);
+    } else if (event?.agent_id) {
+      setSelectedAgentId(event.agent_id);
+    } else if (user?.id) {
+      setSelectedAgentId(user.id);
+    }
+  }, [adminAgentId, event?.agent_id, user?.id]);
+
+  // Load agent branding when form opens (for new events) or when agent changes
+  useEffect(() => {
+    const targetAgentId = isAdminMode ? selectedAgentId : user?.id;
+    if (!isEditing && targetAgentId) {
+      loadAgentBranding(targetAgentId);
+    }
+  }, [isEditing, user, selectedAgentId, isAdminMode]);
+
+  const loadAgentBranding = async (agentId: string) => {
+    if (!agentId) return;
     
     try {
       setLoadingBranding(true);
       const { data: profileData } = await supabase
         .from('profiles')
         .select('primary_color, logo_colored_url, headshot_url')
-        .eq('user_id', user.id)
+        .eq('user_id', agentId)
         .single();
 
       if (profileData) {
@@ -94,41 +119,49 @@ export const EventForm = ({ event, onClose }: EventFormProps) => {
       return;
     }
 
+    if (isAdminMode && !selectedAgentId) {
+      toast({
+        title: "Validation Error",
+        description: "Please select an agent for this event.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
+      const eventData = {
+        title: title.trim(),
+        event_date: eventDate,
+        location: location.trim() || undefined,
+        description: description.trim() || undefined,
+        theme: theme.trim() || undefined,
+        invited_count: invitedCount || 0,
+        max_capacity: maxCapacity || undefined,
+        is_published: isPublished,
+        header_image_url: headerImageUrl.trim() || undefined,
+        brand_color: brandColor.trim() || undefined,
+        attendance_count: 0,
+        leads_generated: 0
+      };
+
       if (isEditing && event) {
-        await updateEvent(event.id, {
-          title: title.trim(),
-          event_date: eventDate,
-          location: location.trim() || undefined,
-          description: description.trim() || undefined,
-          theme: theme.trim() || undefined,
-          invited_count: invitedCount || 0,
-          max_capacity: maxCapacity || undefined,
-          is_published: isPublished,
-          header_image_url: headerImageUrl.trim() || undefined,
-          brand_color: brandColor.trim() || undefined,
-        });
+        if (isAdminMode) {
+          await updateEventAsAdmin(event.id, eventData, selectedAgentId);
+        } else {
+          await updateEvent(event.id, eventData);
+        }
 
         toast({
           title: "Event updated",
           description: "Event has been updated successfully.",
         });
       } else {
-        await addEvent({
-          title: title.trim(),
-          event_date: eventDate,
-          location: location.trim() || undefined,
-          description: description.trim() || undefined,
-          theme: theme.trim() || undefined,
-          invited_count: invitedCount || 0,
-          max_capacity: maxCapacity || undefined,
-          is_published: isPublished,
-          header_image_url: headerImageUrl.trim() || undefined,
-          brand_color: brandColor.trim() || undefined,
-          attendance_count: 0,
-          leads_generated: 0
-        });
+        if (isAdminMode) {
+          await addEventAsAdmin(eventData, selectedAgentId);
+        } else {
+          await addEvent(eventData);
+        }
 
         toast({
           title: "Event created",
@@ -156,6 +189,30 @@ export const EventForm = ({ event, onClose }: EventFormProps) => {
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
+          {isAdminMode && (
+            <div className="space-y-2">
+              <Label htmlFor="agent">Agent *</Label>
+              <Select value={selectedAgentId} onValueChange={(value) => {
+                setSelectedAgentId(value);
+                loadAgentBranding(value);
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  {agents.map(agent => (
+                    <SelectItem key={agent.user_id} value={agent.user_id}>
+                      {getAgentDisplayName(agent)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Select the agent this event belongs to
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="title">Event Title *</Label>

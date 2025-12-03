@@ -327,6 +327,10 @@ const AdminEventsManagement = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button onClick={() => setEditingEvent(null)} variant="default">
+              <Calendar className="h-4 w-4 mr-2" />
+              Create Event
+            </Button>
             <Button onClick={exportEvents} variant="outline">
               <Download className="h-4 w-4 mr-2" />
               Export CSV
@@ -592,14 +596,16 @@ const AdminEventsManagement = () => {
           </CardContent>
         </Card>
 
-        {/* Edit Event Dialog */}
-        {editingEvent && (
+        {/* Create/Edit Event Dialog */}
+        {(editingEvent !== null) && (
           <EventForm
-            event={editingEvent as any}
+            event={editingEvent || undefined}
             onClose={() => {
               setEditingEvent(null);
               fetchEvents();
             }}
+            isAdminMode={true}
+            adminAgentId={editingEvent?.agent_id}
           />
         )}
 

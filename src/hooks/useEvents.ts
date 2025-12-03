@@ -262,6 +262,140 @@ export const useEvents = () => {
     }
   };
 
+  // Admin functions - bypass agent_id checks
+  const addEventAsAdmin = async (eventData: Omit<Event, 'id' | 'agent_id'> & { is_published?: boolean; max_capacity?: number; header_image_url?: string; brand_color?: string }, agentId: string) => {
+    if (!user) return;
+
+    try {
+      // Fetch agent branding from profiles to auto-populate event branding
+      let agentBranding = {
+        primary_color: eventData.brand_color || undefined,
+        logo_url: undefined as string | undefined,
+        header_image_url: eventData.header_image_url || undefined,
+      };
+
+      try {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('primary_color, logo_colored_url, headshot_url')
+          .eq('user_id', agentId)
+          .single();
+
+        if (profileData) {
+          // Use agent branding if not explicitly provided
+          if (!eventData.brand_color && profileData.primary_color) {
+            agentBranding.primary_color = profileData.primary_color;
+          }
+          // Use agent logo as event logo if not provided
+          if (!eventData.header_image_url && profileData.logo_colored_url) {
+            agentBranding.logo_url = profileData.logo_colored_url;
+          }
+        }
+      } catch (error) {
+        console.warn('Could not fetch agent branding, using provided values:', error);
+      }
+
+      // Generate public slug if event is being published
+      let publicSlug: string | undefined = undefined;
+      if (eventData.is_published && eventData.title) {
+        const { data: slugData, error: slugError } = await supabase
+          .rpc('generate_event_slug', { title: eventData.title });
+        
+        if (!slugError && slugData) {
+          publicSlug = slugData;
+        }
+      }
+
+      const { data, error } = await supabase
+        .from('events')
+        .insert([{ 
+          ...eventData, 
+          agent_id: agentId,
+          public_slug: publicSlug,
+          current_rsvp_count: 0,
+          brand_color: agentBranding.primary_color,
+          logo_url: agentBranding.logo_url,
+          header_image_url: agentBranding.header_image_url || eventData.header_image_url,
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Auto-generate tasks from template with calculated due dates
+      if (data) {
+        const eventDate = new Date(data.event_date);
+        const tasksToInsert = EVENT_TASK_TEMPLATES.map(template => ({
+          event_id: data.id,
+          task_name: template.task_name,
+          responsible_person: template.responsible_person,
+          due_date: new Date(eventDate.getTime() - (template.days_before * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
+          status: 'pending' as const,
+          agent_id: agentId
+        }));
+
+        const { error: tasksError } = await supabase
+          .from('event_tasks')
+          .insert(tasksToInsert);
+
+        if (tasksError) {
+          console.error('Error creating tasks:', tasksError);
+          throw new Error(`Event created but failed to create tasks: ${tasksError.message}`);
+        }
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error adding event as admin:', error);
+      throw error;
+    }
+  };
+
+  const updateEventAsAdmin = async (id: string, updates: Partial<Event>, agentId: string) => {
+    if (!user) return;
+
+    try {
+      // Generate new slug if title changed and event is published
+      if (updates.title && updates.is_published) {
+        const { data: slugData, error: slugError } = await supabase
+          .rpc('generate_event_slug', { title: updates.title });
+        
+        if (!slugError && slugData) {
+          updates.public_slug = slugData;
+        }
+      }
+
+      const { data, error } = await supabase
+        .from('events')
+        .update({ ...updates, agent_id: agentId })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error updating event as admin:', error);
+      throw error;
+    }
+  };
+
+  const deleteEventAsAdmin = async (id: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting event as admin:', error);
+      throw error;
+    }
+  };
+
   const addTask = async (taskData: Omit<EventTask, 'id' | 'agent_id' | 'created_at' | 'updated_at'>) => {
     if (!user) return;
 
@@ -374,6 +508,9 @@ export const useEvents = () => {
     addEvent,
     updateEvent,
     deleteEvent,
+    addEventAsAdmin,
+    updateEventAsAdmin,
+    deleteEventAsAdmin,
     addTask,
     updateTask,
     markTaskComplete,
