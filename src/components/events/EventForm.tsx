@@ -37,10 +37,10 @@ export const EventForm = ({ event, onClose }: EventFormProps) => {
 
   // Load agent branding when form opens (for new events)
   useEffect(() => {
-    if (!isEditing && user && !event) {
+    if (!isEditing && user) {
       loadAgentBranding();
     }
-  }, [isEditing, user, event]);
+  }, [isEditing, user]);
 
   const loadAgentBranding = async () => {
     if (!user) return;

@@ -167,6 +167,7 @@ export const RSVPManagement = ({ eventId, publicSlug }: RSVPManagementProps) => 
             confirmed={stats.confirmed}
             waitlist={stats.waitlist}
             checkedIn={stats.checked_in}
+            maxCapacity={undefined}
           />
         )}
 

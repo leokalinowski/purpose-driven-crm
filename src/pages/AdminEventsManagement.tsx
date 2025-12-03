@@ -33,7 +33,7 @@ import {
   FileText,
   BarChart3
 } from 'lucide-react';
-import { format, isAfter, isBefore, startOfToday } from 'date-fns';
+import { format, startOfToday } from 'date-fns';
 import { EventForm } from '@/components/events/EventForm';
 import { RSVPManagement } from '@/components/events/RSVPManagement';
 
@@ -147,25 +147,35 @@ const AdminEventsManagement = () => {
   const fetchEvents = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      // Fetch events and profiles separately to avoid relationship query issues
+      const { data: eventsData, error: eventsError } = await supabase
         .from('events')
-        .select(`
-          *,
-          profiles:agent_id (
-            first_name,
-            last_name,
-            email,
-            team_name,
-            brokerage
-          )
-        `)
+        .select('*')
         .order('event_date', { ascending: false });
 
-      if (error) throw error;
+      if (eventsError) throw eventsError;
 
-      const eventsWithAgents = (data || []).map(event => ({
+      // Fetch profiles for all unique agent_ids
+      const agentIds = [...new Set((eventsData || []).map(e => e.agent_id).filter(Boolean))];
+      let profilesMap: Record<string, any> = {};
+
+      if (agentIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('user_id, first_name, last_name, email, team_name, brokerage')
+          .in('user_id', agentIds);
+
+        if (profilesData) {
+          profilesMap = profilesData.reduce((acc, p) => {
+            acc[p.user_id] = p;
+            return acc;
+          }, {} as Record<string, any>);
+        }
+      }
+
+      const eventsWithAgents = (eventsData || []).map(event => ({
         ...event,
-        profiles: Array.isArray(event.profiles) ? event.profiles[0] : event.profiles,
+        profiles: profilesMap[event.agent_id] || null,
       })) as EventWithAgent[];
 
       setEvents(eventsWithAgents);
@@ -603,7 +613,10 @@ const AdminEventsManagement = () => {
                   View and manage RSVPs for this event
                 </DialogDescription>
               </DialogHeader>
-              <RSVPManagement eventId={viewingRSVPs} />
+              <RSVPManagement 
+                eventId={viewingRSVPs} 
+                publicSlug={events.find(e => e.id === viewingRSVPs)?.public_slug}
+              />
             </DialogContent>
           </Dialog>
         )}
