@@ -99,7 +99,6 @@ serve(async (req) => {
     const officeAddress = agent?.office_address || '';
     const website = agent?.website || '';
     const stateLicenses = agent?.state_licenses?.length ? agent.state_licenses.join(' and ') : '';
-    const officeNumber = agent?.office_number || '';
     
     // Helper function to adjust color brightness
     function adjustBrightness(color: string, percent: number): string {
