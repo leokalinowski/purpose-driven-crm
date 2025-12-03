@@ -1,33 +1,50 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { useEvents } from '@/hooks/useEvents';
+import { useEvents, Event } from '@/hooks/useEvents';
 import { useToast } from '@/hooks/use-toast';
 
 interface EventFormProps {
+  event?: Event;
   onClose: () => void;
 }
 
-export const EventForm = ({ onClose }: EventFormProps) => {
-  const [title, setTitle] = useState('');
-  const [eventDate, setEventDate] = useState('');
-  const [location, setLocation] = useState('');
-  const [description, setDescription] = useState('');
-  const [theme, setTheme] = useState('');
-  const [invitedCount, setInvitedCount] = useState<number>(0);
-  const [maxCapacity, setMaxCapacity] = useState<number | undefined>(undefined);
-  const [isPublished, setIsPublished] = useState(false);
-  const [headerImageUrl, setHeaderImageUrl] = useState('');
-  const [brandColor, setBrandColor] = useState('');
+export const EventForm = ({ event, onClose }: EventFormProps) => {
+  const isEditing = !!event;
+  const [title, setTitle] = useState(event?.title || '');
+  const [eventDate, setEventDate] = useState(event?.event_date ? new Date(event.event_date).toISOString().split('T')[0] : '');
+  const [location, setLocation] = useState(event?.location || '');
+  const [description, setDescription] = useState(event?.description || '');
+  const [theme, setTheme] = useState(event?.theme || '');
+  const [invitedCount, setInvitedCount] = useState<number>(event?.invited_count || 0);
+  const [maxCapacity, setMaxCapacity] = useState<number | undefined>(event?.max_capacity);
+  const [isPublished, setIsPublished] = useState(event?.is_published || false);
+  const [headerImageUrl, setHeaderImageUrl] = useState(event?.header_image_url || '');
+  const [brandColor, setBrandColor] = useState(event?.brand_color || '#2563eb');
   
   const [loading, setLoading] = useState(false);
   
-  const { addEvent } = useEvents();
+  const { addEvent, updateEvent } = useEvents();
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (event) {
+      setTitle(event.title || '');
+      setEventDate(event.event_date ? new Date(event.event_date).toISOString().split('T')[0] : '');
+      setLocation(event.location || '');
+      setDescription(event.description || '');
+      setTheme(event.theme || '');
+      setInvitedCount(event.invited_count || 0);
+      setMaxCapacity(event.max_capacity);
+      setIsPublished(event.is_published || false);
+      setHeaderImageUrl(event.header_image_url || '');
+      setBrandColor(event.brand_color || '#2563eb');
+    }
+  }, [event]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,31 +59,51 @@ export const EventForm = ({ onClose }: EventFormProps) => {
 
     setLoading(true);
     try {
-      await addEvent({
-        title: title.trim(),
-        event_date: eventDate,
-        location: location.trim() || undefined,
-        description: description.trim() || undefined,
-        theme: theme.trim() || undefined,
-        invited_count: invitedCount || 0,
-        max_capacity: maxCapacity || undefined,
-        is_published: isPublished,
-        header_image_url: headerImageUrl.trim() || undefined,
-        brand_color: brandColor.trim() || undefined,
-        attendance_count: 0,
-        leads_generated: 0
-      });
+      if (isEditing && event) {
+        await updateEvent(event.id, {
+          title: title.trim(),
+          event_date: eventDate,
+          location: location.trim() || undefined,
+          description: description.trim() || undefined,
+          theme: theme.trim() || undefined,
+          invited_count: invitedCount || 0,
+          max_capacity: maxCapacity || undefined,
+          is_published: isPublished,
+          header_image_url: headerImageUrl.trim() || undefined,
+          brand_color: brandColor.trim() || undefined,
+        });
 
-      toast({
-        title: "Event created",
-        description: "Event and preparation tasks have been created successfully.",
-      });
+        toast({
+          title: "Event updated",
+          description: "Event has been updated successfully.",
+        });
+      } else {
+        await addEvent({
+          title: title.trim(),
+          event_date: eventDate,
+          location: location.trim() || undefined,
+          description: description.trim() || undefined,
+          theme: theme.trim() || undefined,
+          invited_count: invitedCount || 0,
+          max_capacity: maxCapacity || undefined,
+          is_published: isPublished,
+          header_image_url: headerImageUrl.trim() || undefined,
+          brand_color: brandColor.trim() || undefined,
+          attendance_count: 0,
+          leads_generated: 0
+        });
+
+        toast({
+          title: "Event created",
+          description: "Event and preparation tasks have been created successfully.",
+        });
+      }
       
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to create event. Please try again.",
+        description: error.message || `Failed to ${isEditing ? 'update' : 'create'} event. Please try again.`,
         variant: "destructive",
       });
     } finally {
@@ -78,7 +115,7 @@ export const EventForm = ({ onClose }: EventFormProps) => {
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Event</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Event' : 'Create New Event'}</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -222,7 +259,7 @@ export const EventForm = ({ onClose }: EventFormProps) => {
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Creating...' : 'Create Event & Tasks'}
+              {loading ? (isEditing ? 'Updating...' : 'Creating...') : (isEditing ? 'Update Event' : 'Create Event & Tasks')}
             </Button>
           </div>
         </form>

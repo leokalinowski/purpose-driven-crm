@@ -186,6 +186,16 @@ export const useEvents = () => {
     if (!user) return;
 
     try {
+      // Generate new slug if title changed and event is published
+      if (updates.title && updates.is_published) {
+        const { data: slugData, error: slugError } = await supabase
+          .rpc('generate_event_slug', { title: updates.title });
+        
+        if (!slugError && slugData) {
+          updates.public_slug = slugData;
+        }
+      }
+
       const { data, error } = await supabase
         .from('events')
         .update(updates)
@@ -199,6 +209,24 @@ export const useEvents = () => {
       return data;
     } catch (error) {
       console.error('Error updating event:', error);
+      throw error;
+    }
+  };
+
+  const deleteEvent = async (id: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', id)
+        .eq('agent_id', user.id);
+
+      if (error) throw error;
+      setEvents(prev => prev.filter(event => event.id !== id));
+    } catch (error) {
+      console.error('Error deleting event:', error);
       throw error;
     }
   };
@@ -314,6 +342,7 @@ export const useEvents = () => {
     loading,
     addEvent,
     updateEvent,
+    deleteEvent,
     addTask,
     updateTask,
     markTaskComplete,

@@ -128,25 +128,35 @@ export const useRSVP = () => {
         throw rsvpError;
       }
 
-      // Trigger email confirmation
-      try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        if (supabaseUrl) {
-          await fetch(`${supabaseUrl}/functions/v1/rsvp-confirmation-email`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || ''}`,
-            },
-            body: JSON.stringify({
-              rsvp_id: rsvp.id,
-              event_id: eventId,
-            }),
-          });
-        }
-      } catch (emailError) {
-        console.error('Failed to send confirmation email:', emailError);
-        // Don't fail the RSVP if email fails
+      // Trigger email confirmation (fire and forget - don't block RSVP)
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (supabaseUrl && anonKey) {
+        // Use fetch without await to not block the RSVP
+        fetch(`${supabaseUrl}/functions/v1/rsvp-confirmation-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${anonKey}`,
+          },
+          body: JSON.stringify({
+            rsvp_id: rsvp.id,
+            event_id: eventId,
+          }),
+        }).then(response => {
+          if (!response.ok) {
+            console.error('Email function returned error:', response.status, response.statusText);
+          }
+          return response.json();
+        }).then(data => {
+          console.log('Email confirmation sent:', data);
+        }).catch((emailError) => {
+          console.error('Failed to send confirmation email:', emailError);
+          // Don't fail the RSVP if email fails
+        });
+      } else {
+        console.warn('Missing Supabase URL or Anon Key - email confirmation skipped');
       }
 
       return rsvp as RSVP;

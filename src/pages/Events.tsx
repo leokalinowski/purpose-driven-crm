@@ -9,13 +9,14 @@ import { EventForm } from '@/components/events/EventForm';
 import { RSVPManagement } from '@/components/events/RSVPManagement';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Calendar, ExternalLink } from 'lucide-react';
+import { Plus, Calendar, ExternalLink, Edit, Trash2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 
 const Events = () => {
   const [showEventForm, setShowEventForm] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<any>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -23,7 +24,9 @@ const Events = () => {
     events, 
     loading, 
     getPreviousQuarterEvent, 
-    getNextEvent 
+    getNextEvent,
+    updateEvent,
+    deleteEvent
   } = useEvents();
 
   useEffect(() => {
@@ -90,58 +93,6 @@ const Events = () => {
           </Button>
         </div>
 
-        {/* Events Overview */}
-        <Accordion type="single" collapsible className="space-y-4">
-          <AccordionItem value="previous">
-            <AccordionTrigger>Previous Quarter Event</AccordionTrigger>
-            <AccordionContent>
-              {previousEvent ? (
-                <EventCard event={previousEvent} type="previous" />
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <Calendar className="h-5 w-5" />
-                      <span>Previous Quarter Event</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground">
-                      No events found from the previous quarter.
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-            </AccordionContent>
-          </AccordionItem>
-
-          <AccordionItem value="next">
-            <AccordionTrigger>Next Quarter Event</AccordionTrigger>
-            <AccordionContent>
-              {nextEvent ? (
-                <EventCard event={nextEvent} type="next" />
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <Calendar className="h-5 w-5" />
-                      <span>Next Event</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground">
-                      No upcoming events scheduled.
-                    </p>
-                    <Button className="mt-4" onClick={() => setShowEventForm(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Schedule Event
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
 
         {/* RSVP Management - Show for selected or next event */}
         {(selectedEventId || nextEvent?.id) && (
@@ -166,8 +117,7 @@ const Events = () => {
                   {events.map((event) => (
                     <div 
                       key={event.id} 
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 cursor-pointer"
-                      onClick={() => setSelectedEventId(event.id === selectedEventId ? null : event.id)}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"
                     >
                       <div className="flex-1">
                         <h4 className="font-medium">{event.title}</h4>
@@ -204,12 +154,51 @@ const Events = () => {
                           </p>
                         )}
                       </div>
-                      <div className="text-right">
-                        {new Date(event.event_date) < new Date() ? (
-                          <span className="text-sm text-green-600">Completed</span>
-                        ) : (
-                          <span className="text-sm text-blue-600">Upcoming</span>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <div className="text-right mr-4">
+                          {new Date(event.event_date) < new Date() ? (
+                            <span className="text-sm text-green-600">Completed</span>
+                          ) : (
+                            <span className="text-sm text-blue-600">Upcoming</span>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingEvent(event);
+                            setShowEventForm(true);
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (confirm(`Are you sure you want to delete "${event.title}"? This action cannot be undone.`)) {
+                              try {
+                                await deleteEvent(event.id);
+                              } catch (error: any) {
+                                alert('Failed to delete event: ' + error.message);
+                              }
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedEventId(event.id === selectedEventId ? null : event.id);
+                          }}
+                        >
+                          {selectedEventId === event.id ? 'Hide RSVPs' : 'View RSVPs'}
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -238,7 +227,13 @@ const Events = () => {
 
         {/* Event Form Modal */}
         {showEventForm && (
-          <EventForm onClose={() => setShowEventForm(false)} />
+          <EventForm 
+            event={editingEvent || undefined}
+            onClose={() => {
+              setShowEventForm(false);
+              setEditingEvent(null);
+            }} 
+          />
         )}
       </div>
     </Layout>
