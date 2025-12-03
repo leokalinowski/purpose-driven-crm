@@ -14,7 +14,7 @@ import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useAgents, Agent } from '@/hooks/useAgents';
-import { Copy, Mail, Plus, Users, Clock, CheckCircle, XCircle, Trash2, Edit, Shield, ShieldCheck } from 'lucide-react';
+import { Copy, Mail, Plus, Users, Clock, CheckCircle, XCircle, Trash2, Edit, Shield, ShieldCheck, Upload, X } from 'lucide-react';
 import { format, isAfter } from 'date-fns';
 
 interface Invitation {
@@ -52,6 +52,13 @@ const AdminTeamManagement = () => {
   const [editHeadshotUrl, setEditHeadshotUrl] = useState('');
   const [editLogoColoredUrl, setEditLogoColoredUrl] = useState('');
   const [editLogoWhiteUrl, setEditLogoWhiteUrl] = useState('');
+  // File upload states
+  const [uploadingHeadshot, setUploadingHeadshot] = useState(false);
+  const [uploadingLogoColored, setUploadingLogoColored] = useState(false);
+  const [uploadingLogoWhite, setUploadingLogoWhite] = useState(false);
+  const [headshotFile, setHeadshotFile] = useState<File | null>(null);
+  const [logoColoredFile, setLogoColoredFile] = useState<File | null>(null);
+  const [logoWhiteFile, setLogoWhiteFile] = useState<File | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -245,6 +252,32 @@ const AdminTeamManagement = () => {
     }
   };
 
+  // File upload helper function
+  const uploadFile = async (file: File, path: string, agentUserId: string): Promise<string> => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${path}-${Date.now()}.${fileExt}`;
+    const filePath = `${agentUserId}/${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('agent-assets')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) {
+      console.error('Upload error:', error);
+      throw error;
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('agent-assets')
+      .getPublicUrl(filePath);
+
+    return urlData.publicUrl;
+  };
+
   // Agent management functions
   const handleEditAgent = async (agent: Agent) => {
     setEditingAgent(agent);
@@ -253,7 +286,12 @@ const AdminTeamManagement = () => {
     setEditEmail(agent.email || '');
     setEditRole(agent.role as 'agent' | 'admin');
 
-    // Fetch profile data from profiles table (not auth.users.raw_user_meta_data)
+    // Reset file upload states
+    setHeadshotFile(null);
+    setLogoColoredFile(null);
+    setLogoWhiteFile(null);
+
+    // Fetch profile data from profiles table
     try {
       const { data: profileData, error } = await supabase
         .from('profiles')
@@ -261,7 +299,10 @@ const AdminTeamManagement = () => {
         .eq('user_id', agent.user_id)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Profile fetch error:', error);
+        throw error;
+      }
 
       if (profileData) {
         setEditTeamName(profileData.team_name || '');
@@ -277,9 +318,29 @@ const AdminTeamManagement = () => {
         setEditHeadshotUrl(profileData.headshot_url || '');
         setEditLogoColoredUrl(profileData.logo_colored_url || '');
         setEditLogoWhiteUrl(profileData.logo_white_url || '');
+      } else {
+        console.warn('No profile data returned for user_id:', agent.user_id);
+        // Set defaults
+        setEditTeamName('');
+        setEditBrokerage('');
+        setEditPhoneNumber('');
+        setEditOfficeAddress('');
+        setEditOfficeNumber('');
+        setEditWebsite('');
+        setEditStateLicenses([]);
+        setEditPrimaryColor('#667eea');
+        setEditSecondaryColor('#764ba2');
+        setEditHeadshotUrl('');
+        setEditLogoColoredUrl('');
+        setEditLogoWhiteUrl('');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching profile data:', error);
+      toast({
+        title: 'Warning',
+        description: `Could not load all profile data: ${error.message}. Some fields may be empty.`,
+        variant: 'default',
+      });
       // Set defaults if we can't fetch profile data
       setEditTeamName('');
       setEditBrokerage('');
@@ -303,6 +364,68 @@ const AdminTeamManagement = () => {
 
     setEditLoading(true);
     try {
+      // Upload files if selected
+      let finalHeadshotUrl = editHeadshotUrl;
+      let finalLogoColoredUrl = editLogoColoredUrl;
+      let finalLogoWhiteUrl = editLogoWhiteUrl;
+
+      if (headshotFile) {
+        try {
+          setUploadingHeadshot(true);
+          finalHeadshotUrl = await uploadFile(headshotFile, 'headshot', editingAgent.user_id);
+          setEditHeadshotUrl(finalHeadshotUrl);
+        } catch (error: any) {
+          toast({
+            title: 'Upload Error',
+            description: `Failed to upload headshot: ${error.message}`,
+            variant: 'destructive',
+          });
+          setUploadingHeadshot(false);
+          setEditLoading(false);
+          return;
+        } finally {
+          setUploadingHeadshot(false);
+        }
+      }
+
+      if (logoColoredFile) {
+        try {
+          setUploadingLogoColored(true);
+          finalLogoColoredUrl = await uploadFile(logoColoredFile, 'logo-colored', editingAgent.user_id);
+          setEditLogoColoredUrl(finalLogoColoredUrl);
+        } catch (error: any) {
+          toast({
+            title: 'Upload Error',
+            description: `Failed to upload colored logo: ${error.message}`,
+            variant: 'destructive',
+          });
+          setUploadingLogoColored(false);
+          setEditLoading(false);
+          return;
+        } finally {
+          setUploadingLogoColored(false);
+        }
+      }
+
+      if (logoWhiteFile) {
+        try {
+          setUploadingLogoWhite(true);
+          finalLogoWhiteUrl = await uploadFile(logoWhiteFile, 'logo-white', editingAgent.user_id);
+          setEditLogoWhiteUrl(finalLogoWhiteUrl);
+        } catch (error: any) {
+          toast({
+            title: 'Upload Error',
+            description: `Failed to upload white logo: ${error.message}`,
+            variant: 'destructive',
+          });
+          setUploadingLogoWhite(false);
+          setEditLoading(false);
+          return;
+        } finally {
+          setUploadingLogoWhite(false);
+        }
+      }
+
       // Update profile with all fields including branding
       const { error: profileError } = await supabase
         .from('profiles')
@@ -319,13 +442,16 @@ const AdminTeamManagement = () => {
           state_licenses: editStateLicenses.length > 0 ? editStateLicenses : null,
           primary_color: editPrimaryColor.trim() || null,
           secondary_color: editSecondaryColor.trim() || null,
-          headshot_url: editHeadshotUrl.trim() || null,
-          logo_colored_url: editLogoColoredUrl.trim() || null,
-          logo_white_url: editLogoWhiteUrl.trim() || null,
+          headshot_url: finalHeadshotUrl.trim() || null,
+          logo_colored_url: finalLogoColoredUrl.trim() || null,
+          logo_white_url: finalLogoWhiteUrl.trim() || null,
         })
         .eq('user_id', editingAgent.user_id);
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('Profile update error:', profileError);
+        throw profileError;
+      }
 
       // Update role if changed
       if (editRole !== editingAgent.role) {
@@ -350,6 +476,11 @@ const AdminTeamManagement = () => {
         title: 'Success',
         description: 'Agent information and branding updated successfully',
       });
+
+      // Reset file states
+      setHeadshotFile(null);
+      setLogoColoredFile(null);
+      setLogoWhiteFile(null);
 
       setEditDialogOpen(false);
       setEditingAgent(null);
@@ -963,50 +1094,185 @@ const AdminTeamManagement = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Headshot URL</label>
-                  <Input
-                    value={editHeadshotUrl}
-                    onChange={(e) => setEditHeadshotUrl(e.target.value)}
-                    placeholder="https://example.com/headshot.jpg"
-                    type="url"
-                  />
-                  {editHeadshotUrl && (
-                    <div className="mt-2">
-                      <img src={editHeadshotUrl} alt="Headshot preview" className="h-20 w-20 rounded-full object-cover border-2 border-muted" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                  <label className="text-sm font-medium">Headshot</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setHeadshotFile(file);
+                          // Create preview URL
+                          const previewUrl = URL.createObjectURL(file);
+                          setEditHeadshotUrl(previewUrl);
+                        }
+                      }}
+                      className="flex-1"
+                      disabled={uploadingHeadshot}
+                    />
+                    {editHeadshotUrl && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setHeadshotFile(null);
+                          setEditHeadshotUrl('');
+                        }}
+                        disabled={uploadingHeadshot}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  {(editHeadshotUrl || uploadingHeadshot) && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <img 
+                        src={editHeadshotUrl} 
+                        alt="Headshot preview" 
+                        className="h-20 w-20 rounded-full object-cover border-2 border-muted" 
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                      />
+                      {uploadingHeadshot && (
+                        <span className="text-sm text-muted-foreground">Uploading...</span>
+                      )}
                     </div>
                   )}
+                  <p className="text-xs text-muted-foreground">
+                    Upload an image file or enter a URL below
+                  </p>
+                  <Input
+                    value={headshotFile ? '' : editHeadshotUrl}
+                    onChange={(e) => {
+                      if (!headshotFile) {
+                        setEditHeadshotUrl(e.target.value);
+                      }
+                    }}
+                    placeholder="Or enter URL: https://example.com/headshot.jpg"
+                    type="url"
+                    disabled={!!headshotFile}
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Logo (Colored) URL</label>
-                    <Input
-                      value={editLogoColoredUrl}
-                      onChange={(e) => setEditLogoColoredUrl(e.target.value)}
-                      placeholder="https://example.com/logo-colored.png"
-                      type="url"
-                    />
-                    {editLogoColoredUrl && (
-                      <div className="mt-2">
-                        <img src={editLogoColoredUrl} alt="Colored logo preview" className="h-16 object-contain border rounded p-2 bg-white" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    <label className="text-sm font-medium">Logo (Colored)</label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setLogoColoredFile(file);
+                            const previewUrl = URL.createObjectURL(file);
+                            setEditLogoColoredUrl(previewUrl);
+                          }
+                        }}
+                        className="flex-1"
+                        disabled={uploadingLogoColored}
+                      />
+                      {editLogoColoredUrl && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setLogoColoredFile(null);
+                            setEditLogoColoredUrl('');
+                          }}
+                          disabled={uploadingLogoColored}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    {(editLogoColoredUrl || uploadingLogoColored) && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <img 
+                          src={editLogoColoredUrl} 
+                          alt="Colored logo preview" 
+                          className="h-16 object-contain border rounded p-2 bg-white" 
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                        />
+                        {uploadingLogoColored && (
+                          <span className="text-sm text-muted-foreground">Uploading...</span>
+                        )}
                       </div>
                     )}
+                    <Input
+                      value={logoColoredFile ? '' : editLogoColoredUrl}
+                      onChange={(e) => {
+                        if (!logoColoredFile) {
+                          setEditLogoColoredUrl(e.target.value);
+                        }
+                      }}
+                      placeholder="Or enter URL"
+                      type="url"
+                      disabled={!!logoColoredFile}
+                      className="text-xs"
+                    />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Logo (White) URL</label>
-                    <Input
-                      value={editLogoWhiteUrl}
-                      onChange={(e) => setEditLogoWhiteUrl(e.target.value)}
-                      placeholder="https://example.com/logo-white.png"
-                      type="url"
-                    />
-                    {editLogoWhiteUrl && (
-                      <div className="mt-2">
+                    <label className="text-sm font-medium">Logo (White)</label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setLogoWhiteFile(file);
+                            const previewUrl = URL.createObjectURL(file);
+                            setEditLogoWhiteUrl(previewUrl);
+                          }
+                        }}
+                        className="flex-1"
+                        disabled={uploadingLogoWhite}
+                      />
+                      {editLogoWhiteUrl && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setLogoWhiteFile(null);
+                            setEditLogoWhiteUrl('');
+                          }}
+                          disabled={uploadingLogoWhite}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    {(editLogoWhiteUrl || uploadingLogoWhite) && (
+                      <div className="mt-2 flex items-center gap-2">
                         <div className="h-16 bg-gray-800 rounded p-2 flex items-center justify-center">
-                          <img src={editLogoWhiteUrl} alt="White logo preview" className="h-full object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                          <img 
+                            src={editLogoWhiteUrl} 
+                            alt="White logo preview" 
+                            className="h-full object-contain" 
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                          />
                         </div>
+                        {uploadingLogoWhite && (
+                          <span className="text-sm text-muted-foreground">Uploading...</span>
+                        )}
                       </div>
                     )}
+                    <Input
+                      value={logoWhiteFile ? '' : editLogoWhiteUrl}
+                      onChange={(e) => {
+                        if (!logoWhiteFile) {
+                          setEditLogoWhiteUrl(e.target.value);
+                        }
+                      }}
+                      placeholder="Or enter URL"
+                      type="url"
+                      disabled={!!logoWhiteFile}
+                      className="text-xs"
+                    />
                   </div>
                 </div>
               </div>
