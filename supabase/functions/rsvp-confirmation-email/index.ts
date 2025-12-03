@@ -1,7 +1,6 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { Resend } from "npm:resend@2.0.0";
-import { format } from "https://esm.sh/date-fns@2.30.0";
+import { Resend } from 'https://esm.sh/resend@4.0.0';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -67,21 +66,10 @@ serve(async (req) => {
       throw new Error(`RSVP not found: ${rsvpError?.message}`);
     }
 
-    // Fetch event details with agent profile
+    // Fetch event details
     const { data: event, error: eventError } = await supabase
       .from('events')
-      .select(`
-        *,
-        profiles:agent_id (
-          first_name,
-          last_name,
-          email,
-          team_name,
-          brokerage,
-          phone_number,
-          office_address
-        )
-      `)
+      .select('*')
       .eq('id', event_id)
       .single();
 
@@ -89,7 +77,17 @@ serve(async (req) => {
       throw new Error(`Event not found: ${eventError?.message}`);
     }
 
-    const agent = event.profiles as any;
+    // Fetch agent profile separately
+    let agent = null;
+    if (event.agent_id) {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('first_name, last_name, email, team_name, brokerage, phone_number, office_address')
+        .eq('user_id', event.agent_id)
+        .single();
+      
+      agent = profileData;
+    }
     const agentName = agent
       ? `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || 'Your Real Estate Agent'
       : 'Your Real Estate Agent';
@@ -100,8 +98,18 @@ serve(async (req) => {
     const officeAddress = agent?.office_address || '';
 
     const eventDate = new Date(event.event_date);
-    const formattedDate = format(eventDate, 'EEEE, MMMM d, yyyy');
-    const formattedTime = format(eventDate, 'h:mm a');
+    // Format date manually to avoid date-fns dependency issues
+    const formattedDate = eventDate.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    const formattedTime = eventDate.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
 
     const isWaitlist = rsvp.status === 'waitlist';
 

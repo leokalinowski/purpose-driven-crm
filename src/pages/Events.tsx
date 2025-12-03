@@ -21,7 +21,6 @@ const Events = () => {
   const navigate = useNavigate();
   const { 
     events, 
-    tasks, 
     loading, 
     getPreviousQuarterEvent, 
     getNextEvent 
@@ -153,14 +152,6 @@ const Events = () => {
             />
           </div>
         )}
-
-        {/* Task Management - Now shows all events with selector */}
-        <div className="mb-8">
-          <TaskManagement 
-            eventId={nextEvent?.id} 
-            tasks={tasks} 
-          />
-        </div>
 
         {/* All Events Timeline */}
         {events.length > 0 && (

@@ -183,27 +183,34 @@ export const useRSVP = () => {
   // Get event by public slug (public, no auth required)
   const getEventBySlug = async (slug: string) => {
     try {
-      const { data, error } = await supabase
+      // First fetch the event
+      const { data: event, error: eventError } = await supabase
         .from('events')
-        .select(`
-          *,
-          profiles:agent_id (
-            first_name,
-            last_name,
-            team_name,
-            brokerage,
-            phone_number
-          )
-        `)
+        .select('*')
         .eq('public_slug', slug)
         .eq('is_published', true)
         .single();
 
-      if (error) {
-        throw error;
+      if (eventError || !event) {
+        throw eventError || new Error('Event not found');
       }
 
-      return data;
+      // Then fetch the agent profile separately if agent_id exists
+      let profile = null;
+      if (event.agent_id) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('first_name, last_name, team_name, brokerage, phone_number, office_address')
+          .eq('user_id', event.agent_id)
+          .single();
+        
+        profile = profileData;
+      }
+
+      return {
+        ...event,
+        profiles: profile
+      };
     } catch (err) {
       console.error('Error fetching event by slug:', err);
       throw err;

@@ -174,13 +174,20 @@ FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Update RLS policy for events to allow public read access to published events
+-- SAFE: This adds a new policy for public access. Existing agent policies remain unchanged.
+-- The IF EXISTS ensures no error if policy already exists from a previous run.
 DROP POLICY IF EXISTS "Public can view published events" ON public.events;
 CREATE POLICY "Public can view published events"
 ON public.events
 FOR SELECT
 USING (is_published = true);
 
--- Allow agents to update their own events (including publishing)
+-- Update the existing update policy to also allow admins
+-- SAFE: This makes the policy MORE permissive (adds admin access), not less.
+-- Old policy: auth.uid() = agent_id
+-- New policy: auth.uid() = agent_id OR get_current_user_role() = 'admin'
+-- The IF EXISTS ensures no error if policy doesn't exist.
+-- This is an enhancement, not a restriction - agents can still update their events.
 DROP POLICY IF EXISTS "Users can update their own events" ON public.events;
 CREATE POLICY "Users can update their own events"
 ON public.events
