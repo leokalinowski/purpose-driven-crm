@@ -258,22 +258,29 @@ const AdminTeamManagement = () => {
     const fileName = `${path}-${Date.now()}.${fileExt}`;
     const filePath = `${agentUserId}/${fileName}`;
 
+    // Delete old file if exists (optional - for cleanup)
+    // We'll just upload new one with timestamp
+
     const { data, error } = await supabase.storage
       .from('agent-assets')
       .upload(filePath, file, {
         cacheControl: '3600',
-        upsert: false
+        upsert: true // Allow overwriting
       });
 
     if (error) {
       console.error('Upload error:', error);
-      throw error;
+      throw new Error(`Failed to upload ${path}: ${error.message}`);
     }
 
     // Get public URL
     const { data: urlData } = supabase.storage
       .from('agent-assets')
       .getPublicUrl(filePath);
+
+    if (!urlData?.publicUrl) {
+      throw new Error('Failed to get public URL for uploaded file');
+    }
 
     return urlData.publicUrl;
   };

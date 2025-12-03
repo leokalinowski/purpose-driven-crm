@@ -11,7 +11,10 @@ FOR INSERT
 WITH CHECK (
   bucket_id = 'agent-assets' AND
   auth.role() = 'authenticated' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+  (
+    (storage.foldername(name))[1] = auth.uid()::text OR
+    get_current_user_role() = 'admin'
+  )
 );
 
 -- Allow authenticated users to read their own files
@@ -20,8 +23,11 @@ ON storage.objects
 FOR SELECT
 USING (
   bucket_id = 'agent-assets' AND
-  auth.role() = 'authenticated' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+  (
+    auth.role() = 'authenticated' AND
+    (storage.foldername(name))[1] = auth.uid()::text OR
+    get_current_user_role() = 'admin'
+  )
 );
 
 -- Allow admins to manage all agent assets
