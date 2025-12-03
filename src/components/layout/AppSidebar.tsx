@@ -127,7 +127,7 @@ export function AppSidebar() {
                     isActive={location.pathname === '/admin/events'}
                   >
                     <Link to="/admin/events">
-                      <CalendarIcon />
+                      <Calendar />
                       <span>Events Management</span>
                     </Link>
                   </SidebarMenuButton>
