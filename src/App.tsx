@@ -20,6 +20,7 @@ import Coaching from "./pages/Coaching";
 import Transactions from "./pages/Transactions";
 import Pipeline from "./pages/Pipeline";
 import AdminTeamManagement from "./pages/AdminTeamManagement";
+import AdminEventsManagement from "./pages/AdminEventsManagement";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminNewsletter from "./pages/AdminNewsletter";
 import AdminDatabaseManagement from "./pages/AdminDatabaseManagement";
@@ -47,6 +48,7 @@ const AppContent = () => {
         <Route path="/pipeline" element={<Pipeline />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/team-management" element={<AdminTeamManagement />} />
+        <Route path="/admin/events" element={<AdminEventsManagement />} />
         <Route path="/admin/newsletter" element={<AdminNewsletter />} />
         <Route path="/admin/database" element={<AdminDatabaseManagement />} />
         <Route path="/social-scheduler" element={<SocialScheduler />} />

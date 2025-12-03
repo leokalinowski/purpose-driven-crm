@@ -124,6 +124,17 @@ export function AppSidebar() {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
+                    isActive={location.pathname === '/admin/events'}
+                  >
+                    <Link to="/admin/events">
+                      <CalendarIcon />
+                      <span>Events Management</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
                     isActive={location.pathname === '/admin/newsletter'}
                   >
                     <Link to="/admin/newsletter">

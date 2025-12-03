@@ -7,6 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useEvents, Event } from '@/hooks/useEvents';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 interface EventFormProps {
   event?: Event;
@@ -15,6 +17,7 @@ interface EventFormProps {
 
 export const EventForm = ({ event, onClose }: EventFormProps) => {
   const isEditing = !!event;
+  const { user } = useAuth();
   const [title, setTitle] = useState(event?.title || '');
   const [eventDate, setEventDate] = useState(event?.event_date ? new Date(event.event_date).toISOString().split('T')[0] : '');
   const [location, setLocation] = useState(event?.location || '');
@@ -27,9 +30,43 @@ export const EventForm = ({ event, onClose }: EventFormProps) => {
   const [brandColor, setBrandColor] = useState(event?.brand_color || '#2563eb');
   
   const [loading, setLoading] = useState(false);
+  const [loadingBranding, setLoadingBranding] = useState(false);
   
   const { addEvent, updateEvent } = useEvents();
   const { toast } = useToast();
+
+  // Load agent branding when form opens (for new events)
+  useEffect(() => {
+    if (!isEditing && user && !event) {
+      loadAgentBranding();
+    }
+  }, [isEditing, user, event]);
+
+  const loadAgentBranding = async () => {
+    if (!user) return;
+    
+    try {
+      setLoadingBranding(true);
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('primary_color, logo_colored_url, headshot_url')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profileData) {
+        if (profileData.primary_color && !event?.brand_color) {
+          setBrandColor(profileData.primary_color);
+        }
+        if (profileData.logo_colored_url && !event?.header_image_url) {
+          setHeaderImageUrl(profileData.logo_colored_url);
+        }
+      }
+    } catch (error) {
+      console.warn('Could not load agent branding:', error);
+    } finally {
+      setLoadingBranding(false);
+    }
+  };
 
   useEffect(() => {
     if (event) {

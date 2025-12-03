@@ -125,6 +125,34 @@ export const useEvents = () => {
     if (!user) return;
 
     try {
+      // Fetch agent branding from profiles to auto-populate event branding
+      let agentBranding = {
+        primary_color: eventData.brand_color || undefined,
+        logo_url: undefined as string | undefined,
+        header_image_url: eventData.header_image_url || undefined,
+      };
+
+      try {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('primary_color, logo_colored_url, headshot_url')
+          .eq('user_id', user.id)
+          .single();
+
+        if (profileData) {
+          // Use agent branding if not explicitly provided
+          if (!eventData.brand_color && profileData.primary_color) {
+            agentBranding.primary_color = profileData.primary_color;
+          }
+          // Use agent logo as event logo if not provided
+          if (!eventData.header_image_url && profileData.logo_colored_url) {
+            agentBranding.logo_url = profileData.logo_colored_url;
+          }
+        }
+      } catch (error) {
+        console.warn('Could not fetch agent branding, using provided values:', error);
+      }
+
       // Generate public slug if event is being published
       let publicSlug: string | undefined = undefined;
       if (eventData.is_published && eventData.title) {
@@ -142,7 +170,10 @@ export const useEvents = () => {
           ...eventData, 
           agent_id: user.id,
           public_slug: publicSlug,
-          current_rsvp_count: 0
+          current_rsvp_count: 0,
+          brand_color: agentBranding.primary_color,
+          logo_url: agentBranding.logo_url,
+          header_image_url: agentBranding.header_image_url || eventData.header_image_url,
         }])
         .select()
         .single();
