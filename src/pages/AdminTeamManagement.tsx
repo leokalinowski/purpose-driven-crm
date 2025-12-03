@@ -46,6 +46,7 @@ const AdminTeamManagement = () => {
   const [editOfficeNumber, setEditOfficeNumber] = useState('');
   const [editWebsite, setEditWebsite] = useState('');
   const [editStateLicenses, setEditStateLicenses] = useState<string[]>([]);
+  const [editStateLicensesInput, setEditStateLicensesInput] = useState('');
   // Branding fields
   const [editPrimaryColor, setEditPrimaryColor] = useState('#667eea');
   const [editSecondaryColor, setEditSecondaryColor] = useState('#764ba2');
@@ -318,7 +319,9 @@ const AdminTeamManagement = () => {
         setEditOfficeAddress(profileData.office_address || '');
         setEditOfficeNumber(profileData.office_number || '');
         setEditWebsite(profileData.website || '');
-        setEditStateLicenses(Array.isArray(profileData.state_licenses) ? profileData.state_licenses : []);
+        const licenses = Array.isArray(profileData.state_licenses) ? profileData.state_licenses : [];
+        setEditStateLicenses(licenses);
+        setEditStateLicensesInput(licenses.join(', '));
         // Branding fields
         setEditPrimaryColor(profileData.primary_color || '#667eea');
         setEditSecondaryColor(profileData.secondary_color || '#764ba2');
@@ -333,9 +336,10 @@ const AdminTeamManagement = () => {
         setEditPhoneNumber('');
         setEditOfficeAddress('');
         setEditOfficeNumber('');
-        setEditWebsite('');
-        setEditStateLicenses([]);
-        setEditPrimaryColor('#667eea');
+      setEditWebsite('');
+      setEditStateLicenses([]);
+      setEditStateLicensesInput('');
+      setEditPrimaryColor('#667eea');
         setEditSecondaryColor('#764ba2');
         setEditHeadshotUrl('');
         setEditLogoColoredUrl('');
@@ -356,6 +360,7 @@ const AdminTeamManagement = () => {
       setEditOfficeNumber('');
       setEditWebsite('');
       setEditStateLicenses([]);
+      setEditStateLicensesInput('');
       setEditPrimaryColor('#667eea');
       setEditSecondaryColor('#764ba2');
       setEditHeadshotUrl('');
@@ -1031,15 +1036,27 @@ const AdminTeamManagement = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">State Licenses</label>
                   <Input
-                    value={editStateLicenses?.join(', ') || ''}
+                    value={editStateLicensesInput}
                     onChange={(e) => {
-                      const licenses = e.target.value.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
+                      // Allow free-form typing with commas
+                      setEditStateLicensesInput(e.target.value);
+                    }}
+                    onBlur={(e) => {
+                      // Parse licenses when user finishes typing
+                      const licenses = e.target.value
+                        .split(',')
+                        .map(s => s.trim().toUpperCase())
+                        .filter(s => s.length > 0);
                       setEditStateLicenses(licenses);
+                      // Update input to show cleaned version (but keep user's typing)
+                      if (licenses.length > 0) {
+                        setEditStateLicensesInput(licenses.join(', '));
+                      }
                     }}
                     placeholder="CA, NV, AZ (comma-separated)"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Enter state codes separated by commas
+                    Enter state codes separated by commas (e.g., CA, NV, AZ)
                   </p>
                   {editStateLicenses && editStateLicenses.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
