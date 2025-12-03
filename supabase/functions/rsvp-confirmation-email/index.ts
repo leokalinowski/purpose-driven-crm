@@ -78,7 +78,7 @@ serve(async (req) => {
     }
 
     // Fetch agent profile separately
-    let agent = null;
+    let agent: any = null;
     if (event.agent_id) {
       const { data: profileData } = await supabase
         .from('profiles')
