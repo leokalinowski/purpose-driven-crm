@@ -82,7 +82,7 @@ serve(async (req) => {
     if (event.agent_id) {
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('first_name, last_name, email, team_name, brokerage, phone_number, office_number, office_address, website, state_licenses')
+        .select('first_name, last_name, email, team_name, brokerage, phone_number, office_number, office_address, website, state_licenses, primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
         .eq('user_id', event.agent_id)
         .single();
       
@@ -99,6 +99,7 @@ serve(async (req) => {
     const officeAddress = agent?.office_address || '';
     const website = agent?.website || '';
     const stateLicenses = agent?.state_licenses?.length ? agent.state_licenses.join(' and ') : '';
+    const officeNumber = agent?.office_number || '';
     
     // Helper function to adjust color brightness
     function adjustBrightness(color: string, percent: number): string {
@@ -112,10 +113,12 @@ serve(async (req) => {
         (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
     }
     
-    // Use event brand color or default to modern gradient
-    const primaryColor = event.brand_color || '#667eea';
-    const secondaryColor = event.brand_color ? adjustBrightness(event.brand_color, -20) : '#764ba2';
-    const logoUrl = event.logo_url || '';
+    // Use agent branding colors (from profiles) or event brand color, or default
+    const primaryColor = agent?.primary_color || event.brand_color || '#667eea';
+    const secondaryColor = agent?.secondary_color || (event.brand_color ? adjustBrightness(event.brand_color, -20) : '#764ba2');
+    // Use agent logo (colored) or event logo, prefer agent branding
+    const logoUrl = agent?.logo_colored_url || event.logo_url || '';
+    const headshotUrl = agent?.headshot_url || '';
 
     const eventDate = new Date(event.event_date);
     // Format date manually to avoid date-fns dependency issues
@@ -150,7 +153,8 @@ serve(async (req) => {
                   <!-- Header with gradient -->
                   <tr>
                     <td style="background: linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%); padding: 40px 30px; text-align: center;">
-                      ${logoUrl ? `<img src="${logoUrl}" alt="${agentName}" style="max-width: 150px; height: auto; margin-bottom: 15px; border-radius: 8px;" />` : ''}
+                      ${logoUrl ? `<img src="${logoUrl}" alt="${agentName}" style="max-width: 150px; height: auto; margin-bottom: 15px; border-radius: 8px; background: rgba(255,255,255,0.1); padding: 8px;" />` : ''}
+                      ${headshotUrl && !logoUrl ? `<img src="${headshotUrl}" alt="${agentName}" style="max-width: 100px; height: 100px; margin-bottom: 15px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.3); object-fit: cover;" />` : ''}
                       <h1 style="color: #ffffff; margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">
                         ${isWaitlist ? 'You\'re on the Waitlist!' : 'RSVP Confirmed!'}
                       </h1>

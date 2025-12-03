@@ -46,6 +46,12 @@ const AdminTeamManagement = () => {
   const [editOfficeNumber, setEditOfficeNumber] = useState('');
   const [editWebsite, setEditWebsite] = useState('');
   const [editStateLicenses, setEditStateLicenses] = useState<string[]>([]);
+  // Branding fields
+  const [editPrimaryColor, setEditPrimaryColor] = useState('#667eea');
+  const [editSecondaryColor, setEditSecondaryColor] = useState('#764ba2');
+  const [editHeadshotUrl, setEditHeadshotUrl] = useState('');
+  const [editLogoColoredUrl, setEditLogoColoredUrl] = useState('');
+  const [editLogoWhiteUrl, setEditLogoWhiteUrl] = useState('');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -247,22 +253,34 @@ const AdminTeamManagement = () => {
     setEditEmail(agent.email || '');
     setEditRole(agent.role as 'agent' | 'admin');
 
-    // Fetch additional profile data from auth.users.raw_user_meta_data
+    // Fetch profile data from profiles table (not auth.users.raw_user_meta_data)
     try {
-      const { data: userData, error } = await supabase.auth.admin.getUserById(agent.user_id);
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('team_name, brokerage, phone_number, office_address, office_number, website, state_licenses, primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
+        .eq('user_id', agent.user_id)
+        .single();
+
       if (error) throw error;
 
-      const metaData = userData.user?.raw_user_meta_data || {};
-      setEditTeamName(metaData.team_name || '');
-      setEditBrokerage(metaData.brokerage || '');
-      setEditPhoneNumber(metaData.phone_number || '');
-      setEditOfficeAddress(metaData.office_address || '');
-      setEditOfficeNumber(metaData.office_number || '');
-      setEditWebsite(metaData.website || '');
-      setEditStateLicenses(Array.isArray(metaData.state_licenses) ? metaData.state_licenses : []);
+      if (profileData) {
+        setEditTeamName(profileData.team_name || '');
+        setEditBrokerage(profileData.brokerage || '');
+        setEditPhoneNumber(profileData.phone_number || '');
+        setEditOfficeAddress(profileData.office_address || '');
+        setEditOfficeNumber(profileData.office_number || '');
+        setEditWebsite(profileData.website || '');
+        setEditStateLicenses(Array.isArray(profileData.state_licenses) ? profileData.state_licenses : []);
+        // Branding fields
+        setEditPrimaryColor(profileData.primary_color || '#667eea');
+        setEditSecondaryColor(profileData.secondary_color || '#764ba2');
+        setEditHeadshotUrl(profileData.headshot_url || '');
+        setEditLogoColoredUrl(profileData.logo_colored_url || '');
+        setEditLogoWhiteUrl(profileData.logo_white_url || '');
+      }
     } catch (error) {
-      console.error('Error fetching user metadata:', error);
-      // Set defaults if we can't fetch metadata
+      console.error('Error fetching profile data:', error);
+      // Set defaults if we can't fetch profile data
       setEditTeamName('');
       setEditBrokerage('');
       setEditPhoneNumber('');
@@ -270,6 +288,11 @@ const AdminTeamManagement = () => {
       setEditOfficeNumber('');
       setEditWebsite('');
       setEditStateLicenses([]);
+      setEditPrimaryColor('#667eea');
+      setEditSecondaryColor('#764ba2');
+      setEditHeadshotUrl('');
+      setEditLogoColoredUrl('');
+      setEditLogoWhiteUrl('');
     }
 
     setEditDialogOpen(true);
@@ -280,13 +303,25 @@ const AdminTeamManagement = () => {
 
     setEditLoading(true);
     try {
-      // Update profile
+      // Update profile with all fields including branding
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
           first_name: editFirstName.trim() || null,
           last_name: editLastName.trim() || null,
           email: editEmail.trim() || null,
+          team_name: editTeamName.trim() || null,
+          brokerage: editBrokerage.trim() || null,
+          phone_number: editPhoneNumber.trim() || null,
+          office_address: editOfficeAddress.trim() || null,
+          office_number: editOfficeNumber.trim() || null,
+          website: editWebsite.trim() || null,
+          state_licenses: editStateLicenses.length > 0 ? editStateLicenses : null,
+          primary_color: editPrimaryColor.trim() || null,
+          secondary_color: editSecondaryColor.trim() || null,
+          headshot_url: editHeadshotUrl.trim() || null,
+          logo_colored_url: editLogoColoredUrl.trim() || null,
+          logo_white_url: editLogoWhiteUrl.trim() || null,
         })
         .eq('user_id', editingAgent.user_id);
 
@@ -311,41 +346,17 @@ const AdminTeamManagement = () => {
         if (roleError) throw roleError;
       }
 
-      // Update user metadata (additional profile fields)
-      const { error: metadataError } = await supabase.functions.invoke('admin-update-user-metadata', {
-        body: {
-          userId: editingAgent.user_id,
-          metadata: {
-            team_name: editTeamName.trim() || null,
-            brokerage: editBrokerage.trim() || null,
-            phone_number: editPhoneNumber.trim() || null,
-            office_address: editOfficeAddress.trim() || null,
-            office_number: editOfficeNumber.trim() || null,
-            website: editWebsite.trim() || null,
-            state_licenses: editStateLicenses,
-          }
-        }
+      toast({
+        title: 'Success',
+        description: 'Agent information and branding updated successfully',
       });
-
-      if (metadataError) {
-        console.error('Metadata update error:', metadataError);
-        toast({
-          title: 'Warning',
-          description: 'Basic info updated, but additional profile details may not have been saved',
-          variant: 'default',
-        });
-      } else {
-        toast({
-          title: 'Success',
-          description: 'Agent information updated successfully',
-        });
-      }
 
       setEditDialogOpen(false);
       setEditingAgent(null);
       fetchAgents(); // Refresh the agents list
 
     } catch (error: any) {
+      console.error('Error updating agent:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to update agent',
@@ -904,6 +915,99 @@ const AdminTeamManagement = () => {
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* Branding Information */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Branding & Assets</h4>
+                <p className="text-xs text-muted-foreground mb-4">
+                  These branding elements will be used throughout the Hub in emails, event pages, and marketing communications.
+                </p>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Primary Brand Color</label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="color"
+                        value={editPrimaryColor}
+                        onChange={(e) => setEditPrimaryColor(e.target.value)}
+                        className="w-20 h-10"
+                      />
+                      <Input
+                        value={editPrimaryColor}
+                        onChange={(e) => setEditPrimaryColor(e.target.value)}
+                        placeholder="#667eea"
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Secondary Brand Color</label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="color"
+                        value={editSecondaryColor}
+                        onChange={(e) => setEditSecondaryColor(e.target.value)}
+                        className="w-20 h-10"
+                      />
+                      <Input
+                        value={editSecondaryColor}
+                        onChange={(e) => setEditSecondaryColor(e.target.value)}
+                        placeholder="#764ba2"
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Headshot URL</label>
+                  <Input
+                    value={editHeadshotUrl}
+                    onChange={(e) => setEditHeadshotUrl(e.target.value)}
+                    placeholder="https://example.com/headshot.jpg"
+                    type="url"
+                  />
+                  {editHeadshotUrl && (
+                    <div className="mt-2">
+                      <img src={editHeadshotUrl} alt="Headshot preview" className="h-20 w-20 rounded-full object-cover border-2 border-muted" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Logo (Colored) URL</label>
+                    <Input
+                      value={editLogoColoredUrl}
+                      onChange={(e) => setEditLogoColoredUrl(e.target.value)}
+                      placeholder="https://example.com/logo-colored.png"
+                      type="url"
+                    />
+                    {editLogoColoredUrl && (
+                      <div className="mt-2">
+                        <img src={editLogoColoredUrl} alt="Colored logo preview" className="h-16 object-contain border rounded p-2 bg-white" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Logo (White) URL</label>
+                    <Input
+                      value={editLogoWhiteUrl}
+                      onChange={(e) => setEditLogoWhiteUrl(e.target.value)}
+                      placeholder="https://example.com/logo-white.png"
+                      type="url"
+                    />
+                    {editLogoWhiteUrl && (
+                      <div className="mt-2">
+                        <div className="h-16 bg-gray-800 rounded p-2 flex items-center justify-center">
+                          <img src={editLogoWhiteUrl} alt="White logo preview" className="h-full object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

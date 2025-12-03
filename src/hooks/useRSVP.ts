@@ -205,12 +205,12 @@ export const useRSVP = () => {
         throw eventError || new Error('Event not found');
       }
 
-      // Then fetch the agent profile separately if agent_id exists
+      // Then fetch the agent profile separately if agent_id exists (including branding)
       let profile = null;
       if (event.agent_id) {
         const { data: profileData } = await supabase
           .from('profiles')
-          .select('first_name, last_name, team_name, brokerage, phone_number, office_address')
+          .select('first_name, last_name, team_name, brokerage, phone_number, office_number, office_address, website, state_licenses, primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
           .eq('user_id', event.agent_id)
           .single();
         

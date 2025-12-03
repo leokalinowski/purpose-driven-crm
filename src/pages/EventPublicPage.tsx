@@ -26,6 +26,16 @@ interface EventData {
     last_name?: string;
     team_name?: string;
     brokerage?: string;
+    phone_number?: string;
+    office_number?: string;
+    office_address?: string;
+    website?: string;
+    state_licenses?: string[];
+    primary_color?: string;
+    secondary_color?: string;
+    headshot_url?: string;
+    logo_colored_url?: string;
+    logo_white_url?: string;
   };
 }
 
@@ -106,9 +116,13 @@ const EventPublicPage = () => {
   const agentName = event.profiles && (event.profiles.first_name || event.profiles.last_name)
     ? `${event.profiles.first_name || ''} ${event.profiles.last_name || ''}`.trim()
     : undefined;
+  
+  // Use agent branding colors (from profiles) or event brand color, or default
+  const primaryColor = event.profiles?.primary_color || event.brand_color || '#2563eb';
+  const secondaryColor = event.profiles?.secondary_color || '#764ba2';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ backgroundColor: event.profiles?.primary_color ? `${primaryColor}08` : '#f5f7fa' }}>
       <div className="container mx-auto px-4 py-8 md:py-12 max-w-4xl">
         <div className="space-y-8">
           {/* Event Header */}
@@ -118,10 +132,12 @@ const EventPublicPage = () => {
             location={event.location}
             description={event.description}
             headerImageUrl={event.header_image_url}
-            brandColor={event.brand_color}
+            brandColor={primaryColor}
             agentName={agentName}
             teamName={event.profiles?.team_name}
             brokerage={event.profiles?.brokerage}
+            agentLogo={event.profiles?.logo_colored_url}
+            agentHeadshot={event.profiles?.headshot_url}
           />
 
           {/* RSVP Stats (if available) */}

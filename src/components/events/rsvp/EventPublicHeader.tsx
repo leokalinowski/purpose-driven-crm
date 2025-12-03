@@ -12,6 +12,8 @@ interface EventPublicHeaderProps {
   agentName?: string;
   teamName?: string;
   brokerage?: string;
+  agentLogo?: string;
+  agentHeadshot?: string;
 }
 
 export const EventPublicHeader = ({
@@ -24,6 +26,8 @@ export const EventPublicHeader = ({
   agentName,
   teamName,
   brokerage,
+  agentLogo,
+  agentHeadshot,
 }: EventPublicHeaderProps) => {
   const primaryColor = brandColor || '#2563eb';
 
@@ -41,7 +45,27 @@ export const EventPublicHeader = ({
       )}
 
       {/* Event Title */}
-      <div className="text-center space-y-2">
+      <div className="text-center space-y-4">
+        {(agentLogo || agentHeadshot) && (
+          <div className="flex justify-center mb-4">
+            {agentLogo ? (
+              <img 
+                src={agentLogo} 
+                alt={`${agentName || 'Agent'} logo`}
+                className="h-24 w-auto object-contain"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            ) : agentHeadshot ? (
+              <img 
+                src={agentHeadshot} 
+                alt={agentName || 'Agent'}
+                className="h-24 w-24 rounded-full object-cover border-4 shadow-lg"
+                style={{ borderColor: primaryColor }}
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            ) : null}
+          </div>
+        )}
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{title}</h1>
         {agentName && (
           <p className="text-lg text-muted-foreground">
