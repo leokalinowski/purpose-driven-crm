@@ -401,12 +401,12 @@ export const ContactForm = ({
               </Button>
             )}
             <div className="flex space-x-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? 'Saving...' : 'Save Contact'}
-              </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Saving...' : 'Save Contact'}
+            </Button>
             </div>
           </div>
         </form>

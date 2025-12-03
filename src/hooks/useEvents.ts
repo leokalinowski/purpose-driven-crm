@@ -54,6 +54,12 @@ export interface Event {
   charity_goal?: number;
   charity_actual?: number;
   feedback_score?: number;
+  public_slug?: string;
+  max_capacity?: number;
+  current_rsvp_count?: number;
+  header_image_url?: string;
+  brand_color?: string;
+  is_published?: boolean;
 }
 
 export interface EventTask {
@@ -115,13 +121,29 @@ export const useEvents = () => {
     }
   };
 
-  const addEvent = async (eventData: Omit<Event, 'id' | 'agent_id'>) => {
+  const addEvent = async (eventData: Omit<Event, 'id' | 'agent_id'> & { is_published?: boolean; max_capacity?: number; header_image_url?: string; brand_color?: string }) => {
     if (!user) return;
 
     try {
+      // Generate public slug if event is being published
+      let publicSlug: string | undefined = undefined;
+      if (eventData.is_published && eventData.title) {
+        const { data: slugData, error: slugError } = await supabase
+          .rpc('generate_event_slug', { title: eventData.title });
+        
+        if (!slugError && slugData) {
+          publicSlug = slugData;
+        }
+      }
+
       const { data, error } = await supabase
         .from('events')
-        .insert([{ ...eventData, agent_id: user.id }])
+        .insert([{ 
+          ...eventData, 
+          agent_id: user.id,
+          public_slug: publicSlug,
+          current_rsvp_count: 0
+        }])
         .select()
         .single();
 

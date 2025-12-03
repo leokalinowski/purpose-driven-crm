@@ -111,7 +111,7 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
+                  <SidebarMenuButton 
                     asChild
                     isActive={location.pathname === '/admin/team-management'}
                   >

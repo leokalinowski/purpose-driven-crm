@@ -46,6 +46,9 @@ verify_jwt = true
 [functions.social-oauth]
 verify_jwt = true
 
+[functions.rsvp-confirmation-email]
+verify_jwt = false
+
 [functions.social-schedule]
 verify_jwt = true
 

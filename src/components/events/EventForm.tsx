@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { useEvents } from '@/hooks/useEvents';
 import { useToast } from '@/hooks/use-toast';
 
@@ -18,6 +19,10 @@ export const EventForm = ({ onClose }: EventFormProps) => {
   const [description, setDescription] = useState('');
   const [theme, setTheme] = useState('');
   const [invitedCount, setInvitedCount] = useState<number>(0);
+  const [maxCapacity, setMaxCapacity] = useState<number | undefined>(undefined);
+  const [isPublished, setIsPublished] = useState(false);
+  const [headerImageUrl, setHeaderImageUrl] = useState('');
+  const [brandColor, setBrandColor] = useState('');
   
   const [loading, setLoading] = useState(false);
   
@@ -44,7 +49,10 @@ export const EventForm = ({ onClose }: EventFormProps) => {
         description: description.trim() || undefined,
         theme: theme.trim() || undefined,
         invited_count: invitedCount || 0,
-        
+        max_capacity: maxCapacity || undefined,
+        is_published: isPublished,
+        header_image_url: headerImageUrl.trim() || undefined,
+        brand_color: brandColor.trim() || undefined,
         attendance_count: 0,
         leads_generated: 0
       });
@@ -129,15 +137,83 @@ export const EventForm = ({ onClose }: EventFormProps) => {
             />
           </div>
 
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="invitedCount">Expected Attendees</Label>
+              <Input
+                id="invitedCount"
+                type="number"
+                value={invitedCount || ''}
+                onChange={(e) => setInvitedCount(parseInt(e.target.value) || 0)}
+                placeholder="0"
+                min="0"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="maxCapacity">Max Capacity (RSVP Limit)</Label>
+              <Input
+                id="maxCapacity"
+                type="number"
+                value={maxCapacity || ''}
+                onChange={(e) => setMaxCapacity(e.target.value ? parseInt(e.target.value) : undefined)}
+                placeholder="Unlimited"
+                min="1"
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave empty for unlimited RSVPs
+              </p>
+            </div>
+          </div>
+
           <div className="space-y-2">
-            <Label htmlFor="invitedCount">Expected Attendees</Label>
+            <Label htmlFor="headerImageUrl">Header Image URL</Label>
             <Input
-              id="invitedCount"
-              type="number"
-              value={invitedCount || ''}
-              onChange={(e) => setInvitedCount(parseInt(e.target.value) || 0)}
-              placeholder="0"
-              min="0"
+              id="headerImageUrl"
+              type="url"
+              value={headerImageUrl}
+              onChange={(e) => setHeaderImageUrl(e.target.value)}
+              placeholder="https://example.com/image.jpg"
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional: URL to an image for the public event page header
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="brandColor">Brand Color</Label>
+            <div className="flex gap-2">
+              <Input
+                id="brandColor"
+                type="color"
+                value={brandColor || '#2563eb'}
+                onChange={(e) => setBrandColor(e.target.value)}
+                className="w-20 h-10"
+              />
+              <Input
+                type="text"
+                value={brandColor}
+                onChange={(e) => setBrandColor(e.target.value)}
+                placeholder="#2563eb"
+                className="flex-1"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Primary color for the public event page
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="space-y-0.5">
+              <Label htmlFor="isPublished">Publish Public RSVP Page</Label>
+              <p className="text-sm text-muted-foreground">
+                Allow public RSVPs via a shareable link
+              </p>
+            </div>
+            <Switch
+              id="isPublished"
+              checked={isPublished}
+              onCheckedChange={setIsPublished}
             />
           </div>
 

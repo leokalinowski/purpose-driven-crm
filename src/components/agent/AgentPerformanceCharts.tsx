@@ -94,7 +94,7 @@ export function AgentPerformanceCharts() {
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="week" tickLine={false} axisLine={false} />
                   <YAxis tickLine={false} axisLine={false} domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
-                  <ChartTooltip
+                  <ChartTooltip 
                     content={<ChartTooltipContent formatter={(value) => [`${value}%`, 'Completion Rate']} />}
                   />
                   <Line type="monotone" dataKey="completionRate" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} />
@@ -141,7 +141,7 @@ export function AgentPerformanceCharts() {
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="week" tickLine={false} axisLine={false} />
                   <YAxis tickLine={false} axisLine={false} domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
-                  <ChartTooltip
+                  <ChartTooltip 
                     content={<ChartTooltipContent formatter={(value) => [`${value}%`, 'Compliance Rate']} />}
                   />
                   <Line type="monotone" dataKey="compliance" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4 }} />

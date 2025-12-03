@@ -603,42 +603,42 @@ const AdminTeamManagement = () => {
           </TabsContent>
 
           <TabsContent value="invitations" className="space-y-6">
-            {/* Stats Cards */}
+        {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card>
-                <CardContent className="flex items-center gap-4 p-6">
-                  <div className="p-3 rounded-full bg-yellow-100">
-                    <Clock className="h-6 w-6 text-yellow-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{activeInvitations.length}</p>
-                    <p className="text-sm text-muted-foreground">Active Invitations</p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="flex items-center gap-4 p-6">
-                  <div className="p-3 rounded-full bg-green-100">
-                    <CheckCircle className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{usedInvitations.length}</p>
-                    <p className="text-sm text-muted-foreground">Used Invitations</p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="flex items-center gap-4 p-6">
-                  <div className="p-3 rounded-full bg-red-100">
-                    <XCircle className="h-6 w-6 text-red-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{expiredInvitations.length}</p>
-                    <p className="text-sm text-muted-foreground">Expired Invitations</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+          <Card>
+            <CardContent className="flex items-center gap-4 p-6">
+              <div className="p-3 rounded-full bg-yellow-100">
+                <Clock className="h-6 w-6 text-yellow-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{activeInvitations.length}</p>
+                <p className="text-sm text-muted-foreground">Active Invitations</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center gap-4 p-6">
+              <div className="p-3 rounded-full bg-green-100">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{usedInvitations.length}</p>
+                <p className="text-sm text-muted-foreground">Used Invitations</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center gap-4 p-6">
+              <div className="p-3 rounded-full bg-red-100">
+                <XCircle className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{expiredInvitations.length}</p>
+                <p className="text-sm text-muted-foreground">Expired Invitations</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Generate New Invitation */}
         <Card className="mb-8">

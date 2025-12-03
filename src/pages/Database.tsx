@@ -420,23 +420,23 @@ const Database = () => {
          
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 self-start sm:self-auto">
             <div className="flex flex-col sm:flex-row gap-2">
-              <Button
+            <Button
                 onClick={() => setShowContactForm(true)}
                 className="sm:w-auto"
-              >
+            >
                 <Plus className="h-4 w-4 mr-2" />
                 <span className="hidden xs:inline">Add Contact</span>
                 <span className="xs:hidden">Add</span>
-              </Button>
-              <Button
-                onClick={() => setShowCSVUpload(true)}
-                variant="outline"
+            </Button>
+            <Button
+              onClick={() => setShowCSVUpload(true)}
+              variant="outline"
                 className="sm:w-auto"
-              >
-                <Upload className="h-4 w-4 mr-2" />
+            >
+              <Upload className="h-4 w-4 mr-2" />
                 <span className="hidden xs:inline">Upload CSV</span>
                 <span className="xs:hidden">Upload</span>
-              </Button>
+            </Button>
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
               <Button
@@ -447,18 +447,18 @@ const Database = () => {
                 <Users className="h-4 w-4 mr-2" />
                 <span className="hidden xs:inline">Clean Duplicates</span>
                 <span className="xs:hidden">Clean</span>
-              </Button>
-              <Button
-                onClick={() => setShowBulkEditor(true)}
-                disabled={selectedContacts.length === 0}
-                variant="outline"
+            </Button>
+            <Button
+              onClick={() => setShowBulkEditor(true)}
+              disabled={selectedContacts.length === 0}
+              variant="outline"
                 className="sm:w-auto"
-                title="Edit multiple selected contacts at once"
-              >
-                <Users className="h-4 w-4 mr-2" />
+              title="Edit multiple selected contacts at once"
+            >
+              <Users className="h-4 w-4 mr-2" />
                 <span className="hidden xs:inline">Bulk Edit ({selectedContacts.length})</span>
                 <span className="xs:hidden">Bulk ({selectedContacts.length})</span>
-              </Button>
+            </Button>
             </div>
           </div>
         </div>
@@ -468,15 +468,15 @@ const Database = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex gap-2">
-                <DNCCheckButton
-                  variant="default"
-                  size="default"
+                <DNCCheckButton 
+                  variant="default" 
+                  size="default" 
                   onRun={handleDNCCheck}
                   checking={dncChecking}
                 />
-                <DNCCheckButton
-                  variant="destructive"
-                  size="default"
+                <DNCCheckButton 
+                  variant="destructive" 
+                  size="default" 
                   forceRecheck={true}
                   onRun={handleDNCCheck}
                   checking={dncChecking}
@@ -547,7 +547,7 @@ const Database = () => {
                     <div className="text-sm text-muted-foreground text-center sm:text-left">
                       Page {currentPage} of {totalPages}
                     </div>
-
+                   
                     <div className="flex items-center space-x-2">
                       <Button
                         variant="outline"
@@ -559,20 +559,20 @@ const Database = () => {
                         <ChevronLeft className="h-4 w-4" />
                         <span className="hidden sm:inline ml-1">Previous</span>
                       </Button>
-
+                     
                       {/* Mobile: Show fewer page numbers */}
                       <div className="hidden sm:flex items-center space-x-1">
-                        {generatePageNumbers().map((page) => (
-                          <Button
-                            key={page}
-                            variant={page === currentPage ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => goToPage(page)}
-                            className="min-w-[2.5rem]"
-                          >
-                            {page}
-                          </Button>
-                        ))}
+                      {generatePageNumbers().map((page) => (
+                        <Button
+                          key={page}
+                          variant={page === currentPage ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => goToPage(page)}
+                          className="min-w-[2.5rem]"
+                        >
+                          {page}
+                        </Button>
+                      ))}
                       </div>
 
                       {/* Mobile: Simple current page indicator */}
@@ -581,7 +581,7 @@ const Database = () => {
                           {currentPage}
                         </span>
                       </div>
-
+                     
                       <Button
                         variant="outline"
                         size="sm"

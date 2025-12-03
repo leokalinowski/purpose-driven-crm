@@ -6,14 +6,17 @@ import { Layout } from '@/components/layout/Layout';
 import { EventCard } from '@/components/events/EventCard';
 import { TaskManagement } from '@/components/events/TaskManagement';
 import { EventForm } from '@/components/events/EventForm';
+import { RSVPManagement } from '@/components/events/RSVPManagement';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Calendar } from 'lucide-react';
+import { Plus, Calendar, ExternalLink } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 
 const Events = () => {
   const [showEventForm, setShowEventForm] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { 
@@ -141,6 +144,16 @@ const Events = () => {
           </AccordionItem>
         </Accordion>
 
+        {/* RSVP Management - Show for selected or next event */}
+        {(selectedEventId || nextEvent?.id) && (
+          <div className="mb-8">
+            <RSVPManagement 
+              eventId={selectedEventId || nextEvent?.id || ''}
+              publicSlug={events.find(e => e.id === (selectedEventId || nextEvent?.id))?.public_slug}
+            />
+          </div>
+        )}
+
         {/* Task Management - Now shows all events with selector */}
         <div className="mb-8">
           <TaskManagement 
@@ -162,9 +175,10 @@ const Events = () => {
                   {events.map((event) => (
                     <div 
                       key={event.id} 
-                      className="flex items-center justify-between p-4 border rounded-lg"
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 cursor-pointer"
+                      onClick={() => setSelectedEventId(event.id === selectedEventId ? null : event.id)}
                     >
-                      <div>
+                      <div className="flex-1">
                         <h4 className="font-medium">{event.title}</h4>
                         <p className="text-sm text-muted-foreground">
                           {new Date(event.event_date).toLocaleDateString()}
@@ -172,6 +186,30 @@ const Events = () => {
                         {event.location && (
                           <p className="text-sm text-muted-foreground">
                             {event.location}
+                          </p>
+                        )}
+                        {event.public_slug && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <Badge variant="outline" className="text-xs">
+                              Published
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(`/event/${event.public_slug}`, '_blank');
+                              }}
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              View Public Page
+                            </Button>
+                          </div>
+                        )}
+                        {event.current_rsvp_count !== undefined && event.current_rsvp_count > 0 && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {event.current_rsvp_count} RSVP{event.current_rsvp_count !== 1 ? 's' : ''}
                           </p>
                         )}
                       </div>

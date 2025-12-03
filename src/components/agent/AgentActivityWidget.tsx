@@ -11,14 +11,14 @@ export function AgentActivityWidget() {
   // Get today's priority tasks
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
-  const todaysCallTasks = callTasks.filter(t =>
+  
+  const todaysCallTasks = callTasks.filter(t => 
     !t.completed &&
     new Date(t.created_at).toDateString() === today.toDateString()
   ).slice(0, 5); // Increased from 3 to 5
 
   const todaysTextTasks = textTasks.filter(t =>
-    !t.completed &&
+    !t.completed && 
     new Date(t.created_at).toDateString() === today.toDateString()
   ).slice(0, 3);
 
@@ -136,11 +136,11 @@ export function AgentActivityWidget() {
                 <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center gap-3">
                     <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                    <div>
+                  <div>
                       <p className="text-sm font-medium">
                         {task.lead?.first_name} {task.lead?.last_name}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                         {task.lead?.phone || 'No phone'}
                       </p>
                     </div>

@@ -25,6 +25,7 @@ import AdminNewsletter from "./pages/AdminNewsletter";
 import AdminDatabaseManagement from "./pages/AdminDatabaseManagement";
 import SocialScheduler from "./pages/SocialScheduler";
 import AdminSocialScheduler from "./pages/AdminSocialScheduler";
+import EventPublicPage from "./pages/EventPublicPage";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,7 @@ const AppContent = () => {
         <Route path="/social-scheduler" element={<SocialScheduler />} />
         <Route path="/admin/social-scheduler" element={<AdminSocialScheduler />} />
         <Route path="/oauth-callback" element={<OAuthCallback />} />
+        <Route path="/event/:slug" element={<EventPublicPage />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>

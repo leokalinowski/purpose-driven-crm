@@ -140,14 +140,14 @@
             // Metricool requires referrerpolicy="origin" for proper authentication
             iframe.setAttribute('referrerpolicy', 'origin');
             iframe.setAttribute('allow', 'clipboard-write; clipboard-read; fullscreen; encrypted-media; autoplay; picture-in-picture; camera; microphone; geolocation; payment');
-
+            
             // Set the source - this will trigger the load
             iframe.src = metricoolUrl;
 
             // Handle iframe load
             iframe.onload = function() {
                 console.log('Iframe loaded successfully');
-
+                
                 // Wait a moment to see if it's actually loaded or if it's a 401 page
                 setTimeout(function() {
                     loading.classList.add('hidden');

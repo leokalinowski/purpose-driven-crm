@@ -51,7 +51,7 @@ export function AgentMetricsCards() {
   const completedSphereSync = sphereSyncTasks.filter(t => t.completed).length;
   const totalSphereSync = sphereSyncTasks.length;
   const sphereSyncCompletion = totalSphereSync > 0 ? Math.round((completedSphereSync / totalSphereSync) * 100) : 0;
-
+  
   // Calculate weekly task completion trend
   const lastWeekStats = historicalStats.slice(-2);
   const weeklyTrend = lastWeekStats.length === 2
@@ -74,7 +74,7 @@ export function AgentMetricsCards() {
   const taskEfficiency = completedSphereSync > 0 && daysThisWeek > 0
     ? Math.round(completedSphereSync / daysThisWeek)
     : 0;
-
+  
   // Calculate contact quality score (based on DNC compliance and activity)
   const contactQualityScore = dncStats.totalContacts > 0
     ? Math.round(((dncStats.nonDncContacts / dncStats.totalContacts) * 100 + (dncStats.lastChecked ? 20 : 0) + (conversionRate > 5 ? 10 : 0)) / 1.3)
@@ -90,7 +90,7 @@ export function AgentMetricsCards() {
     }
     return 'neutral';
   };
-
+  
   const agentKpis = {
     sphereSyncProgress: {
       value: `${sphereSyncCompletion}%`,
