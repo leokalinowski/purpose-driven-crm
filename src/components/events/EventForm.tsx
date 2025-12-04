@@ -28,11 +28,12 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
   // Fix date handling: use local date string to avoid timezone issues
   const getLocalDateString = (dateStr: string) => {
     if (!dateStr) return '';
-    // Parse the date as local date to avoid timezone shifting
-    const date = new Date(dateStr + 'T12:00:00'); // Add noon time to avoid DST issues
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    // Parse date string directly without timezone conversion
+    // Format: YYYY-MM-DDTHH:mm:ss or YYYY-MM-DD
+    const parts = dateStr.split('T')[0].split('-');
+    const year = parts[0];
+    const month = String(parts[1]).padStart(2, '0');
+    const day = String(parts[2]).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
 
@@ -40,10 +41,12 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
   const [eventDate, setEventDate] = useState(event?.event_date ? getLocalDateString(event.event_date) : '');
   const [eventTime, setEventTime] = useState(() => {
     if (event?.event_date) {
-      const date = new Date(event.event_date + 'T12:00:00'); // Add noon time to avoid DST issues
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      return `${hours}:${minutes}`;
+      // Extract time from the datetime string directly
+      const timePart = event.event_date.split('T')[1];
+      if (timePart) {
+        return timePart.substring(0, 5); // HH:mm format
+      }
+      return '18:00'; // fallback
     }
     return '09:00'; // Default to 9 AM instead of 6 PM
   });
@@ -132,10 +135,11 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
       setTitle(event.title || '');
       setEventDate(event.event_date ? getLocalDateString(event.event_date) : '');
       if (event.event_date) {
-        const date = new Date(event.event_date + 'T12:00:00'); // Add noon time to avoid DST issues
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        setEventTime(`${hours}:${minutes}`);
+        // Extract time from the datetime string directly
+        const timePart = event.event_date.split('T')[1];
+        if (timePart) {
+          setEventTime(timePart.substring(0, 5)); // HH:mm format
+        }
       }
       setLocation(event.location || '');
       setDescription(event.description || '');
@@ -245,7 +249,10 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
       // Combine date and time into a single datetime string
       // Use the exact date/time entered by the user
       const [hours, minutes] = eventTime.split(':');
-      const eventDateTime = `${eventDate}T${hours}:${minutes}:00`;
+      // Create the datetime string directly without timezone conversion
+      const eventDateTime = `${eventDate}T${hours}:${minutes}:00.000Z`;
+
+      console.log('DEBUG: Creating event with:', { eventDate, eventTime, eventDateTime });
       
       console.log('Updating event with date/time:', {
         eventDate,
@@ -325,8 +332,12 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Event' : 'Create New Event'}</DialogTitle>
+          {/* Debug info */}
+          <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
+            Debug: Date={eventDate}, Time={eventTime}, Editing={isEditing}
+          </div>
         </DialogHeader>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {isAdminMode && (
             <div className="space-y-2">
