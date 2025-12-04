@@ -86,11 +86,20 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let requestSource = 'manual';
   try {
-    console.log('SphereSync email function started');
+    // Get source from request body or headers
+    const requestBody = await req.json().catch(() => ({}));
+    requestSource = requestBody.source || req.headers.get('x-request-source') || 'manual';
+    const scheduledAt = requestBody.scheduled_at;
+    
+    console.log(`SphereSync email function started - Source: ${requestSource}`);
+    console.log(`Request timestamp: ${new Date().toISOString()}`);
+    if (scheduledAt) {
+      console.log(`Scheduled execution time: ${scheduledAt}`);
+    }
 
     // Check if this is a forced send (admin override) or test mode
-    const requestBody = await req.json().catch(() => ({}));
     const forceSend = requestBody.force === true;
     const testEmail = requestBody.testEmail; // If provided, send only to this email as a test
     
@@ -141,10 +150,31 @@ const handler = async (req: Request): Promise<Response> => {
       throw tasksError;
     }
 
-    console.log(`Found ${tasks?.length || 0} SphereSync tasks`);
+    console.log(`Found ${tasks?.length || 0} SphereSync tasks for week ${currentWeek}, year ${currentYear}`);
+    
+    // If no tasks found, log warning but don't fail - this might be normal if no tasks were generated
+    if (!tasks || tasks.length === 0) {
+      const warningMessage = `WARNING: No SphereSync tasks found for week ${currentWeek}, year ${currentYear}. This might indicate that task generation did not run or failed.`;
+      console.warn(warningMessage);
+      return new Response(JSON.stringify({
+        success: false,
+        warning: true,
+        message: warningMessage,
+        week_number: currentWeek,
+        year: currentYear,
+        emails_sent: 0,
+        emails_skipped: 0,
+        source: requestSource
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200, // Return 200 but with warning flag
+      });
+    }
 
     // Get agent emails
     const agentIds = [...new Set(tasks?.map(task => task.agent_id) || [])];
+    
+    console.log(`Found ${agentIds.length} unique agents with tasks`);
     
     const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
@@ -158,7 +188,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     const agentEmails = new Map(profiles?.map(p => [p.user_id, p]) || []);
     
-    console.log(`Found ${agentEmails.size} agent profiles`);
+    console.log(`Found ${agentEmails.size} agent profiles with email addresses`);
 
     // Group tasks by agent
     const tasksByAgent = new Map<string, any[]>();
@@ -170,17 +200,21 @@ const handler = async (req: Request): Promise<Response> => {
       tasksByAgent.get(task.agent_id)?.push(task);
     });
 
+    console.log(`Grouped tasks for ${tasksByAgent.size} agents`);
+
     let emailsSent = 0;
     let emailsSkipped = 0;
     const agentsProcessed: string[] = [];
     const agentsSkipped: string[] = [];
+    const agentsFailed: string[] = [];
 
     // Send email to each agent
     for (const [agentId, agentTasks] of tasksByAgent) {
       const agent = agentEmails.get(agentId);
       
       if (!agent?.email) {
-        console.log(`No email found for agent ${agentId}`);
+        console.warn(`No email found for agent ${agentId} - skipping`);
+        agentsSkipped.push(`Agent ${agentId} (no email)`);
         continue;
       }
 
@@ -199,6 +233,11 @@ const handler = async (req: Request): Promise<Response> => {
           .eq('week_number', currentWeek)
           .eq('year', currentYear)
           .maybeSingle();
+
+        if (logError) {
+          console.error(`Error checking email log for agent ${agentId}:`, logError);
+          // Continue anyway - don't block on log check errors
+        }
 
         if (existingLog) {
           const agentName = agent.first_name ? `${agent.first_name} ${agent.last_name}`.trim() : agent.email;
@@ -377,6 +416,7 @@ const handler = async (req: Request): Promise<Response> => {
 
           if (logInsertError) {
             console.error(`Failed to log email send for agent ${agentId}:`, logInsertError);
+            // Don't fail the whole process if logging fails
           } else {
             console.log(`Logged email send for agent ${agentId}`);
           }
@@ -388,34 +428,62 @@ const handler = async (req: Request): Promise<Response> => {
         await new Promise(resolve => setTimeout(resolve, 1000));
 
       } catch (error) {
-        console.error(`Failed to send email to agent ${agentId}:`, error);
+        const agentName = agentEmails.get(agentId)?.email || agentId;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`Failed to send email to agent ${agentId} (${agentName}):`, errorMessage);
+        agentsFailed.push(`${agentName}: ${errorMessage}`);
         // Continue with other agents even if one fails
       }
     }
 
-    console.log(`SphereSync email function completed. Sent ${emailsSent} emails, skipped ${emailsSkipped}.`);
+    const completionMessage = `SphereSync email function completed. Sent ${emailsSent} emails, skipped ${emailsSkipped}, failed ${agentsFailed.length}.`;
+    console.log(completionMessage);
+    console.log(`Agents processed: ${agentsProcessed.length}`);
+    console.log(`Agents skipped: ${agentsSkipped.length}`);
+    if (agentsFailed.length > 0) {
+      console.error(`Agents failed: ${agentsFailed.length}`, agentsFailed);
+    }
+    
+    // Log summary for monitoring
+    if (emailsSent === 0 && emailsSkipped === 0 && agentsFailed.length === 0) {
+      console.warn('WARNING: No emails were sent, skipped, or failed. This might indicate an issue.');
+    }
 
     return new Response(JSON.stringify({
       success: true,
-      message: `Sent ${emailsSent} emails, skipped ${emailsSkipped} (already sent)`,
+      message: `Sent ${emailsSent} emails, skipped ${emailsSkipped} (already sent), failed ${agentsFailed.length}`,
       week_number: currentWeek,
       year: currentYear,
       emails_sent: emailsSent,
       emails_skipped: emailsSkipped,
       agents_processed: agentsProcessed,
       agents_skipped: agentsSkipped,
-      force_send: forceSend
+      agents_failed: agentsFailed,
+      force_send: forceSend,
+      execution_time: new Date().toISOString(),
+      source: requestSource
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
 
   } catch (error) {
-    console.error('Error in spheresync-email-function:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    console.error('ERROR in spheresync-email-function:', {
+      message: errorMessage,
+      stack: errorStack,
+      timestamp: new Date().toISOString(),
+      source: requestSource || 'unknown'
+    });
     
     return new Response(JSON.stringify({
       success: false,
-      error: error.message
+      error: errorMessage,
+      error_type: error instanceof Error ? error.constructor.name : 'Unknown',
+      timestamp: new Date().toISOString(),
+      source: requestSource || 'unknown'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
