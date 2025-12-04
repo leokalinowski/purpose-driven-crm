@@ -88,9 +88,11 @@ export const EventPublicHeader = ({
                 <Calendar className="h-5 w-5" style={{ color: primaryColor }} />
               </div>
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Date</p>
-                <p className="font-semibold">{format(new Date(eventDate), 'EEEE, MMMM d, yyyy')}</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm font-medium text-muted-foreground">Date & Time</p>
+                <p className="font-semibold">
+                  {format(new Date(eventDate), 'EEEE, MMMM d, yyyy')}
+                </p>
+                <p className="text-sm font-medium text-foreground">
                   {format(new Date(eventDate), 'h:mm a')}
                 </p>
               </div>

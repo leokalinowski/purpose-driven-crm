@@ -25,7 +25,25 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
   const { agents, fetchAgents, getAgentDisplayName } = useAgents();
   const [selectedAgentId, setSelectedAgentId] = useState<string>(adminAgentId || event?.agent_id || user?.id || '');
   const [title, setTitle] = useState(event?.title || '');
-  const [eventDate, setEventDate] = useState(event?.event_date ? new Date(event.event_date).toISOString().split('T')[0] : '');
+  // Fix date handling: use local date string to avoid timezone issues
+  const getLocalDateString = (dateStr: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const [eventDate, setEventDate] = useState(event?.event_date ? getLocalDateString(event.event_date) : '');
+  const [eventTime, setEventTime] = useState(() => {
+    if (event?.event_date) {
+      const date = new Date(event.event_date);
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${hours}:${minutes}`;
+    }
+    return '18:00'; // Default to 6 PM
+  });
   const [location, setLocation] = useState(event?.location || '');
   const [description, setDescription] = useState(event?.description || '');
   const [theme, setTheme] = useState(event?.theme || '');
@@ -33,6 +51,8 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
   const [maxCapacity, setMaxCapacity] = useState<number | undefined>(event?.max_capacity);
   const [isPublished, setIsPublished] = useState(event?.is_published || false);
   const [headerImageUrl, setHeaderImageUrl] = useState(event?.header_image_url || '');
+  const [headerImageFile, setHeaderImageFile] = useState<File | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [brandColor, setBrandColor] = useState(event?.brand_color || '#2563eb');
   
   const [loading, setLoading] = useState(false);
@@ -107,7 +127,13 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
   useEffect(() => {
     if (event) {
       setTitle(event.title || '');
-      setEventDate(event.event_date ? new Date(event.event_date).toISOString().split('T')[0] : '');
+      setEventDate(event.event_date ? getLocalDateString(event.event_date) : '');
+      if (event.event_date) {
+        const date = new Date(event.event_date);
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        setEventTime(`${hours}:${minutes}`);
+      }
       setLocation(event.location || '');
       setDescription(event.description || '');
       setTheme(event.theme || '');
@@ -118,6 +144,87 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
       setBrandColor(event.brand_color || '#2563eb');
     }
   }, [event]);
+
+  // File upload helper function
+  const uploadHeaderImage = async (file: File): Promise<string> => {
+    const targetAgentId = isAdminMode ? selectedAgentId : user?.id;
+    if (!targetAgentId) {
+      throw new Error('Agent ID is required for file upload');
+    }
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `event-header-${Date.now()}.${fileExt}`;
+    const filePath = `${targetAgentId}/events/${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('agent-assets')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      });
+
+    if (error) {
+      console.error('Upload error:', error);
+      throw new Error(`Failed to upload image: ${error.message}`);
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('agent-assets')
+      .getPublicUrl(filePath);
+
+    if (!urlData?.publicUrl) {
+      throw new Error('Failed to get public URL for uploaded file');
+    }
+
+    return urlData.publicUrl;
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid file type",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please select an image smaller than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingImage(true);
+    setHeaderImageFile(file);
+
+    try {
+      const uploadedUrl = await uploadHeaderImage(file);
+      setHeaderImageUrl(uploadedUrl);
+      toast({
+        title: "Image uploaded",
+        description: "Header image uploaded successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Upload failed",
+        description: error.message || "Failed to upload image",
+        variant: "destructive",
+      });
+      setHeaderImageFile(null);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,9 +248,15 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
 
     setLoading(true);
     try {
+      // Combine date and time into a single datetime string
+      // Use local timezone to avoid date shifting issues
+      const [hours, minutes] = eventTime.split(':');
+      const dateTime = new Date(`${eventDate}T${hours}:${minutes}`);
+      const eventDateTime = dateTime.toISOString();
+
       const eventData = {
         title: title.trim(),
-        event_date: eventDate,
+        event_date: eventDateTime,
         location: location.trim() || undefined,
         description: description.trim() || undefined,
         theme: theme.trim() || undefined,
@@ -246,6 +359,17 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
                 required
               />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="eventTime">Event Time *</Label>
+              <Input
+                id="eventTime"
+                type="time"
+                value={eventTime}
+                onChange={(e) => setEventTime(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -309,17 +433,44 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="headerImageUrl">Header Image URL</Label>
-            <Input
-              id="headerImageUrl"
-              type="url"
-              value={headerImageUrl}
-              onChange={(e) => setHeaderImageUrl(e.target.value)}
-              placeholder="https://example.com/image.jpg"
-            />
-            <p className="text-xs text-muted-foreground">
-              Optional: URL to an image for the public event page header
-            </p>
+            <Label htmlFor="headerImage">Header Image</Label>
+            <div className="space-y-2">
+              <Input
+                id="headerImage"
+                type="file"
+                accept="image/*"
+                onChange={handleImageFileChange}
+                disabled={uploadingImage}
+                className="cursor-pointer"
+              />
+              {headerImageUrl && (
+                <div className="mt-2">
+                  <img
+                    src={headerImageUrl}
+                    alt="Header preview"
+                    className="h-32 w-full object-cover rounded-md border"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setHeaderImageUrl('');
+                      setHeaderImageFile(null);
+                    }}
+                    className="mt-2"
+                  >
+                    Remove Image
+                  </Button>
+                </div>
+              )}
+              {uploadingImage && (
+                <p className="text-xs text-muted-foreground">Uploading image...</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Optional: Upload an image for the public event page header (max 5MB)
+              </p>
+            </div>
           </div>
 
           <div className="space-y-2">

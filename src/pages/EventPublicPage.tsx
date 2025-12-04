@@ -8,7 +8,7 @@ import { RSVPStats } from '@/components/events/rsvp/RSVPStats';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, MapPin, Users } from 'lucide-react';
 
 interface EventData {
   id: string;
@@ -180,21 +180,102 @@ const EventPublicPage = () => {
             />
           )}
 
-          {/* Additional Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Questions?</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                If you have any questions about this event, please contact{' '}
-                {agentName || 'the event organizer'}.
-                {event.profiles?.phone_number && (
-                  <> You can reach them at {event.profiles.phone_number}.</>
-                )}
-              </p>
-            </CardContent>
-          </Card>
+          {/* Agent Contact Information */}
+          {event.profiles && (agentName || event.profiles.phone_number || event.profiles.email || event.profiles.office_address) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Contact Information</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Get in touch with {agentName || 'the event organizer'}
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {event.profiles.phone_number && (
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-full p-2" style={{ backgroundColor: `${primaryColor}20` }}>
+                        <svg className="h-5 w-5" style={{ color: primaryColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Phone</p>
+                        <a href={`tel:${event.profiles.phone_number}`} className="font-semibold hover:underline">
+                          {event.profiles.phone_number}
+                        </a>
+                        {event.profiles.office_number && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Office: <a href={`tel:${event.profiles.office_number}`} className="hover:underline">{event.profiles.office_number}</a>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {event.profiles.email && (
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-full p-2" style={{ backgroundColor: `${primaryColor}20` }}>
+                        <svg className="h-5 w-5" style={{ color: primaryColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Email</p>
+                        <a href={`mailto:${event.profiles.email}`} className="font-semibold hover:underline break-all">
+                          {event.profiles.email}
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {event.profiles.office_address && (
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-full p-2" style={{ backgroundColor: `${primaryColor}20` }}>
+                        <MapPin className="h-5 w-5" style={{ color: primaryColor }} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Office Address</p>
+                        <p className="font-semibold whitespace-pre-line">{event.profiles.office_address}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {(event.profiles.brokerage || event.profiles.team_name) && (
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-full p-2" style={{ backgroundColor: `${primaryColor}20` }}>
+                        <Users className="h-5 w-5" style={{ color: primaryColor }} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Brokerage & Team</p>
+                        {event.profiles.brokerage && (
+                          <p className="font-semibold">{event.profiles.brokerage}</p>
+                        )}
+                        {event.profiles.team_name && (
+                          <p className="text-sm text-muted-foreground">{event.profiles.team_name}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {event.profiles.website && (
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-full p-2" style={{ backgroundColor: `${primaryColor}20` }}>
+                        <svg className="h-5 w-5" style={{ color: primaryColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Website</p>
+                        <a href={event.profiles.website} target="_blank" rel="noopener noreferrer" className="font-semibold hover:underline break-all">
+                          {event.profiles.website.replace(/^https?:\/\//, '')}
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
