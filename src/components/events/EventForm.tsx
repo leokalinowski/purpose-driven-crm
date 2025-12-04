@@ -240,10 +240,19 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
     setLoading(true);
     try {
       // Combine date and time into a single datetime string
-      // Use local timezone to avoid date shifting issues
+      // Create date in local timezone, then convert to ISO string
       const [hours, minutes] = eventTime.split(':');
-      const dateTime = new Date(`${eventDate}T${hours}:${minutes}`);
-      const eventDateTime = dateTime.toISOString();
+      // Create a date object using local time components
+      const localDate = new Date(eventDate);
+      localDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      const eventDateTime = localDate.toISOString();
+      
+      console.log('Updating event with date/time:', {
+        eventDate,
+        eventTime,
+        eventDateTime,
+        isEditing
+      });
 
       // When editing, only include fields that should be updated
       // Don't reset attendance_count and leads_generated
