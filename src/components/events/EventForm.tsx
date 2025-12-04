@@ -264,6 +264,7 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
       const eventDateTime = `${eventDate}T${hours}:${minutes}:00.000Z`;
 
       console.log('SAVING EVENT WITH:', {
+        title: title.trim(),
         eventDate,
         eventTime,
         eventDateTime,
