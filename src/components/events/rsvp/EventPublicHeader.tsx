@@ -47,23 +47,24 @@ export const EventPublicHeader = ({
       {/* Event Title */}
       <div className="text-center space-y-4">
         {(agentLogo || agentHeadshot) && (
-          <div className="flex justify-center mb-4">
-            {agentLogo ? (
-              <img 
-                src={agentLogo} 
-                alt={`${agentName || 'Agent'} logo`}
-                className="h-24 w-auto object-contain"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-              />
-            ) : agentHeadshot ? (
+          <div className="flex justify-center items-center gap-4 mb-4 flex-wrap">
+            {agentHeadshot && (
               <img 
                 src={agentHeadshot} 
                 alt={agentName || 'Agent'}
-                className="h-24 w-24 rounded-full object-cover border-4 shadow-lg"
+                className="h-20 w-20 md:h-24 md:w-24 rounded-full object-cover border-4 shadow-lg"
                 style={{ borderColor: primaryColor }}
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
-            ) : null}
+            )}
+            {agentLogo && (
+              <img 
+                src={agentLogo} 
+                alt={`${agentName || 'Agent'} logo`}
+                className="h-16 md:h-24 w-auto object-contain max-w-xs"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            )}
           </div>
         )}
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{title}</h1>
