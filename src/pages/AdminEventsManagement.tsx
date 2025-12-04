@@ -340,14 +340,10 @@ const AdminEventsManagement = () => {
           </div>
         </div>
 
-        {/* Debug: Current tab is {activeTab} */}
-        <Tabs value={activeTab} onValueChange={(value) => {
-          console.log('Tab changed to:', value);
-          setActiveTab(value as 'events' | 'emails');
-        }} className="w-full mt-6">
-          <TabsList className="grid w-full grid-cols-2 mb-6 border-2 border-blue-500">
-            <TabsTrigger value="events" className="text-base font-semibold">📅 Events Management</TabsTrigger>
-            <TabsTrigger value="emails" className="text-base font-semibold">📧 Email Management</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'events' | 'emails')} className="w-full mt-6">
+          <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsTrigger value="events">Events Management</TabsTrigger>
+            <TabsTrigger value="emails">Email Management</TabsTrigger>
           </TabsList>
 
             <TabsContent value="events" className="space-y-4 mt-6">

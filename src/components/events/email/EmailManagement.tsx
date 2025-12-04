@@ -81,37 +81,51 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
   const loadEvents = async () => {
     setLoadingEvents(true)
     try {
-      const { data, error } = await supabase
+      // Fetch events and profiles separately to avoid relationship query issues
+      const { data: eventsData, error: eventsError } = await supabase
         .from('events')
-        .select(`
-          id,
-          title,
-          event_date,
-          profiles:agent_id (
-            first_name,
-            last_name
-          )
-        `)
+        .select('id, title, event_date, agent_id')
         .eq('is_published', true)
         .order('event_date', { ascending: false })
 
-      if (error) throw error
+      if (eventsError) throw eventsError
 
-      const formattedEvents: EventOption[] = (data || []).map(event => ({
-        id: event.id,
-        title: event.title,
-        event_date: event.event_date,
-        agent_name: event.profiles ?
-          `${event.profiles.first_name || ''} ${event.profiles.last_name || ''}`.trim() || 'Unknown Agent' :
-          'Unknown Agent'
-      }))
+      // Fetch profiles for all unique agent_ids
+      const agentIds = [...new Set((eventsData || []).map(e => e.agent_id).filter(Boolean))]
+      let profilesMap: Record<string, { first_name?: string; last_name?: string }> = {}
+
+      if (agentIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('user_id, first_name, last_name')
+          .in('user_id', agentIds)
+
+        if (profilesData) {
+          profilesMap = profilesData.reduce((acc, p) => {
+            acc[p.user_id] = p
+            return acc
+          }, {} as Record<string, { first_name?: string; last_name?: string }>)
+        }
+      }
+
+      const formattedEvents: EventOption[] = (eventsData || []).map(event => {
+        const profile = profilesMap[event.agent_id]
+        return {
+          id: event.id,
+          title: event.title,
+          event_date: event.event_date,
+          agent_name: profile ?
+            `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Unknown Agent' :
+            'Unknown Agent'
+        }
+      })
 
       setEvents(formattedEvents)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading events:', error)
       toast({
         title: "Error loading events",
-        description: "Could not load available events for email management.",
+        description: error.message || "Could not load available events for email management.",
         variant: "destructive"
       })
     } finally {
