@@ -194,16 +194,7 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Please select an image smaller than 5MB",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    // No file size restriction - user will manage costs in Supabase
     setUploadingImage(true);
     setHeaderImageFile(file);
 
@@ -468,7 +459,7 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
                 <p className="text-xs text-muted-foreground">Uploading image...</p>
               )}
               <p className="text-xs text-muted-foreground">
-                Optional: Upload an image for the public event page header (max 5MB)
+                Optional: Upload an image for the public event page header
               </p>
             </div>
           </div>
