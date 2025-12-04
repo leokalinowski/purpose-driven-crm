@@ -5,14 +5,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { useEmailTemplates, EmailTemplate } from '@/hooks/useEmailTemplates'
-import { Loader2, Save, Eye } from 'lucide-react'
+import { useGlobalEmailTemplates, GlobalEmailTemplate } from '@/hooks/useGlobalEmailTemplates'
+import { Loader2, Save, Eye, Globe } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getDefaultEmailTemplate } from '@/utils/emailTemplateBuilder'
-import { useGlobalEmailTemplates } from '@/hooks/useGlobalEmailTemplates'
 
-interface EmailTemplateEditorProps {
-  eventId: string
+interface GlobalTemplateEditorProps {
   emailType: 'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show'
   onSave?: () => void
 }
@@ -25,13 +23,11 @@ const EMAIL_TYPE_LABELS = {
   no_show: 'No-Show Follow-up'
 }
 
-export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
-  eventId,
+export const GlobalTemplateEditor: React.FC<GlobalTemplateEditorProps> = ({
   emailType,
   onSave
 }) => {
-  const { templates, createTemplate, updateTemplate, getTemplateByType } = useEmailTemplates(eventId)
-  const { getTemplateByType: getGlobalTemplate } = useGlobalEmailTemplates()
+  const { templates, createTemplate, updateTemplate, getTemplateByType } = useGlobalEmailTemplates()
   const { toast } = useToast()
 
   const [subject, setSubject] = useState('')
@@ -42,30 +38,22 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
   const [previewMode, setPreviewMode] = useState(false)
 
   const existingTemplate = getTemplateByType(emailType)
-  const globalTemplate = getGlobalTemplate(emailType)
 
   useEffect(() => {
     if (existingTemplate) {
-      // Use event-specific template
       setSubject(existingTemplate.subject)
       setHtmlContent(existingTemplate.html_content)
       setTextContent(existingTemplate.text_content || '')
       setIsActive(existingTemplate.is_active)
-    } else if (globalTemplate) {
-      // Use global template as default
-      setSubject(globalTemplate.subject)
-      setHtmlContent(globalTemplate.html_content)
-      setTextContent(globalTemplate.text_content || '')
-      setIsActive(true)
     } else {
-      // Use built-in default template
+      // Load default template
       const defaultTemplate = getDefaultEmailTemplate(emailType)
-      setSubject(`You're confirmed for {event_title}`)
+      setSubject(defaultTemplate.match(/<title>(.*?)<\/title>/)?.[1] || `You're confirmed for {event_title}`)
       setHtmlContent(defaultTemplate)
       setTextContent('')
       setIsActive(true)
     }
-  }, [existingTemplate, globalTemplate, emailType])
+  }, [existingTemplate, emailType])
 
   const handleSave = async () => {
     if (!subject.trim() || !htmlContent.trim()) {
@@ -80,7 +68,6 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
     setSaving(true)
     try {
       const templateData = {
-        event_id: eventId,
         email_type: emailType,
         subject: subject.trim(),
         html_content: htmlContent.trim(),
@@ -91,23 +78,23 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
       if (existingTemplate) {
         await updateTemplate(existingTemplate.id, templateData)
         toast({
-          title: "Template updated",
-          description: `${EMAIL_TYPE_LABELS[emailType]} template has been updated.`
+          title: "Global template updated",
+          description: `${EMAIL_TYPE_LABELS[emailType]} global template has been updated.`
         })
       } else {
         await createTemplate(templateData)
         toast({
-          title: "Template created",
-          description: `${EMAIL_TYPE_LABELS[emailType]} template has been created.`
+          title: "Global template created",
+          description: `${EMAIL_TYPE_LABELS[emailType]} global template has been created.`
         })
       }
 
       onSave?.()
     } catch (error) {
-      console.error('Error saving template:', error)
+      console.error('Error saving global template:', error)
       toast({
         title: "Error saving template",
-        description: "There was an error saving the email template.",
+        description: "There was an error saving the global email template.",
         variant: "destructive"
       })
     } finally {
@@ -116,38 +103,21 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
   }
 
   const renderPreview = () => {
-    let previewContent = htmlContent
+    const previewContent = htmlContent
       .replace(/{event_title}/g, '[Event Title]')
       .replace(/{event_date}/g, '[Event Date]')
       .replace(/{event_time}/g, '[Event Time]')
-      .replace(/{event_description}/g, '[Event Description - This is a sample description of what the event is about.]')
+      .replace(/{event_description}/g, '[Event Description]')
       .replace(/{event_location}/g, '[Event Location]')
       .replace(/{agent_name}/g, '[Agent Name]')
-      .replace(/{agent_email}/g, 'agent@example.com')
-      .replace(/{agent_phone}/g, '(555) 123-4567')
-      .replace(/{agent_office_number}/g, '(555) 987-6543')
-      .replace(/{agent_office_address}/g, '123 Main St, City, State 12345')
-      .replace(/{agent_website}/g, 'https://example.com')
-      .replace(/{agent_brokerage}/g, '[Brokerage Name]')
-      .replace(/{agent_team_name}/g, '[Team Name]')
       .replace(/{primary_color}/g, '#2563eb')
       .replace(/{secondary_color}/g, '#1e40af')
-      .replace(/{headshot_url}/g, 'https://via.placeholder.com/100')
-      .replace(/{logo_colored_url}/g, 'https://via.placeholder.com/200x60')
-      .replace(/{logo_white_url}/g, 'https://via.placeholder.com/200x60/ffffff/000000')
-
-    // Handle conditional blocks - show all for preview
-    previewContent = previewContent.replace(/\{#if ([^}]+)\}([\s\S]*?)\{\/if\}/g, '$2')
 
     return (
-      <div className="border rounded p-4 bg-white max-h-[600px] overflow-auto">
-        <iframe
-          srcDoc={previewContent}
-          className="w-full border-0"
-          style={{ minHeight: '500px' }}
-          title="Email Preview"
-        />
-      </div>
+      <div
+        className="border rounded p-4 bg-white"
+        dangerouslySetInnerHTML={{ __html: previewContent }}
+      />
     )
   }
 
@@ -155,7 +125,10 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span>Event-Specific Template - {EMAIL_TYPE_LABELS[emailType]}</span>
+          <div className="flex items-center gap-2">
+            <Globe className="h-5 w-5 text-blue-600" />
+            <span>Global Template - {EMAIL_TYPE_LABELS[emailType]}</span>
+          </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -169,6 +142,12 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+          <p className="text-sm text-blue-800">
+            <strong>Global Templates</strong> are used as defaults for all events. Individual events can override these with their own custom templates.
+          </p>
+        </div>
+
         {previewMode ? (
           <div className="space-y-4">
             <div>
@@ -193,7 +172,7 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
                 placeholder="Enter email subject..."
               />
               <p className="text-xs text-gray-500 mt-1">
-                Available variables: {'{event_title}'}, {'{event_date}'}, {'{event_time}'}, {'{event_description}'}, {'{event_location}'}, {'{agent_name}'}
+                Available variables: {'{event_title}'}, {'{event_date}'}, {'{event_time}'}, {'{agent_name}'}
               </p>
             </div>
 
@@ -208,10 +187,7 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
                 className="font-mono text-sm"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Available variables: {'{event_title}'}, {'{event_date}'}, {'{event_time}'}, {'{event_description}'}, {'{event_location}'}, {'{agent_name}'}, {'{agent_email}'}, {'{agent_phone}'}, {'{agent_office_number}'}, {'{agent_office_address}'}, {'{agent_website}'}, {'{agent_brokerage}'}, {'{agent_team_name}'}, {'{primary_color}'}, {'{secondary_color}'}, {'{headshot_url}'}, {'{logo_colored_url}'}, {'{logo_white_url}'}
-              </p>
-              <p className="text-xs text-blue-600 mt-1">
-                💡 Tip: Use conditional blocks like {'{#if headshot_url}'}...{'{/if}'} to show content only when variables exist
+                Available variables: {'{event_title}'}, {'{event_date}'}, {'{event_time}'}, {'{event_description}'}, {'{event_location}'}, {'{agent_name}'}, {'{primary_color}'}, {'{secondary_color}'}, {'{headshot_url}'}, {'{logo_colored_url}'}
               </p>
             </div>
 
@@ -221,7 +197,7 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
                 id="text-content"
                 value={textContent}
                 onChange={(e) => setTextContent(e.target.value)}
-                rows={8}
+                rows={10}
                 placeholder="Enter plain text version..."
               />
             </div>
@@ -239,7 +215,7 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
               <Button onClick={handleSave} disabled={saving}>
                 {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 <Save className="h-4 w-4 mr-2" />
-                Save Template
+                Save Global Template
               </Button>
             </div>
           </>

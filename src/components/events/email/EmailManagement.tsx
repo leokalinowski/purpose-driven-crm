@@ -5,11 +5,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { EmailTemplateEditor } from './EmailTemplateEditor'
+import { GlobalTemplateEditor } from './GlobalTemplateEditor'
 import { EmailMetricsDashboard } from './EmailMetricsDashboard'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
-import { Send, Mail, Calendar, Heart, UserX } from 'lucide-react'
+import { Send, Mail, Calendar, Heart, UserX, Globe, FileText } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/integrations/supabase/client'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface EmailManagementProps {
   eventId?: string
@@ -63,6 +65,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
   const [selectedEventId, setSelectedEventId] = useState<string>(initialEventId || '')
   const [selectedEventTitle, setSelectedEventTitle] = useState<string>(initialEventTitle || '')
   const [loadingEvents, setLoadingEvents] = useState(false)
+  const [templateMode, setTemplateMode] = useState<'global' | 'event'>('global')
 
   // Use the selected event or the initial event
   const currentEventId = selectedEventId || initialEventId
@@ -242,18 +245,42 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Email Management - {currentEventTitle}</span>
-            {canSendManually && (
-              <Button
-                onClick={handleSendTestEmails}
-                disabled={sending}
-                variant="outline"
-              >
-                <Send className="h-4 w-4 mr-2" />
-                {sending ? 'Sending...' : 'Send Now'}
-              </Button>
-            )}
+          <CardTitle className="flex items-center justify-between flex-wrap gap-4">
+            <span>
+              {templateMode === 'global' ? 'Global Email Templates' : `Email Templates - ${currentEventTitle}`}
+            </span>
+            <div className="flex items-center gap-2">
+              {currentEventId && (
+                <div className="flex items-center gap-2 border rounded-lg p-1">
+                  <Button
+                    variant={templateMode === 'global' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setTemplateMode('global')}
+                  >
+                    <Globe className="h-4 w-4 mr-2" />
+                    Global
+                  </Button>
+                  <Button
+                    variant={templateMode === 'event' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setTemplateMode('event')}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Event-Specific
+                  </Button>
+                </div>
+              )}
+              {canSendManually && templateMode === 'event' && (
+                <Button
+                  onClick={handleSendTestEmails}
+                  disabled={sending}
+                  variant="outline"
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  {sending ? 'Sending...' : 'Send Now'}
+                </Button>
+              )}
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -279,10 +306,16 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
                       </div>
                     </div>
 
-                    <EmailTemplateEditor
-                      eventId={currentEventId}
-                      emailType={type.key}
-                    />
+                    {templateMode === 'global' ? (
+                      <GlobalTemplateEditor
+                        emailType={type.key}
+                      />
+                    ) : (
+                      <EmailTemplateEditor
+                        eventId={currentEventId}
+                        emailType={type.key}
+                      />
+                    )}
                   </div>
                 </TabsContent>
               ))}
