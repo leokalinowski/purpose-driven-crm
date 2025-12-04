@@ -28,21 +28,24 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
   // Fix date handling: use local date string to avoid timezone issues
   const getLocalDateString = (dateStr: string) => {
     if (!dateStr) return '';
-    const date = new Date(dateStr);
+    // Parse the date as local date to avoid timezone shifting
+    const date = new Date(dateStr + 'T12:00:00'); // Add noon time to avoid DST issues
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
+
+  // For new events, start with empty date and 9 AM default time
   const [eventDate, setEventDate] = useState(event?.event_date ? getLocalDateString(event.event_date) : '');
   const [eventTime, setEventTime] = useState(() => {
     if (event?.event_date) {
-      const date = new Date(event.event_date);
+      const date = new Date(event.event_date + 'T12:00:00'); // Add noon time to avoid DST issues
       const hours = String(date.getHours()).padStart(2, '0');
       const minutes = String(date.getMinutes()).padStart(2, '0');
       return `${hours}:${minutes}`;
     }
-    return '18:00'; // Default to 6 PM
+    return '09:00'; // Default to 9 AM instead of 6 PM
   });
   const [location, setLocation] = useState(event?.location || '');
   const [description, setDescription] = useState(event?.description || '');
@@ -129,7 +132,7 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
       setTitle(event.title || '');
       setEventDate(event.event_date ? getLocalDateString(event.event_date) : '');
       if (event.event_date) {
-        const date = new Date(event.event_date);
+        const date = new Date(event.event_date + 'T12:00:00'); // Add noon time to avoid DST issues
         const hours = String(date.getHours()).padStart(2, '0');
         const minutes = String(date.getMinutes()).padStart(2, '0');
         setEventTime(`${hours}:${minutes}`);
@@ -240,12 +243,9 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
     setLoading(true);
     try {
       // Combine date and time into a single datetime string
-      // Create date in local timezone, then convert to ISO string
+      // Use the exact date/time entered by the user
       const [hours, minutes] = eventTime.split(':');
-      // Create a date object using local time components
-      const localDate = new Date(eventDate);
-      localDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-      const eventDateTime = localDate.toISOString();
+      const eventDateTime = `${eventDate}T${hours}:${minutes}:00`;
       
       console.log('Updating event with date/time:', {
         eventDate,
