@@ -91,10 +91,24 @@ export const EventPublicHeader = ({
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Date & Time</p>
                 <p className="font-semibold">
-                  {format(new Date(eventDate), 'EEEE, MMMM d, yyyy')}
+                  {(() => {
+                    const dateStr = eventDate.split('T')[0];
+                    const [year, month, day] = dateStr.split('-');
+                    return format(new Date(year, month - 1, day), 'EEEE, MMMM d, yyyy');
+                  })()}
                 </p>
                 <p className="text-sm font-medium text-foreground">
-                  {format(new Date(eventDate), 'h:mm a')}
+                  {(() => {
+                    const timeStr = eventDate.split('T')[1];
+                    if (timeStr) {
+                      const [hours, minutes] = timeStr.split(':');
+                      const hour24 = parseInt(hours);
+                      const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+                      const ampm = hour24 >= 12 ? 'PM' : 'AM';
+                      return `${hour12}:${minutes} ${ampm}`;
+                    }
+                    return '';
+                  })()}
                 </p>
               </div>
             </div>
