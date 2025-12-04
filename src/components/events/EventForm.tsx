@@ -245,7 +245,22 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
       const dateTime = new Date(`${eventDate}T${hours}:${minutes}`);
       const eventDateTime = dateTime.toISOString();
 
-      const eventData = {
+      // When editing, only include fields that should be updated
+      // Don't reset attendance_count and leads_generated
+      const eventData = isEditing ? {
+        title: title.trim(),
+        event_date: eventDateTime,
+        location: location.trim() || undefined,
+        description: description.trim() || undefined,
+        theme: theme.trim() || undefined,
+        invited_count: invitedCount || 0,
+        max_capacity: maxCapacity || undefined,
+        is_published: isPublished,
+        header_image_url: headerImageUrl.trim() || undefined,
+        brand_color: brandColor.trim() || undefined,
+        // Don't include attendance_count and leads_generated when editing
+        // to preserve existing values
+      } : {
         title: title.trim(),
         event_date: eventDateTime,
         location: location.trim() || undefined,
