@@ -312,6 +312,24 @@ serve(async (req) => {
       throw new Error(`Failed to send email: ${emailError.message}`);
     }
 
+    // Record email in tracking table
+    const { error: trackingError } = await supabaseClient
+      .from('event_emails')
+      .insert({
+        event_id: eventId,
+        rsvp_id: rsvp.id,
+        email_type: 'confirmation',
+        recipient_email: rsvp.email,
+        subject: isWaitlist ? `Waitlist Confirmation: ${event.title}` : `RSVP Confirmed: ${event.title}`,
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        resend_id: data?.id
+      })
+
+    if (trackingError) {
+      console.error('Error recording email tracking:', trackingError)
+    }
+
     console.log(`RSVP confirmation email sent to ${rsvp.email} for event ${event.title}`);
 
     return new Response(

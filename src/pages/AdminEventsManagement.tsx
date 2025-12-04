@@ -36,6 +36,7 @@ import {
 import { format, startOfToday } from 'date-fns';
 import { EventForm } from '@/components/events/EventForm';
 import { RSVPManagement } from '@/components/events/RSVPManagement';
+import { EmailManagement } from '@/components/events/email/EmailManagement';
 
 interface EventWithAgent {
   id: string;
@@ -87,6 +88,7 @@ const AdminEventsManagement = () => {
   const [editingEvent, setEditingEvent] = useState<EventWithAgent | null | undefined>(undefined);
   const [deletingEvent, setDeletingEvent] = useState<EventWithAgent | null>(null);
   const [viewingRSVPs, setViewingRSVPs] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'events' | 'emails'>('events');
   const [stats, setStats] = useState<EventStats>({
     total: 0,
     published: 0,
@@ -338,7 +340,14 @@ const AdminEventsManagement = () => {
           </div>
         </div>
 
-        {/* Stats Cards */}
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'events' | 'emails')} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="events">Events Management</TabsTrigger>
+            <TabsTrigger value="emails">Email Management</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="events" className="space-y-4">
+            {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -609,6 +618,15 @@ const AdminEventsManagement = () => {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="emails" className="space-y-4">
+            <EmailManagement
+              eventId={selectedEvent?.id}
+              eventTitle={selectedEvent?.title}
+            />
+          </TabsContent>
+        </Tabs>
 
         {/* Create/Edit Event Dialog */}
         {(editingEvent !== undefined) && (
