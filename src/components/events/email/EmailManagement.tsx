@@ -1,17 +1,26 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { EmailTemplateEditor } from './EmailTemplateEditor'
 import { EmailMetricsDashboard } from './EmailMetricsDashboard'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
-import { Send, Mail, Calendar, Heart, UserX } from 'lucide-react'
+import { Send, Mail, Calendar, Heart, UserX, ChevronDown } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { supabase } from '@/integrations/supabase/client'
 
 interface EmailManagementProps {
-  eventId: string
-  eventTitle: string
+  eventId?: string
+  eventTitle?: string
+}
+
+interface EventOption {
+  id: string
+  title: string
+  event_date: string
+  agent_name: string
 }
 
 const EMAIL_TYPES = [
@@ -47,11 +56,76 @@ const EMAIL_TYPES = [
   }
 ]
 
-export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId, eventTitle }) => {
+export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initialEventId, eventTitle: initialEventTitle }) => {
   const [selectedType, setSelectedType] = useState<'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show'>('confirmation')
   const [sending, setSending] = useState(false)
-  const { sendReminderEmails, sendThankYouEmails, sendNoShowEmails, getTemplateByType } = useEmailTemplates(eventId)
+  const [events, setEvents] = useState<EventOption[]>([])
+  const [selectedEventId, setSelectedEventId] = useState<string>(initialEventId || '')
+  const [selectedEventTitle, setSelectedEventTitle] = useState<string>(initialEventTitle || '')
+  const [loadingEvents, setLoadingEvents] = useState(false)
+
+  const { sendReminderEmails, sendThankYouEmails, sendNoShowEmails, getTemplateByType } = useEmailTemplates(currentEventId)
   const { toast } = useToast()
+
+  // Load available events if no eventId provided
+  useEffect(() => {
+    if (!initialEventId) {
+      loadEvents()
+    }
+  }, [initialEventId])
+
+  const loadEvents = async () => {
+    setLoadingEvents(true)
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .select(`
+          id,
+          title,
+          event_date,
+          profiles:agent_id (
+            first_name,
+            last_name
+          )
+        `)
+        .eq('is_published', true)
+        .order('event_date', { ascending: false })
+
+      if (error) throw error
+
+      const formattedEvents: EventOption[] = (data || []).map(event => ({
+        id: event.id,
+        title: event.title,
+        event_date: event.event_date,
+        agent_name: event.profiles ?
+          `${event.profiles.first_name || ''} ${event.profiles.last_name || ''}`.trim() || 'Unknown Agent' :
+          'Unknown Agent'
+      }))
+
+      setEvents(formattedEvents)
+    } catch (error) {
+      console.error('Error loading events:', error)
+      toast({
+        title: "Error loading events",
+        description: "Could not load available events for email management.",
+        variant: "destructive"
+      })
+    } finally {
+      setLoadingEvents(false)
+    }
+  }
+
+  const handleEventSelect = (eventId: string) => {
+    const event = events.find(e => e.id === eventId)
+    if (event) {
+      setSelectedEventId(event.id)
+      setSelectedEventTitle(event.title)
+    }
+  }
+
+  // Use the selected event or the initial event
+  const currentEventId = selectedEventId || initialEventId
+  const currentEventTitle = selectedEventTitle || initialEventTitle
 
   const handleSendTestEmails = async () => {
     const template = getTemplateByType(selectedType)
@@ -70,13 +144,13 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId, event
       switch (selectedType) {
         case 'reminder_7day':
         case 'reminder_1day':
-          result = await sendReminderEmails(eventId, selectedType)
+          result = await sendReminderEmails(currentEventId, selectedType)
           break
         case 'thank_you':
-          result = await sendThankYouEmails(eventId)
+          result = await sendThankYouEmails(currentEventId)
           break
         case 'no_show':
-          result = await sendNoShowEmails(eventId)
+          result = await sendNoShowEmails(currentEventId)
           break
         default:
           throw new Error('Manual sending not supported for this email type')
@@ -100,12 +174,53 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId, event
 
   const canSendManually = ['reminder_7day', 'reminder_1day', 'thank_you', 'no_show'].includes(selectedType)
 
+  if (!currentEventId) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Select Event for Email Management</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">Choose an event to manage its email templates and view metrics:</label>
+                <Select onValueChange={handleEventSelect} disabled={loadingEvents}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={loadingEvents ? "Loading events..." : "Select an event"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {events.map((event) => (
+                      <SelectItem key={event.id} value={event.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{event.title}</span>
+                          <span className="text-xs text-gray-500">
+                            {new Date(event.event_date).toLocaleDateString()} • {event.agent_name}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {events.length === 0 && !loadingEvents && (
+                <p className="text-sm text-gray-500">
+                  No published events found. Create and publish events first to manage their emails.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Email Management - {eventTitle}</span>
+            <span>Email Management - {currentEventTitle}</span>
             {canSendManually && (
               <Button
                 onClick={handleSendTestEmails}
@@ -142,7 +257,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId, event
                     </div>
 
                     <EmailTemplateEditor
-                      eventId={eventId}
+                      eventId={currentEventId}
                       emailType={type.key}
                     />
                   </div>
@@ -153,7 +268,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId, event
         </CardContent>
       </Card>
 
-      <EmailMetricsDashboard eventId={eventId} />
+      <EmailMetricsDashboard eventId={currentEventId} />
 
       <Card>
         <CardHeader>
