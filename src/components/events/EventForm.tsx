@@ -50,14 +50,25 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
 
   // Update selected agent when adminAgentId prop changes
   useEffect(() => {
-    if (adminAgentId) {
-      setSelectedAgentId(adminAgentId);
-    } else if (event?.agent_id) {
-      setSelectedAgentId(event.agent_id);
-    } else if (user?.id) {
-      setSelectedAgentId(user.id);
+    if (isAdminMode) {
+      // In admin mode, only set from props or event, not from user
+      if (adminAgentId) {
+        setSelectedAgentId(adminAgentId);
+      } else if (event?.agent_id) {
+        setSelectedAgentId(event.agent_id);
+      } else {
+        // For new events, leave empty so user must select
+        setSelectedAgentId('');
+      }
+    } else {
+      // In regular mode, use user's ID
+      if (event?.agent_id) {
+        setSelectedAgentId(event.agent_id);
+      } else if (user?.id) {
+        setSelectedAgentId(user.id);
+      }
     }
-  }, [adminAgentId, event?.agent_id, user?.id]);
+  }, [adminAgentId, event?.agent_id, user?.id, isAdminMode]);
 
   // Load agent branding when form opens (for new events) or when agent changes
   useEffect(() => {
