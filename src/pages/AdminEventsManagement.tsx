@@ -340,15 +340,19 @@ const AdminEventsManagement = () => {
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'events' | 'emails')} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="events">Events Management</TabsTrigger>
-            <TabsTrigger value="emails">Email Management</TabsTrigger>
+        {/* Debug: Current tab is {activeTab} */}
+        <Tabs value={activeTab} onValueChange={(value) => {
+          console.log('Tab changed to:', value);
+          setActiveTab(value as 'events' | 'emails');
+        }} className="w-full mt-6">
+          <TabsList className="grid w-full grid-cols-2 mb-6 border-2 border-blue-500">
+            <TabsTrigger value="events" className="text-base font-semibold">📅 Events Management</TabsTrigger>
+            <TabsTrigger value="emails" className="text-base font-semibold">📧 Email Management</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="events" className="space-y-4">
+            <TabsContent value="events" className="space-y-4 mt-6">
             {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Events</CardTitle>
@@ -620,7 +624,7 @@ const AdminEventsManagement = () => {
         </Card>
           </TabsContent>
 
-          <TabsContent value="emails" className="space-y-4">
+          <TabsContent value="emails" className="space-y-4 mt-6">
             <EmailManagement
               eventId={selectedEvent?.id}
               eventTitle={selectedEvent?.title}
