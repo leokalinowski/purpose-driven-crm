@@ -12,6 +12,10 @@ interface EmailMetricsDashboardProps {
 export const EmailMetricsDashboard: React.FC<EmailMetricsDashboardProps> = ({ eventId }) => {
   const { metrics, emails, loading } = useEmailMetrics(eventId)
 
+  if (!eventId) {
+    return null
+  }
+
   if (loading) {
     return (
       <Card>
