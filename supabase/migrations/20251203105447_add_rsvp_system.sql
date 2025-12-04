@@ -100,23 +100,17 @@ BEGIN
   -- Debug: Log the input
   RAISE NOTICE 'generate_event_slug input: %', title;
 
-  -- Convert to lowercase, replace spaces with hyphens, remove special chars
-  base_slug := lower(regexp_replace(title, '[^a-z0-9]+', '-', 'g'));
+  -- Convert to lowercase first, then replace non-alphanumeric with hyphens
+  base_slug := regexp_replace(lower(title), '[^a-z0-9]+', '-', 'g');
 
-  -- Debug: Log after regexp
-  RAISE NOTICE 'generate_event_slug after regexp: %', base_slug;
+  -- Debug: Log after processing
+  RAISE NOTICE 'generate_event_slug processed: %', base_slug;
 
   -- Remove leading/trailing hyphens
   base_slug := trim(both '-' from base_slug);
 
-  -- Debug: Log after trim
-  RAISE NOTICE 'generate_event_slug after trim: %', base_slug;
-
   -- Limit length
   base_slug := left(base_slug, 50);
-
-  -- Debug: Log final base_slug
-  RAISE NOTICE 'generate_event_slug final base_slug: %', base_slug;
 
   slug := base_slug;
 
@@ -125,9 +119,6 @@ BEGIN
     counter := counter + 1;
     slug := base_slug || '-' || counter;
   END LOOP;
-
-  -- Debug: Log final slug
-  RAISE NOTICE 'generate_event_slug final slug: %', slug;
 
   RETURN slug;
 END;
