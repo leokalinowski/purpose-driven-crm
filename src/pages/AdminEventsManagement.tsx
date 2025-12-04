@@ -501,10 +501,24 @@ const AdminEventsManagement = () => {
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Calendar className="h-4 w-4 text-muted-foreground" />
-                              {format(new Date(event.event_date), 'MMM d, yyyy')}
+                              {(() => {
+                                const dateStr = event.event_date.split('T')[0];
+                                const [year, month, day] = dateStr.split('-');
+                                return format(new Date(year, month - 1, day), 'MMM d, yyyy');
+                              })()}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {format(new Date(event.event_date), 'h:mm a')}
+                              {(() => {
+                                const timeStr = event.event_date.split('T')[1];
+                                if (timeStr) {
+                                  const [hours, minutes] = timeStr.split(':');
+                                  const hour24 = parseInt(hours);
+                                  const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+                                  const ampm = hour24 >= 12 ? 'PM' : 'AM';
+                                  return `${hour12}:${minutes} ${ampm}`;
+                                }
+                                return '';
+                              })()}
                             </div>
                           </TableCell>
                           <TableCell>
