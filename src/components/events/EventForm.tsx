@@ -25,30 +25,31 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
   const { agents, fetchAgents, getAgentDisplayName } = useAgents();
   const [selectedAgentId, setSelectedAgentId] = useState<string>(adminAgentId || event?.agent_id || user?.id || '');
   const [title, setTitle] = useState(event?.title || '');
-  // Fix date handling: use local date string to avoid timezone issues
-  const getLocalDateString = (dateStr: string) => {
-    if (!dateStr) return '';
-    // Parse date string directly without timezone conversion
-    // Format: YYYY-MM-DDTHH:mm:ss or YYYY-MM-DD
-    const parts = dateStr.split('T')[0].split('-');
-    const year = parts[0];
-    const month = String(parts[1]).padStart(2, '0');
-    const day = String(parts[2]).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
 
-  // For new events, start with empty date and 9 AM default time
-  const [eventDate, setEventDate] = useState(event?.event_date ? getLocalDateString(event.event_date) : '');
+  // Initialize date and time properly
+  const [eventDate, setEventDate] = useState(() => {
+    if (event?.event_date) {
+      // Extract date part directly from ISO string
+      const dateStr = event.event_date.split('T')[0];
+      console.log('Initializing eventDate with:', dateStr);
+      return dateStr;
+    }
+    console.log('Initializing eventDate as empty');
+    return '';
+  });
+
   const [eventTime, setEventTime] = useState(() => {
     if (event?.event_date) {
-      // Extract time from the datetime string directly
-      const timePart = event.event_date.split('T')[1];
-      if (timePart) {
-        return timePart.substring(0, 5); // HH:mm format
+      // Extract time part from ISO string
+      const timeStr = event.event_date.split('T')[1];
+      if (timeStr) {
+        const time = timeStr.substring(0, 5); // HH:mm
+        console.log('Initializing eventTime with:', time);
+        return time;
       }
-      return '18:00'; // fallback
     }
-    return '09:00'; // Default to 9 AM instead of 6 PM
+    console.log('Initializing eventTime as 09:00');
+    return '09:00'; // Default to 9 AM
   });
   const [location, setLocation] = useState(event?.location || '');
   const [description, setDescription] = useState(event?.description || '');
@@ -132,14 +133,16 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
 
   useEffect(() => {
     if (event) {
+      console.log('Event data received:', event);
       setTitle(event.title || '');
-      setEventDate(event.event_date ? getLocalDateString(event.event_date) : '');
+
       if (event.event_date) {
-        // Extract time from the datetime string directly
-        const timePart = event.event_date.split('T')[1];
-        if (timePart) {
-          setEventTime(timePart.substring(0, 5)); // HH:mm format
-        }
+        const dateStr = event.event_date.split('T')[0];
+        const timeStr = event.event_date.split('T')[1];
+        console.log('Setting eventDate to:', dateStr);
+        console.log('Setting eventTime to:', timeStr ? timeStr.substring(0, 5) : '09:00');
+        setEventDate(dateStr);
+        setEventTime(timeStr ? timeStr.substring(0, 5) : '09:00');
       }
       setLocation(event.location || '');
       setDescription(event.description || '');
@@ -247,12 +250,25 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
     setLoading(true);
     try {
       // Combine date and time into a single datetime string
-      // Use the exact date/time entered by the user
+      if (!eventDate || !eventTime) {
+        toast({
+          title: "Validation Error",
+          description: "Please fill in both event date and time.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const [hours, minutes] = eventTime.split(':');
-      // Create the datetime string directly without timezone conversion
+      // Create ISO datetime string
       const eventDateTime = `${eventDate}T${hours}:${minutes}:00.000Z`;
 
-      console.log('DEBUG: Creating event with:', { eventDate, eventTime, eventDateTime });
+      console.log('SAVING EVENT WITH:', {
+        eventDate,
+        eventTime,
+        eventDateTime,
+        isEditing
+      });
       
       console.log('Updating event with date/time:', {
         eventDate,
@@ -333,8 +349,13 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Event' : 'Create New Event'}</DialogTitle>
           {/* Debug info */}
-          <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
-            Debug: Date={eventDate}, Time={eventTime}, Editing={isEditing}
+          <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded space-y-1">
+            <div>Debug Info:</div>
+            <div>Date: {eventDate || 'empty'}</div>
+            <div>Time: {eventTime || 'empty'}</div>
+            <div>Editing: {isEditing ? 'Yes' : 'No'}</div>
+            <div>Event exists: {event ? 'Yes' : 'No'}</div>
+            {event?.event_date && <div>Original: {event.event_date}</div>}
           </div>
         </DialogHeader>
 
@@ -381,7 +402,10 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
                 id="eventDate"
                 type="date"
                 value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
+                onChange={(e) => {
+                  console.log('Date changed to:', e.target.value);
+                  setEventDate(e.target.value);
+                }}
                 required
               />
             </div>
@@ -392,7 +416,10 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
                 id="eventTime"
                 type="time"
                 value={eventTime}
-                onChange={(e) => setEventTime(e.target.value)}
+                onChange={(e) => {
+                  console.log('Time changed to:', e.target.value);
+                  setEventTime(e.target.value);
+                }}
                 required
               />
             </div>
