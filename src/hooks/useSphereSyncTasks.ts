@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from '@/components/ui/use-toast';
-import { getCurrentWeekTasks } from '@/utils/sphereSyncLogic';
+import { getCurrentWeekTasks, getWeekRange } from '@/utils/sphereSyncLogic';
 
 export interface Contact {
   id: string;
@@ -49,10 +49,25 @@ export function useSphereSyncTasks() {
   const [generating, setGenerating] = useState(false);
   const [historicalStats, setHistoricalStats] = useState<WeeklyStats[]>([]);
   const [lastGeneratedWeek, setLastGeneratedWeek] = useState<string | null>(null);
+  const [selectedWeek, setSelectedWeek] = useState<{ weekNumber: number; year: number } | null>(null);
   const currentWeek = getCurrentWeekTasks();
 
-  const loadTasksAndContacts = useCallback(async () => {
+  // Initialize selected week to current week
+  useEffect(() => {
+    if (!selectedWeek) {
+      setSelectedWeek({
+        weekNumber: currentWeek.weekNumber,
+        year: new Date().getFullYear()
+      });
+    }
+  }, [currentWeek.weekNumber, selectedWeek]);
+
+  const loadTasksAndContacts = useCallback(async (weekNumber?: number, year?: number) => {
     if (!user) return;
+
+    // Use selected week or current week
+    const targetWeek = weekNumber ?? selectedWeek?.weekNumber ?? currentWeek.weekNumber;
+    const targetYear = year ?? selectedWeek?.year ?? new Date().getFullYear();
 
     try {
       setLoading(true);
@@ -89,13 +104,13 @@ export function useSphereSyncTasks() {
 
       setContacts(updatedContacts);
 
-      // Load tasks (without join first, then match contacts manually)
+      // Load tasks for the selected week
       const { data: tasksData, error: tasksError } = await supabase
         .from('spheresync_tasks')
         .select('*')
         .eq('agent_id', user.id)
-        .eq('week_number', currentWeek.weekNumber)
-        .eq('year', new Date().getFullYear())
+        .eq('week_number', targetWeek)
+        .eq('year', targetYear)
         .order('created_at');
 
       if (tasksError) throw tasksError;
@@ -118,8 +133,9 @@ export function useSphereSyncTasks() {
 
       setTasks(tasksWithLeads);
 
-      // Auto-generate tasks if none exist for current week
-      if (tasksWithLeads.length === 0 && updatedContacts.length > 0) {
+      // Auto-generate tasks only for current week
+      const isCurrentWeek = targetWeek === currentWeek.weekNumber && targetYear === new Date().getFullYear();
+      if (tasksWithLeads.length === 0 && updatedContacts.length > 0 && isCurrentWeek) {
         await generateWeeklyTasksInternal(updatedContacts);
       }
 
@@ -377,6 +393,12 @@ export function useSphereSyncTasks() {
 
   const refreshTasks = loadTasksAndContacts;
 
+  // Function to load tasks for a specific week
+  const loadTasksForWeek = useCallback(async (weekNumber: number, year: number) => {
+    setSelectedWeek({ weekNumber, year });
+    await loadTasksAndContacts(weekNumber, year);
+  }, [loadTasksAndContacts]);
+
   // Function to generate tasks for newly uploaded contacts
   const generateTasksForNewContacts = useCallback(async (newContacts: Contact[]) => {
     if (!user || newContacts.length === 0) return;
@@ -454,10 +476,10 @@ export function useSphereSyncTasks() {
   }, [user, currentWeek, loadTasksAndContacts]);
 
   useEffect(() => {
-    if (user) {
-      loadTasksAndContacts();
+    if (user && selectedWeek) {
+      loadTasksAndContacts(selectedWeek.weekNumber, selectedWeek.year);
     }
-  }, [user, loadTasksAndContacts]);
+  }, [user, selectedWeek?.weekNumber, selectedWeek?.year, loadTasksAndContacts]);
 
   const callTasks = tasks.filter(task => task.task_type === 'call');
   const textTasks = tasks.filter(task => task.task_type === 'text');
@@ -471,6 +493,8 @@ export function useSphereSyncTasks() {
     generating,
     currentWeek,
     historicalStats,
+    selectedWeek,
+    loadTasksForWeek,
     generateWeeklyTasks,
     generateTasksForNewContacts,
     updateTask,

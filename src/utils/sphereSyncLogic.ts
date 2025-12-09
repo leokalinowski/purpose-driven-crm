@@ -103,3 +103,47 @@ export function getCurrentWeekTasks() {
     textCategory: getTextCategoryForWeek(weekNumber)
   };
 }
+
+/**
+ * Get previous week number(s), handling year rollover
+ */
+export function getPreviousWeekNumber(weekNumber: number, year: number, weeksBack: number = 1): { weekNumber: number; year: number } {
+  let targetWeek = weekNumber - weeksBack;
+  let targetYear = year;
+  
+  if (targetWeek < 1) {
+    // Roll back to previous year
+    targetYear = year - 1;
+    targetWeek = 52 + targetWeek; // Add the negative value (e.g., 52 + (-1) = 51)
+  }
+  
+  return { weekNumber: targetWeek, year: targetYear };
+}
+
+/**
+ * Get week info for current week and previous N weeks
+ */
+export function getWeekRange(weeksBack: number = 2): Array<{ weekNumber: number; year: number; label: string }> {
+  const currentWeek = getCurrentWeekNumber();
+  const currentYear = new Date().getFullYear();
+  const weeks: Array<{ weekNumber: number; year: number; label: string }> = [];
+  
+  // Add current week
+  weeks.push({
+    weekNumber: currentWeek,
+    year: currentYear,
+    label: `Week ${currentWeek} (Current)`
+  });
+  
+  // Add previous weeks
+  for (let i = 1; i <= weeksBack; i++) {
+    const prevWeek = getPreviousWeekNumber(currentWeek, currentYear, i);
+    weeks.push({
+      weekNumber: prevWeek.weekNumber,
+      year: prevWeek.year,
+      label: `Week ${prevWeek.weekNumber} (${i === 1 ? '1 week ago' : `${i} weeks ago`})`
+    });
+  }
+  
+  return weeks;
+}

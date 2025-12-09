@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SphereSyncTaskCard } from '@/components/spheresync/SphereSyncTaskCard';
 import { UpcomingTasksPreview } from '@/components/spheresync/UpcomingTasksPreview';
 import { ContactForm } from '@/components/database/ContactForm';
@@ -14,6 +15,7 @@ import { Layout } from '@/components/layout/Layout';
 import { Phone, MessageSquare, Calendar, BarChart3 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { getWeekRange, getCallCategoriesForWeek, getTextCategoryForWeek } from '@/utils/sphereSyncLogic';
 
 export default function SphereSyncTasks() {
   const { user } = useAuth();
@@ -25,6 +27,8 @@ export default function SphereSyncTasks() {
     loading,
     currentWeek,
     historicalStats,
+    selectedWeek,
+    loadTasksForWeek,
     updateTask,
     refreshTasks
   } = useSphereSyncTasks();
@@ -39,6 +43,24 @@ export default function SphereSyncTasks() {
   const totalTasks = callTasks.length + textTasks.length;
   const completedTasks = [...callTasks, ...textTasks].filter(task => task.completed).length;
   const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+
+  const weekRange = getWeekRange(2); // Get current + 2 previous weeks
+  const selectedWeekInfo = weekRange.find(w => 
+    w.weekNumber === selectedWeek?.weekNumber && w.year === selectedWeek?.year
+  ) || weekRange[0];
+
+  // Get categories for selected week
+  const selectedWeekCategories = selectedWeek 
+    ? {
+        callCategories: getCallCategoriesForWeek(selectedWeek.weekNumber),
+        textCategory: getTextCategoryForWeek(selectedWeek.weekNumber)
+      }
+    : currentWeek;
+
+  const handleWeekChange = (value: string) => {
+    const [weekNum, year] = value.split('-').map(Number);
+    loadTasksForWeek(weekNum, year);
+  };
 
   const handleEditContact = (task: SphereSyncTask) => {
     const contactForEdit = {
@@ -133,11 +155,36 @@ export default function SphereSyncTasks() {
       <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">SphereSync</h1>
-          <p className="text-muted-foreground">
-            Balanced contact assignment system based on surname frequency analysis
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">SphereSync</h1>
+            <p className="text-muted-foreground">
+              Balanced contact assignment system based on surname frequency analysis
+            </p>
+          </div>
+          
+          {/* Week Selector */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">View Week:</label>
+            <Select
+              value={selectedWeek ? `${selectedWeek.weekNumber}-${selectedWeek.year}` : undefined}
+              onValueChange={handleWeekChange}
+            >
+              <SelectTrigger className="w-[250px]">
+                <SelectValue placeholder="Select week" />
+              </SelectTrigger>
+              <SelectContent>
+                {weekRange.map((week) => (
+                  <SelectItem 
+                    key={`${week.weekNumber}-${week.year}`} 
+                    value={`${week.weekNumber}-${week.year}`}
+                  >
+                    {week.label} - {week.year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Current Week Stats */}
@@ -146,13 +193,13 @@ export default function SphereSyncTasks() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
-                Current Week
+                {selectedWeekInfo.label.split('(')[0].trim()}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">Week {currentWeek.weekNumber}</div>
+              <div className="text-2xl font-bold">Week {selectedWeek?.weekNumber}</div>
               <p className="text-xs text-muted-foreground">
-                Calls: {currentWeek.callCategories.join(', ')} | Text: {currentWeek.textCategory}
+                Calls: {selectedWeekCategories.callCategories.join(', ')} | Text: {selectedWeekCategories.textCategory}
               </p>
             </CardContent>
           </Card>
@@ -241,13 +288,20 @@ export default function SphereSyncTasks() {
             <Card>
               <CardContent className="p-6">
                 <div className="space-y-3">
-                  <p className="font-medium">No call tasks this week</p>
+                  <p className="font-medium">No call tasks for this week</p>
                   <p className="text-sm text-muted-foreground">
-                    Your contacts don't match this week's call categories ({currentWeek.callCategories.join(', ')}). 
+                    Your contacts don't match this week's call categories ({selectedWeekCategories.callCategories.join(', ')}). 
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    Tasks are assigned based on the first letter of your contacts' last names. Add more contacts or wait for the next week's rotation to see tasks here.
-                  </p>
+                  {selectedWeek?.weekNumber !== currentWeek.weekNumber && (
+                    <p className="text-sm text-muted-foreground">
+                      This is a past week. You can still complete tasks here if you need to follow up.
+                    </p>
+                  )}
+                  {selectedWeek?.weekNumber === currentWeek.weekNumber && (
+                    <p className="text-sm text-muted-foreground">
+                      Tasks are assigned based on the first letter of your contacts' last names. Add more contacts or wait for the next week's rotation to see tasks here.
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -276,13 +330,20 @@ export default function SphereSyncTasks() {
             <Card>
               <CardContent className="p-6">
                 <div className="space-y-3">
-                  <p className="font-medium">No text tasks this week</p>
+                  <p className="font-medium">No text tasks for this week</p>
                   <p className="text-sm text-muted-foreground">
-                    Your contacts don't match this week's text category ({currentWeek.textCategory}). 
+                    Your contacts don't match this week's text category ({selectedWeekCategories.textCategory}). 
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    Tasks are assigned based on the first letter of your contacts' last names. Add more contacts or wait for the next week's rotation to see tasks here.
-                  </p>
+                  {selectedWeek?.weekNumber !== currentWeek.weekNumber && (
+                    <p className="text-sm text-muted-foreground">
+                      This is a past week. You can still complete tasks here if you need to follow up.
+                    </p>
+                  )}
+                  {selectedWeek?.weekNumber === currentWeek.weekNumber && (
+                    <p className="text-sm text-muted-foreground">
+                      Tasks are assigned based on the first letter of your contacts' last names. Add more contacts or wait for the next week's rotation to see tasks here.
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
