@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-import { supabase } from '@/integrations/supabase/client'
+import { useState, useEffect, useCallback } from 'react'
 
 export interface GlobalEmailTemplate {
   id: string
@@ -12,60 +11,28 @@ export interface GlobalEmailTemplate {
   updated_at: string
 }
 
+// Note: global_email_templates table doesn't exist in the database schema
+// This hook provides stub implementations that return empty data
+// The email functionality needs database tables to be created first
+
 export const useGlobalEmailTemplates = () => {
   const [templates, setTemplates] = useState<GlobalEmailTemplate[]>([])
   const [loading, setLoading] = useState(false)
 
-  const fetchTemplates = async () => {
-    setLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from('global_email_templates')
-        .select('*')
-        .order('created_at', { ascending: false })
+  const fetchTemplates = useCallback(async () => {
+    // Table global_email_templates doesn't exist - return empty array
+    console.warn('global_email_templates table does not exist in database')
+    setTemplates([])
+  }, [])
 
-      if (error) throw error
-      setTemplates(data || [])
-    } catch (error) {
-      console.error('Error fetching global email templates:', error)
-    } finally {
-      setLoading(false)
-    }
+  const createTemplate = async (template: Omit<GlobalEmailTemplate, 'id' | 'created_at' | 'updated_at'>): Promise<GlobalEmailTemplate> => {
+    console.warn('Cannot create template - global_email_templates table does not exist')
+    throw new Error('Global email templates feature requires database setup')
   }
 
-  const createTemplate = async (template: Omit<GlobalEmailTemplate, 'id' | 'created_at' | 'updated_at'>) => {
-    try {
-      const { data, error } = await supabase
-        .from('global_email_templates')
-        .insert(template)
-        .select()
-        .single()
-
-      if (error) throw error
-      setTemplates(prev => [data, ...prev])
-      return data
-    } catch (error) {
-      console.error('Error creating global email template:', error)
-      throw error
-    }
-  }
-
-  const updateTemplate = async (id: string, updates: Partial<GlobalEmailTemplate>) => {
-    try {
-      const { data, error } = await supabase
-        .from('global_email_templates')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single()
-
-      if (error) throw error
-      setTemplates(prev => prev.map(t => t.id === id ? data : t))
-      return data
-    } catch (error) {
-      console.error('Error updating global email template:', error)
-      throw error
-    }
+  const updateTemplate = async (id: string, updates: Partial<GlobalEmailTemplate>): Promise<GlobalEmailTemplate> => {
+    console.warn('Cannot update template - global_email_templates table does not exist')
+    throw new Error('Global email templates feature requires database setup')
   }
 
   const getTemplateByType = (emailType: string) => {
@@ -74,7 +41,7 @@ export const useGlobalEmailTemplates = () => {
 
   useEffect(() => {
     fetchTemplates()
-  }, [])
+  }, [fetchTemplates])
 
   return {
     templates,
@@ -85,4 +52,3 @@ export const useGlobalEmailTemplates = () => {
     getTemplateByType
   }
 }
-

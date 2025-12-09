@@ -112,17 +112,16 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
       setLoadingBranding(true);
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('primary_color, logo_colored_url, headshot_url')
+        .select('headshot_url')
         .eq('user_id', agentId)
         .single();
 
+      // Note: primary_color and logo_colored_url columns don't exist in profiles table
+      // Using default brand color and no default header image
       if (profileData) {
-        if (profileData.primary_color && !event?.brand_color) {
-          setBrandColor(profileData.primary_color);
-        }
-        if (profileData.logo_colored_url && !event?.header_image_url) {
-          setHeaderImageUrl(profileData.logo_colored_url);
-        }
+        // Could set headshot as header image if desired
+        // For now, just log that branding was loaded
+        console.log('Agent branding loaded for:', agentId);
       }
     } catch (error) {
       console.warn('Could not load agent branding:', error);

@@ -36,6 +36,7 @@ interface EventData {
     headshot_url?: string;
     logo_colored_url?: string;
     logo_white_url?: string;
+    email?: string;
   };
 }
 
@@ -165,7 +166,7 @@ const EventPublicPage = () => {
                   eventId={event.id}
                   maxCapacity={event.max_capacity}
                   currentCount={event.current_rsvp_count}
-                  onSuccess={handleRSVPSuccess}
+                  onSuccess={() => handleRSVPSuccess(null)}
                 />
               </CardContent>
             </Card>
