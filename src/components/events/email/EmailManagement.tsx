@@ -11,7 +11,6 @@ import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { Send, Mail, Calendar, Heart, UserX, Globe, FileText } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/integrations/supabase/client'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface EmailManagementProps {
   eventId?: string

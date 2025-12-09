@@ -38,7 +38,7 @@ export interface Event {
   id: string;
   title: string;
   event_date: string;
-  location: string;
+  location?: string;
   description?: string;
   theme?: string;
   speakers?: string[];

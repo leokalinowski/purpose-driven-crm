@@ -513,7 +513,7 @@ const AdminEventsManagement = () => {
                               {(() => {
                                 const dateStr = event.event_date.split('T')[0];
                                 const [year, month, day] = dateStr.split('-');
-                                return format(new Date(year, month - 1, day), 'MMM d, yyyy');
+                                return format(new Date(parseInt(year), parseInt(month) - 1, parseInt(day)), 'MMM d, yyyy');
                               })()}
                             </div>
                             <div className="text-sm text-muted-foreground">

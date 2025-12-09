@@ -535,6 +535,62 @@ export type Database = {
           },
         ]
       }
+      event_rsvps: {
+        Row: {
+          check_in_status: string | null
+          checked_in_at: string | null
+          created_at: string
+          email: string
+          event_id: string
+          guest_count: number | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          rsvp_date: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          check_in_status?: string | null
+          checked_in_at?: string | null
+          created_at?: string
+          email: string
+          event_id: string
+          guest_count?: number | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          rsvp_date?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          check_in_status?: string | null
+          checked_in_at?: string | null
+          created_at?: string
+          email?: string
+          event_id?: string
+          guest_count?: number | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          rsvp_date?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_rsvps_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_tasks: {
         Row: {
           agent_id: string
@@ -589,18 +645,25 @@ export type Database = {
         Row: {
           agent_id: string | null
           attendance_count: number | null
+          brand_color: string | null
           clickup_list_id: string | null
           created_at: string
           created_by: string | null
+          current_rsvp_count: number | null
           description: string | null
           event_date: string
           event_type: string | null
           feedback_score: number | null
           feedback_summary: string | null
+          header_image_url: string | null
           id: string
           invited_count: number | null
+          is_published: boolean | null
           leads_generated: number | null
           location: string | null
+          logo_url: string | null
+          max_capacity: number | null
+          public_slug: string | null
           quarter: string | null
           registration_info: string | null
           speakers: string[] | null
@@ -611,18 +674,25 @@ export type Database = {
         Insert: {
           agent_id?: string | null
           attendance_count?: number | null
+          brand_color?: string | null
           clickup_list_id?: string | null
           created_at?: string
           created_by?: string | null
+          current_rsvp_count?: number | null
           description?: string | null
           event_date: string
           event_type?: string | null
           feedback_score?: number | null
           feedback_summary?: string | null
+          header_image_url?: string | null
           id?: string
           invited_count?: number | null
+          is_published?: boolean | null
           leads_generated?: number | null
           location?: string | null
+          logo_url?: string | null
+          max_capacity?: number | null
+          public_slug?: string | null
           quarter?: string | null
           registration_info?: string | null
           speakers?: string[] | null
@@ -633,18 +703,25 @@ export type Database = {
         Update: {
           agent_id?: string | null
           attendance_count?: number | null
+          brand_color?: string | null
           clickup_list_id?: string | null
           created_at?: string
           created_by?: string | null
+          current_rsvp_count?: number | null
           description?: string | null
           event_date?: string
           event_type?: string | null
           feedback_score?: number | null
           feedback_summary?: string | null
+          header_image_url?: string | null
           id?: string
           invited_count?: number | null
+          is_published?: boolean | null
           leads_generated?: number | null
           location?: string | null
+          logo_url?: string | null
+          max_capacity?: number | null
+          public_slug?: string | null
           quarter?: string | null
           registration_info?: string | null
           speakers?: string[] | null
@@ -1275,15 +1352,20 @@ export type Database = {
           created_at: string
           email: string | null
           first_name: string | null
+          headshot_url: string | null
           id: string
           last_name: string | null
           license_number: string | null
           license_states: string[] | null
+          logo_colored_url: string | null
+          logo_white_url: string | null
           office_address: string | null
           office_number: string | null
           phone_number: string | null
+          primary_color: string | null
           privacy_policy_url: string | null
           role: string
+          secondary_color: string | null
           state_licenses: string[] | null
           team_name: string | null
           updated_at: string
@@ -1297,15 +1379,20 @@ export type Database = {
           created_at?: string
           email?: string | null
           first_name?: string | null
+          headshot_url?: string | null
           id?: string
           last_name?: string | null
           license_number?: string | null
           license_states?: string[] | null
+          logo_colored_url?: string | null
+          logo_white_url?: string | null
           office_address?: string | null
           office_number?: string | null
           phone_number?: string | null
+          primary_color?: string | null
           privacy_policy_url?: string | null
           role?: string
+          secondary_color?: string | null
           state_licenses?: string[] | null
           team_name?: string | null
           updated_at?: string
@@ -1319,15 +1406,20 @@ export type Database = {
           created_at?: string
           email?: string | null
           first_name?: string | null
+          headshot_url?: string | null
           id?: string
           last_name?: string | null
           license_number?: string | null
           license_states?: string[] | null
+          logo_colored_url?: string | null
+          logo_white_url?: string | null
           office_address?: string | null
           office_number?: string | null
           phone_number?: string | null
+          primary_color?: string | null
           privacy_policy_url?: string | null
           role?: string
+          secondary_color?: string | null
           state_licenses?: string[] | null
           team_name?: string | null
           updated_at?: string
@@ -1904,6 +1996,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_rsvp_duplicate: {
+        Args: { p_email: string; p_event_id: string }
+        Returns: boolean
+      }
       decrypt_social_token: {
         Args: {
           p_agent_id: string
@@ -1921,6 +2017,7 @@ export type Database = {
         Returns: Json
       }
       format_phone_display: { Args: { phone_input: string }; Returns: string }
+      generate_event_slug: { Args: { title: string }; Returns: string }
       get_current_user_role: { Args: never; Returns: string }
       has_role: {
         Args: {

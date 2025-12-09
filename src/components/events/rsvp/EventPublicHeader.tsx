@@ -94,7 +94,7 @@ export const EventPublicHeader = ({
                   {(() => {
                     const dateStr = eventDate.split('T')[0];
                     const [year, month, day] = dateStr.split('-');
-                    return format(new Date(year, month - 1, day), 'EEEE, MMMM d, yyyy');
+                    return format(new Date(parseInt(year), parseInt(month) - 1, parseInt(day)), 'EEEE, MMMM d, yyyy');
                   })()}
                 </p>
                 <p className="text-sm font-medium text-foreground">
