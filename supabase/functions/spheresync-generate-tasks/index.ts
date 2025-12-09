@@ -120,9 +120,15 @@ const handler = async (req: Request): Promise<Response> => {
 
     // For non-admin users, require authentication (but allow cron jobs without auth)
     const authHeader = req.headers.get('Authorization');
-    const isCronJob = req.headers.get('X-Cron-Job') === 'true' || req.headers.get('source') === 'pg_cron';
+    const cronJobHeader = req.headers.get('X-Cron-Job');
+    const sourceHeader = req.headers.get('source');
+    const isCronJob = cronJobHeader === 'true' || sourceHeader === 'pg_cron';
+
+    console.log(`Authentication check - isCronJob: ${isCronJob}, X-Cron-Job header: ${cronJobHeader}, source header: ${sourceHeader}`);
 
     if (!isCronJob && (!authHeader || !authHeader.startsWith('Bearer '))) {
+      console.error('Authentication failed - no valid auth header and not a cron job');
+      console.error('Headers received:', JSON.stringify(Object.fromEntries([...req.headers.entries()])));
       return new Response(
         JSON.stringify({ error: "Authentication required" }),
         { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
