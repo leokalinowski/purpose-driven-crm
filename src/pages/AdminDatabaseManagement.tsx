@@ -516,6 +516,7 @@ const AdminDatabaseManagement = () => {
 
     try {
       await updateContact(editingContact.id, contactData);
+      await fetchContacts(); // Refresh UI to show updated data
       toast({
         title: "Success",
         description: "Contact updated successfully",
