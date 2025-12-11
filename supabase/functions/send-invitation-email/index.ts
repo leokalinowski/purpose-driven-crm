@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "npm:resend@2.0.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
@@ -171,6 +172,47 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log("Invitation email sent successfully:", emailResponse);
 
+    // Log to unified email_logs table
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (supabaseUrl && supabaseServiceKey) {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        
+        // Try to find the invitation record to get agent_id if available
+        const { data: invitation } = await supabase
+          .from('invitations')
+          .select('created_by')
+          .eq('email', email)
+          .eq('code', code)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+          .catch(() => ({ data: null }));
+
+        await supabase
+          .from('email_logs')
+          .insert({
+            email_type: 'team_invitation',
+            recipient_email: email,
+            recipient_name: null,
+            agent_id: invitation?.created_by || null,
+            subject: "Welcome to Real Estate on Purpose - Your Invitation",
+            status: emailResponse.error ? 'failed' : 'sent',
+            resend_email_id: emailResponse.data?.id || null,
+            error_message: emailResponse.error ? JSON.stringify(emailResponse.error) : null,
+            metadata: {
+              invitation_code: code,
+              expires_at: expiresAt
+            },
+            sent_at: emailResponse.error ? null : new Date().toISOString()
+          })
+          .catch(err => console.error('Failed to log invitation email:', err));
+      }
+    } catch (logError) {
+      console.error('Error logging invitation email:', logError);
+    }
+
     return new Response(JSON.stringify(emailResponse), {
       status: 200,
       headers: {
@@ -180,6 +222,48 @@ const handler = async (req: Request): Promise<Response> => {
     });
   } catch (error: any) {
     console.error("Error in send-invitation-email function:", error);
+    
+    // Log failed email to unified email_logs table
+    try {
+      const { email, code, expiresAt }: InvitationEmailRequest = await req.json().catch(() => ({ email: '', code: '', expiresAt: '' }));
+      if (email) {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL");
+        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+        if (supabaseUrl && supabaseServiceKey) {
+          const supabase = createClient(supabaseUrl, supabaseServiceKey);
+          
+          const { data: invitation } = await supabase
+            .from('invitations')
+            .select('created_by')
+            .eq('email', email)
+            .eq('code', code)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single()
+            .catch(() => ({ data: null }));
+
+          await supabase
+            .from('email_logs')
+            .insert({
+              email_type: 'team_invitation',
+              recipient_email: email,
+              recipient_name: null,
+              agent_id: invitation?.created_by || null,
+              subject: "Welcome to Real Estate on Purpose - Your Invitation",
+              status: 'failed',
+              error_message: error.message || error.toString(),
+              metadata: {
+                invitation_code: code,
+                expires_at: expiresAt
+              }
+            })
+            .catch(err => console.error('Failed to log failed invitation email:', err));
+        }
+      }
+    } catch (logError) {
+      console.error('Error logging failed invitation email:', logError);
+    }
+    
     return new Response(
       JSON.stringify({ error: error.message }),
       {

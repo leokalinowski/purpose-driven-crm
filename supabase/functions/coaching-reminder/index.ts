@@ -105,14 +105,22 @@ async function sendReminderEmails(
           to: { email: agent.email, name: `${agent.first_name || ''} ${agent.last_name || ''}`.trim() },
           subject: "Reminder: Submit Your Weekly Performance Data",
           html: emailHtml,
-          categories: ["coaching-reminder"]
+          categories: ["coaching-reminder"],
+          metadata: {
+            email_type: 'success_scoreboard_reminder',
+            week_number: currentWeek,
+            year: currentYear
+          }
         }
       });
 
+      const agentName = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || agent.email;
+      const emailSubject = "Reminder: Submit Your Weekly Performance Data";
+
       if (emailResponse.error) {
         console.error(`[Background] Failed to send email to ${agent.email}:`, emailResponse.error);
-        
-        // Log the failure
+
+        // Log the failure to coaching_reminder_logs
         await supabase.from('coaching_reminder_logs').insert({
           agent_id: agent.user_id,
           week_number: currentWeek,
@@ -120,27 +128,64 @@ async function sendReminderEmails(
           success: false,
           error_message: emailResponse.error.message || 'Unknown error'
         });
-        
-        emailResults.push({ 
-          agent: agent.email, 
-          success: false, 
-          error: emailResponse.error.message 
+
+        // Log failed email to unified email_logs table
+        await supabase
+          .from('email_logs')
+          .insert({
+            email_type: 'success_scoreboard_reminder',
+            recipient_email: agent.email,
+            recipient_name: agentName,
+            agent_id: agent.user_id,
+            subject: emailSubject,
+            status: 'failed',
+            error_message: emailResponse.error.message || JSON.stringify(emailResponse.error),
+            metadata: {
+              week_number: currentWeek,
+              year: currentYear
+            }
+          })
+          .catch(err => console.error('Failed to log failed email:', err));
+
+        emailResults.push({
+          agent: agent.email,
+          success: false,
+          error: emailResponse.error.message
         });
       } else {
         console.log(`[Background] Email sent successfully to ${agent.email}`);
         emailsSent++;
-        
-        // Log the success
+
+        // Log the success to coaching_reminder_logs
         await supabase.from('coaching_reminder_logs').insert({
           agent_id: agent.user_id,
           week_number: currentWeek,
           year: currentYear,
           success: true
         });
-        
-        emailResults.push({ 
-          agent: agent.email, 
-          success: true 
+
+        // Log successful email to unified email_logs table
+        await supabase
+          .from('email_logs')
+          .insert({
+            email_type: 'success_scoreboard_reminder',
+            recipient_email: agent.email,
+            recipient_name: agentName,
+            agent_id: agent.user_id,
+            subject: emailSubject,
+            status: 'sent',
+            resend_email_id: emailResponse.data?.id,
+            metadata: {
+              week_number: currentWeek,
+              year: currentYear
+            },
+            sent_at: new Date().toISOString()
+          })
+          .catch(err => console.error('Failed to log email to unified table:', err));
+
+        emailResults.push({
+          agent: agent.email,
+          success: true
         });
       }
 

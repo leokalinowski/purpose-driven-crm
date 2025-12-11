@@ -31,7 +31,7 @@ function formatLeadName(lead: any): string {
 /**
  * Send email using Resend
  */
-async function sendEmail({ to, subject, html, text, bcc }: { to: string; subject: string; html: string; text: string; bcc?: string[] }): Promise<void> {
+async function sendEmail({ to, subject, html, text, bcc }: { to: string; subject: string; html: string; text: string; bcc?: string[] }): Promise<{ data?: { id: string }, error?: any }> {
   const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
   const FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'onboarding@resend.dev';
   const FROM_NAME = Deno.env.get('RESEND_FROM_NAME') || 'SphereSync System';
@@ -78,6 +78,7 @@ async function sendEmail({ to, subject, html, text, bcc }: { to: string; subject
   }
 
   console.log('Email sent successfully via Resend:', { id: data?.id, to, subject: subject.substring(0, 50) + '...' });
+  return { data, error };
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -249,8 +250,6 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       try {
-        const agentName = agent.first_name ? `${agent.first_name} ${agent.last_name}`.trim() : agent.email;
-        agentsProcessed.push(`${agentName} (${agentTasks.length} tasks)`);
         // Separate call and text tasks
         const callTasks = agentTasks.filter(task => task.task_type === 'call');
         const textTasks = agentTasks.filter(task => task.task_type === 'text');
@@ -393,36 +392,93 @@ const handler = async (req: Request): Promise<Response> => {
           ? `[TEST] SphereSync Tasks - Week ${currentWeek} (${agentTasks.length} tasks assigned)` 
           : `SphereSync Tasks - Week ${currentWeek} (${agentTasks.length} tasks assigned)`;
         
-        await sendEmail({
-          to: recipientEmail,
-          subject: emailSubject,
-          html: htmlContent,
-          text: plainTextContent,
-          bcc: testEmail ? undefined : [adminBCC] // No BCC in test mode to avoid duplicate
-        });
-
-        console.log(`Email sent to ${recipientEmail} (${agentTasks.length} tasks)${testEmail ? ' [TEST MODE]' : ''}`);
+        const agentName = agent.first_name ? `${agent.first_name} ${agent.last_name}`.trim() : agent.email;
+        agentsProcessed.push(`${agentName} (${agentTasks.length} tasks)`);
+        let resendResponse: { data?: { id: string }, error?: any } | null = null;
         
-        // Only log the email send in non-test mode to prevent duplicates
-        if (!testEmail) {
-          const { error: logInsertError } = await supabase
-            .from('spheresync_email_logs')
-            .insert({
-              agent_id: agentId,
-              week_number: currentWeek,
-              year: currentYear,
-              task_count: agentTasks.length
-            });
+        try {
+          resendResponse = await sendEmail({
+            to: recipientEmail,
+            subject: emailSubject,
+            html: htmlContent,
+            text: plainTextContent,
+            bcc: testEmail ? undefined : [adminBCC] // No BCC in test mode to avoid duplicate
+          });
 
-          if (logInsertError) {
-            console.error(`Failed to log email send for agent ${agentId}:`, logInsertError);
-            // Don't fail the whole process if logging fails
-          } else {
-            console.log(`Logged email send for agent ${agentId}`);
+          console.log(`Email sent to ${recipientEmail} (${agentTasks.length} tasks)${testEmail ? ' [TEST MODE]' : ''}`);
+          
+          // Only log the email send in non-test mode to prevent duplicates
+          if (!testEmail) {
+            // Log to existing spheresync_email_logs table (for backward compatibility)
+            const { error: logInsertError } = await supabase
+              .from('spheresync_email_logs')
+              .insert({
+                agent_id: agentId,
+                week_number: currentWeek,
+                year: currentYear,
+                task_count: agentTasks.length
+              });
+
+            if (logInsertError) {
+              console.error(`Failed to log email send for agent ${agentId}:`, logInsertError);
+              // Don't fail the whole process if logging fails
+            }
+
+            // Log to unified email_logs table
+            const { error: unifiedLogError } = await supabase
+              .from('email_logs')
+              .insert({
+                email_type: 'spheresync_reminder',
+                recipient_email: recipientEmail,
+                recipient_name: agentName,
+                agent_id: agentId,
+                subject: emailSubject,
+                status: resendResponse?.error ? 'failed' : 'sent',
+                resend_email_id: resendResponse?.data?.id,
+                error_message: resendResponse?.error ? JSON.stringify(resendResponse.error) : null,
+                metadata: {
+                  week_number: currentWeek,
+                  year: currentYear,
+                  task_count: agentTasks.length,
+                  call_tasks: callTasks.length,
+                  text_tasks: textTasks.length
+                },
+                sent_at: new Date().toISOString()
+              });
+
+            if (unifiedLogError) {
+              console.error(`Failed to log to unified email_logs for agent ${agentId}:`, unifiedLogError);
+              // Don't fail the whole process if logging fails
+            } else {
+              console.log(`Logged email send to unified email_logs for agent ${agentId}`);
+            }
           }
+          
+          emailsSent++;
+        } catch (emailError) {
+          // Log failed email to unified email_logs table
+          if (!testEmail) {
+            const errorMessage = emailError instanceof Error ? emailError.message : String(emailError);
+            await supabase
+              .from('email_logs')
+              .insert({
+                email_type: 'spheresync_reminder',
+                recipient_email: recipientEmail,
+                recipient_name: agentName,
+                agent_id: agentId,
+                subject: emailSubject,
+                status: 'failed',
+                error_message: errorMessage,
+                metadata: {
+                  week_number: currentWeek,
+                  year: currentYear,
+                  task_count: agentTasks.length
+                }
+              })
+              .catch(err => console.error('Failed to log failed email:', err));
+          }
+          throw emailError; // Re-throw to be caught by outer catch block
         }
-        
-        emailsSent++;
 
         // Rate limiting: Resend has 2 requests/second limit, so wait 1000ms between emails
         await new Promise(resolve => setTimeout(resolve, 1000));

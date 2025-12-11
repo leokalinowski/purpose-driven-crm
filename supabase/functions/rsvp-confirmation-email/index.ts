@@ -313,7 +313,7 @@ serve(async (req) => {
     }
 
     // Record email in tracking table
-    const { error: trackingError } = await supabaseClient
+    const { error: trackingError } = await supabase
       .from('event_emails')
       .insert({
         event_id: eventId,
@@ -328,6 +328,30 @@ serve(async (req) => {
 
     if (trackingError) {
       console.error('Error recording email tracking:', trackingError)
+    }
+
+    // Log to unified email_logs table
+    try {
+      await supabase
+        .from('email_logs')
+        .insert({
+          email_type: 'event_confirmation',
+          recipient_email: rsvp.email,
+          recipient_name: rsvp.name,
+          agent_id: event.agent_id,
+          subject: isWaitlist ? `Waitlist Confirmation: ${event.title}` : `RSVP Confirmed: ${event.title}`,
+          status: 'sent',
+          resend_email_id: data?.id,
+          metadata: {
+            event_id: eventId,
+            event_title: event.title,
+            rsvp_id: rsvp.id,
+            is_waitlist: isWaitlist
+          },
+          sent_at: new Date().toISOString()
+        });
+    } catch (logError) {
+      console.error('Failed to log email to unified email_logs table:', logError);
     }
 
     console.log(`RSVP confirmation email sent to ${rsvp.email} for event ${event.title}`);
@@ -345,6 +369,46 @@ serve(async (req) => {
     );
   } catch (error: any) {
     console.error("Error sending RSVP confirmation email:", error);
+    
+    // Log failed email to unified email_logs table
+    try {
+      const payload: RSVPConfirmationRequest = await req.json().catch(() => ({ rsvp_id: '', event_id: '' }));
+      if (payload.rsvp_id && payload.event_id) {
+        const { data: rsvp } = await supabase
+          .from('event_rsvps')
+          .select('email, name')
+          .eq('id', payload.rsvp_id)
+          .single();
+        
+        const { data: event } = await supabase
+          .from('events')
+          .select('title, agent_id')
+          .eq('id', payload.event_id)
+          .single();
+
+        if (rsvp && event) {
+          await supabase
+            .from('email_logs')
+            .insert({
+              email_type: 'event_confirmation',
+              recipient_email: rsvp.email,
+              recipient_name: rsvp.name,
+              agent_id: event.agent_id,
+              subject: `RSVP Confirmation: ${event.title}`,
+              status: 'failed',
+              error_message: error.message || error.toString(),
+              metadata: {
+                event_id: payload.event_id,
+                event_title: event.title,
+                rsvp_id: payload.rsvp_id
+              }
+            });
+        }
+      }
+    } catch (logError) {
+      console.error('Failed to log failed email:', logError);
+    }
+    
     return new Response(
       JSON.stringify({ 
         error: error.message || "Failed to send confirmation email",

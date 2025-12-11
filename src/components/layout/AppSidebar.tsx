@@ -12,7 +12,8 @@ import {
   UserPlus,
   Settings,
   Share,
-  Database
+  Database,
+  FileText
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -162,6 +163,17 @@ export function AppSidebar() {
                     <Link to="/admin/social-scheduler">
                       <Share />
                       <span>Social Media</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location.pathname === '/admin/email-logs'}
+                  >
+                    <Link to="/admin/email-logs">
+                      <FileText />
+                      <span>Email Logs</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@4.0.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,6 +20,11 @@ interface SendEmailRequest {
   bcc?: Array<string | EmailRecipient>;
   reply_to?: EmailRecipient;
   categories?: string[];
+  metadata?: {
+    email_type?: string;
+    agent_id?: string;
+    [key: string]: any;
+  };
 }
 
 function normalizeRecipients(
@@ -155,6 +161,34 @@ serve(async (req) => {
 
     if (error) {
       console.error("Resend error:", error);
+      
+      // Log failed email to unified email_logs if metadata.email_type is provided
+      if (payload.metadata?.email_type) {
+        try {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL");
+          const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+          if (supabaseUrl && supabaseServiceKey) {
+            const supabase = createClient(supabaseUrl, supabaseServiceKey);
+            const firstRecipient = toList[0];
+            await supabase
+              .from('email_logs')
+              .insert({
+                email_type: payload.metadata.email_type,
+                recipient_email: firstRecipient.email,
+                recipient_name: firstRecipient.name,
+                agent_id: payload.metadata.agent_id || null,
+                subject: payload.subject,
+                status: 'failed',
+                error_message: JSON.stringify(error),
+                metadata: payload.metadata
+              })
+              .catch(err => console.error('Failed to log failed email:', err));
+          }
+        } catch (logError) {
+          console.error('Error logging failed email:', logError);
+        }
+      }
+      
       return new Response(
         JSON.stringify({
           error: "Email sending failed",
@@ -165,6 +199,34 @@ serve(async (req) => {
     }
 
     console.log("Email sent successfully via Resend:", data?.id);
+
+    // Log successful email to unified email_logs if metadata.email_type is provided
+    if (payload.metadata?.email_type) {
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL");
+        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+        if (supabaseUrl && supabaseServiceKey) {
+          const supabase = createClient(supabaseUrl, supabaseServiceKey);
+          const firstRecipient = toList[0];
+          await supabase
+            .from('email_logs')
+            .insert({
+              email_type: payload.metadata.email_type,
+              recipient_email: firstRecipient.email,
+              recipient_name: firstRecipient.name,
+              agent_id: payload.metadata.agent_id || null,
+              subject: payload.subject,
+              status: 'sent',
+              resend_email_id: data?.id,
+              metadata: payload.metadata,
+              sent_at: new Date().toISOString()
+            })
+            .catch(err => console.error('Failed to log email to unified table:', err));
+        }
+      } catch (logError) {
+        console.error('Error logging email:', logError);
+      }
+    }
 
     return new Response(JSON.stringify({ ok: true, id: data?.id }), {
       status: 200,

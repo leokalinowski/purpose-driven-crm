@@ -391,7 +391,7 @@ serve(async (req) => {
             // Combine Grok's email content with standardized footer
             const finalEmailHtml = emailData.html_email + generateStandardFooter(agent);
             
-            await resend.emails.send({
+            const emailResult = await resend.emails.send({
               from: `${fromName} <${Deno.env.get('RESEND_FROM_EMAIL')}>`,
               to: [toEmail],
               subject,
@@ -416,6 +416,30 @@ serve(async (req) => {
                 if (activityError) {
                   console.error(`Failed to log newsletter activity for ${contact.email}:`, activityError);
                 }
+
+                // Log to unified email_logs table
+                const contactName = `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || null;
+                await supabase
+                  .from('email_logs')
+                  .insert({
+                    email_type: 'newsletter',
+                    recipient_email: toEmail,
+                    recipient_name: contactName,
+                    agent_id: agent.user_id,
+                    subject: subject,
+                    status: emailResult.error ? 'failed' : 'sent',
+                    resend_email_id: emailResult.data?.id || null,
+                    error_message: emailResult.error ? JSON.stringify(emailResult.error) : null,
+                    metadata: {
+                      campaign_id: campaignRecord?.id,
+                      campaign_name: campaignName,
+                      contact_id: contact.id,
+                      zip_code: zipCode,
+                      dry_run: dry_run
+                    },
+                    sent_at: emailResult.error ? null : new Date().toISOString()
+                  })
+                  .catch(err => console.error('Failed to log newsletter email:', err));
               } catch (error) {
                 console.error(`Error logging newsletter activity for ${contact.email}:`, error);
               }
@@ -425,6 +449,35 @@ serve(async (req) => {
             if (dry_run) break;
           } catch (emailError) {
             console.error(`Failed to send email to ${contact.email}:`, emailError);
+            
+            // Log failed email to unified email_logs table
+            if (!dry_run) {
+              try {
+                const contactName = `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || null;
+                const errorMessage = emailError instanceof Error ? emailError.message : String(emailError);
+                await supabase
+                  .from('email_logs')
+                  .insert({
+                    email_type: 'newsletter',
+                    recipient_email: contact.email,
+                    recipient_name: contactName,
+                    agent_id: agent.user_id,
+                    subject: subject,
+                    status: 'failed',
+                    error_message: errorMessage,
+                    metadata: {
+                      campaign_id: campaignRecord?.id,
+                      campaign_name: campaignName,
+                      contact_id: contact.id,
+                      zip_code: zipCode,
+                      dry_run: dry_run
+                    }
+                  })
+                  .catch(err => console.error('Failed to log failed newsletter email:', err));
+              } catch (logError) {
+                console.error('Error logging failed newsletter email:', logError);
+              }
+            }
           }
         }
 

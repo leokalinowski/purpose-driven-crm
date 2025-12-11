@@ -568,7 +568,14 @@ async function createAgentRun(supabase: SupabaseClient, agentId: string, reportM
 }
 
 // Email sending function with proper Resend implementation
-async function sendEmailBatch(recipients: string[], subject: string, html: string, agent?: AgentProfile | null) {
+async function sendEmailBatch(
+  recipients: string[], 
+  subject: string, 
+  html: string, 
+  agent?: AgentProfile | null,
+  supabaseClient?: SupabaseClient,
+  metadata?: { reportMonth?: string, zipCode?: string, campaignId?: string }
+) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
   let fromEmail = Deno.env.get("RESEND_FROM_EMAIL");
   const fromName = Deno.env.get("RESEND_FROM_NAME") || "Newsletter";
@@ -655,9 +662,52 @@ async function sendEmailBatch(recipients: string[], subject: string, html: strin
         if (result.error) {
           console.error(`Failed to send email to ${email}:`, result.error);
           errors.push(`${email}: ${result.error.message}`);
+          
+          // Log failed email to unified email_logs table
+          if (supabaseClient && agent) {
+            try {
+              await supabaseClient
+                .from('email_logs')
+                .insert({
+                  email_type: 'newsletter',
+                  recipient_email: email,
+                  recipient_name: null,
+                  agent_id: agent.user_id,
+                  subject: subject,
+                  status: 'failed',
+                  error_message: JSON.stringify(result.error),
+                  metadata: metadata || {}
+                })
+                .catch(err => console.error('Failed to log failed newsletter email:', err));
+            } catch (logError) {
+              console.error('Error logging failed newsletter email:', logError);
+            }
+          }
         } else {
           console.log(`Email sent successfully to ${email}:`, result.data?.id);
           sentCount++;
+          
+          // Log successful email to unified email_logs table
+          if (supabaseClient && agent) {
+            try {
+              await supabaseClient
+                .from('email_logs')
+                .insert({
+                  email_type: 'newsletter',
+                  recipient_email: email,
+                  recipient_name: null,
+                  agent_id: agent.user_id,
+                  subject: subject,
+                  status: 'sent',
+                  resend_email_id: result.data?.id || null,
+                  metadata: metadata || {},
+                  sent_at: new Date().toISOString()
+                })
+                .catch(err => console.error('Failed to log newsletter email:', err));
+            } catch (logError) {
+              console.error('Error logging newsletter email:', logError);
+            }
+          }
         }
       } catch (emailError) {
         console.error(`Exception sending email to ${email}:`, emailError);
@@ -842,7 +892,18 @@ async function processAgent(
       // Send emails in batches for rate limiting
       const batches = chunkArray(actualRecipients, 50);
       for (const batch of batches) {
-        const res = await sendEmailBatch(batch, subject, finalHtml, agentProfile);
+        const res = await sendEmailBatch(
+          batch, 
+          subject, 
+          finalHtml, 
+          agentProfile,
+          admin,
+          {
+            reportMonth: reportMonth,
+            zipCode: zip,
+            campaignId: undefined // Could be added if campaign tracking is needed
+          }
+        );
         if (res.error) {
           const msg = `Failed to send batch for ${zip}: ${res.error}`;
           out.errors.push(msg);

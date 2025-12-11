@@ -1,6 +1,39 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
 
+// Helper function to log email to unified email_logs table
+async function logEmailToUnifiedTable(
+  supabaseClient: any,
+  emailType: string,
+  recipientEmail: string,
+  recipientName: string | null,
+  agentId: string | null,
+  subject: string,
+  status: 'sent' | 'failed',
+  resendId: string | null,
+  errorMessage: string | null,
+  metadata: any
+) {
+  try {
+    await supabaseClient
+      .from('email_logs')
+      .insert({
+        email_type: emailType,
+        recipient_email: recipientEmail,
+        recipient_name: recipientName,
+        agent_id: agentId,
+        subject: subject,
+        status: status,
+        resend_email_id: resendId,
+        error_message: errorMessage,
+        metadata: metadata,
+        sent_at: status === 'sent' ? new Date().toISOString() : null
+      });
+  } catch (error) {
+    console.error('Failed to log email to unified email_logs table:', error);
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -179,6 +212,24 @@ serve(async (req) => {
             resend_id: resendData.id
           })
 
+        // Log to unified email_logs table
+        await logEmailToUnifiedTable(
+          supabaseClient,
+          emailType === 'reminder_7day' ? 'event_reminder_7day' : 'event_reminder_1day',
+          rsvp.email,
+          rsvp.name,
+          event.agent_id,
+          template.subject,
+          'sent',
+          resendData.id,
+          null,
+          {
+            event_id: eventId,
+            event_title: event.title,
+            rsvp_id: rsvp.id
+          }
+        )
+
       } catch (error) {
         console.error(`Failed to send email to ${rsvp.email}:`, error)
 
@@ -194,6 +245,24 @@ serve(async (req) => {
             status: 'failed',
             error_message: error.message
           })
+
+        // Log to unified email_logs table
+        await logEmailToUnifiedTable(
+          supabaseClient,
+          emailType === 'reminder_7day' ? 'event_reminder_7day' : 'event_reminder_1day',
+          rsvp.email,
+          rsvp.name,
+          event.agent_id,
+          template.subject,
+          'failed',
+          null,
+          error.message,
+          {
+            event_id: eventId,
+            event_title: event.title,
+            rsvp_id: rsvp.id
+          }
+        )
       }
     })
 
