@@ -195,6 +195,47 @@ export type Database = {
           },
         ]
       }
+      coaching_reminder_logs: {
+        Row: {
+          agent_id: string
+          created_at: string | null
+          error_message: string | null
+          id: string
+          sent_at: string | null
+          success: boolean | null
+          week_number: number
+          year: number
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          sent_at?: string | null
+          success?: boolean | null
+          week_number: number
+          year: number
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          sent_at?: string | null
+          success?: boolean | null
+          week_number?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coaching_reminder_logs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       coaching_sessions: {
         Row: {
           agent_id: string
