@@ -95,9 +95,11 @@ const AdminEmailLogs = () => {
 
   const fetchEmailLogs = async () => {
     if (!isAdmin) return;
-    
+
     setLoading(true);
     try {
+      console.log('Fetching email logs...');
+
       let query = supabase
         .from('email_logs')
         .select(`
@@ -114,39 +116,80 @@ const AdminEmailLogs = () => {
       // Apply filters
       if (emailTypeFilter !== 'all') {
         query = query.eq('email_type', emailTypeFilter);
+        console.log('Applying email type filter:', emailTypeFilter);
       }
-      
+
       if (statusFilter !== 'all') {
         query = query.eq('status', statusFilter);
+        console.log('Applying status filter:', statusFilter);
       }
-      
+
       if (searchQuery) {
         query = query.or(`recipient_email.ilike.%${searchQuery}%,subject.ilike.%${searchQuery}%,recipient_name.ilike.%${searchQuery}%`);
+        console.log('Applying search query:', searchQuery);
       }
-      
+
       if (dateRange.start) {
-        query = query.gte('created_at', dateRange.start);
+        query = query.gte('created_at', dateRange.start + 'T00:00:00');
+        console.log('Applying start date:', dateRange.start);
       }
-      
+
       if (dateRange.end) {
         query = query.lte('created_at', dateRange.end + 'T23:59:59');
+        console.log('Applying end date:', dateRange.end);
       }
 
+      console.log('Executing query...');
       const { data, error, count } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching email logs:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        
+        // Check if it's an RLS policy error
+        if (error.message?.includes('permission denied') || error.message?.includes('policy')) {
+          toast({
+            title: 'Permission Error',
+            description: 'You may not have permission to view email logs. Please ensure you are an admin and the RLS policies are correctly configured.',
+            variant: 'destructive'
+          });
+        }
+        
+        throw error;
+      }
 
+      console.log('Query successful. Data:', data, 'Count:', count);
+      console.log('Total count from query:', count);
       setEmailLogs(data || []);
       setTotalCount(count || 0);
 
-      // Calculate stats
-      const { data: statsData } = await supabase
+      // Calculate stats with same filters
+      let statsQuery = supabase
         .from('email_logs')
-        .select('status')
-        .gte('created_at', dateRange.start)
-        .lte('created_at', dateRange.end + 'T23:59:59');
+        .select('status', { count: 'exact' });
 
-      if (statsData) {
+      // Apply same filters for stats
+      if (emailTypeFilter !== 'all') {
+        statsQuery = statsQuery.eq('email_type', emailTypeFilter);
+      }
+      
+      if (statusFilter !== 'all') {
+        statsQuery = statsQuery.eq('status', statusFilter);
+      }
+      
+      if (dateRange.start) {
+        statsQuery = statsQuery.gte('created_at', dateRange.start + 'T00:00:00');
+      }
+      
+      if (dateRange.end) {
+        statsQuery = statsQuery.lte('created_at', dateRange.end + 'T23:59:59');
+      }
+
+      const { data: statsData, error: statsError } = await statsQuery;
+      
+      if (statsError) {
+        console.error('Error fetching stats:', statsError);
+      } else if (statsData) {
         const total = statsData.length;
         const sent = statsData.filter(s => s.status === 'sent').length;
         const failed = statsData.filter(s => s.status === 'failed').length;
