@@ -576,6 +576,65 @@ export type Database = {
           },
         ]
       }
+      email_logs: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          email_type: string
+          error_message: string | null
+          id: string
+          last_retry_at: string | null
+          metadata: Json | null
+          recipient_email: string
+          recipient_name: string | null
+          resend_email_id: string | null
+          retry_count: number | null
+          sent_at: string | null
+          status: string
+          subject: string
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          email_type: string
+          error_message?: string | null
+          id?: string
+          last_retry_at?: string | null
+          metadata?: Json | null
+          recipient_email: string
+          recipient_name?: string | null
+          resend_email_id?: string | null
+          retry_count?: number | null
+          sent_at?: string | null
+          status?: string
+          subject: string
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          email_type?: string
+          error_message?: string | null
+          id?: string
+          last_retry_at?: string | null
+          metadata?: Json | null
+          recipient_email?: string
+          recipient_name?: string | null
+          resend_email_id?: string | null
+          retry_count?: number | null
+          sent_at?: string | null
+          status?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_logs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       event_rsvps: {
         Row: {
           check_in_status: string | null

@@ -100,75 +100,82 @@ const AdminEmailLogs = () => {
     try {
       console.log('Fetching email logs...');
 
+      // Step 1: Fetch email logs without join
       let query = supabase
         .from('email_logs')
-        .select(`
-          *,
-          profiles:agent_id (
-            first_name,
-            last_name,
-            email
-          )
-        `, { count: 'exact' })
+        .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range((page - 1) * pageSize, page * pageSize - 1);
 
       // Apply filters
       if (emailTypeFilter !== 'all') {
         query = query.eq('email_type', emailTypeFilter);
-        console.log('Applying email type filter:', emailTypeFilter);
       }
 
       if (statusFilter !== 'all') {
         query = query.eq('status', statusFilter);
-        console.log('Applying status filter:', statusFilter);
       }
 
       if (searchQuery) {
         query = query.or(`recipient_email.ilike.%${searchQuery}%,subject.ilike.%${searchQuery}%,recipient_name.ilike.%${searchQuery}%`);
-        console.log('Applying search query:', searchQuery);
       }
 
       if (dateRange.start) {
         query = query.gte('created_at', dateRange.start + 'T00:00:00');
-        console.log('Applying start date:', dateRange.start);
       }
 
       if (dateRange.end) {
         query = query.lte('created_at', dateRange.end + 'T23:59:59');
-        console.log('Applying end date:', dateRange.end);
       }
 
-      console.log('Executing query...');
-      const { data, error, count } = await query;
+      const { data: logsData, error: logsError, count } = await query;
 
-      if (error) {
-        console.error('Error fetching email logs:', error);
-        console.error('Error details:', JSON.stringify(error, null, 2));
-        
-        // Check if it's an RLS policy error
-        if (error.message?.includes('permission denied') || error.message?.includes('policy')) {
+      if (logsError) {
+        console.error('Error fetching email logs:', logsError);
+        if (logsError.message?.includes('permission denied') || logsError.message?.includes('policy')) {
           toast({
             title: 'Permission Error',
-            description: 'You may not have permission to view email logs. Please ensure you are an admin and the RLS policies are correctly configured.',
+            description: 'You may not have permission to view email logs.',
             variant: 'destructive'
           });
         }
-        
-        throw error;
+        throw logsError;
       }
 
-      console.log('Query successful. Data:', data, 'Count:', count);
-      console.log('Total count from query:', count);
-      setEmailLogs(data || []);
+      // Step 2: Fetch profiles for agent_ids
+      const agentIds = [...new Set((logsData || []).map(log => log.agent_id).filter(Boolean))];
+      let profilesMap: Record<string, { first_name: string | null; last_name: string | null; email: string | null }> = {};
+      
+      if (agentIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('user_id, first_name, last_name, email')
+          .in('user_id', agentIds);
+        
+        if (profilesData) {
+          profilesMap = profilesData.reduce((acc, p) => {
+            acc[p.user_id] = { first_name: p.first_name, last_name: p.last_name, email: p.email };
+            return acc;
+          }, {} as Record<string, { first_name: string | null; last_name: string | null; email: string | null }>);
+        }
+      }
+
+      // Step 3: Merge results
+      const enrichedLogs: EmailLog[] = (logsData || []).map(log => ({
+        ...log,
+        status: log.status as 'pending' | 'sent' | 'failed' | 'bounced',
+        profiles: log.agent_id ? profilesMap[log.agent_id] || null : null
+      }));
+
+      console.log('Query successful. Count:', count);
+      setEmailLogs(enrichedLogs);
       setTotalCount(count || 0);
 
       // Calculate stats with same filters
       let statsQuery = supabase
         .from('email_logs')
-        .select('status', { count: 'exact' });
+        .select('status');
 
-      // Apply same filters for stats
       if (emailTypeFilter !== 'all') {
         statsQuery = statsQuery.eq('email_type', emailTypeFilter);
       }
@@ -191,9 +198,9 @@ const AdminEmailLogs = () => {
         console.error('Error fetching stats:', statsError);
       } else if (statsData) {
         const total = statsData.length;
-        const sent = statsData.filter(s => s.status === 'sent').length;
-        const failed = statsData.filter(s => s.status === 'failed').length;
-        const pending = statsData.filter(s => s.status === 'pending').length;
+        const sent = statsData.filter((s: { status: string }) => s.status === 'sent').length;
+        const failed = statsData.filter((s: { status: string }) => s.status === 'failed').length;
+        const pending = statsData.filter((s: { status: string }) => s.status === 'pending').length;
         const successRate = total > 0 ? ((sent / total) * 100).toFixed(1) : '0';
 
         setStats({

@@ -316,7 +316,7 @@ serve(async (req) => {
     const { error: trackingError } = await supabase
       .from('event_emails')
       .insert({
-        event_id: eventId,
+        event_id: event_id,
         rsvp_id: rsvp.id,
         email_type: 'confirmation',
         recipient_email: rsvp.email,
