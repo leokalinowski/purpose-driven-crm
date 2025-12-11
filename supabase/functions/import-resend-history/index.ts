@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { Resend } from "https://esm.sh/resend@4.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -66,17 +65,13 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const resend = new Resend(resendApiKey);
+    console.log("Starting Resend history import using REST API...");
 
-    console.log("Starting Resend history import...");
-
-    // Fetch emails from Resend with pagination
+    // Fetch emails from Resend REST API with pagination
     const allEmails: any[] = [];
     let hasMore = true;
     let pageCount = 0;
     const maxPages = 50; // Safety limit
-
-    // Resend uses cursor-based pagination
     let lastEmailId: string | undefined = undefined;
 
     while (hasMore && pageCount < maxPages) {
@@ -84,21 +79,32 @@ serve(async (req) => {
       console.log(`Fetching page ${pageCount}...`);
 
       try {
-        // Note: Resend's list API returns most recent first
-        const listParams: any = { limit: 100 };
+        // Build URL with query params
+        const url = new URL('https://api.resend.com/emails');
+        url.searchParams.set('limit', '100');
         if (lastEmailId) {
-          listParams.starting_after = lastEmailId;
+          url.searchParams.set('starting_after', lastEmailId);
         }
 
-        const response = await resend.emails.list(listParams);
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Resend API error (${response.status}):`, errorText);
+          throw new Error(`Resend API returned ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log(`API response structure:`, JSON.stringify(Object.keys(data)));
         
-        if (!response.data || !response.data.data) {
-          console.log("No more emails or invalid response");
-          hasMore = false;
-          break;
-        }
-
-        const emails = response.data.data;
+        // Resend REST API returns { object: "list", data: [...], has_more: bool }
+        const emails = data.data || [];
         console.log(`Got ${emails.length} emails on page ${pageCount}`);
 
         if (emails.length === 0) {
@@ -110,7 +116,7 @@ serve(async (req) => {
         lastEmailId = emails[emails.length - 1].id;
 
         // Check if there are more pages
-        hasMore = emails.length === 100;
+        hasMore = data.has_more === true;
 
         // Rate limiting - wait 500ms between requests
         if (hasMore) {
