@@ -37,7 +37,7 @@ interface EmailLog {
   recipient_name: string | null;
   agent_id: string | null;
   subject: string;
-  status: 'pending' | 'sent' | 'failed' | 'bounced';
+  status: 'pending' | 'sent' | 'delivered' | 'opened' | 'clicked' | 'failed' | 'bounced' | 'complained' | 'unsubscribed';
   resend_email_id: string | null;
   error_message: string | null;
   metadata: any;
@@ -164,7 +164,7 @@ const AdminEmailLogs = () => {
       // Step 3: Merge results
       const enrichedLogs: EmailLog[] = (logsData || []).map(log => ({
         ...log,
-        status: log.status as 'pending' | 'sent' | 'failed' | 'bounced',
+        status: log.status as EmailLog['status'],
         profiles: log.agent_id ? profilesMap[log.agent_id] || null : null
       }));
 
@@ -199,14 +199,18 @@ const AdminEmailLogs = () => {
         console.error('Error fetching stats:', statsError);
       } else if (statsData) {
         const total = statsData.length;
-        const sent = statsData.filter((s: { status: string }) => s.status === 'sent').length;
-        const failed = statsData.filter((s: { status: string }) => s.status === 'failed').length;
+        // Success includes: sent, delivered, opened, clicked
+        const successStatuses = ['sent', 'delivered', 'opened', 'clicked'];
+        const delivered = statsData.filter((s: { status: string }) => successStatuses.includes(s.status)).length;
+        // Failed includes: failed, bounced, complained
+        const failedStatuses = ['failed', 'bounced', 'complained'];
+        const failed = statsData.filter((s: { status: string }) => failedStatuses.includes(s.status)).length;
         const pending = statsData.filter((s: { status: string }) => s.status === 'pending').length;
-        const successRate = total > 0 ? ((sent / total) * 100).toFixed(1) : '0';
+        const successRate = total > 0 ? ((delivered / total) * 100).toFixed(1) : '0';
 
         setStats({
           total,
-          sent,
+          sent: delivered,
           failed,
           pending,
           successRate: parseFloat(successRate)
@@ -235,16 +239,26 @@ const AdminEmailLogs = () => {
   const getStatusBadge = (status: string) => {
     const variants = {
       sent: 'default',
+      delivered: 'default',
+      opened: 'default',
+      clicked: 'default',
       failed: 'destructive',
       pending: 'secondary',
-      bounced: 'destructive'
+      bounced: 'destructive',
+      complained: 'destructive',
+      unsubscribed: 'outline'
     } as const;
 
     const icons = {
       sent: <CheckCircle2 className="h-3 w-3 mr-1" />,
+      delivered: <CheckCircle2 className="h-3 w-3 mr-1" />,
+      opened: <Eye className="h-3 w-3 mr-1" />,
+      clicked: <Send className="h-3 w-3 mr-1" />,
       failed: <AlertCircle className="h-3 w-3 mr-1" />,
       pending: <Clock className="h-3 w-3 mr-1" />,
-      bounced: <AlertCircle className="h-3 w-3 mr-1" />
+      bounced: <AlertCircle className="h-3 w-3 mr-1" />,
+      complained: <AlertCircle className="h-3 w-3 mr-1" />,
+      unsubscribed: <AlertCircle className="h-3 w-3 mr-1" />
     };
 
     return (
@@ -389,13 +403,13 @@ const AdminEmailLogs = () => {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Sent</CardTitle>
+              <CardTitle className="text-sm font-medium">Delivered</CardTitle>
               <CheckCircle2 className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.sent}</div>
               <p className="text-xs text-muted-foreground">
-                Successfully delivered
+                Sent, delivered, opened, clicked
               </p>
             </CardContent>
           </Card>
@@ -462,9 +476,14 @@ const AdminEmailLogs = () => {
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
                     <SelectItem value="sent">Sent</SelectItem>
+                    <SelectItem value="delivered">Delivered</SelectItem>
+                    <SelectItem value="opened">Opened</SelectItem>
+                    <SelectItem value="clicked">Clicked</SelectItem>
                     <SelectItem value="failed">Failed</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="bounced">Bounced</SelectItem>
+                    <SelectItem value="complained">Complained</SelectItem>
+                    <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
