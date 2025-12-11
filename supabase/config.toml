@@ -63,3 +63,6 @@ verify_jwt = true
 
 [functions.newsletter-monthly]
 verify_jwt = false
+
+[functions.import-resend-history]
+verify_jwt = true
