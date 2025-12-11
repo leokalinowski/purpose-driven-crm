@@ -59,6 +59,7 @@ const AdminEmailLogs = () => {
   
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [selectedLog, setSelectedLog] = useState<EmailLog | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   
@@ -296,6 +297,30 @@ const AdminEmailLogs = () => {
     window.URL.revokeObjectURL(url);
   };
 
+  const handleImportHistory = async () => {
+    setImporting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('import-resend-history');
+      if (error) throw error;
+      
+      toast({
+        title: "Import Complete",
+        description: `Fetched: ${data.stats?.fetched || 0}, Imported: ${data.stats?.imported || 0}, Skipped: ${data.stats?.skipped || 0}`,
+      });
+      
+      fetchEmailLogs();
+    } catch (error: any) {
+      console.error('Import error:', error);
+      toast({
+        title: "Import Failed",
+        description: error.message || 'Failed to import email history from Resend',
+        variant: "destructive"
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   if (authLoading || roleLoading || loading) {
     return (
       <Layout>
@@ -333,6 +358,10 @@ const AdminEmailLogs = () => {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button onClick={handleImportHistory} variant="outline" size="sm" disabled={importing}>
+              {importing ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+              {importing ? 'Importing...' : 'Import History'}
+            </Button>
             <Button onClick={fetchEmailLogs} variant="outline" size="sm">
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
