@@ -17,26 +17,41 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { useAllCoachingSubmissions, useAgentsList, type CoachingSubmissionWithAgent } from '@/hooks/useAdminCoachingData';
 import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
 
-const CoachingInsights = () => {
+interface CoachingInsightsProps {
+  selectedWeek?: string;
+}
+
+const CoachingInsights = ({ selectedWeek = 'all' }: CoachingInsightsProps) => {
   const { data: submissions, isLoading: submissionsLoading } = useAllCoachingSubmissions();
   const { data: agents, isLoading: agentsLoading } = useAgentsList();
   
   const currentWeekNumber = getCurrentWeekNumber();
   const currentYear = new Date().getFullYear();
+  
+  // Parse selected week for filtering
+  const filterWeek = useMemo(() => {
+    if (selectedWeek === 'all') return null;
+    const [weekNum, year] = selectedWeek.split('-').map(Number);
+    return { week: weekNum, year };
+  }, [selectedWeek]);
 
   // Calculate insights
   const insights = useMemo(() => {
     if (!submissions || !agents) return null;
 
-    const currentWeekSubmissions = submissions.filter(
-      s => s.week_number === currentWeekNumber && s.year === currentYear
+    // Use filtered week or current week for "Missing Submissions" and "Declining Metrics"
+    const targetWeek = filterWeek?.week || currentWeekNumber;
+    const targetYear = filterWeek?.year || currentYear;
+    
+    const targetWeekSubmissions = submissions.filter(
+      s => s.week_number === targetWeek && s.year === targetYear
     );
-    const lastWeekSubmissions = submissions.filter(
-      s => s.week_number === currentWeekNumber - 1 && s.year === currentYear
+    const previousWeekSubmissions = submissions.filter(
+      s => s.week_number === targetWeek - 1 && s.year === targetYear
     );
 
-    // Agents who haven't submitted this week
-    const submittedAgentIds = new Set(currentWeekSubmissions.map(s => s.agent_id));
+    // Agents who haven't submitted for the target week
+    const submittedAgentIds = new Set(targetWeekSubmissions.map(s => s.agent_id));
     const missingSubmissions = agents.filter(a => !submittedAgentIds.has(a.id));
 
     // YTD aggregates per agent
@@ -74,11 +89,11 @@ const CoachingInsights = () => {
     const topByAmount = [...ytdList].sort((a, b) => b.amount - a.amount).slice(0, 5);
     const topByAttempts = [...ytdList].sort((a, b) => b.attempts - a.attempts).slice(0, 5);
 
-    // Declining metrics - compare current week to previous week
+    // Declining metrics - compare target week to previous week
     const decliningAgents: { name: string; metric: string; change: number }[] = [];
     
-    currentWeekSubmissions.forEach(current => {
-      const previous = lastWeekSubmissions.find(p => p.agent_id === current.agent_id);
+    targetWeekSubmissions.forEach(current => {
+      const previous = previousWeekSubmissions.find(p => p.agent_id === current.agent_id);
       if (previous) {
         const currentAttempts = current.dials_made || 0;
         const previousAttempts = previous.dials_made || 0;
@@ -119,13 +134,14 @@ const CoachingInsights = () => {
 
     return {
       missingSubmissions,
+      missingWeekLabel: filterWeek ? `Week ${filterWeek.week}` : `Week ${currentWeekNumber}`,
       topByClosings,
       topByAmount,
       topByAttempts,
       decliningAgents,
       trends: last8Weeks,
     };
-  }, [submissions, agents, currentWeekNumber, currentYear]);
+  }, [submissions, agents, currentWeekNumber, currentYear, filterWeek]);
 
   const chartConfig = {
     attempts: { label: "Total Attempts", color: "hsl(var(--chart-1))" },
@@ -218,7 +234,7 @@ const CoachingInsights = () => {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Users className="h-4 w-4 text-red-500" />
-                Missing Submissions (Week {currentWeekNumber})
+                Missing Submissions ({insights.missingWeekLabel})
               </CardTitle>
               <CardDescription>
                 {insights.missingSubmissions.length} agent(s) haven't submitted yet

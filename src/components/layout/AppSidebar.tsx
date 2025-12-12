@@ -125,6 +125,17 @@ export function AppSidebar() {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
+                    isActive={location.pathname === '/admin/database'}
+                  >
+                    <Link to="/admin/database">
+                      <Database />
+                      <span>Database Management</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
                     isActive={location.pathname === '/admin/events'}
                   >
                     <Link to="/admin/events">
@@ -147,17 +158,6 @@ export function AppSidebar() {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={location.pathname === '/admin/database'}
-                  >
-                    <Link to="/admin/database">
-                      <Database />
-                      <span>Database Management</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
                     isActive={location.pathname === '/admin/social-scheduler'}
                   >
                     <Link to="/admin/social-scheduler">
@@ -169,22 +169,22 @@ export function AppSidebar() {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={location.pathname === '/admin/email-logs'}
+                    isActive={location.pathname === '/admin/coaching'}
                   >
-                    <Link to="/admin/email-logs">
-                      <FileText />
-                      <span>Email Logs</span>
+                    <Link to="/admin/coaching">
+                      <TrendingUp />
+                      <span>Coaching Management</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={location.pathname === '/admin/coaching'}
+                    isActive={location.pathname === '/admin/email-logs'}
                   >
-                    <Link to="/admin/coaching">
-                      <TrendingUp />
-                      <span>Coaching Management</span>
+                    <Link to="/admin/email-logs">
+                      <FileText />
+                      <span>Email Logs</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
