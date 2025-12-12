@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Users, TrendingUp, Trophy, AlertTriangle, BarChart3, Target } from 'lucide-react';
+import { Users, TrendingUp, Trophy, AlertTriangle, BarChart3, Target, CalendarDays } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAllCoachingSubmissions, useAgentsList } from '@/hooks/useAdminCoachingData';
 import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
 import AdminTeamOverview from '@/components/coaching/AdminTeamOverview';
@@ -12,12 +13,28 @@ import AgentCoachingDeepDive from '@/components/coaching/AgentCoachingDeepDive';
 
 const AdminCoachingManagement = () => {
   const [activeTab, setActiveTab] = useState('overview');
+  const [selectedWeek, setSelectedWeek] = useState('all');
   
   const { data: submissions, isLoading: submissionsLoading } = useAllCoachingSubmissions();
   const { data: agents, isLoading: agentsLoading } = useAgentsList();
   
   const currentWeekNumber = getCurrentWeekNumber();
   const currentYear = new Date().getFullYear();
+
+  // Generate available weeks from submissions
+  const availableWeeks = useMemo(() => {
+    if (!submissions) return [];
+    const weeks = new Map<string, { week: number; year: number }>();
+    submissions.forEach(s => {
+      const key = `${s.week_number}-${s.year}`;
+      if (!weeks.has(key)) {
+        weeks.set(key, { week: s.week_number, year: s.year });
+      }
+    });
+    return Array.from(weeks.values())
+      .sort((a, b) => b.year - a.year || b.week - a.week)
+      .slice(0, 12); // Last 12 weeks with data
+  }, [submissions]);
 
   // Calculate summary metrics
   const summaryMetrics = useMemo(() => {
@@ -65,6 +82,27 @@ const AdminCoachingManagement = () => {
             <p className="text-muted-foreground text-sm sm:text-base">
               Compare agent performance and identify coaching priorities
             </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5 text-muted-foreground" />
+            <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Filter by week" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Weeks</SelectItem>
+                <SelectItem value={`${currentWeekNumber}-${currentYear}`}>
+                  This Week (W{currentWeekNumber})
+                </SelectItem>
+                {availableWeeks
+                  .filter(w => !(w.week === currentWeekNumber && w.year === currentYear))
+                  .map(w => (
+                    <SelectItem key={`${w.week}-${w.year}`} value={`${w.week}-${w.year}`}>
+                      Week {w.week}, {w.year}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -149,15 +187,15 @@ const AdminCoachingManagement = () => {
           </TabsList>
 
           <TabsContent value="overview" className="mt-6">
-            <AdminTeamOverview />
+            <AdminTeamOverview selectedWeek={selectedWeek} />
           </TabsContent>
 
           <TabsContent value="insights" className="mt-6">
-            <CoachingInsights />
+            <CoachingInsights selectedWeek={selectedWeek} />
           </TabsContent>
 
           <TabsContent value="deepdive" className="mt-6">
-            <AgentCoachingDeepDive />
+            <AgentCoachingDeepDive selectedWeek={selectedWeek} />
           </TabsContent>
         </Tabs>
       </div>

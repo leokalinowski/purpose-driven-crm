@@ -27,23 +27,33 @@ import {
 import { useAllCoachingSubmissions, useAgentsList, type CoachingSubmissionWithAgent } from '@/hooks/useAdminCoachingData';
 import { format } from 'date-fns';
 
-const AgentCoachingDeepDive = () => {
+interface AgentCoachingDeepDiveProps {
+  selectedWeek?: string;
+}
+
+const AgentCoachingDeepDive = ({ selectedWeek = 'all' }: AgentCoachingDeepDiveProps) => {
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const [expandedSubmission, setExpandedSubmission] = useState<string | null>(null);
 
   const { data: submissions, isLoading: submissionsLoading } = useAllCoachingSubmissions();
   const { data: agents, isLoading: agentsLoading } = useAgentsList();
 
-  // Get selected agent's submissions
+  // Get selected agent's submissions (filtered by week if specified)
   const agentSubmissions = useMemo(() => {
     if (!submissions || !selectedAgent) return [];
-    return submissions
-      .filter(s => s.agent_id === selectedAgent)
-      .sort((a, b) => {
-        if (a.year !== b.year) return b.year - a.year;
-        return b.week_number - a.week_number;
-      });
-  }, [submissions, selectedAgent]);
+    let filtered = submissions.filter(s => s.agent_id === selectedAgent);
+    
+    // Apply week filter
+    if (selectedWeek !== 'all') {
+      const [weekNum, year] = selectedWeek.split('-').map(Number);
+      filtered = filtered.filter(s => s.week_number === weekNum && s.year === year);
+    }
+    
+    return filtered.sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year;
+      return b.week_number - a.week_number;
+    });
+  }, [submissions, selectedAgent, selectedWeek]);
 
   // Calculate agent metrics
   const agentMetrics = useMemo(() => {

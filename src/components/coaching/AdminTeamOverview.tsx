@@ -21,7 +21,11 @@ import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
 type SortField = 'agent_name' | 'week_number' | 'dials_made' | 'leads_contacted' | 'appointments_set' | 'closings' | 'closing_amount';
 type SortDirection = 'asc' | 'desc';
 
-const AdminTeamOverview = () => {
+interface AdminTeamOverviewProps {
+  selectedWeek?: string;
+}
+
+const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => {
   const [selectedAgent, setSelectedAgent] = useState<string>('all');
   const [sortField, setSortField] = useState<SortField>('week_number');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -33,12 +37,24 @@ const AdminTeamOverview = () => {
   const currentWeekNumber = getCurrentWeekNumber();
   const currentYear = new Date().getFullYear();
 
-  // Filter submissions by selected agent
+  // Filter submissions by selected agent and week
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
-    if (selectedAgent === 'all') return submissions;
-    return submissions.filter(s => s.agent_id === selectedAgent);
-  }, [submissions, selectedAgent]);
+    let filtered = submissions;
+    
+    // Filter by agent
+    if (selectedAgent !== 'all') {
+      filtered = filtered.filter(s => s.agent_id === selectedAgent);
+    }
+    
+    // Filter by week
+    if (selectedWeek !== 'all') {
+      const [weekNum, year] = selectedWeek.split('-').map(Number);
+      filtered = filtered.filter(s => s.week_number === weekNum && s.year === year);
+    }
+    
+    return filtered;
+  }, [submissions, selectedAgent, selectedWeek]);
 
   // Sort submissions
   const sortedSubmissions = useMemo(() => {
@@ -55,18 +71,22 @@ const AdminTeamOverview = () => {
     });
   }, [filteredSubmissions, sortField, sortDirection]);
 
-  // Current week submissions for leaderboard
-  const currentWeekSubmissions = useMemo(() => {
+  // Current week submissions for leaderboard (or filtered week)
+  const leaderboardSubmissions = useMemo(() => {
     if (!submissions) return [];
+    if (selectedWeek !== 'all') {
+      const [weekNum, year] = selectedWeek.split('-').map(Number);
+      return submissions.filter(s => s.week_number === weekNum && s.year === year);
+    }
     return submissions.filter(s => s.week_number === currentWeekNumber && s.year === currentYear);
-  }, [submissions, currentWeekNumber, currentYear]);
+  }, [submissions, selectedWeek, currentWeekNumber, currentYear]);
 
   // Generate leaderboard data
   const leaderboardData = useMemo(() => {
-    const sortedByClosings = [...currentWeekSubmissions].sort((a, b) => (b.closings || 0) - (a.closings || 0));
-    const sortedByAmount = [...currentWeekSubmissions].sort((a, b) => (b.closing_amount || 0) - (a.closing_amount || 0));
-    const sortedByAttempts = [...currentWeekSubmissions].sort((a, b) => (b.dials_made || 0) - (a.dials_made || 0));
-    const sortedByAppointments = [...currentWeekSubmissions].sort((a, b) => (b.appointments_set || 0) - (a.appointments_set || 0));
+    const sortedByClosings = [...leaderboardSubmissions].sort((a, b) => (b.closings || 0) - (a.closings || 0));
+    const sortedByAmount = [...leaderboardSubmissions].sort((a, b) => (b.closing_amount || 0) - (a.closing_amount || 0));
+    const sortedByAttempts = [...leaderboardSubmissions].sort((a, b) => (b.dials_made || 0) - (a.dials_made || 0));
+    const sortedByAppointments = [...leaderboardSubmissions].sort((a, b) => (b.appointments_set || 0) - (a.appointments_set || 0));
 
     return {
       closings: sortedByClosings.slice(0, 5),
@@ -74,7 +94,16 @@ const AdminTeamOverview = () => {
       attempts: sortedByAttempts.slice(0, 5),
       appointments: sortedByAppointments.slice(0, 5),
     };
-  }, [currentWeekSubmissions]);
+  }, [leaderboardSubmissions]);
+  
+  // Get the week label for leaderboard subtitle
+  const leaderboardWeekLabel = useMemo(() => {
+    if (selectedWeek !== 'all') {
+      const [weekNum, year] = selectedWeek.split('-').map(Number);
+      return `Week ${weekNum}, ${year}`;
+    }
+    return `Week ${currentWeekNumber}`;
+  }, [selectedWeek, currentWeekNumber]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -194,28 +223,28 @@ const AdminTeamOverview = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <LeaderboardCard
               title="Top Closings"
-              subtitle={`Week ${currentWeekNumber}`}
+              subtitle={leaderboardWeekLabel}
               data={leaderboardData.closings}
               metric="closings"
               formatValue={(v) => v.toString()}
             />
             <LeaderboardCard
               title="Top $ Closed"
-              subtitle={`Week ${currentWeekNumber}`}
+              subtitle={leaderboardWeekLabel}
               data={leaderboardData.amount}
               metric="closing_amount"
               formatValue={(v) => `$${v.toLocaleString()}`}
             />
             <LeaderboardCard
               title="Most Attempts"
-              subtitle={`Week ${currentWeekNumber}`}
+              subtitle={leaderboardWeekLabel}
               data={leaderboardData.attempts}
               metric="dials_made"
               formatValue={(v) => v.toString()}
             />
             <LeaderboardCard
               title="Most Appointments Set"
-              subtitle={`Week ${currentWeekNumber}`}
+              subtitle={leaderboardWeekLabel}
               data={leaderboardData.appointments}
               metric="appointments_set"
               formatValue={(v) => v.toString()}
