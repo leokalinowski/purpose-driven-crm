@@ -343,3 +343,27 @@ export const useAgentCurrentWeekMetrics = () => {
     enabled: !!user,
   });
 };
+
+// Hook to fetch submission for a specific week/year (used for form pre-population)
+export const useWeekSubmission = (weekNumber: number, year: number) => {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['week-submission', user?.id, weekNumber, year],
+    queryFn: async () => {
+      if (!user) throw new Error('User not authenticated');
+
+      const { data, error } = await supabase
+        .from('coaching_submissions')
+        .select('*')
+        .eq('agent_id', user.id)
+        .eq('week_number', weekNumber)
+        .eq('year', year)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as CoachingSubmission | null;
+    },
+    enabled: !!user && !!weekNumber && !!year,
+  });
+};

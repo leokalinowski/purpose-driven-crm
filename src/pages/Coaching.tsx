@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -24,6 +24,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { 
@@ -31,11 +42,13 @@ import {
   usePersonalMetrics, 
   useTeamAverages, 
   useAgentCurrentWeekMetrics,
+  useWeekSubmission,
   type CoachingFormData 
 } from '@/hooks/useCoaching';
 import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
 import { MySubmissionsHistory } from '@/components/coaching/MySubmissionsHistory';
 import AdminTeamOverview from '@/components/coaching/AdminTeamOverview';
+import { format } from 'date-fns';
 
 const formSchema = z.object({
   week_number: z.number().min(1, "Week must be between 1 and 52").max(52, "Week must be between 1 and 52"),
@@ -58,14 +71,21 @@ const WeeklySuccessScoreboard = () => {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
   const [activeTab, setActiveTab] = useState("submit");
+  const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
+  const [pendingSubmission, setPendingSubmission] = useState<CoachingFormData | null>(null);
   
   const currentWeekNumber = getCurrentWeekNumber();
   const currentYear = new Date().getFullYear();
+  
+  // Track selected week/year for fetching existing submission
+  const [selectedWeek, setSelectedWeek] = useState(currentWeekNumber);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
   
   const submitMutation = useSubmitCoachingForm();
   const { data: personalMetrics, isLoading: personalLoading } = usePersonalMetrics();
   const { data: teamAverages, isLoading: teamLoading } = useTeamAverages();
   const { data: agentCurrentMetrics } = useAgentCurrentWeekMetrics();
+  const { data: existingSubmission, isLoading: loadingExisting } = useWeekSubmission(selectedWeek, selectedYear);
 
   const form = useForm<CoachingFormData>({
     resolver: zodResolver(formSchema),
@@ -87,8 +107,76 @@ const WeeklySuccessScoreboard = () => {
     },
   });
 
-  const onSubmit = (data: CoachingFormData) => {
-    submitMutation.mutate(data);
+  // Watch for week/year changes in form
+  const watchedWeek = form.watch('week_number');
+  const watchedYear = form.watch('year');
+
+  // Update selected week/year when form values change
+  useEffect(() => {
+    if (watchedWeek !== selectedWeek) {
+      setSelectedWeek(watchedWeek);
+    }
+    if (watchedYear !== selectedYear) {
+      setSelectedYear(watchedYear);
+    }
+  }, [watchedWeek, watchedYear, selectedWeek, selectedYear]);
+
+  // Pre-populate form when existing submission is loaded
+  useEffect(() => {
+    if (existingSubmission) {
+      form.reset({
+        week_number: existingSubmission.week_number,
+        year: existingSubmission.year,
+        dials_made: existingSubmission.dials_made || 0,
+        leads_contacted: existingSubmission.leads_contacted || 0,
+        appointments_set: existingSubmission.appointments_set || 0,
+        appointments_held: existingSubmission.appointments_held || 0,
+        agreements_signed: existingSubmission.agreements_signed || 0,
+        offers_made_accepted: existingSubmission.offers_made_accepted || 0,
+        closings: existingSubmission.closings || 0,
+        closing_amount: existingSubmission.closing_amount || 0,
+        challenges: existingSubmission.challenges || "",
+        tasks: existingSubmission.tasks || "",
+        coaching_notes: existingSubmission.coaching_notes || "",
+        must_do_task: existingSubmission.must_do_task || "",
+      });
+    } else if (!loadingExisting) {
+      // Reset to empty values for new week (but keep week/year)
+      form.reset({
+        week_number: selectedWeek,
+        year: selectedYear,
+        dials_made: 0,
+        leads_contacted: 0,
+        appointments_set: 0,
+        appointments_held: 0,
+        agreements_signed: 0,
+        offers_made_accepted: 0,
+        closings: 0,
+        closing_amount: 0,
+        challenges: "",
+        tasks: "",
+        coaching_notes: "",
+        must_do_task: "",
+      });
+    }
+  }, [existingSubmission, loadingExisting, selectedWeek, selectedYear, form]);
+
+  const handleFormSubmit = (data: CoachingFormData) => {
+    // Show warning if updating existing submission
+    if (existingSubmission) {
+      setPendingSubmission(data);
+      setShowOverwriteWarning(true);
+    } else {
+      submitMutation.mutate(data);
+    }
+  };
+
+  const confirmOverwrite = () => {
+    if (pendingSubmission) {
+      submitMutation.mutate(pendingSubmission);
+    }
+    setShowOverwriteWarning(false);
+    setPendingSubmission(null);
   };
 
   // Prepare enhanced chart data for personal metrics
@@ -240,14 +328,32 @@ const WeeklySuccessScoreboard = () => {
           <TabsContent value="submit" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Weekly Success Scorecard</CardTitle>
-                <CardDescription>
-                  Submit your weekly metrics and prepare for Thursday coaching session
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Weekly Success Scorecard</CardTitle>
+                    <CardDescription>
+                      Submit your weekly metrics and prepare for Thursday coaching session
+                    </CardDescription>
+                  </div>
+                  {loadingExisting ? (
+                    <Skeleton className="h-6 w-32" />
+                  ) : existingSubmission ? (
+                    <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-300">
+                      Editing Week {selectedWeek} submission
+                      <span className="ml-1 text-xs opacity-75">
+                        (Updated {format(new Date(existingSubmission.updated_at), 'MMM d, h:mm a')})
+                      </span>
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-muted-foreground">
+                      New submission for Week {selectedWeek}
+                    </Badge>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
@@ -738,6 +844,23 @@ const WeeklySuccessScoreboard = () => {
           )}
         </Tabs>
       </div>
+
+      {/* Overwrite Warning Dialog */}
+      <AlertDialog open={showOverwriteWarning} onOpenChange={setShowOverwriteWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Update Existing Submission?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You already have a submission for Week {selectedWeek}, {selectedYear}. 
+              Submitting now will replace your existing data including any notes you previously saved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingSubmission(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmOverwrite}>Update Submission</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 };
