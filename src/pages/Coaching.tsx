@@ -36,7 +36,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from '@/hooks/useAuth';
-import { useUserRole } from '@/hooks/useUserRole';
 import { 
   useSubmitCoachingForm, 
   usePersonalMetrics, 
@@ -47,7 +46,6 @@ import {
 } from '@/hooks/useCoaching';
 import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
 import { MySubmissionsHistory } from '@/components/coaching/MySubmissionsHistory';
-import AdminTeamOverview from '@/components/coaching/AdminTeamOverview';
 import { format } from 'date-fns';
 
 const formSchema = z.object({
@@ -69,7 +67,6 @@ const formSchema = z.object({
 
 const WeeklySuccessScoreboard = () => {
   const { user } = useAuth();
-  const { isAdmin } = useUserRole();
   const [activeTab, setActiveTab] = useState("submit");
   const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
   const [pendingSubmission, setPendingSubmission] = useState<CoachingFormData | null>(null);
@@ -192,8 +189,8 @@ const WeeklySuccessScoreboard = () => {
     '$ Closed': metric.closing_amount || 0,
   })) || [];
 
-  // Prepare chart data for team comparison (admin only)
-  const comparisonChartData = isAdmin && teamAverages && agentCurrentMetrics ? [
+  // Prepare chart data for team comparison
+  const comparisonChartData = teamAverages && agentCurrentMetrics ? [
     {
       metric: 'Attempts Made',
       'Your Performance': agentCurrentMetrics.dials_made || 0,
@@ -319,10 +316,9 @@ const WeeklySuccessScoreboard = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="submit">Success Scoreboard</TabsTrigger>
             <TabsTrigger value="dashboard">Performance Dashboard</TabsTrigger>
-            {isAdmin && <TabsTrigger value="team">Team Overview</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="submit" className="space-y-6">
@@ -791,57 +787,48 @@ const WeeklySuccessScoreboard = () => {
               {/* My Weekly Submissions History */}
               <MySubmissionsHistory />
 
-              {/* Team Comparison Chart (Admin Only) */}
-              {isAdmin && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Team Performance Comparison</CardTitle>
-                    <CardDescription>
-                      Compare your current week performance with team averages (anonymized)
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {teamLoading ? (
-                      <div className="space-y-4">
-                        <Skeleton className="h-64 w-full" />
-                      </div>
-                    ) : comparisonChartData.length > 0 ? (
-                      <ChartContainer config={chartConfig} className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={comparisonChartData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="metric" />
-                            <YAxis />
-                            <ChartTooltip content={<ChartTooltipContent />} />
-                            <Legend />
-                            <Bar 
-                              dataKey="Your Performance" 
-                              fill="var(--color-your-performance)" 
-                            />
-                            <Bar 
-                              dataKey="Team Average" 
-                              fill="var(--color-team-average)" 
-                            />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </ChartContainer>
-                    ) : (
-                      <div className="flex items-center justify-center h-64">
-                        <p className="text-muted-foreground">No team data available for comparison.</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
+              {/* Team Comparison Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Team Performance Comparison</CardTitle>
+                  <CardDescription>
+                    Compare your current week performance with team averages (anonymized)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {teamLoading ? (
+                    <div className="space-y-4">
+                      <Skeleton className="h-64 w-full" />
+                    </div>
+                  ) : comparisonChartData.length > 0 ? (
+                    <ChartContainer config={chartConfig} className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={comparisonChartData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="metric" />
+                          <YAxis />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Legend />
+                          <Bar 
+                            dataKey="Your Performance" 
+                            fill="var(--color-your-performance)" 
+                          />
+                          <Bar 
+                            dataKey="Team Average" 
+                            fill="var(--color-team-average)" 
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-64">
+                      <p className="text-muted-foreground">No team data available for comparison.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
-
-          {/* Admin Team Overview Tab */}
-          {isAdmin && (
-            <TabsContent value="team" className="space-y-6">
-              <AdminTeamOverview />
-            </TabsContent>
-          )}
         </Tabs>
       </div>
 

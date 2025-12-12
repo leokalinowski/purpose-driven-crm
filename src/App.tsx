@@ -25,6 +25,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AdminNewsletter from "./pages/AdminNewsletter";
 import AdminDatabaseManagement from "./pages/AdminDatabaseManagement";
 import AdminEmailLogs from "./pages/AdminEmailLogs";
+import AdminCoachingManagement from "./pages/AdminCoachingManagement";
 import SocialScheduler from "./pages/SocialScheduler";
 import AdminSocialScheduler from "./pages/AdminSocialScheduler";
 import EventPublicPage from "./pages/EventPublicPage";
@@ -53,6 +54,7 @@ const AppContent = () => {
         <Route path="/admin/newsletter" element={<AdminNewsletter />} />
         <Route path="/admin/database" element={<AdminDatabaseManagement />} />
         <Route path="/admin/email-logs" element={<AdminEmailLogs />} />
+        <Route path="/admin/coaching" element={<AdminCoachingManagement />} />
         <Route path="/social-scheduler" element={<SocialScheduler />} />
         <Route path="/admin/social-scheduler" element={<AdminSocialScheduler />} />
         <Route path="/oauth-callback" element={<OAuthCallback />} />
