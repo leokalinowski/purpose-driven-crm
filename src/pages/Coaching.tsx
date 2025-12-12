@@ -25,6 +25,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { 
   useSubmitCoachingForm, 
   usePersonalMetrics, 
@@ -33,6 +34,8 @@ import {
   type CoachingFormData 
 } from '@/hooks/useCoaching';
 import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
+import { MySubmissionsHistory } from '@/components/coaching/MySubmissionsHistory';
+import AdminTeamOverview from '@/components/coaching/AdminTeamOverview';
 
 const formSchema = z.object({
   week_number: z.number().min(1, "Week must be between 1 and 52").max(52, "Week must be between 1 and 52"),
@@ -53,6 +56,7 @@ const formSchema = z.object({
 
 const WeeklySuccessScoreboard = () => {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const [activeTab, setActiveTab] = useState("submit");
   
   const currentWeekNumber = getCurrentWeekNumber();
@@ -86,8 +90,6 @@ const WeeklySuccessScoreboard = () => {
   const onSubmit = (data: CoachingFormData) => {
     submitMutation.mutate(data);
   };
-
-  const isAdmin = user?.email && ['admin@realestateonpurpose.com'].includes(user.email);
 
   // Prepare enhanced chart data for personal metrics
   const personalChartData = personalMetrics?.map(metric => ({
@@ -229,9 +231,10 @@ const WeeklySuccessScoreboard = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'}`}>
             <TabsTrigger value="submit">Success Scoreboard</TabsTrigger>
             <TabsTrigger value="dashboard">Performance Dashboard</TabsTrigger>
+            {isAdmin && <TabsTrigger value="team">Team Overview</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="submit" className="space-y-6">
@@ -679,6 +682,9 @@ const WeeklySuccessScoreboard = () => {
                 </CardContent>
               </Card>
 
+              {/* My Weekly Submissions History */}
+              <MySubmissionsHistory />
+
               {/* Team Comparison Chart (Admin Only) */}
               {isAdmin && (
                 <Card>
@@ -723,6 +729,13 @@ const WeeklySuccessScoreboard = () => {
               )}
             </div>
           </TabsContent>
+
+          {/* Admin Team Overview Tab */}
+          {isAdmin && (
+            <TabsContent value="team" className="space-y-6">
+              <AdminTeamOverview />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </Layout>
