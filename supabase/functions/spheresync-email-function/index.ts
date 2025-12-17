@@ -250,6 +250,9 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       try {
+        // Define agentName FIRST before using it
+        const agentName = agent.first_name ? `${agent.first_name} ${agent.last_name}`.trim() : agent.email;
+        
         // Separate call and text tasks
         const callTasks = agentTasks.filter(task => task.task_type === 'call');
         const textTasks = agentTasks.filter(task => task.task_type === 'text');
@@ -392,7 +395,7 @@ const handler = async (req: Request): Promise<Response> => {
           ? `[TEST] SphereSync Tasks - Week ${currentWeek} (${agentTasks.length} tasks assigned)` 
           : `SphereSync Tasks - Week ${currentWeek} (${agentTasks.length} tasks assigned)`;
         
-        const agentName = agent.first_name ? `${agent.first_name} ${agent.last_name}`.trim() : agent.email;
+        // agentName already declared at start of try block
         agentsProcessed.push(`${agentName} (${agentTasks.length} tasks)`);
         let resendResponse: { data?: { id: string }, error?: any } | null = null;
         
