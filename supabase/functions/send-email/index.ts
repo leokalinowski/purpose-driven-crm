@@ -170,7 +170,7 @@ serve(async (req) => {
           if (supabaseUrl && supabaseServiceKey) {
             const supabase = createClient(supabaseUrl, supabaseServiceKey);
             const firstRecipient = toList[0];
-            await supabase
+            const { error: logError } = await supabase
               .from('email_logs')
               .insert({
                 email_type: payload.metadata.email_type,
@@ -181,11 +181,13 @@ serve(async (req) => {
                 status: 'failed',
                 error_message: JSON.stringify(error),
                 metadata: payload.metadata
-              })
-              .catch(err => console.error('Failed to log failed email:', err));
+              });
+            if (logError) {
+              console.error('Failed to log failed email:', logError);
+            }
           }
-        } catch (logError) {
-          console.error('Error logging failed email:', logError);
+        } catch (logErr) {
+          console.error('Error logging failed email:', logErr);
         }
       }
       
@@ -208,7 +210,7 @@ serve(async (req) => {
         if (supabaseUrl && supabaseServiceKey) {
           const supabase = createClient(supabaseUrl, supabaseServiceKey);
           const firstRecipient = toList[0];
-          await supabase
+          const { error: logError } = await supabase
             .from('email_logs')
             .insert({
               email_type: payload.metadata.email_type,
@@ -220,11 +222,13 @@ serve(async (req) => {
               resend_email_id: data?.id,
               metadata: payload.metadata,
               sent_at: new Date().toISOString()
-            })
-            .catch(err => console.error('Failed to log email to unified table:', err));
+            });
+          if (logError) {
+            console.error('Failed to log email to unified table:', logError);
+          }
         }
-      } catch (logError) {
-        console.error('Error logging email:', logError);
+      } catch (logErr) {
+        console.error('Error logging email:', logErr);
       }
     }
 
