@@ -462,23 +462,29 @@ const handler = async (req: Request): Promise<Response> => {
           // Log failed email to unified email_logs table
           if (!testEmail) {
             const errorMessage = emailError instanceof Error ? emailError.message : String(emailError);
-            await supabase
-              .from('email_logs')
-              .insert({
-                email_type: 'spheresync_reminder',
-                recipient_email: recipientEmail,
-                recipient_name: agentName,
-                agent_id: agentId,
-                subject: emailSubject,
-                status: 'failed',
-                error_message: errorMessage,
-                metadata: {
-                  week_number: currentWeek,
-                  year: currentYear,
-                  task_count: agentTasks.length
-                }
-              })
-              .catch(err => console.error('Failed to log failed email:', err));
+            try {
+              const { error: failedLogError } = await supabase
+                .from('email_logs')
+                .insert({
+                  email_type: 'spheresync_reminder',
+                  recipient_email: recipientEmail,
+                  recipient_name: agentName,
+                  agent_id: agentId,
+                  subject: emailSubject,
+                  status: 'failed',
+                  error_message: errorMessage,
+                  metadata: {
+                    week_number: currentWeek,
+                    year: currentYear,
+                    task_count: agentTasks.length
+                  }
+                });
+              if (failedLogError) {
+                console.error('Failed to log failed email:', failedLogError);
+              }
+            } catch (logErr) {
+              console.error('Exception logging failed email:', logErr);
+            }
           }
           throw emailError; // Re-throw to be caught by outer catch block
         }
