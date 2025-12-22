@@ -1268,6 +1268,33 @@ export type Database = {
         }
         Relationships: []
       }
+      newsletter_unsubscribes: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          email: string
+          id: string
+          reason: string | null
+          unsubscribed_at: string
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          reason?: string | null
+          unsubscribed_at?: string
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          reason?: string | null
+          unsubscribed_at?: string
+        }
+        Relationships: []
+      }
       opportunities: {
         Row: {
           actual_close_date: string | null

@@ -7,6 +7,33 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Rate limiting constants
+const DELAY_BETWEEN_EMAILS_MS = 200; // 200ms between each email
+const DELAY_BETWEEN_ZIPS_MS = 2000; // 2 seconds between ZIP batches
+
+// Helper function for delays
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Simple token generation for unsubscribe links
+function generateUnsubscribeToken(email: string, agentId: string): string {
+  const secret = Deno.env.get('UNSUBSCRIBE_SECRET') || 'default-secret';
+  const data = `${email}:${agentId}:${secret}`;
+  let hash = 0;
+  for (let i = 0; i < data.length; i++) {
+    const char = data.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+// Email validation regex
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidEmail(email: string): boolean {
+  return EMAIL_REGEX.test(email);
+}
+
 async function sendFailureReport(
   failures: FailureData[], 
   agent: AgentProfile, 
@@ -16,7 +43,6 @@ async function sendFailureReport(
 ) {
   console.log(`Sending failure report for ${failures.length} failed ZIP codes`);
 
-  // Create HTML table of failures
   const failureRows = failures.map(failure => {
     const contactList = failure.contacts.map(c => 
       `${c.first_name || ''} ${c.last_name || ''} (${c.email})`.trim()
@@ -130,7 +156,7 @@ interface FailureData {
   attempts: number;
 }
 
-function generateStandardFooter(agent: AgentProfile): string {
+function generateStandardFooter(agent: AgentProfile, contactEmail: string): string {
   const agentName = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || 'Your Real Estate Agent';
   const agentEmail = agent.email || '';
   const teamName = agent.team_name || '';
@@ -141,11 +167,16 @@ function generateStandardFooter(agent: AgentProfile): string {
   const officeNumber = agent.office_number || '';
   const website = agent.website || '';
   
-  // Format licenses display
   const licenseText = stateLicenses ? `Licensed in ${stateLicenses}` : '';
-  
-  // Format team and brokerage
   const companyLine = [teamName, brokerage].filter(Boolean).join(' | ');
+  
+  // Generate secure unsubscribe link
+  const unsubscribeToken = generateUnsubscribeToken(contactEmail, agent.user_id);
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+  const unsubscribeUrl = `${supabaseUrl}/functions/v1/newsletter-unsubscribe?email=${encodeURIComponent(contactEmail)}&agent_id=${agent.user_id}&token=${unsubscribeToken}`;
+  
+  // Company physical address for CAN-SPAM compliance
+  const companyAddress = Deno.env.get('COMPANY_PHYSICAL_ADDRESS') || officeAddress || '';
   
   return `
     <div style="padding: 30px 0; margin-top: 30px; border-top: 1px solid #e5e5e5; font-family: Arial, sans-serif; text-align: left;">
@@ -165,9 +196,9 @@ function generateStandardFooter(agent: AgentProfile): string {
         <p style="margin: 3px 0;">
           This email was sent because you are a valued contact in our database.
         </p>
-        <p style="margin: 3px 0;">
-          If you no longer wish to receive these market updates, you can 
-          <a href="mailto:${agentEmail}?subject=Unsubscribe%20Request" style="color: #999;">unsubscribe here</a>.
+        ${companyAddress ? `<p style="margin: 3px 0;">${companyAddress}</p>` : ''}
+        <p style="margin: 8px 0;">
+          <a href="${unsubscribeUrl}" style="color: #999; text-decoration: underline;">Unsubscribe from these market updates</a>
         </p>
         <p style="margin: 3px 0;">
           © ${new Date().getFullYear()} ${agentName}. All rights reserved.
@@ -186,6 +217,10 @@ serve(async (req) => {
   try {
     const { agent_id, dry_run, campaign_name }: NewsletterRequest = await req.json();
 
+    if (!agent_id) {
+      throw new Error('agent_id is required');
+    }
+
     console.log(`Starting newsletter ${dry_run ? 'test' : 'send'} for agent: ${agent_id}`);
 
     // Initialize Supabase and Resend clients
@@ -196,14 +231,26 @@ serve(async (req) => {
     
     const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
 
-    // Create a new run record
+    // Cleanup: Mark old stuck runs as timed out
+    await supabase
+      .from('monthly_runs')
+      .update({
+        status: 'timeout',
+        error: 'Process timed out - marked during cleanup',
+        finished_at: new Date().toISOString()
+      })
+      .eq('status', 'running')
+      .lt('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString()); // Older than 30 minutes
+
+    // Create a new run record with started_at
     const { data: runRecord, error: runError } = await supabase
       .from('monthly_runs')
       .insert({
         agent_id,
         dry_run,
         status: 'running',
-        run_date: new Date().toISOString().split('T')[0]
+        run_date: new Date().toISOString().split('T')[0],
+        started_at: new Date().toISOString()
       })
       .select()
       .single();
@@ -244,6 +291,15 @@ serve(async (req) => {
 
       console.log(`Found agent: ${agent.first_name} ${agent.last_name}`);
 
+      // Get unsubscribed emails for this agent
+      const { data: unsubscribes } = await supabase
+        .from('newsletter_unsubscribes')
+        .select('email')
+        .or(`agent_id.eq.${agent_id},agent_id.is.null`);
+      
+      const unsubscribedEmails = new Set((unsubscribes || []).map(u => u.email.toLowerCase()));
+      console.log(`Found ${unsubscribedEmails.size} unsubscribed emails`);
+
       // Get agent's contacts with valid email, zip_code, and address
       const { data: contacts, error: contactsError } = await supabase
         .from('contacts')
@@ -264,17 +320,50 @@ serve(async (req) => {
         throw new Error('No contacts found with valid email and ZIP code');
       }
 
-      // Filter out invalid zip codes and get unique ZIP codes
+      // Filter out invalid zip codes, invalid emails, and unsubscribed contacts
       const validContacts = contacts.filter(contact => {
         const zip = contact.zip_code?.replace(/[^0-9]/g, '');
-        return zip && zip.length === 5;
+        const email = contact.email?.toLowerCase().trim();
+        
+        // Check ZIP is valid 5 digits
+        if (!zip || zip.length !== 5) {
+          console.log(`Skipping contact ${contact.id}: Invalid ZIP code ${contact.zip_code}`);
+          return false;
+        }
+        
+        // Check email is valid format
+        if (!email || !isValidEmail(email)) {
+          console.log(`Skipping contact ${contact.id}: Invalid email format ${contact.email}`);
+          return false;
+        }
+        
+        // Check if unsubscribed
+        if (unsubscribedEmails.has(email)) {
+          console.log(`Skipping contact ${contact.id}: Unsubscribed ${contact.email}`);
+          return false;
+        }
+        
+        return true;
       });
 
       if (validContacts.length === 0) {
-        throw new Error('No contacts with valid 5-digit ZIP codes');
+        throw new Error('No contacts with valid 5-digit ZIP codes after filtering');
       }
 
-      const uniqueZipCodes = [...new Set(validContacts.map(c => c.zip_code))];
+      console.log(`${validContacts.length} contacts remain after filtering (invalid/unsubscribed)`);
+
+      // DEDUPLICATION: Keep only one contact per unique email (prefer most recently updated)
+      const emailToContact = new Map<string, Contact>();
+      for (const contact of validContacts) {
+        const email = contact.email.toLowerCase().trim();
+        if (!emailToContact.has(email)) {
+          emailToContact.set(email, contact);
+        }
+      }
+      const deduplicatedContacts = Array.from(emailToContact.values());
+      console.log(`${deduplicatedContacts.length} unique email addresses after deduplication`);
+
+      const uniqueZipCodes = [...new Set(deduplicatedContacts.map(c => c.zip_code))];
       console.log(`Processing ${uniqueZipCodes.length} unique ZIP codes`);
 
       // For test mode, only process first ZIP code
@@ -282,10 +371,8 @@ serve(async (req) => {
       
       let totalEmailsSent = 0;
       let totalContactsProcessed = 0;
+      let skippedEmails = 0;
       const failures: FailureData[] = [];
-
-
-
 
       async function generateEmailContent(
         zipCode: string,
@@ -330,12 +417,13 @@ serve(async (req) => {
         }
       }
 
-      for (const zipCode of zipsToProcess) {
-        console.log(`Processing ZIP code: ${zipCode}`);
+      for (let zipIndex = 0; zipIndex < zipsToProcess.length; zipIndex++) {
+        const zipCode = zipsToProcess[zipIndex];
+        console.log(`Processing ZIP code: ${zipCode} (${zipIndex + 1}/${zipsToProcess.length})`);
         
-        // Get contacts for this ZIP
-        const zipContacts = validContacts.filter(c => c.zip_code === zipCode);
-        console.log(`Found ${zipContacts.length} contacts for ZIP ${zipCode}`);
+        // Get deduplicated contacts for this ZIP
+        const zipContacts = deduplicatedContacts.filter(c => c.zip_code === zipCode);
+        console.log(`Found ${zipContacts.length} unique contacts for ZIP ${zipCode}`);
 
         // Generate one email per ZIP code using CSV data and Grok
         let emailData: EmailData | null = null;
@@ -350,17 +438,14 @@ serve(async (req) => {
           ].filter(Boolean);
           const address = addressParts.length > 0 ? addressParts.join(', ') : `Property in ${firstContact.zip_code}`;
 
-          // Generate content using market-data-grok function (CSV data + Grok)
           try {
             emailData = await generateEmailContent(zipCode, firstContact, address, agent);
           } catch (error) {
             console.error(`Failed to generate content for ZIP ${zipCode}:`, error.message);
-            // emailData remains null, will be handled below
           }
         }
 
         if (!emailData) {
-          // Record failure for this ZIP code with specific error
           failures.push({
             zip_code: zipCode,
             contacts: zipContacts,
@@ -369,12 +454,13 @@ serve(async (req) => {
             attempts: 1
           });
 
-          console.error(`Skipping ZIP ${zipCode} - no real market data available, will not send generic emails`);
+          console.error(`Skipping ZIP ${zipCode} - no real market data available`);
           continue;
         }
 
-        // Success! Send emails to all contacts in this ZIP
-        for (const contact of zipContacts) {
+        // Success! Send emails to all contacts in this ZIP with rate limiting
+        for (let contactIndex = 0; contactIndex < zipContacts.length; contactIndex++) {
+          const contact = zipContacts[contactIndex];
           if (!contact.email) continue;
 
           const agentFullName = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || 'your agent';
@@ -388,8 +474,8 @@ serve(async (req) => {
           const fromName = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || 'Your Real Estate Agent';
 
           try {
-            // Combine Grok's email content with standardized footer
-            const finalEmailHtml = emailData.html_email + generateStandardFooter(agent);
+            // Combine Grok's email content with standardized footer (passing contact email for unsubscribe link)
+            const finalEmailHtml = emailData.html_email + generateStandardFooter(agent, contact.email);
             
             const emailResult = await resend.emails.send({
               from: `${fromName} <${Deno.env.get('RESEND_FROM_EMAIL')}>`,
@@ -399,10 +485,32 @@ serve(async (req) => {
               reply_to: agent.email || undefined,
             });
 
+            // Check for rate limit response
+            if (emailResult.error) {
+              const errorMessage = emailResult.error.message || '';
+              if (errorMessage.includes('rate') || errorMessage.includes('limit')) {
+                console.log('Rate limit hit, waiting 5 seconds...');
+                await delay(5000);
+                // Retry once
+                const retryResult = await resend.emails.send({
+                  from: `${fromName} <${Deno.env.get('RESEND_FROM_EMAIL')}>`,
+                  to: [toEmail],
+                  subject,
+                  html: finalEmailHtml,
+                  reply_to: agent.email || undefined,
+                });
+                if (retryResult.error) {
+                  throw new Error(retryResult.error.message);
+                }
+              } else {
+                throw new Error(errorMessage);
+              }
+            }
+
             totalEmailsSent++;
             totalContactsProcessed++;
             
-            console.log(`Email sent to ${dry_run ? 'agent (test mode)' : contact.email}`);
+            console.log(`Email sent to ${dry_run ? 'agent (test mode)' : contact.email} (${contactIndex + 1}/${zipContacts.length})`);
             
             // Log the newsletter activity for this contact (not in dry run mode)
             if (!dry_run) {
@@ -428,9 +536,8 @@ serve(async (req) => {
                     recipient_name: contactName,
                     agent_id: agent.user_id,
                     subject: subject,
-                    status: emailResult.error ? 'failed' : 'sent',
+                    status: 'sent',
                     resend_email_id: emailResult.data?.id || null,
-                    error_message: emailResult.error ? JSON.stringify(emailResult.error) : null,
                     metadata: {
                       campaign_id: campaignRecord?.id,
                       campaign_name: campaignName,
@@ -438,7 +545,7 @@ serve(async (req) => {
                       zip_code: zipCode,
                       dry_run: dry_run
                     },
-                    sent_at: emailResult.error ? null : new Date().toISOString()
+                    sent_at: new Date().toISOString()
                   })
                   .catch(err => console.error('Failed to log newsletter email:', err));
               } catch (error) {
@@ -446,10 +553,16 @@ serve(async (req) => {
               }
             }
             
+            // Rate limiting: delay between emails
+            if (!dry_run && contactIndex < zipContacts.length - 1) {
+              await delay(DELAY_BETWEEN_EMAILS_MS);
+            }
+            
             // In test mode, only send one email
             if (dry_run) break;
           } catch (emailError) {
             console.error(`Failed to send email to ${contact.email}:`, emailError);
+            skippedEmails++;
             
             // Log failed email to unified email_logs table
             if (!dry_run) {
@@ -482,6 +595,12 @@ serve(async (req) => {
           }
         }
 
+        // Rate limiting: delay between ZIP batches
+        if (!dry_run && zipIndex < zipsToProcess.length - 1) {
+          console.log(`Waiting ${DELAY_BETWEEN_ZIPS_MS}ms before next ZIP batch...`);
+          await delay(DELAY_BETWEEN_ZIPS_MS);
+        }
+
         // In test mode, only process one ZIP
         if (dry_run) break;
       }
@@ -499,7 +618,6 @@ serve(async (req) => {
           emails_sent: totalEmailsSent,
           contacts_processed: totalContactsProcessed,
           zip_codes_processed: zipsToProcess.length,
-          failed_zip_codes: failures.length,
           finished_at: new Date().toISOString()
         })
         .eq('id', runRecord.id);
@@ -521,7 +639,7 @@ serve(async (req) => {
           .eq('id', campaignRecord.id);
       }
 
-      console.log(`Newsletter ${dry_run ? 'test' : 'send'} completed. Emails sent: ${totalEmailsSent}, Failures: ${failures.length}`);
+      console.log(`Newsletter ${dry_run ? 'test' : 'send'} completed. Emails sent: ${totalEmailsSent}, Skipped: ${skippedEmails}, Failures: ${failures.length}`);
 
       return new Response(JSON.stringify({
         success: true,
@@ -529,6 +647,7 @@ serve(async (req) => {
         contacts_processed: totalContactsProcessed,
         zip_codes_processed: zipsToProcess.length,
         failed_zip_codes: failures.length,
+        skipped_emails: skippedEmails,
         run_id: runRecord.id,
         campaign_id: campaignRecord?.id
       }), {
