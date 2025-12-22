@@ -396,6 +396,7 @@ serve(async (req) => {
               to: [toEmail],
               subject,
               html: finalEmailHtml,
+              reply_to: agent.email || undefined,
             });
 
             totalEmailsSent++;
