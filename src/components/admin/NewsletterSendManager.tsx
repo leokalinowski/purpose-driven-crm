@@ -32,8 +32,17 @@ interface Campaign {
   updated_at: string;
 }
 
+interface Agent {
+  user_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+}
+
 export function NewsletterSendManager() {
   const [campaignName, setCampaignName] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('')
+  const [agents, setAgents] = useState<Agent[]>([])
   const [csvFiles, setCsvFiles] = useState<CSVFile[]>([])
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [sending, setSending] = useState(false)
@@ -41,9 +50,29 @@ export function NewsletterSendManager() {
   const { session } = useAuth()
 
   useEffect(() => {
+    fetchAgents()
     fetchCSVFiles()
     fetchCampaigns()
   }, [])
+
+  const fetchAgents = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('user_id, first_name, last_name, email')
+        .order('first_name', { ascending: true })
+
+      if (error) throw error
+      setAgents(data || [])
+      
+      // Auto-select first agent if available
+      if (data && data.length > 0 && !selectedAgentId) {
+        setSelectedAgentId(data[0].user_id)
+      }
+    } catch (error) {
+      console.error('Error fetching agents:', error)
+    }
+  }
 
   const fetchCSVFiles = async () => {
     try {
@@ -66,6 +95,7 @@ export function NewsletterSendManager() {
         .from('newsletter_campaigns')
         .select('*')
         .order('created_at', { ascending: false })
+        .limit(10)
 
       if (error) throw error
       setCampaigns(data || [])
@@ -77,6 +107,11 @@ export function NewsletterSendManager() {
   const sendNewsletter = async () => {
     if (!campaignName.trim()) {
       setMessage({ type: 'error', text: 'Please enter a campaign name' })
+      return
+    }
+
+    if (!selectedAgentId) {
+      setMessage({ type: 'error', text: 'Please select an agent' })
       return
     }
 
@@ -103,19 +138,21 @@ export function NewsletterSendManager() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          campaign_name: campaignName.trim()
+          agent_id: selectedAgentId,
+          campaign_name: campaignName.trim(),
+          dry_run: false
         })
       })
 
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Newsletter sending failed')
+        throw new Error(result.error || result.details || 'Newsletter sending failed')
       }
 
       setMessage({
         type: 'success',
-        text: `Newsletter campaign started successfully! Run ID: ${result.run_id}`
+        text: `Newsletter campaign completed! Sent ${result.emails_sent} emails across ${result.zip_codes_processed} ZIP codes. Run ID: ${result.run_id}`
       })
 
       setCampaignName('')
@@ -132,6 +169,7 @@ export function NewsletterSendManager() {
     const variants: { [key: string]: 'default' | 'secondary' | 'destructive' | 'outline' } = {
       'draft': 'secondary',
       'sending': 'default',
+      'sent': 'default',
       'completed': 'default',
       'failed': 'destructive'
     }
@@ -153,6 +191,11 @@ export function NewsletterSendManager() {
     })
   }
 
+  const getAgentDisplayName = (agent: Agent) => {
+    const name = `${agent.first_name || ''} ${agent.last_name || ''}`.trim()
+    return name || agent.email || 'Unknown Agent'
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -161,12 +204,31 @@ export function NewsletterSendManager() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
+            <Label htmlFor="agent-select">Select Agent</Label>
+            <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+              <SelectTrigger id="agent-select">
+                <SelectValue placeholder="Select an agent..." />
+              </SelectTrigger>
+              <SelectContent>
+                {agents.map((agent) => (
+                  <SelectItem key={agent.user_id} value={agent.user_id}>
+                    {getAgentDisplayName(agent)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Newsletter will be sent to all contacts owned by this agent
+            </p>
+          </div>
+
+          <div>
             <Label htmlFor="campaign-name">Campaign Name</Label>
             <Input
               id="campaign-name"
               value={campaignName}
               onChange={(e) => setCampaignName(e.target.value)}
-              placeholder="e.g., September 2024 Market Update"
+              placeholder="e.g., December 2024 Market Update"
             />
           </div>
 
@@ -175,19 +237,25 @@ export function NewsletterSendManager() {
             <p className="text-sm text-muted-foreground mt-1 mb-3">
               This will send personalized newsletters to all agent contacts using CSV market data and AI-generated content. One email per ZIP code will be generated and sent to all contacts in that area.
             </p>
-            <div className="bg-blue-50 border border-blue-200 rounded p-3">
-              <p className="text-sm text-blue-800">
-                <strong>How it works:</strong> The system analyzes CSV market data for each unique ZIP code in your contacts, generates personalized content using AI, and sends customized emails to all contacts in that ZIP code.
+            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded p-3 space-y-2">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                <strong>How it works:</strong> The system analyzes CSV market data for each unique ZIP code in contacts, generates personalized content using AI, and sends customized emails.
               </p>
+              <ul className="text-xs text-blue-700 dark:text-blue-300 list-disc ml-4 space-y-1">
+                <li>Duplicate emails are automatically filtered (one email per address)</li>
+                <li>Invalid emails and unsubscribed contacts are skipped</li>
+                <li>Rate limiting prevents API throttling (200ms between emails)</li>
+                <li>One-click unsubscribe link included in every email</li>
+              </ul>
             </div>
           </div>
           
           <Button
             onClick={sendNewsletter}
-            disabled={!campaignName.trim() || sending || csvFiles.length === 0}
+            disabled={!campaignName.trim() || !selectedAgentId || sending || csvFiles.length === 0}
             className="w-full"
           >
-            {sending ? 'Starting Campaign...' : 'Send Newsletter Campaign'}
+            {sending ? 'Sending Campaign...' : 'Send Newsletter Campaign'}
           </Button>
 
           {message && (
@@ -219,8 +287,10 @@ export function NewsletterSendManager() {
                       {campaign.send_date && (
                         <p>Send Date: {formatDate(campaign.send_date)}</p>
                       )}
-                      <p>Recipients: {campaign.recipient_count} contacts</p>
-                      <p>Open Rate: {campaign.open_rate}% • Click Rate: {campaign.click_through_rate}%</p>
+                      <p>Recipients: {campaign.recipient_count || 0} contacts</p>
+                      {campaign.status === 'sent' && (
+                        <p>Open Rate: {campaign.open_rate?.toFixed(1) || 0}% • Click Rate: {campaign.click_through_rate?.toFixed(1) || 0}%</p>
+                      )}
                     </div>
                   </div>
                 </div>
