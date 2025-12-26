@@ -57,49 +57,81 @@ serve(async (req) => {
     }
 
     const resend = new Resend(RESEND_API_KEY);
+    
+    // Generate a unique unsubscribe URL for deliverability
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+    const unsubscribeUrl = `${SUPABASE_URL}/functions/v1/newsletter-unsubscribe?email=${encodeURIComponent(to)}&reason=test`;
+
+    const htmlContent = `
+      <div style="font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #2563eb; margin-bottom: 24px;">✅ Resend Email Test Successful</h1>
+        
+        <p>This is a test email to verify that your Resend email configuration is working correctly.</p>
+        
+        <div style="background-color: #f8fafc; border-left: 4px solid #2563eb; padding: 16px; margin: 20px 0;">
+          <h3 style="margin: 0 0 12px 0; color: #1f2937;">Configuration Details:</h3>
+          <ul style="margin: 0; padding-left: 20px;">
+            <li><strong>From Email:</strong> ${FROM_EMAIL}</li>
+            <li><strong>From Name:</strong> ${FROM_NAME}</li>
+            <li><strong>Recipient:</strong> ${to}</li>
+            <li><strong>Timestamp:</strong> ${new Date().toISOString()}</li>
+          </ul>
+        </div>
+        
+        ${FROM_EMAIL === 'onboarding@resend.dev' ? `
+        <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; margin: 20px 0;">
+          <h4 style="margin: 0 0 8px 0; color: #92400e;">⚠️ Important Notice</h4>
+          <p style="margin: 0; color: #92400e;">
+            You're using the default Resend test email address. For production use:
+          </p>
+          <ol style="margin: 8px 0 0 20px; color: #92400e;">
+            <li>Verify your domain at <a href="https://resend.com/domains" style="color: #1d4ed8;">https://resend.com/domains</a></li>
+            <li>Set RESEND_FROM_EMAIL to use your verified domain</li>
+          </ol>
+        </div>
+        ` : ''}
+        
+        <p style="color: #6b7280; margin-top: 32px;">
+          If you received this email, your Resend configuration is working correctly!
+        </p>
+        
+        <div style="font-size: 12px; color: #999; margin-top: 30px; padding-top: 15px; border-top: 1px solid #eee;">
+          <p style="margin: 3px 0;">This is a test email from Real Estate on Purpose.</p>
+          <p style="margin: 3px 0;"><a href="${unsubscribeUrl}" style="color: #999; text-decoration: underline;">Unsubscribe</a></p>
+        </div>
+      </div>
+    `;
+
+    const textContent = `Resend Email Test Successful
+
+This is a test email to verify that your Resend email configuration is working correctly.
+
+Configuration Details:
+- From Email: ${FROM_EMAIL}
+- From Name: ${FROM_NAME}
+- Recipient: ${to}
+- Timestamp: ${new Date().toISOString()}
+
+If you received this email, your Resend configuration is working correctly!
+
+---
+This is a test email from Real Estate on Purpose.
+To unsubscribe, reply with "unsubscribe" in the subject line.`;
 
     const emailData = {
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: [to],
       subject: "Resend Email Test - Configuration Verification",
-      html: `
-        <div style="font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h1 style="color: #2563eb; margin-bottom: 24px;">✅ Resend Email Test Successful</h1>
-          
-          <p>This is a test email to verify that your Resend email configuration is working correctly.</p>
-          
-          <div style="background-color: #f8fafc; border-left: 4px solid #2563eb; padding: 16px; margin: 20px 0;">
-            <h3 style="margin: 0 0 12px 0; color: #1f2937;">Configuration Details:</h3>
-            <ul style="margin: 0; padding-left: 20px;">
-              <li><strong>From Email:</strong> ${FROM_EMAIL}</li>
-              <li><strong>From Name:</strong> ${FROM_NAME}</li>
-              <li><strong>Recipient:</strong> ${to}</li>
-              <li><strong>Timestamp:</strong> ${new Date().toISOString()}</li>
-            </ul>
-          </div>
-          
-          ${FROM_EMAIL === 'onboarding@resend.dev' ? `
-          <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; margin: 20px 0;">
-            <h4 style="margin: 0 0 8px 0; color: #92400e;">⚠️ Important Notice</h4>
-            <p style="margin: 0; color: #92400e;">
-              You're using the default Resend test email address. For production use:
-            </p>
-            <ol style="margin: 8px 0 0 20px; color: #92400e;">
-              <li>Verify your domain at <a href="https://resend.com/domains" style="color: #1d4ed8;">https://resend.com/domains</a></li>
-              <li>Set RESEND_FROM_EMAIL to use your verified domain</li>
-            </ol>
-          </div>
-          ` : ''}
-          
-          <p style="color: #6b7280; margin-top: 32px;">
-            If you received this email, your Resend configuration is working correctly!
-          </p>
-        </div>
-      `,
-      text: `Resend Email Test Successful\n\nThis is a test email to verify that your Resend email configuration is working correctly.\n\nConfiguration Details:\n- From Email: ${FROM_EMAIL}\n- From Name: ${FROM_NAME}\n- Recipient: ${to}\n- Timestamp: ${new Date().toISOString()}\n\nIf you received this email, your Resend configuration is working correctly!`
+      html: htmlContent,
+      text: textContent,
+      headers: {
+        'List-Unsubscribe': `<${unsubscribeUrl}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        'X-Entity-Ref-ID': `test-email-${Date.now()}`,
+      },
     };
 
-    console.log("Attempting to send test email via Resend...");
+    console.log("Attempting to send test email via Resend with deliverability headers...");
 
     const { data, error } = await resend.emails.send(emailData);
 
