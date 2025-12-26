@@ -34,6 +34,53 @@ function isValidEmail(email: string): boolean {
   return EMAIL_REGEX.test(email);
 }
 
+// Generate plain text version from HTML for better deliverability
+function generatePlainTextVersion(htmlEmail: string, agent: AgentProfile, contact: Contact): string {
+  // Strip HTML tags and convert to plain text
+  let text = htmlEmail
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<\/td>/gi, ' | ')
+    .replace(/<\/th>/gi, ' | ')
+    .replace(/<li>/gi, '• ')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<h[1-6][^>]*>/gi, '\n\n')
+    .replace(/<\/h[1-6]>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  // Add agent footer
+  const agentName = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || 'Your Real Estate Agent';
+  const footer = `
+---
+${agentName} - REALTOR®
+${agent.team_name || ''} ${agent.brokerage ? `| ${agent.brokerage}` : ''}
+${agent.office_address || ''}
+${agent.phone_number ? `Cell/Text: ${agent.phone_number}` : ''}
+${agent.office_number ? `Office: ${agent.office_number}` : ''}
+${agent.email ? `Email: ${agent.email}` : ''}
+${agent.website || ''}
+
+This email was sent because you are a valued contact in our database.
+To unsubscribe from these market updates, reply with "unsubscribe" in the subject line.
+
+© ${new Date().getFullYear()} ${agentName}. All rights reserved.
+`.trim();
+
+  return text + '\n\n' + footer;
+}
+
 async function sendFailureReport(
   failures: FailureData[], 
   agent: AgentProfile, 
@@ -477,12 +524,26 @@ serve(async (req) => {
             // Combine Grok's email content with standardized footer (passing contact email for unsubscribe link)
             const finalEmailHtml = emailData.html_email + generateStandardFooter(agent, contact.email);
             
+            // Generate unsubscribe URL for headers
+            const unsubscribeToken = generateUnsubscribeToken(contact.email, agent.user_id);
+            const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+            const unsubscribeUrl = `${supabaseUrl}/functions/v1/newsletter-unsubscribe?email=${encodeURIComponent(contact.email)}&agent_id=${agent.user_id}&token=${unsubscribeToken}`;
+            
+            // Generate plain text version for better deliverability
+            const plainTextContent = generatePlainTextVersion(emailData.html_email, agent, contact);
+            
             const emailResult = await resend.emails.send({
               from: `${fromName} <${Deno.env.get('RESEND_FROM_EMAIL')}>`,
               to: [toEmail],
               subject,
               html: finalEmailHtml,
+              text: plainTextContent,
               reply_to: agent.email || undefined,
+              headers: {
+                'List-Unsubscribe': `<${unsubscribeUrl}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                'X-Entity-Ref-ID': `newsletter-${contact.id}-${Date.now()}`,
+              },
             });
 
             // Check for rate limit response
@@ -497,7 +558,13 @@ serve(async (req) => {
                   to: [toEmail],
                   subject,
                   html: finalEmailHtml,
+                  text: plainTextContent,
                   reply_to: agent.email || undefined,
+                  headers: {
+                    'List-Unsubscribe': `<${unsubscribeUrl}>`,
+                    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                    'X-Entity-Ref-ID': `newsletter-${contact.id}-${Date.now()}`,
+                  },
                 });
                 if (retryResult.error) {
                   throw new Error(retryResult.error.message);
