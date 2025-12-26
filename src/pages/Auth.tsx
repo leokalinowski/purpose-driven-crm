@@ -164,7 +164,7 @@ const Auth = () => {
       
       toast({
         title: 'Success',
-        description: 'Account created! Please check your email to confirm your account.',
+        description: 'Account created successfully! You can now sign in.',
       });
       
       // Reset form
