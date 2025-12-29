@@ -48,24 +48,37 @@ const SPHERESYNC_TEXTS: Record<number, string> = {
 };
 
 /**
- * Calculate the current week number of the year (1-52) using ISO 8601 standard
+ * Calculate ISO 8601 week number and year
+ * Handles year boundaries correctly (e.g., Dec 29, 2025 = Week 1 of 2026)
  */
-function getCurrentWeekNumber(date: Date = new Date()): number {
-  const start = new Date(date.getFullYear(), 0, 1);
-  const startDay = start.getDay();
-  const daysSinceStart = Math.floor((date.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-  const adjustedDays = daysSinceStart + (startDay === 0 ? 6 : startDay - 1);
-  const weekNumber = Math.ceil((adjustedDays + 1) / 7);
-  return Math.min(Math.max(weekNumber, 1), 52);
+function getISOWeekNumber(date: Date = new Date()): { week: number; year: number } {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7; // Make Sunday = 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum); // Set to nearest Thursday
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNumber = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return { week: weekNumber, year: d.getUTCFullYear() };
 }
 
 /**
- * Get current week's call and text categories
+ * Get week number for task category lookup (1-52)
+ * Maps ISO week to our 52-week category system
+ */
+function getCurrentWeekNumber(date: Date = new Date()): number {
+  const { week } = getISOWeekNumber(date);
+  // ISO weeks can be 1-53, but our category system uses 1-52
+  return Math.min(week, 52);
+}
+
+/**
+ * Get current week's call and text categories with ISO year
  */
 function getCurrentWeekTasks() {
-  const weekNumber = getCurrentWeekNumber();
+  const { week, year } = getISOWeekNumber();
+  const weekNumber = Math.min(week, 52); // Map to our 52-week system
   return {
     weekNumber,
+    isoYear: year, // Use ISO year for correct year boundary handling
     callCategories: SPHERESYNC_CALLS[weekNumber] || [],
     textCategory: SPHERESYNC_TEXTS[weekNumber] || ''
   };
@@ -261,14 +274,13 @@ const handler = async (req: Request): Promise<Response> => {
           category: contact.category || contact.last_name?.charAt(0).toUpperCase() || 'A'
         })) || [];
 
-        // Check if tasks already exist for this agent and week
-        const currentYear = new Date().getFullYear();
+        // Check if tasks already exist for this agent and week (use ISO year)
         const { data: existingTasks, error: checkError } = await supabase
           .from('spheresync_tasks')
           .select('id, task_type')
           .eq('agent_id', agent.user_id)
           .eq('week_number', currentWeekTasks.weekNumber)
-          .eq('year', currentYear);
+          .eq('year', currentWeekTasks.isoYear);
 
         if (checkError) {
           console.error(`Error checking existing tasks for agent ${agent.user_id}:`, checkError);
@@ -285,7 +297,7 @@ const handler = async (req: Request): Promise<Response> => {
             .delete()
             .eq('agent_id', agent.user_id)
             .eq('week_number', currentWeekTasks.weekNumber)
-            .eq('year', currentYear);
+            .eq('year', currentWeekTasks.isoYear);
 
           if (deleteError) {
             console.error(`Error deleting existing tasks for agent ${agent.user_id}:`, deleteError);
@@ -310,14 +322,13 @@ const handler = async (req: Request): Promise<Response> => {
 
         console.log(`Agent ${agent.user_id}: ${callContacts.length} call tasks, ${textContacts.length} text tasks`);
 
-        // Generate tasks
         const tasksToInsert = [
           ...callContacts.map((contact: Contact) => ({
             agent_id: agent.user_id,
             lead_id: contact.id,
             task_type: 'call',
             week_number: currentWeekTasks.weekNumber,
-            year: currentYear,
+            year: currentWeekTasks.isoYear,
             completed: false
           })),
           ...textContacts.map((contact: Contact) => ({
@@ -325,7 +336,7 @@ const handler = async (req: Request): Promise<Response> => {
             lead_id: contact.id,
             task_type: 'text',
             week_number: currentWeekTasks.weekNumber,
-            year: currentYear,
+            year: currentWeekTasks.isoYear,
             completed: false
           }))
         ];
@@ -372,7 +383,7 @@ const handler = async (req: Request): Promise<Response> => {
       success: true,
       message: 'SphereSync tasks generated successfully',
       week_number: currentWeekTasks.weekNumber,
-      year: new Date().getFullYear(),
+      iso_year: currentWeekTasks.isoYear,
       call_categories: currentWeekTasks.callCategories,
       text_category: currentWeekTasks.textCategory,
       agents_processed: agents.length,
