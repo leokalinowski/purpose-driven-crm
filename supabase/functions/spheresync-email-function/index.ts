@@ -89,6 +89,8 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   let requestSource = 'manual';
+  let runLogId: string | null = null;
+  
   try {
     // Get source from request body or headers
     const requestBody = await req.json().catch(() => ({}));
@@ -154,6 +156,34 @@ const handler = async (req: Request): Promise<Response> => {
       targetYear = computedYear;
     }
 
+    console.log(`Targeting week ${targetWeek}, year ${targetYear}`);
+
+    // Create run log entry (unless dry run or test mode)
+    if (!dryRun && !testEmail) {
+      const { data: runLog, error: runLogError } = await supabase
+        .from('spheresync_run_logs')
+        .insert({
+          run_type: 'email',
+          source: requestSource,
+          scheduled_at: scheduledAt || null,
+          target_week_number: targetWeek,
+          target_year: targetYear,
+          force_send: forceSend,
+          dry_run: false,
+          target_agent_id: targetAgentId || null,
+          status: 'running'
+        })
+        .select('id')
+        .single();
+
+      if (runLogError) {
+        console.warn('Failed to create run log:', runLogError);
+      } else {
+        runLogId = runLog?.id;
+        console.log(`Created run log: ${runLogId}`);
+      }
+    }
+
     console.log(`Fetching SphereSync tasks for week ${targetWeek}, year ${targetYear}`);
 
     // Build query for tasks
@@ -192,10 +222,25 @@ const handler = async (req: Request): Promise<Response> => {
     if (!tasks || tasks.length === 0) {
       const warningMessage = `WARNING: No SphereSync tasks found for week ${targetWeek}, year ${targetYear}. This might indicate that task generation did not run or failed.`;
       console.warn(warningMessage);
+      
+      // Update run log
+      if (runLogId) {
+        await supabase
+          .from('spheresync_run_logs')
+          .update({
+            finished_at: new Date().toISOString(),
+            status: 'completed',
+            error_message: warningMessage,
+            agent_results: []
+          })
+          .eq('id', runLogId);
+      }
+      
       return new Response(JSON.stringify({
         success: false,
         warning: true,
         message: warningMessage,
+        run_log_id: runLogId,
         week_number: targetWeek,
         year: targetYear,
         emails_sent: 0,
@@ -295,17 +340,23 @@ const handler = async (req: Request): Promise<Response> => {
 
     let emailsSent = 0;
     let emailsSkipped = 0;
-    const agentsProcessed: string[] = [];
-    const agentsSkipped: { name: string; reason: string }[] = [];
-    const agentsFailed: string[] = [];
+    let emailsFailed = 0;
+    const agentResults: any[] = [];
 
     // Send email to each agent
     for (const [agentId, agentTasks] of tasksByAgent) {
       const agent = agentEmails.get(agentId);
+      const agentName = agent?.first_name ? `${agent.first_name} ${agent.last_name}`.trim() : agent?.email || 'Unknown';
       
       if (!agent?.email) {
         console.warn(`No email found for agent ${agentId} - skipping`);
-        agentsSkipped.push({ name: `Agent ${agentId}`, reason: 'no email address' });
+        agentResults.push({
+          agent_id: agentId,
+          agent_name: agentName,
+          status: 'skipped',
+          reason: 'no email address'
+        });
+        emailsSkipped++;
         continue;
       }
 
@@ -331,18 +382,19 @@ const handler = async (req: Request): Promise<Response> => {
         }
 
         if (existingLog) {
-          const agentName = agent.first_name ? `${agent.first_name} ${agent.last_name}`.trim() : agent.email;
           console.log(`Skipping ${agentName} - already sent email for week ${targetWeek}/${targetYear} at ${existingLog.sent_at}`);
-          agentsSkipped.push({ name: agentName, reason: `already sent at ${existingLog.sent_at}` });
+          agentResults.push({
+            agent_id: agentId,
+            agent_name: agentName,
+            status: 'skipped',
+            reason: `already sent at ${existingLog.sent_at}`
+          });
           emailsSkipped++;
           continue;
         }
       }
 
       try {
-        // Define agentName FIRST before using it
-        const agentName = agent.first_name ? `${agent.first_name} ${agent.last_name}`.trim() : agent.email;
-        
         // Separate call and text tasks
         const callTasks = agentTasks.filter(task => task.task_type === 'call');
         const textTasks = agentTasks.filter(task => task.task_type === 'text');
@@ -375,7 +427,7 @@ const handler = async (req: Request): Promise<Response> => {
             htmlContent += `
               <li style="background: #f0fdf4; padding: 10px; margin: 5px 0; border-left: 3px solid #059669; border-radius: 4px;">
                 <strong>${leadName}</strong><br>
-                <span style="color: #6b7280;">Phone: ${phone} | Category: ${category}</span>
+                <span style="color: #6b7280;">Phone: <a href="tel:${phone}" style="color: #059669;">${phone}</a> | Category: ${category}</span>
               </li>
             `;
           });
@@ -401,7 +453,7 @@ const handler = async (req: Request): Promise<Response> => {
             htmlContent += `
               <li style="background: #fef2f2; padding: 10px; margin: 5px 0; border-left: 3px solid #dc2626; border-radius: 4px;">
                 <strong>${leadName}</strong><br>
-                <span style="color: #6b7280;">Phone: ${phone} | Category: ${category}</span>
+                <span style="color: #6b7280;">Phone: <a href="tel:${phone}" style="color: #dc2626;">${phone}</a> | Category: ${category}</span>
               </li>
             `;
           });
@@ -485,8 +537,6 @@ const handler = async (req: Request): Promise<Response> => {
           ? `[TEST] SphereSync Tasks - Week ${targetWeek} (${agentTasks.length} tasks assigned)` 
           : `SphereSync Tasks - Week ${targetWeek} (${agentTasks.length} tasks assigned)`;
         
-        // agentName already declared at start of try block
-        agentsProcessed.push(`${agentName} (${agentTasks.length} tasks)`);
         let resendResponse: { data?: { id: string }, error?: any } | null = null;
         
         try {
@@ -548,6 +598,13 @@ const handler = async (req: Request): Promise<Response> => {
           }
           
           emailsSent++;
+          agentResults.push({
+            agent_id: agentId,
+            agent_name: agentName,
+            status: 'sent',
+            task_count: agentTasks.length,
+            resend_id: resendResponse?.data?.id
+          });
         } catch (emailError) {
           // Log failed email to unified email_logs table
           if (!testEmail) {
@@ -583,37 +640,60 @@ const handler = async (req: Request): Promise<Response> => {
         await new Promise(resolve => setTimeout(resolve, 1000));
 
       } catch (error) {
-        const agentName = agentEmails.get(agentId)?.email || agentId;
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error(`Failed to send email to agent ${agentId} (${agentName}):`, errorMessage);
-        agentsFailed.push(`${agentName}: ${errorMessage}`);
+        emailsFailed++;
+        agentResults.push({
+          agent_id: agentId,
+          agent_name: agentName,
+          status: 'failed',
+          error: errorMessage
+        });
         // Continue with other agents even if one fails
       }
     }
 
-    const completionMessage = `SphereSync email function completed. Sent ${emailsSent} emails, skipped ${emailsSkipped}, failed ${agentsFailed.length}.`;
+    const completionMessage = `SphereSync email function completed. Sent ${emailsSent} emails, skipped ${emailsSkipped}, failed ${emailsFailed}.`;
     console.log(completionMessage);
-    console.log(`Agents processed: ${agentsProcessed.length}`);
-    console.log(`Agents skipped: ${agentsSkipped.length}`);
-    if (agentsFailed.length > 0) {
-      console.error(`Agents failed: ${agentsFailed.length}`, agentsFailed);
-    }
     
     // Log summary for monitoring
-    if (emailsSent === 0 && emailsSkipped === 0 && agentsFailed.length === 0) {
+    if (emailsSent === 0 && emailsSkipped === 0 && emailsFailed === 0) {
       console.warn('WARNING: No emails were sent, skipped, or failed. This might indicate an issue.');
+    }
+
+    // Update run log
+    if (runLogId) {
+      const { error: updateLogError } = await supabase
+        .from('spheresync_run_logs')
+        .update({
+          finished_at: new Date().toISOString(),
+          status: emailsFailed > 0 && emailsSent === 0 ? 'failed' : 'completed',
+          agents_processed: tasksByAgent.size,
+          emails_sent: emailsSent,
+          emails_skipped: emailsSkipped,
+          emails_failed: emailsFailed,
+          agent_results: agentResults,
+          error_message: emailsFailed > 0 ? `${emailsFailed} emails failed` : null
+        })
+        .eq('id', runLogId);
+
+      if (updateLogError) {
+        console.warn('Failed to update run log:', updateLogError);
+      }
     }
 
     return new Response(JSON.stringify({
       success: true,
-      message: `Sent ${emailsSent} emails, skipped ${emailsSkipped} (already sent), failed ${agentsFailed.length}`,
+      message: `Sent ${emailsSent} emails, skipped ${emailsSkipped} (already sent), failed ${emailsFailed}`,
+      run_log_id: runLogId,
       week_number: targetWeek,
       year: targetYear,
       emails_sent: emailsSent,
       emails_skipped: emailsSkipped,
-      agents_processed: agentsProcessed,
-      agents_skipped: agentsSkipped,
-      agents_failed: agentsFailed,
+      emails_failed: emailsFailed,
+      agents_processed: agentResults.filter(r => r.status === 'sent').map(r => `${r.agent_name} (${r.task_count} tasks)`),
+      agents_skipped: agentResults.filter(r => r.status === 'skipped').map(r => ({ name: r.agent_name, reason: r.reason })),
+      agents_failed: agentResults.filter(r => r.status === 'failed').map(r => `${r.agent_name}: ${r.error}`),
       force_send: forceSend,
       execution_time: new Date().toISOString(),
       source: requestSource
@@ -632,11 +712,33 @@ const handler = async (req: Request): Promise<Response> => {
       timestamp: new Date().toISOString(),
       source: requestSource || 'unknown'
     });
+
+    // Update run log with error
+    if (runLogId) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        if (supabaseUrl && supabaseServiceKey) {
+          const supabase = createClient(supabaseUrl, supabaseServiceKey);
+          await supabase
+            .from('spheresync_run_logs')
+            .update({
+              finished_at: new Date().toISOString(),
+              status: 'failed',
+              error_message: errorMessage
+            })
+            .eq('id', runLogId);
+        }
+      } catch (logError) {
+        console.error('Failed to update run log with error:', logError);
+      }
+    }
     
     return new Response(JSON.stringify({
       success: false,
       error: errorMessage,
       error_type: error instanceof Error ? error.constructor.name : 'Unknown',
+      run_log_id: runLogId,
       timestamp: new Date().toISOString(),
       source: requestSource || 'unknown'
     }), {

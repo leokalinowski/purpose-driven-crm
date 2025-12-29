@@ -28,6 +28,7 @@ import AdminEmailLogs from "./pages/AdminEmailLogs";
 import AdminCoachingManagement from "./pages/AdminCoachingManagement";
 import SocialScheduler from "./pages/SocialScheduler";
 import AdminSocialScheduler from "./pages/AdminSocialScheduler";
+import AdminSphereSyncRecovery from "./pages/AdminSphereSyncRecovery";
 import EventPublicPage from "./pages/EventPublicPage";
 
 const queryClient = new QueryClient();
@@ -57,6 +58,7 @@ const AppContent = () => {
         <Route path="/admin/coaching" element={<AdminCoachingManagement />} />
         <Route path="/social-scheduler" element={<SocialScheduler />} />
         <Route path="/admin/social-scheduler" element={<AdminSocialScheduler />} />
+        <Route path="/admin/spheresync-recovery" element={<AdminSphereSyncRecovery />} />
         <Route path="/oauth-callback" element={<OAuthCallback />} />
         <Route path="/event/:slug" element={<EventPublicPage />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
