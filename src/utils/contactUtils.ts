@@ -293,9 +293,12 @@ function isValidEmail(email: string): boolean {
 }
 
 /**
- * Validate phone format (basic US phone validation)
+ * Validate phone format (lenient - accepts any phone with 7+ digits)
+ * This allows local numbers, US numbers, international formats, etc.
+ * Contacts with partial/invalid phones will simply skip DNC checking later.
  */
 function isValidPhone(phone: string): boolean {
   const digits = phone.replace(/\D/g, '');
-  return digits.length === 10 || digits.length === 11;
+  // Accept any phone with 7 or more digits (local, US, international)
+  return digits.length >= 7;
 }
