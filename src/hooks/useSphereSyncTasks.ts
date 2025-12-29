@@ -52,22 +52,22 @@ export function useSphereSyncTasks() {
   const [selectedWeek, setSelectedWeek] = useState<{ weekNumber: number; year: number } | null>(null);
   const currentWeek = getCurrentWeekTasks();
 
-  // Initialize selected week to current week
+  // Initialize selected week to current week using ISO year
   useEffect(() => {
     if (!selectedWeek) {
       setSelectedWeek({
         weekNumber: currentWeek.weekNumber,
-        year: new Date().getFullYear()
+        year: currentWeek.isoYear // Use ISO year for correct year boundary handling
       });
     }
-  }, [currentWeek.weekNumber, selectedWeek]);
+  }, [currentWeek.weekNumber, currentWeek.isoYear, selectedWeek]);
 
   const loadTasksAndContacts = useCallback(async (weekNumber?: number, year?: number) => {
     if (!user) return;
 
-    // Use selected week or current week
+    // Use selected week or current week (with ISO year)
     const targetWeek = weekNumber ?? selectedWeek?.weekNumber ?? currentWeek.weekNumber;
-    const targetYear = year ?? selectedWeek?.year ?? new Date().getFullYear();
+    const targetYear = year ?? selectedWeek?.year ?? currentWeek.isoYear;
 
     try {
       setLoading(true);
@@ -133,8 +133,8 @@ export function useSphereSyncTasks() {
 
       setTasks(tasksWithLeads);
 
-      // Auto-generate tasks only for current week
-      const isCurrentWeek = targetWeek === currentWeek.weekNumber && targetYear === new Date().getFullYear();
+      // Auto-generate tasks only for current week (using ISO year comparison)
+      const isCurrentWeek = targetWeek === currentWeek.weekNumber && targetYear === currentWeek.isoYear;
       if (tasksWithLeads.length === 0 && updatedContacts.length > 0 && isCurrentWeek) {
         await generateWeeklyTasksInternal(updatedContacts);
       }
@@ -152,22 +152,21 @@ export function useSphereSyncTasks() {
     } finally {
       setLoading(false);
     }
-  }, [user, currentWeek.weekNumber]);
+  }, [user, currentWeek.weekNumber, currentWeek.isoYear]);
 
   const generateWeeklyTasksInternal = async (contactsToUse?: Contact[]) => {
     if (!user) return;
 
     try {
-      const { callCategories, textCategory } = currentWeek;
-      const currentYear = new Date().getFullYear();
+      const { callCategories, textCategory, weekNumber, isoYear } = currentWeek;
 
       // Check if tasks already exist for this week to prevent duplicates
       const { data: existingTasks, error: checkError } = await supabase
         .from('spheresync_tasks')
         .select('id')
         .eq('agent_id', user.id)
-        .eq('week_number', currentWeek.weekNumber)
-        .eq('year', currentYear);
+        .eq('week_number', weekNumber)
+        .eq('year', isoYear);
 
       if (checkError) {
         console.error('Error checking existing tasks:', checkError);
@@ -180,8 +179,8 @@ export function useSphereSyncTasks() {
           .from('spheresync_tasks')
           .delete()
           .eq('agent_id', user.id)
-          .eq('week_number', currentWeek.weekNumber)
-          .eq('year', currentYear);
+          .eq('week_number', weekNumber)
+          .eq('year', isoYear);
 
         if (deleteError) {
           console.error('Error deleting existing tasks:', deleteError);
@@ -213,8 +212,8 @@ export function useSphereSyncTasks() {
         textCategory,
         callContacts: callContacts.length,
         textContacts: textContacts.length,
-        weekNumber: currentWeek.weekNumber,
-        year: currentYear
+        weekNumber: weekNumber,
+        year: isoYear
       });
 
       // Create tasks
@@ -223,16 +222,16 @@ export function useSphereSyncTasks() {
           agent_id: user.id,
           lead_id: contact.id,
           task_type: 'call' as const,
-          week_number: currentWeek.weekNumber,
-          year: currentYear,
+          week_number: weekNumber,
+          year: isoYear,
           completed: false
         })),
         ...textContacts.map(contact => ({
           agent_id: user.id,
           lead_id: contact.id,
           task_type: 'text' as const,
-          week_number: currentWeek.weekNumber,
-          year: currentYear,
+          week_number: weekNumber,
+          year: isoYear,
           completed: false
         }))
       ];
@@ -262,8 +261,8 @@ export function useSphereSyncTasks() {
   const generateWeeklyTasks = async () => {
     if (!user || generating) return;
     
-    const currentYear = new Date().getFullYear();
-    const weekKey = `${currentWeek.weekNumber}-${currentYear}`;
+    const { weekNumber, isoYear } = currentWeek;
+    const weekKey = `${weekNumber}-${isoYear}`;
     
     // Prevent duplicate generation for the same week
     if (lastGeneratedWeek === weekKey) {
@@ -404,8 +403,7 @@ export function useSphereSyncTasks() {
     if (!user || newContacts.length === 0) return;
 
     try {
-      const { callCategories, textCategory } = currentWeek;
-      const currentYear = new Date().getFullYear();
+      const { callCategories, textCategory, weekNumber, isoYear } = currentWeek;
 
       // Filter new contacts by current week's categories
       const callContacts = newContacts.filter(contact => 
@@ -430,16 +428,16 @@ export function useSphereSyncTasks() {
             agent_id: user.id,
             lead_id: contact.id,
             task_type: 'call' as const,
-            week_number: currentWeek.weekNumber,
-            year: currentYear,
+            week_number: weekNumber,
+            year: isoYear,
             completed: false
           })),
           ...textContacts.map(contact => ({
             agent_id: user.id,
             lead_id: contact.id,
             task_type: 'text' as const,
-            week_number: currentWeek.weekNumber,
-            year: currentYear,
+            week_number: weekNumber,
+            year: isoYear,
             completed: false
           }))
         ];

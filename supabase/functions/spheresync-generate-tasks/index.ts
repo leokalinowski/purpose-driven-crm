@@ -61,20 +61,11 @@ function getISOWeekNumber(date: Date = new Date()): { week: number; year: number
 }
 
 /**
- * Get week number for task category lookup (1-52)
- * Maps ISO week to our 52-week category system
- */
-function getCurrentWeekNumber(date: Date = new Date()): number {
-  const { week } = getISOWeekNumber(date);
-  // ISO weeks can be 1-53, but our category system uses 1-52
-  return Math.min(week, 52);
-}
-
-/**
  * Get current week's call and text categories with ISO year
+ * Optionally accepts a date to compute week/year from (for scheduled_at support)
  */
-function getCurrentWeekTasks() {
-  const { week, year } = getISOWeekNumber();
+function getCurrentWeekTasks(referenceDate?: Date) {
+  const { week, year } = getISOWeekNumber(referenceDate);
   const weekNumber = Math.min(week, 52); // Map to our 52-week system
   return {
     weekNumber,
@@ -104,6 +95,8 @@ interface ProcessResult {
   tasks_generated?: number;
   call_tasks?: number;
   text_tasks?: number;
+  skipped?: boolean;
+  skipped_reason?: string;
   error?: string;
 }
 
@@ -176,13 +169,40 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Parse request body
     const body = await req.json();
-    const { mode = 'global', agentId = null } = body;
+    const { 
+      mode = 'global', 
+      agentId = null,
+      scheduled_at = null,
+      force_regenerate = false,
+      week_number: overrideWeek = null,
+      year: overrideYear = null
+    } = body;
 
-    console.log(`Processing mode: ${mode}, agentId: ${agentId}`);
+    console.log(`Processing mode: ${mode}, agentId: ${agentId}, force_regenerate: ${force_regenerate}`);
+    if (scheduled_at) {
+      console.log(`Using scheduled_at for week calculation: ${scheduled_at}`);
+    }
+    if (overrideWeek && overrideYear) {
+      console.log(`Using override week/year: Week ${overrideWeek}/${overrideYear}`);
+    }
 
-    // Get current week tasks
-    const currentWeekTasks = getCurrentWeekTasks();
-    console.log('Current week tasks:', currentWeekTasks);
+    // Determine reference date for week/year calculation
+    // Priority: 1) explicit week/year override, 2) scheduled_at, 3) now()
+    let currentWeekTasks;
+    if (overrideWeek && overrideYear) {
+      // Use explicit override
+      currentWeekTasks = {
+        weekNumber: overrideWeek,
+        isoYear: overrideYear,
+        callCategories: SPHERESYNC_CALLS[overrideWeek] || [],
+        textCategory: SPHERESYNC_TEXTS[overrideWeek] || ''
+      };
+    } else {
+      const referenceDate = scheduled_at ? new Date(scheduled_at) : new Date();
+      currentWeekTasks = getCurrentWeekTasks(referenceDate);
+    }
+    
+    console.log('Target week tasks:', currentWeekTasks);
 
     let agents: Agent[] = [];
 
@@ -287,11 +307,22 @@ const handler = async (req: Request): Promise<Response> => {
           continue;
         }
 
-        // If tasks already exist, skip this agent to prevent duplicates unless forcing regeneration
-        if (existingTasks && existingTasks.length > 0) {
-          console.log(`Tasks already exist for agent ${agent.user_id}, deleting and regenerating`);
+        // If tasks already exist and force_regenerate is not set, skip this agent
+        if (existingTasks && existingTasks.length > 0 && !force_regenerate) {
+          console.log(`Tasks already exist for agent ${agent.user_id} (week ${currentWeekTasks.weekNumber}/${currentWeekTasks.isoYear}), skipping (use force_regenerate to override)`);
+          results.push({
+            agent_id: agent.user_id,
+            agent_name: `${agent.first_name} ${agent.last_name}`,
+            skipped: true,
+            skipped_reason: `Tasks already exist for week ${currentWeekTasks.weekNumber}/${currentWeekTasks.isoYear} (${existingTasks.length} tasks). Use force_regenerate=true to recreate.`
+          });
+          continue;
+        }
+
+        // If tasks exist and force_regenerate is set, delete them first
+        if (existingTasks && existingTasks.length > 0 && force_regenerate) {
+          console.log(`Force regenerating: deleting ${existingTasks.length} existing tasks for agent ${agent.user_id}`);
           
-          // Delete existing tasks first
           const { error: deleteError } = await supabase
             .from('spheresync_tasks')
             .delete()
@@ -379,6 +410,11 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('SphereSync task generation completed');
     
+    // Calculate summary stats
+    const generated = results.filter(r => r.tasks_generated !== undefined && !r.skipped);
+    const skipped = results.filter(r => r.skipped);
+    const failed = results.filter(r => r.error);
+    
     return new Response(JSON.stringify({
       success: true,
       message: 'SphereSync tasks generated successfully',
@@ -386,7 +422,14 @@ const handler = async (req: Request): Promise<Response> => {
       iso_year: currentWeekTasks.isoYear,
       call_categories: currentWeekTasks.callCategories,
       text_category: currentWeekTasks.textCategory,
-      agents_processed: agents.length,
+      force_regenerate: force_regenerate,
+      summary: {
+        agents_processed: agents.length,
+        agents_generated: generated.length,
+        agents_skipped: skipped.length,
+        agents_failed: failed.length,
+        total_tasks_generated: generated.reduce((sum, r) => sum + (r.tasks_generated || 0), 0)
+      },
       results
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

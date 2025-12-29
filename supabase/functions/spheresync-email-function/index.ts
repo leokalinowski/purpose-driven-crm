@@ -21,16 +21,6 @@ function getISOWeekNumber(date: Date = new Date()): { week: number; year: number
 }
 
 /**
- * Get week number for task category lookup (1-52)
- * Maps ISO week to our 52-week category system
- */
-function getCurrentWeekNumber(date: Date = new Date()): number {
-  const { week } = getISOWeekNumber(date);
-  // ISO weeks can be 1-53, but our category system uses 1-52
-  return Math.min(week, 52);
-}
-
-/**
  * Format lead name from lead data
  */
 function formatLeadName(lead: any): string {
@@ -111,9 +101,13 @@ const handler = async (req: Request): Promise<Response> => {
       console.log(`Scheduled execution time: ${scheduledAt}`);
     }
 
-    // Check if this is a forced send (admin override) or test mode
+    // Check for optional overrides
     const forceSend = requestBody.force === true;
     const testEmail = requestBody.testEmail; // If provided, send only to this email as a test
+    const dryRun = requestBody.dry_run === true;
+    const overrideWeek = requestBody.week_number;
+    const overrideYear = requestBody.year;
+    const targetAgentId = requestBody.agent_id; // Optional: send only to specific agent
     
     if (forceSend) {
       console.log('Force send enabled - will send emails even if already sent this week');
@@ -121,6 +115,18 @@ const handler = async (req: Request): Promise<Response> => {
     
     if (testEmail) {
       console.log(`Test mode enabled - will send sample email only to ${testEmail}`);
+    }
+
+    if (dryRun) {
+      console.log('Dry run mode - will NOT send emails, just return what would be sent');
+    }
+
+    if (overrideWeek && overrideYear) {
+      console.log(`Using override week/year: Week ${overrideWeek}/${overrideYear}`);
+    }
+
+    if (targetAgentId) {
+      console.log(`Targeting specific agent: ${targetAgentId}`);
     }
 
     // Initialize Supabase client
@@ -133,14 +139,25 @@ const handler = async (req: Request): Promise<Response> => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get current week and year using ISO 8601 standard
-    const { week: currentWeekISO, year: currentYear } = getISOWeekNumber();
-    const currentWeek = Math.min(currentWeekISO, 52); // Map to our 52-week system
+    // Determine target week/year
+    // Priority: 1) explicit week/year override, 2) scheduled_at, 3) now()
+    let targetWeek: number;
+    let targetYear: number;
 
-    console.log(`Fetching SphereSync tasks for week ${currentWeek}, ISO year ${currentYear} (ISO week: ${currentWeekISO})`);
+    if (overrideWeek && overrideYear) {
+      targetWeek = overrideWeek;
+      targetYear = overrideYear;
+    } else {
+      const referenceDate = scheduledAt ? new Date(scheduledAt) : new Date();
+      const { week: computedWeek, year: computedYear } = getISOWeekNumber(referenceDate);
+      targetWeek = Math.min(computedWeek, 52); // Map to our 52-week system
+      targetYear = computedYear;
+    }
 
-    // Fetch all spheresync_tasks for current week with contact details
-    const { data: tasks, error: tasksError } = await supabase
+    console.log(`Fetching SphereSync tasks for week ${targetWeek}, year ${targetYear}`);
+
+    // Build query for tasks
+    let tasksQuery = supabase
       .from('spheresync_tasks')
       .select(`
         *,
@@ -153,27 +170,34 @@ const handler = async (req: Request): Promise<Response> => {
           category
         )
       `)
-      .eq('week_number', currentWeek)
-      .eq('year', currentYear)
+      .eq('week_number', targetWeek)
+      .eq('year', targetYear)
       .order('agent_id');
+
+    // If targeting specific agent, add filter
+    if (targetAgentId) {
+      tasksQuery = tasksQuery.eq('agent_id', targetAgentId);
+    }
+
+    const { data: tasks, error: tasksError } = await tasksQuery;
 
     if (tasksError) {
       console.error('Error fetching tasks:', tasksError);
       throw tasksError;
     }
 
-    console.log(`Found ${tasks?.length || 0} SphereSync tasks for week ${currentWeek}, year ${currentYear}`);
+    console.log(`Found ${tasks?.length || 0} SphereSync tasks for week ${targetWeek}, year ${targetYear}`);
     
     // If no tasks found, log warning but don't fail - this might be normal if no tasks were generated
     if (!tasks || tasks.length === 0) {
-      const warningMessage = `WARNING: No SphereSync tasks found for week ${currentWeek}, year ${currentYear}. This might indicate that task generation did not run or failed.`;
+      const warningMessage = `WARNING: No SphereSync tasks found for week ${targetWeek}, year ${targetYear}. This might indicate that task generation did not run or failed.`;
       console.warn(warningMessage);
       return new Response(JSON.stringify({
         success: false,
         warning: true,
         message: warningMessage,
-        week_number: currentWeek,
-        year: currentYear,
+        week_number: targetWeek,
+        year: targetYear,
         emails_sent: 0,
         emails_skipped: 0,
         source: requestSource
@@ -214,10 +238,65 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Grouped tasks for ${tasksByAgent.size} agents`);
 
+    // Dry run mode - just return what would be sent
+    if (dryRun) {
+      const dryRunResults = [];
+      for (const [agentId, agentTasks] of tasksByAgent) {
+        const agent = agentEmails.get(agentId);
+        const agentName = agent?.first_name ? `${agent.first_name} ${agent.last_name}`.trim() : agent?.email || 'Unknown';
+        
+        // Check if already sent
+        let wouldSkip = false;
+        let skipReason = '';
+        if (!forceSend && !testEmail) {
+          const { data: existingLog } = await supabase
+            .from('spheresync_email_logs')
+            .select('id, sent_at')
+            .eq('agent_id', agentId)
+            .eq('week_number', targetWeek)
+            .eq('year', targetYear)
+            .maybeSingle();
+          
+          if (existingLog) {
+            wouldSkip = true;
+            skipReason = `Already sent at ${existingLog.sent_at}`;
+          }
+        }
+
+        dryRunResults.push({
+          agent_id: agentId,
+          agent_name: agentName,
+          agent_email: agent?.email || null,
+          task_count: agentTasks.length,
+          call_tasks: agentTasks.filter(t => t.task_type === 'call').length,
+          text_tasks: agentTasks.filter(t => t.task_type === 'text').length,
+          would_skip: wouldSkip,
+          skip_reason: skipReason,
+          has_email: !!agent?.email
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        dry_run: true,
+        message: 'Dry run completed - no emails sent',
+        week_number: targetWeek,
+        year: targetYear,
+        agents_would_send: dryRunResults.filter(r => !r.would_skip && r.has_email).length,
+        agents_would_skip: dryRunResults.filter(r => r.would_skip).length,
+        agents_missing_email: dryRunResults.filter(r => !r.has_email).length,
+        results: dryRunResults,
+        source: requestSource
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
+
     let emailsSent = 0;
     let emailsSkipped = 0;
     const agentsProcessed: string[] = [];
-    const agentsSkipped: string[] = [];
+    const agentsSkipped: { name: string; reason: string }[] = [];
     const agentsFailed: string[] = [];
 
     // Send email to each agent
@@ -226,7 +305,7 @@ const handler = async (req: Request): Promise<Response> => {
       
       if (!agent?.email) {
         console.warn(`No email found for agent ${agentId} - skipping`);
-        agentsSkipped.push(`Agent ${agentId} (no email)`);
+        agentsSkipped.push({ name: `Agent ${agentId}`, reason: 'no email address' });
         continue;
       }
 
@@ -242,8 +321,8 @@ const handler = async (req: Request): Promise<Response> => {
           .from('spheresync_email_logs')
           .select('id, sent_at')
           .eq('agent_id', agentId)
-          .eq('week_number', currentWeek)
-          .eq('year', currentYear)
+          .eq('week_number', targetWeek)
+          .eq('year', targetYear)
           .maybeSingle();
 
         if (logError) {
@@ -253,8 +332,8 @@ const handler = async (req: Request): Promise<Response> => {
 
         if (existingLog) {
           const agentName = agent.first_name ? `${agent.first_name} ${agent.last_name}`.trim() : agent.email;
-          console.log(`Skipping ${agentName} - already sent email for week ${currentWeek}/${currentYear} at ${existingLog.sent_at}`);
-          agentsSkipped.push(`${agentName} (already sent)`);
+          console.log(`Skipping ${agentName} - already sent email for week ${targetWeek}/${targetYear} at ${existingLog.sent_at}`);
+          agentsSkipped.push({ name: agentName, reason: `already sent at ${existingLog.sent_at}` });
           emailsSkipped++;
           continue;
         }
@@ -270,11 +349,11 @@ const handler = async (req: Request): Promise<Response> => {
 
         // Create email content
         let plainTextContent = `Hello ${agentName},\n\n`;
-        plainTextContent += `Your SphereSync tasks for Week ${currentWeek} (${currentYear}) are ready!\n\n`;
+        plainTextContent += `Your SphereSync tasks for Week ${targetWeek} (${targetYear}) are ready!\n\n`;
         
         let htmlContent = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">SphereSync Weekly Tasks - Week ${currentWeek}</h2>
+            <h2 style="color: #2563eb;">SphereSync Weekly Tasks - Week ${targetWeek}</h2>
             <p>Hello ${agentName},</p>
             <p>Your SphereSync tasks for this week are ready! The system uses balanced letter distribution based on surname frequency analysis for optimal task distribution.</p>
         `;
@@ -403,8 +482,8 @@ const handler = async (req: Request): Promise<Response> => {
         const adminBCC = Deno.env.get('SPHERESYNC_ADMIN_BCC') || 'leonardo@realestateonpurpose.com';
         const recipientEmail = testEmail || agent.email;
         const emailSubject = testEmail 
-          ? `[TEST] SphereSync Tasks - Week ${currentWeek} (${agentTasks.length} tasks assigned)` 
-          : `SphereSync Tasks - Week ${currentWeek} (${agentTasks.length} tasks assigned)`;
+          ? `[TEST] SphereSync Tasks - Week ${targetWeek} (${agentTasks.length} tasks assigned)` 
+          : `SphereSync Tasks - Week ${targetWeek} (${agentTasks.length} tasks assigned)`;
         
         // agentName already declared at start of try block
         agentsProcessed.push(`${agentName} (${agentTasks.length} tasks)`);
@@ -428,8 +507,8 @@ const handler = async (req: Request): Promise<Response> => {
               .from('spheresync_email_logs')
               .insert({
                 agent_id: agentId,
-                week_number: currentWeek,
-                year: currentYear,
+                week_number: targetWeek,
+                year: targetYear,
                 task_count: agentTasks.length
               });
 
@@ -451,8 +530,8 @@ const handler = async (req: Request): Promise<Response> => {
                 resend_email_id: resendResponse?.data?.id,
                 error_message: resendResponse?.error ? JSON.stringify(resendResponse.error) : null,
                 metadata: {
-                  week_number: currentWeek,
-                  year: currentYear,
+                  week_number: targetWeek,
+                  year: targetYear,
                   task_count: agentTasks.length,
                   call_tasks: callTasks.length,
                   text_tasks: textTasks.length
@@ -485,8 +564,8 @@ const handler = async (req: Request): Promise<Response> => {
                   status: 'failed',
                   error_message: errorMessage,
                   metadata: {
-                    week_number: currentWeek,
-                    year: currentYear,
+                    week_number: targetWeek,
+                    year: targetYear,
                     task_count: agentTasks.length
                   }
                 });
@@ -528,8 +607,8 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response(JSON.stringify({
       success: true,
       message: `Sent ${emailsSent} emails, skipped ${emailsSkipped} (already sent), failed ${agentsFailed.length}`,
-      week_number: currentWeek,
-      year: currentYear,
+      week_number: targetWeek,
+      year: targetYear,
       emails_sent: emailsSent,
       emails_skipped: emailsSkipped,
       agents_processed: agentsProcessed,

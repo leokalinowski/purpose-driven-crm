@@ -126,20 +126,20 @@ export function getPreviousWeekNumber(weekNumber: number, year: number, weeksBac
  * Get week info for current week and previous N weeks
  */
 export function getWeekRange(weeksBack: number = 2): Array<{ weekNumber: number; year: number; label: string }> {
-  const currentWeek = getCurrentWeekNumber();
-  const currentYear = new Date().getFullYear();
+  // Use ISO week and year for consistent year boundary handling
+  const { week: currentWeek, year: isoYear } = getISOWeekNumber();
   const weeks: Array<{ weekNumber: number; year: number; label: string }> = [];
   
   // Add current week
   weeks.push({
-    weekNumber: currentWeek,
-    year: currentYear,
-    label: `Week ${currentWeek} (Current)`
+    weekNumber: Math.min(currentWeek, 52), // Map to our 52-week system
+    year: isoYear,
+    label: `Week ${Math.min(currentWeek, 52)} (Current)`
   });
   
   // Add previous weeks
   for (let i = 1; i <= weeksBack; i++) {
-    const prevWeek = getPreviousWeekNumber(currentWeek, currentYear, i);
+    const prevWeek = getPreviousWeekNumber(Math.min(currentWeek, 52), isoYear, i);
     weeks.push({
       weekNumber: prevWeek.weekNumber,
       year: prevWeek.year,
