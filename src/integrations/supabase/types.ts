@@ -1838,6 +1838,81 @@ export type Database = {
           },
         ]
       }
+      spheresync_run_logs: {
+        Row: {
+          agent_results: Json | null
+          agents_processed: number | null
+          agents_skipped: number | null
+          created_at: string
+          dry_run: boolean | null
+          emails_failed: number | null
+          emails_sent: number | null
+          emails_skipped: number | null
+          error_message: string | null
+          finished_at: string | null
+          force_regenerate: boolean | null
+          force_send: boolean | null
+          id: string
+          run_type: string
+          scheduled_at: string | null
+          source: string
+          started_at: string
+          status: string
+          target_agent_id: string | null
+          target_week_number: number
+          target_year: number
+          tasks_created: number | null
+        }
+        Insert: {
+          agent_results?: Json | null
+          agents_processed?: number | null
+          agents_skipped?: number | null
+          created_at?: string
+          dry_run?: boolean | null
+          emails_failed?: number | null
+          emails_sent?: number | null
+          emails_skipped?: number | null
+          error_message?: string | null
+          finished_at?: string | null
+          force_regenerate?: boolean | null
+          force_send?: boolean | null
+          id?: string
+          run_type: string
+          scheduled_at?: string | null
+          source?: string
+          started_at?: string
+          status?: string
+          target_agent_id?: string | null
+          target_week_number: number
+          target_year: number
+          tasks_created?: number | null
+        }
+        Update: {
+          agent_results?: Json | null
+          agents_processed?: number | null
+          agents_skipped?: number | null
+          created_at?: string
+          dry_run?: boolean | null
+          emails_failed?: number | null
+          emails_sent?: number | null
+          emails_skipped?: number | null
+          error_message?: string | null
+          finished_at?: string | null
+          force_regenerate?: boolean | null
+          force_send?: boolean | null
+          id?: string
+          run_type?: string
+          scheduled_at?: string | null
+          source?: string
+          started_at?: string
+          status?: string
+          target_agent_id?: string | null
+          target_week_number?: number
+          target_year?: number
+          tasks_created?: number | null
+        }
+        Relationships: []
+      }
       spheresync_tasks: {
         Row: {
           agent_id: string

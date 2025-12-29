@@ -92,6 +92,9 @@ interface Agent {
 interface ProcessResult {
   agent_id: string;
   agent_name: string;
+  contacts_total?: number;
+  contacts_call?: number;
+  contacts_text?: number;
   tasks_generated?: number;
   call_tasks?: number;
   text_tasks?: number;
@@ -105,6 +108,9 @@ const handler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const startTime = new Date();
+  let runLogId: string | null = null;
 
   try {
     console.log('SphereSync task generation started');
@@ -175,7 +181,8 @@ const handler = async (req: Request): Promise<Response> => {
       scheduled_at = null,
       force_regenerate = false,
       week_number: overrideWeek = null,
-      year: overrideYear = null
+      year: overrideYear = null,
+      source = isCronJob ? 'pg_cron' : 'manual'
     } = body;
 
     console.log(`Processing mode: ${mode}, agentId: ${agentId}, force_regenerate: ${force_regenerate}`);
@@ -203,6 +210,29 @@ const handler = async (req: Request): Promise<Response> => {
     }
     
     console.log('Target week tasks:', currentWeekTasks);
+
+    // Create run log entry
+    const { data: runLog, error: runLogError } = await supabase
+      .from('spheresync_run_logs')
+      .insert({
+        run_type: 'generate',
+        source: source,
+        scheduled_at: scheduled_at || null,
+        target_week_number: currentWeekTasks.weekNumber,
+        target_year: currentWeekTasks.isoYear,
+        force_regenerate: force_regenerate,
+        target_agent_id: agentId || null,
+        status: 'running'
+      })
+      .select('id')
+      .single();
+
+    if (runLogError) {
+      console.warn('Failed to create run log:', runLogError);
+    } else {
+      runLogId = runLog?.id;
+      console.log(`Created run log: ${runLogId}`);
+    }
 
     let agents: Agent[] = [];
 
@@ -251,6 +281,9 @@ const handler = async (req: Request): Promise<Response> => {
     console.log(`Processing ${agents.length} agents`);
 
     const results: ProcessResult[] = [];
+    let totalTasksCreated = 0;
+    let agentsProcessed = 0;
+    let agentsSkipped = 0;
 
     // Process each agent
     for (const agent of agents) {
@@ -265,6 +298,11 @@ const handler = async (req: Request): Promise<Response> => {
 
         if (contactsError) {
           console.error(`Error loading contacts for agent ${agent.user_id}:`, contactsError);
+          results.push({
+            agent_id: agent.user_id,
+            agent_name: `${agent.first_name} ${agent.last_name}`,
+            error: `Failed to load contacts: ${contactsError.message}`
+          });
           continue;
         }
 
@@ -304,15 +342,22 @@ const handler = async (req: Request): Promise<Response> => {
 
         if (checkError) {
           console.error(`Error checking existing tasks for agent ${agent.user_id}:`, checkError);
+          results.push({
+            agent_id: agent.user_id,
+            agent_name: `${agent.first_name} ${agent.last_name}`,
+            error: `Failed to check existing tasks: ${checkError.message}`
+          });
           continue;
         }
 
         // If tasks already exist and force_regenerate is not set, skip this agent
         if (existingTasks && existingTasks.length > 0 && !force_regenerate) {
           console.log(`Tasks already exist for agent ${agent.user_id} (week ${currentWeekTasks.weekNumber}/${currentWeekTasks.isoYear}), skipping (use force_regenerate to override)`);
+          agentsSkipped++;
           results.push({
             agent_id: agent.user_id,
             agent_name: `${agent.first_name} ${agent.last_name}`,
+            contacts_total: allContacts.length,
             skipped: true,
             skipped_reason: `Tasks already exist for week ${currentWeekTasks.weekNumber}/${currentWeekTasks.isoYear} (${existingTasks.length} tasks). Use force_regenerate=true to recreate.`
           });
@@ -332,6 +377,11 @@ const handler = async (req: Request): Promise<Response> => {
 
           if (deleteError) {
             console.error(`Error deleting existing tasks for agent ${agent.user_id}:`, deleteError);
+            results.push({
+              agent_id: agent.user_id,
+              agent_name: `${agent.first_name} ${agent.last_name}`,
+              error: `Failed to delete existing tasks: ${deleteError.message}`
+            });
             continue;
           }
         }
@@ -351,7 +401,7 @@ const handler = async (req: Request): Promise<Response> => {
           contact.category === currentWeekTasks.textCategory
         );
 
-        console.log(`Agent ${agent.user_id}: ${callContacts.length} call tasks, ${textContacts.length} text tasks`);
+        console.log(`Agent ${agent.user_id}: ${validContacts.length} total contacts, ${callContacts.length} call tasks, ${textContacts.length} text tasks`);
 
         const tasksToInsert = [
           ...callContacts.map((contact: Contact) => ({
@@ -381,18 +431,35 @@ const handler = async (req: Request): Promise<Response> => {
             // Handle duplicate key errors gracefully
             if (insertError.code === '23505') {
               console.warn(`Duplicate tasks detected for agent ${agent.user_id}, skipping`);
+              agentsSkipped++;
+              results.push({
+                agent_id: agent.user_id,
+                agent_name: `${agent.first_name} ${agent.last_name}`,
+                skipped: true,
+                skipped_reason: 'Duplicate tasks already exist'
+              });
             } else {
               console.error(`Error inserting tasks for agent ${agent.user_id}:`, insertError);
+              results.push({
+                agent_id: agent.user_id,
+                agent_name: `${agent.first_name} ${agent.last_name}`,
+                error: `Failed to insert tasks: ${insertError.message}`
+              });
             }
             continue;
           }
 
           console.log(`Generated ${tasksToInsert.length} tasks for agent ${agent.user_id}`);
+          totalTasksCreated += tasksToInsert.length;
         }
 
+        agentsProcessed++;
         results.push({
           agent_id: agent.user_id,
           agent_name: `${agent.first_name} ${agent.last_name}`,
+          contacts_total: validContacts.length,
+          contacts_call: callContacts.length,
+          contacts_text: textContacts.length,
           tasks_generated: tasksToInsert.length,
           call_tasks: callContacts.length,
           text_tasks: textContacts.length
@@ -411,24 +478,45 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('SphereSync task generation completed');
     
     // Calculate summary stats
-    const generated = results.filter(r => r.tasks_generated !== undefined && !r.skipped);
+    const generated = results.filter(r => r.tasks_generated !== undefined && !r.skipped && !r.error);
     const skipped = results.filter(r => r.skipped);
     const failed = results.filter(r => r.error);
+
+    // Update run log with results
+    if (runLogId) {
+      const { error: updateLogError } = await supabase
+        .from('spheresync_run_logs')
+        .update({
+          finished_at: new Date().toISOString(),
+          status: failed.length > 0 && generated.length === 0 ? 'failed' : 'completed',
+          agents_processed: agentsProcessed,
+          agents_skipped: agentsSkipped,
+          tasks_created: totalTasksCreated,
+          agent_results: results,
+          error_message: failed.length > 0 ? `${failed.length} agents failed` : null
+        })
+        .eq('id', runLogId);
+
+      if (updateLogError) {
+        console.warn('Failed to update run log:', updateLogError);
+      }
+    }
     
     return new Response(JSON.stringify({
       success: true,
       message: 'SphereSync tasks generated successfully',
+      run_log_id: runLogId,
       week_number: currentWeekTasks.weekNumber,
       iso_year: currentWeekTasks.isoYear,
       call_categories: currentWeekTasks.callCategories,
       text_category: currentWeekTasks.textCategory,
       force_regenerate: force_regenerate,
       summary: {
-        agents_processed: agents.length,
-        agents_generated: generated.length,
+        agents_total: agents.length,
+        agents_processed: generated.length,
         agents_skipped: skipped.length,
         agents_failed: failed.length,
-        total_tasks_generated: generated.reduce((sum, r) => sum + (r.tasks_generated || 0), 0)
+        total_tasks_generated: totalTasksCreated
       },
       results
     }), {
@@ -439,9 +527,31 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error) {
     console.error('Error in spheresync-generate-tasks function:', error);
     
+    // Update run log with error if we have one
+    if (runLogId) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        if (supabaseUrl && supabaseServiceKey) {
+          const supabase = createClient(supabaseUrl, supabaseServiceKey);
+          await supabase
+            .from('spheresync_run_logs')
+            .update({
+              finished_at: new Date().toISOString(),
+              status: 'failed',
+              error_message: error.message
+            })
+            .eq('id', runLogId);
+        }
+      } catch (logError) {
+        console.error('Failed to update run log with error:', logError);
+      }
+    }
+    
     return new Response(JSON.stringify({
       success: false,
-      error: error.message
+      error: error.message,
+      run_log_id: runLogId
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
