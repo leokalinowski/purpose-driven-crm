@@ -84,6 +84,12 @@ export const ImprovedCSVUpload = ({
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [validationErrors, setValidationErrors] = useState<Array<{ row: number; errors: string[] }>>([]);
   const [processedContacts, setProcessedContacts] = useState<ContactInputType[]>([]);
+  const [uploadSummary, setUploadSummary] = useState<{
+    total: number;
+    uploaded: number;
+    skipped: number;
+    skippedRows: Array<{ row: number; reason: string }>;
+  } | null>(null);
   const [showDuplicateResolution, setShowDuplicateResolution] = useState(false);
   
   // Use ref for timeoutId to avoid dependency issues
@@ -103,6 +109,7 @@ export const ImprovedCSVUpload = ({
     setValidationErrors([]);
     setProcessedContacts([]);
     setShowDuplicateResolution(false);
+    setUploadSummary(null);
     
     // Clear any pending timeouts
     if (timeoutIdRef.current) {
@@ -140,6 +147,7 @@ export const ImprovedCSVUpload = ({
       setValidationErrors([]);
       setProcessedContacts([]);
       setShowDuplicateResolution(false);
+      setUploadSummary(null);
     }
   }, [open, isAdmin, roleLoading, user?.id, agentId, fetchAgents]);
 
@@ -348,6 +356,7 @@ export const ImprovedCSVUpload = ({
       // Step 1: Parse and validate contacts
       const contacts: ContactInputType[] = [];
       const errors: Array<{ row: number; errors: string[] }> = [];
+      const skippedRows: Array<{ row: number; reason: string }> = [];
       
       rawRows.forEach((row: any, index: number) => {
         const normalize = (v: any) => (v == null ? '' : String(v));
@@ -360,6 +369,7 @@ export const ImprovedCSVUpload = ({
         const last_name = getVal('last_name');
         if (!last_name) {
           errors.push({ row: index + 1, errors: ['Last name is required'] });
+          skippedRows.push({ row: index + 1, reason: 'Missing last name' });
           return;
         }
 
@@ -388,6 +398,7 @@ export const ImprovedCSVUpload = ({
         const validation = validateContact(contact);
         if (!validation.isValid) {
           errors.push({ row: index + 1, errors: validation.errors });
+          skippedRows.push({ row: index + 1, reason: validation.errors.join(', ') });
           return;
         }
 
@@ -395,9 +406,21 @@ export const ImprovedCSVUpload = ({
       });
 
       setValidationErrors(errors);
-      setUploadProgress({ stage: 'validating', progress: 50, message: `Validated ${contacts.length} contacts, ${errors.length} errors found` });
+      
+      // Store total counts for summary
+      const totalRows = rawRows.length;
+      const validatedCount = contacts.length;
+      const skippedCount = skippedRows.length;
+      
+      setUploadProgress({ stage: 'validating', progress: 50, message: `Validated ${validatedCount} contacts, ${skippedCount} skipped` });
 
       if (contacts.length === 0) {
+        setUploadSummary({
+          total: totalRows,
+          uploaded: 0,
+          skipped: skippedCount,
+          skippedRows
+        });
         toast({ title: 'Error', description: 'No valid contacts found after validation.' });
         return;
       }
@@ -588,6 +611,18 @@ export const ImprovedCSVUpload = ({
         return; // Component unmounted
       }
       
+      // Calculate final summary
+      const skippedFromValidation = validationErrors.length;
+      const skippedFromDuplicates = duplicateGroups.filter(g => g.action === 'skip_all').length;
+      const totalSkipped = skippedFromValidation + skippedFromDuplicates;
+      
+      setUploadSummary({
+        total: rawRows.length,
+        uploaded: contacts.length,
+        skipped: totalSkipped,
+        skippedRows: validationErrors.map(e => ({ row: e.row, reason: e.errors.join(', ') }))
+      });
+      
       setUploadProgress({ stage: 'complete', progress: 100, message: `Successfully uploaded ${contacts.length} contacts. DNC checks will run separately.` });
       
       // Clear previous timeout if exists
@@ -595,24 +630,11 @@ export const ImprovedCSVUpload = ({
         clearTimeout(timeoutIdRef.current);
       }
       
-      // Set timeout to close dialog after success
-      timeoutIdRef.current = setTimeout(() => {
-        if (isMountedRef.current) {
-          onOpenChange(false);
-          // Reset state inline to avoid dependency issues
-          setFile(null);
-          setRawRows([]);
-          setHeaders([]);
-          setMapping({} as any);
-          setLoading(false);
-          setSelectedAgentId('');
-          setUploadProgress(null);
-          setDuplicateGroups([]);
-          setValidationErrors([]);
-          setProcessedContacts([]);
-          setShowDuplicateResolution(false);
-        }
-      }, 2000);
+      // Don't auto-close - let user see the summary
+      toast({
+        title: 'Upload Complete',
+        description: `${contacts.length} contacts uploaded. ${totalSkipped > 0 ? `${totalSkipped} rows skipped.` : ''}`
+      });
       
     } catch (error) {
       console.error('Upload error:', error);
@@ -763,6 +785,63 @@ export const ImprovedCSVUpload = ({
                   </ul>
                 </AlertDescription>
               </Alert>
+            )}
+
+            {/* Upload Summary - Shown after upload completes */}
+            {uploadSummary && (
+              <Card className="border-2 border-primary/20">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    Upload Complete
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-2xl font-bold">{uploadSummary.total}</p>
+                      <p className="text-xs text-muted-foreground">Total Rows</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-green-600">{uploadSummary.uploaded}</p>
+                      <p className="text-xs text-muted-foreground">Uploaded</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-yellow-600">{uploadSummary.skipped}</p>
+                      <p className="text-xs text-muted-foreground">Skipped</p>
+                    </div>
+                  </div>
+                  
+                  {uploadSummary.skippedRows.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm font-medium mb-2">Skipped Rows Details:</p>
+                      <div className="max-h-32 overflow-y-auto text-xs space-y-1 bg-muted/50 rounded p-2">
+                        {uploadSummary.skippedRows.slice(0, 20).map((row, i) => (
+                          <p key={i} className="text-muted-foreground">
+                            Row {row.row}: {row.reason}
+                          </p>
+                        ))}
+                        {uploadSummary.skippedRows.length > 20 && (
+                          <p className="text-muted-foreground font-medium">
+                            ... and {uploadSummary.skippedRows.length - 20} more
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <Button 
+                    variant="outline" 
+                    className="w-full mt-2"
+                    onClick={() => {
+                      onOpenChange(false);
+                      resetState();
+                    }}
+                  >
+                    Close
+                  </Button>
+                </CardContent>
+              </Card>
             )}
 
             {/* Field Mapping */}
