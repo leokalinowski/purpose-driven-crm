@@ -20,6 +20,8 @@ import {
   findDuplicatesInList, 
   mergeContacts, 
   validateContact,
+  normalizePhone,
+  hasExtraPhoneData,
   ContactInput as ContactInputType,
   NormalizedContact
 } from '@/utils/contactUtils';
@@ -380,10 +382,22 @@ export const ImprovedCSVUpload = ({
         const dncRaw = getVal('dnc').toLowerCase();
         const dnc = ['true', '1', 'yes', 'y'].includes(dncRaw);
 
+        // Get raw phone and normalize it
+        const rawPhone = getVal('phone');
+        const normalizedPhoneValue = normalizePhone(rawPhone);
+        
+        // Preserve extra phone data in notes if there's multiple numbers or labels
+        let notes = getVal('notes') || '';
+        if (hasExtraPhoneData(rawPhone)) {
+          notes = notes 
+            ? `${notes}\n\n📞 Original phone data: ${rawPhone}`
+            : `📞 Original phone data: ${rawPhone}`;
+        }
+
         const contact: ContactInputType = {
           first_name: getVal('first_name'),
           last_name,
-          phone: getVal('phone'),
+          phone: normalizedPhoneValue || '',
           email: getVal('email'),
           address_1: getVal('address_1'),
           address_2: getVal('address_2'),
@@ -392,7 +406,7 @@ export const ImprovedCSVUpload = ({
           zip_code: getVal('zip_code'),
           tags,
           dnc,
-          notes: getVal('notes'),
+          notes: notes.trim() || undefined,
         };
 
         const validation = validateContact(contact);
