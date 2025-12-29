@@ -28,21 +28,42 @@ export interface NormalizedContact extends ContactInput {
 
 /**
  * Normalize phone number to standard format
+ * Handles multi-number cells by extracting the FIRST valid phone number
+ * Examples:
+ *   "Cell: 555-123-4567 / Work: 555-987-6543" → "5551234567"
+ *   "(555) 123-4567 mobile" → "5551234567"
+ *   "5551234567 5559876543" → "5551234567"
  */
 export function normalizePhone(phone: string | null | undefined): string | null {
   if (!phone) return null;
   
-  // Remove all non-digit characters
-  const digits = phone.replace(/\D/g, '');
+  // Find sequences that look like phone numbers (digits with optional separators)
+  // Match patterns like: 555-123-4567, (555) 123-4567, 555.123.4567, 5551234567
+  const phonePatterns = phone.match(/\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4}/g);
   
-  // Handle different formats
-  if (digits.length === 10) {
-    return digits; // US format: 5551234567
-  } else if (digits.length === 11 && digits.startsWith('1')) {
-    return digits.substring(1); // Remove country code
+  if (phonePatterns && phonePatterns.length > 0) {
+    // Take the first match and extract digits
+    const digits = phonePatterns[0].replace(/\D/g, '');
+    
+    if (digits.length === 10) {
+      return digits;
+    } else if (digits.length === 11 && digits.startsWith('1')) {
+      return digits.substring(1);
+    }
   }
   
-  return digits; // Return as-is if not standard format
+  // Fallback: extract all digits and take first 10 if there are enough
+  const allDigits = phone.replace(/\D/g, '');
+  
+  if (allDigits.length >= 11 && allDigits.startsWith('1')) {
+    return allDigits.substring(1, 11);
+  } else if (allDigits.length >= 10) {
+    return allDigits.substring(0, 10);
+  } else if (allDigits.length >= 7) {
+    return allDigits; // Return shorter numbers as-is (local numbers)
+  }
+  
+  return null;
 }
 
 /**
@@ -293,12 +314,11 @@ function isValidEmail(email: string): boolean {
 }
 
 /**
- * Validate phone format (lenient - accepts any phone with 7+ digits)
- * This allows local numbers, US numbers, international formats, etc.
+ * Validate phone format (lenient - uses normalizePhone to extract first valid number)
+ * This allows local numbers, US numbers, international formats, multi-number cells, etc.
  * Contacts with partial/invalid phones will simply skip DNC checking later.
  */
 function isValidPhone(phone: string): boolean {
-  const digits = phone.replace(/\D/g, '');
-  // Accept any phone with 7 or more digits (local, US, international)
-  return digits.length >= 7;
+  const normalized = normalizePhone(phone);
+  return normalized !== null && normalized.length >= 7;
 }
