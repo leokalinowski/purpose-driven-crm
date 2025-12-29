@@ -13,7 +13,8 @@ import {
   Settings,
   Share,
   Database,
-  FileText
+  FileText,
+  RotateCcw
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -108,6 +109,17 @@ export function AppSidebar() {
                     <Link to="/admin/dashboard">
                       <BarChart3 />
                       <span>Admin Dashboard</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    asChild
+                    isActive={location.pathname === '/admin/spheresync-recovery'}
+                  >
+                    <Link to="/admin/spheresync-recovery">
+                      <RotateCcw />
+                      <span>SphereSync Recovery</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
