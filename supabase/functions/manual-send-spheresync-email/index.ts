@@ -7,10 +7,11 @@ const corsHeaders = {
 };
 
 interface ManualSendRequest {
-  agent_id: string;
+  agent_id?: string;
   week_number?: number;
   year?: number;
   force?: boolean;
+  dry_run?: boolean;
 }
 
 serve(async (req) => {
@@ -27,24 +28,39 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { agent_id, week_number, year, force }: ManualSendRequest = await req.json();
+    const { agent_id, week_number, year, force, dry_run }: ManualSendRequest = await req.json();
 
-    if (!agent_id) {
-      return new Response(
-        JSON.stringify({ error: "Missing agent_id" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
+    console.log('Manual SphereSync email trigger:', {
+      agent_id: agent_id || 'all',
+      week_number: week_number || 'current',
+      year: year || 'current',
+      force: force ?? true,
+      dry_run: dry_run ?? false
+    });
+
+    // Build request body for spheresync-email-function
+    const emailFunctionBody: Record<string, any> = {
+      source: 'manual_admin_trigger',
+      force: force ?? true, // Force send by default for manual triggers
+    };
+
+    // Add optional overrides
+    if (agent_id) {
+      emailFunctionBody.agent_id = agent_id;
+    }
+    if (week_number !== undefined) {
+      emailFunctionBody.week_number = week_number;
+    }
+    if (year !== undefined) {
+      emailFunctionBody.year = year;
+    }
+    if (dry_run) {
+      emailFunctionBody.dry_run = true;
     }
 
-    // Call the spheresync-email-function with force flag
+    // Call the spheresync-email-function with all parameters
     const response = await supabase.functions.invoke('spheresync-email-function', {
-      body: {
-        agent_id,
-        week_number,
-        year,
-        force: force || true, // Force send by default for manual triggers
-        source: 'manual_admin_trigger'
-      }
+      body: emailFunctionBody
     });
 
     if (response.error) {
@@ -54,7 +70,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: "SphereSync email sent",
+        message: dry_run ? "Dry run completed" : "SphereSync email sent",
         data: response.data
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
@@ -68,4 +84,3 @@ serve(async (req) => {
     );
   }
 });
-
