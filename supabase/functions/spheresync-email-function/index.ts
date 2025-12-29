@@ -8,15 +8,26 @@ const corsHeaders = {
 };
 
 /**
- * Calculate the current week number of the year (1-52)
+ * Calculate ISO 8601 week number and year
+ * Handles year boundaries correctly (e.g., Dec 29, 2025 = Week 1 of 2026)
+ */
+function getISOWeekNumber(date: Date = new Date()): { week: number; year: number } {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7; // Make Sunday = 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum); // Set to nearest Thursday
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNumber = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return { week: weekNumber, year: d.getUTCFullYear() };
+}
+
+/**
+ * Get week number for task category lookup (1-52)
+ * Maps ISO week to our 52-week category system
  */
 function getCurrentWeekNumber(date: Date = new Date()): number {
-  const start = new Date(date.getFullYear(), 0, 1);
-  const startDay = start.getDay();
-  const daysSinceStart = Math.floor((date.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-  const adjustedDays = daysSinceStart + (startDay === 0 ? 6 : startDay - 1);
-  const weekNumber = Math.ceil((adjustedDays + 1) / 7);
-  return Math.min(Math.max(weekNumber, 1), 52);
+  const { week } = getISOWeekNumber(date);
+  // ISO weeks can be 1-53, but our category system uses 1-52
+  return Math.min(week, 52);
 }
 
 /**
@@ -122,11 +133,11 @@ const handler = async (req: Request): Promise<Response> => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get current week and year
-    const currentWeek = getCurrentWeekNumber();
-    const currentYear = new Date().getFullYear();
+    // Get current week and year using ISO 8601 standard
+    const { week: currentWeekISO, year: currentYear } = getISOWeekNumber();
+    const currentWeek = Math.min(currentWeekISO, 52); // Map to our 52-week system
 
-    console.log(`Fetching SphereSync tasks for week ${currentWeek}, year ${currentYear}`);
+    console.log(`Fetching SphereSync tasks for week ${currentWeek}, ISO year ${currentYear} (ISO week: ${currentWeekISO})`);
 
     // Fetch all spheresync_tasks for current week with contact details
     const { data: tasks, error: tasksError } = await supabase

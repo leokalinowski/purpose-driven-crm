@@ -56,26 +56,26 @@ export const SPHERESYNC_TEXTS: Record<number, string> = {
 };
 
 /**
- * Calculate the current week number of the year (1-52) using ISO 8601 standard
+ * Calculate ISO 8601 week number and year
+ * Handles year boundaries correctly (e.g., Dec 29, 2025 = Week 1 of 2026)
+ */
+export function getISOWeekNumber(date: Date = new Date()): { week: number; year: number } {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7; // Make Sunday = 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum); // Set to nearest Thursday
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNumber = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return { week: weekNumber, year: d.getUTCFullYear() };
+}
+
+/**
+ * Get the current week number (1-52) for category lookup
+ * Maps ISO week to our 52-week category system
  */
 export function getCurrentWeekNumber(): number {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1);
-  
-  // Get the day of the week for January 1st (0 = Sunday, 1 = Monday, etc.)
-  const startDay = start.getDay();
-  
-  // Calculate days since January 1st
-  const daysSinceStart = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-  
-  // Adjust for the first week (ISO 8601: week starts on Monday)
-  const adjustedDays = daysSinceStart + (startDay === 0 ? 6 : startDay - 1);
-  
-  // Calculate week number
-  const weekNumber = Math.ceil((adjustedDays + 1) / 7);
-  
-  // Ensure we stay within 1-52 range
-  return Math.min(Math.max(weekNumber, 1), 52);
+  const { week } = getISOWeekNumber();
+  // ISO weeks can be 1-53, but our category system uses 1-52
+  return Math.min(week, 52);
 }
 
 /**
@@ -93,12 +93,14 @@ export function getTextCategoryForWeek(weekNumber: number): string {
 }
 
 /**
- * Get current week's call and text categories
+ * Get current week's call and text categories with ISO year
  */
 export function getCurrentWeekTasks() {
-  const weekNumber = getCurrentWeekNumber();
+  const { week, year } = getISOWeekNumber();
+  const weekNumber = Math.min(week, 52); // Map to our 52-week system
   return {
     weekNumber,
+    isoYear: year,
     callCategories: getCallCategoriesForWeek(weekNumber),
     textCategory: getTextCategoryForWeek(weekNumber)
   };
