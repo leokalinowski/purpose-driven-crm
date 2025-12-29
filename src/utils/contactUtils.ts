@@ -29,41 +29,88 @@ export interface NormalizedContact extends ContactInput {
 /**
  * Normalize phone number to standard format
  * Handles multi-number cells by extracting the FIRST valid phone number
+ * Rejects garbage data (too many concatenated digits without separators)
  * Examples:
  *   "Cell: 555-123-4567 / Work: 555-987-6543" → "5551234567"
  *   "(555) 123-4567 mobile" → "5551234567"
- *   "5551234567 5559876543" → "5551234567"
+ *   "5551234567 5559876543" → "5551234567" (takes first)
+ *   "301477493971852749119..." → null (rejected as garbage)
  */
 export function normalizePhone(phone: string | null | undefined): string | null {
   if (!phone) return null;
   
-  // Find sequences that look like phone numbers (digits with optional separators)
-  // Match patterns like: 555-123-4567, (555) 123-4567, 555.123.4567, 5551234567
-  const phonePatterns = phone.match(/\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4}/g);
+  // Step 1: Try to match formatted phone numbers (with separators like dashes, dots, parens)
+  const formattedPattern = /\(?\d{3}\)?[\s\-\.\)]*\d{3}[\s\-\.]*\d{4}/g;
+  const formattedMatches = phone.match(formattedPattern);
   
-  if (phonePatterns && phonePatterns.length > 0) {
-    // Take the first match and extract digits
-    const digits = phonePatterns[0].replace(/\D/g, '');
-    
-    if (digits.length === 10) {
-      return digits;
-    } else if (digits.length === 11 && digits.startsWith('1')) {
-      return digits.substring(1);
-    }
+  if (formattedMatches && formattedMatches.length > 0) {
+    const digits = formattedMatches[0].replace(/\D/g, '');
+    if (digits.length === 10) return digits;
+    if (digits.length === 11 && digits.startsWith('1')) return digits.substring(1);
   }
   
-  // Fallback: extract all digits and take first 10 if there are enough
+  // Step 2: Split by common separators and find valid 10-digit chunks
+  // This handles "5551234567 5559876543" or "555-123-4567 / 555-987-6543"
+  const chunks = phone.split(/[\s\/,;\|\n]+/)
+    .map(chunk => chunk.replace(/\D/g, ''))
+    .filter(chunk => chunk.length > 0);
+  
+  for (const chunk of chunks) {
+    if (chunk.length === 10) return chunk;
+    if (chunk.length === 11 && chunk.startsWith('1')) return chunk.substring(1);
+  }
+  
+  // Step 3: Only accept clean 10-11 digit strings (no garbage)
   const allDigits = phone.replace(/\D/g, '');
   
-  if (allDigits.length >= 11 && allDigits.startsWith('1')) {
-    return allDigits.substring(1, 11);
-  } else if (allDigits.length >= 10) {
-    return allDigits.substring(0, 10);
-  } else if (allDigits.length >= 7) {
-    return allDigits; // Return shorter numbers as-is (local numbers)
+  // Reject if too many digits concatenated (likely garbage data)
+  if (allDigits.length > 15) {
+    return null;
+  }
+  
+  if (allDigits.length === 10) return allDigits;
+  if (allDigits.length === 11 && allDigits.startsWith('1')) return allDigits.substring(1);
+  
+  // Accept 7-9 digit local numbers
+  if (allDigits.length >= 7 && allDigits.length <= 11) {
+    return allDigits;
   }
   
   return null;
+}
+
+/**
+ * Check if a phone field has extra data worth preserving in notes
+ * Returns true if the raw phone value has multiple numbers or labels
+ */
+export function hasExtraPhoneData(rawPhone: string | null | undefined): boolean {
+  if (!rawPhone) return false;
+  
+  // Check for multiple number separators
+  if (rawPhone.includes('/') || rawPhone.includes(',') || rawPhone.includes(';')) {
+    return true;
+  }
+  
+  // Check for phone labels
+  if (/cell|work|home|mobile|fax|office|assistant/i.test(rawPhone)) {
+    return true;
+  }
+  
+  // Check if there are multiple 10-digit sequences
+  const digitChunks = rawPhone.split(/[\s\/,;\|\n]+/)
+    .map(chunk => chunk.replace(/\D/g, ''))
+    .filter(chunk => chunk.length >= 10);
+  
+  if (digitChunks.length > 1) {
+    return true;
+  }
+  
+  // Check for very long strings (likely multiple numbers concatenated or extra text)
+  if (rawPhone.length > 20) {
+    return true;
+  }
+  
+  return false;
 }
 
 /**
