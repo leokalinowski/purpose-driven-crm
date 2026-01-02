@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Users, TrendingUp, Trophy, AlertTriangle, BarChart3, Target, CalendarDays } from 'lucide-react';
+import { Users, TrendingUp, BarChart3, Target, CalendarDays, PenLine } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,6 +10,7 @@ import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
 import AdminTeamOverview from '@/components/coaching/AdminTeamOverview';
 import CoachingInsights from '@/components/coaching/CoachingInsights';
 import AgentCoachingDeepDive from '@/components/coaching/AgentCoachingDeepDive';
+import AdminCoachingSubmissionForm from '@/components/coaching/AdminCoachingSubmissionForm';
 
 const AdminCoachingManagement = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -171,18 +172,26 @@ const AdminCoachingManagement = () => {
 
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Team Overview
+              <span className="hidden sm:inline">Team Overview</span>
+              <span className="sm:hidden">Team</span>
             </TabsTrigger>
             <TabsTrigger value="insights" className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
-              Performance Insights
+              <span className="hidden sm:inline">Performance Insights</span>
+              <span className="sm:hidden">Insights</span>
             </TabsTrigger>
             <TabsTrigger value="deepdive" className="flex items-center gap-2">
               <Target className="h-4 w-4" />
-              Agent Deep Dive
+              <span className="hidden sm:inline">Agent Deep Dive</span>
+              <span className="sm:hidden">Deep Dive</span>
+            </TabsTrigger>
+            <TabsTrigger value="submit" className="flex items-center gap-2">
+              <PenLine className="h-4 w-4" />
+              <span className="hidden sm:inline">Submit for Agent</span>
+              <span className="sm:hidden">Submit</span>
             </TabsTrigger>
           </TabsList>
 
@@ -196,6 +205,10 @@ const AdminCoachingManagement = () => {
 
           <TabsContent value="deepdive" className="mt-6">
             <AgentCoachingDeepDive selectedWeek={selectedWeek} />
+          </TabsContent>
+
+          <TabsContent value="submit" className="mt-6">
+            <AdminCoachingSubmissionForm />
           </TabsContent>
         </Tabs>
       </div>
