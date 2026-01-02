@@ -47,6 +47,9 @@ const Auth = () => {
     stateLicenses: [],
   });
   
+  // Separate state for state licenses input to allow comma typing
+  const [stateLicensesInput, setStateLicensesInput] = useState('');
+  
   const { signIn, signUp, signInWithGoogle, user } = useAuth();
   const navigate = useNavigate();
 
@@ -249,8 +252,8 @@ const Auth = () => {
     if (signupStep > 1) setSignupStep(signupStep - 1);
   };
 
-  const canProceedStep1 = profileData.firstName && profileData.lastName && email && password && inviteCode;
-  const canProceedStep2 = profileData.teamName && profileData.brokerage && profileData.phoneNumber;
+  const canProceedStep1 = profileData.firstName && profileData.lastName && email && password && inviteCode && profileData.phoneNumber;
+  const canProceedStep2 = profileData.teamName && profileData.brokerage;
 
   const renderSignupStep = () => {
     switch (signupStep) {
@@ -334,7 +337,20 @@ const Auth = () => {
               />
             </div>
             
-            <Button 
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber" className="text-gray-700 font-medium">Phone Number *</Label>
+              <Input
+                id="phoneNumber"
+                type="tel"
+                value={profileData.phoneNumber}
+                onChange={(e) => updateProfileData('phoneNumber', e.target.value)}
+                className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                placeholder="(555) 123-4567"
+                required
+              />
+            </div>
+            
+            <Button
               type="button"
               onClick={nextStep}
               disabled={!canProceedStep1}
@@ -381,19 +397,6 @@ const Auth = () => {
                 onChange={(e) => updateProfileData('brokerage', e.target.value)}
                 className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
                 placeholder="Your brokerage name"
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="phoneNumber" className="text-gray-700 font-medium">Phone Number *</Label>
-              <Input
-                id="phoneNumber"
-                type="tel"
-                value={profileData.phoneNumber}
-                onChange={(e) => updateProfileData('phoneNumber', e.target.value)}
-                className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
-                placeholder="(555) 123-4567"
                 required
               />
             </div>
@@ -468,10 +471,12 @@ const Auth = () => {
               <Label htmlFor="stateLicenses" className="text-gray-700 font-medium">State Licenses</Label>
               <Input
                 id="stateLicenses"
-                value={profileData.stateLicenses?.join(', ') || ''}
-                onChange={(e) => {
-                  const licenses = e.target.value.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
+                value={stateLicensesInput}
+                onChange={(e) => setStateLicensesInput(e.target.value)}
+                onBlur={() => {
+                  const licenses = stateLicensesInput.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
                   updateProfileData('stateLicenses', licenses);
+                  setStateLicensesInput(licenses.join(', '));
                 }}
                 className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
                 placeholder="CA, NV, AZ (comma-separated)"
