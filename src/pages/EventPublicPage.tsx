@@ -182,7 +182,7 @@ const EventPublicPage = () => {
           )}
 
           {/* Agent Contact Information */}
-          {event.profiles && (agentName || event.profiles.phone_number || event.profiles.email || event.profiles.office_address) && (
+          {event.profiles && (agentName || event.profiles.phone_number || event.profiles.email) && (
             <Card>
               <CardHeader>
                 <CardTitle>Contact Information</CardTitle>
@@ -229,17 +229,6 @@ const EventPublicPage = () => {
                     </div>
                   )}
 
-                  {event.profiles.office_address && (
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-full p-2" style={{ backgroundColor: `${primaryColor}20` }}>
-                        <MapPin className="h-5 w-5" style={{ color: primaryColor }} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground">Office Address</p>
-                        <p className="font-semibold whitespace-pre-line">{event.profiles.office_address}</p>
-                      </div>
-                    </div>
-                  )}
 
                   {(event.profiles.brokerage || event.profiles.team_name) && (
                     <div className="flex items-start gap-3">
