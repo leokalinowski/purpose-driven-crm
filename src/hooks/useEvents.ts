@@ -217,8 +217,16 @@ export const useEvents = () => {
     if (!user) return;
 
     try {
-      // Generate new slug if title changed and event is published
-      if (updates.title && updates.is_published) {
+      // Find the current event to check if title actually changed
+      const currentEvent = events.find(e => e.id === id);
+      
+      // Only generate new slug if:
+      // 1. Title actually changed AND event is published, OR
+      // 2. Event is being newly published (no existing slug)
+      const titleChanged = currentEvent && updates.title && updates.title !== currentEvent.title;
+      const newlyPublished = updates.is_published && !currentEvent?.public_slug;
+      
+      if ((titleChanged || newlyPublished) && updates.is_published && updates.title) {
         const { data: slugData, error: slugError } = await supabase
           .rpc('generate_event_slug', { title: updates.title });
         
@@ -355,8 +363,20 @@ export const useEvents = () => {
     if (!user) return;
 
     try {
-      // Generate new slug if title changed and event is published
-      if (updates.title && updates.is_published) {
+      // First fetch the current event to check if title actually changed
+      const { data: currentEvent } = await supabase
+        .from('events')
+        .select('title, public_slug')
+        .eq('id', id)
+        .single();
+      
+      // Only generate new slug if:
+      // 1. Title actually changed AND event is published, OR
+      // 2. Event is being newly published (no existing slug)
+      const titleChanged = currentEvent && updates.title && updates.title !== currentEvent.title;
+      const newlyPublished = updates.is_published && !currentEvent?.public_slug;
+      
+      if ((titleChanged || newlyPublished) && updates.is_published && updates.title) {
         const { data: slugData, error: slugError } = await supabase
           .rpc('generate_event_slug', { title: updates.title });
         
