@@ -1473,12 +1473,17 @@ export type Database = {
       }
       profiles: {
         Row: {
+          brand_guidelines: string | null
           brokerage: string | null
           brokerage_info: string | null
           can_email_marketing: boolean | null
+          clickup_social_list_id: string | null
           created_at: string
+          editors: string[] | null
           email: string | null
+          example_copy: string | null
           first_name: string | null
+          gpt_prompt: string | null
           headshot_url: string | null
           id: string
           last_name: string | null
@@ -1486,6 +1491,7 @@ export type Database = {
           license_states: string[] | null
           logo_colored_url: string | null
           logo_white_url: string | null
+          metricool_creds: Json | null
           office_address: string | null
           office_number: string | null
           phone_number: string | null
@@ -1493,6 +1499,7 @@ export type Database = {
           privacy_policy_url: string | null
           role: string
           secondary_color: string | null
+          shade_folder_id: string | null
           state_licenses: string[] | null
           team_name: string | null
           updated_at: string
@@ -1500,12 +1507,17 @@ export type Database = {
           website: string | null
         }
         Insert: {
+          brand_guidelines?: string | null
           brokerage?: string | null
           brokerage_info?: string | null
           can_email_marketing?: boolean | null
+          clickup_social_list_id?: string | null
           created_at?: string
+          editors?: string[] | null
           email?: string | null
+          example_copy?: string | null
           first_name?: string | null
+          gpt_prompt?: string | null
           headshot_url?: string | null
           id?: string
           last_name?: string | null
@@ -1513,6 +1525,7 @@ export type Database = {
           license_states?: string[] | null
           logo_colored_url?: string | null
           logo_white_url?: string | null
+          metricool_creds?: Json | null
           office_address?: string | null
           office_number?: string | null
           phone_number?: string | null
@@ -1520,6 +1533,7 @@ export type Database = {
           privacy_policy_url?: string | null
           role?: string
           secondary_color?: string | null
+          shade_folder_id?: string | null
           state_licenses?: string[] | null
           team_name?: string | null
           updated_at?: string
@@ -1527,12 +1541,17 @@ export type Database = {
           website?: string | null
         }
         Update: {
+          brand_guidelines?: string | null
           brokerage?: string | null
           brokerage_info?: string | null
           can_email_marketing?: boolean | null
+          clickup_social_list_id?: string | null
           created_at?: string
+          editors?: string[] | null
           email?: string | null
+          example_copy?: string | null
           first_name?: string | null
+          gpt_prompt?: string | null
           headshot_url?: string | null
           id?: string
           last_name?: string | null
@@ -1540,6 +1559,7 @@ export type Database = {
           license_states?: string[] | null
           logo_colored_url?: string | null
           logo_white_url?: string | null
+          metricool_creds?: Json | null
           office_address?: string | null
           office_number?: string | null
           phone_number?: string | null
@@ -1547,6 +1567,7 @@ export type Database = {
           privacy_policy_url?: string | null
           role?: string
           secondary_color?: string | null
+          shade_folder_id?: string | null
           state_licenses?: string[] | null
           team_name?: string | null
           updated_at?: string
