@@ -129,35 +129,21 @@ export const useRSVP = () => {
       }
 
       // Trigger email confirmation (fire and forget - don't block RSVP)
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      
-      if (supabaseUrl && anonKey) {
-        // Use fetch without await to not block the RSVP
-        fetch(`${supabaseUrl}/functions/v1/rsvp-confirmation-email`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${anonKey}`,
-          },
-          body: JSON.stringify({
-            rsvp_id: rsvp.id,
-            event_id: eventId,
-          }),
-        }).then(response => {
-          if (!response.ok) {
-            console.error('Email function returned error:', response.status, response.statusText);
-          }
-          return response.json();
-        }).then(data => {
+      supabase.functions.invoke('rsvp-confirmation-email', {
+        body: {
+          rsvp_id: rsvp.id,
+          event_id: eventId,
+        },
+      }).then(({ data, error: emailError }) => {
+        if (emailError) {
+          console.error('Email function returned error:', emailError);
+        } else {
           console.log('Email confirmation sent:', data);
-        }).catch((emailError) => {
-          console.error('Failed to send confirmation email:', emailError);
-          // Don't fail the RSVP if email fails
-        });
-      } else {
-        console.warn('Missing Supabase URL or Anon Key - email confirmation skipped');
-      }
+        }
+      }).catch((emailError) => {
+        console.error('Failed to send confirmation email:', emailError);
+        // Don't fail the RSVP if email fails
+      });
 
       return rsvp as RSVP;
     } catch (err: any) {
