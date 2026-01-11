@@ -30,14 +30,58 @@ serve(async (req) => {
   try {
     console.log('Admin contacts import started');
     
-    // Initialize Supabase client with service role key
-    const supabaseServiceRole = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    // Get and validate Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      console.error('Missing or invalid Authorization header');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized: Missing authentication' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+    // Create client with user's auth context to verify authentication
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // Verify the authenticated user using getClaims
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      console.error('Authentication failed:', claimsError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized: Invalid authentication' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+
+    const authenticatedUserId = claimsData.claims.sub;
+    console.log('Authenticated user ID:', authenticatedUserId);
+
+    // Check if authenticated user has admin role using the security definer function
+    const { data: userRole, error: roleError } = await supabaseAuth.rpc('get_current_user_role');
+    
+    if (roleError || userRole !== 'admin') {
+      console.error('Admin verification failed:', roleError, 'Role:', userRole);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Forbidden: Only admins can perform bulk imports' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+      );
+    }
+
+    console.log('Admin access verified for user:', authenticatedUserId);
+
+    // Initialize service role client for database operations
+    const supabaseServiceRole = createClient(supabaseUrl, supabaseServiceRoleKey);
 
     // Parse request body
-    const { contacts, agentId, adminUserId } = await req.json();
+    const { contacts, agentId } = await req.json();
 
     if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
       throw new Error('No contacts provided');
@@ -47,23 +91,7 @@ serve(async (req) => {
       throw new Error('Agent ID is required');
     }
 
-    if (!adminUserId) {
-      throw new Error('Admin user ID is required');
-    }
-
-    console.log(`Processing ${contacts.length} contacts for agent ${agentId} (by admin ${adminUserId})`);
-
-    // Verify the requesting user is an admin
-    const { data: adminProfile, error: adminError } = await supabaseServiceRole
-      .from('profiles')
-      .select('role')
-      .eq('user_id', adminUserId)
-      .single();
-
-    if (adminError || !adminProfile || adminProfile.role !== 'admin') {
-      console.error('Admin verification failed:', adminError);
-      throw new Error('Unauthorized: Only admins can perform bulk imports');
-    }
+    console.log(`Processing ${contacts.length} contacts for agent ${agentId} (by admin ${authenticatedUserId})`);
 
     // Verify the target agent exists
     const { data: targetAgent, error: agentError } = await supabaseServiceRole
