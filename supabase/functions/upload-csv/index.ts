@@ -7,6 +7,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Security constants for file validation
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_MIME_TYPES = ['text/csv', 'application/csv', 'text/plain', 'application/vnd.ms-excel'];
+const MAX_ROWS = 50000;
+
 interface CSVRow {
   zip_code: string;
   median_listing_price: number;
@@ -15,6 +20,24 @@ interface CSVRow {
   city: string;
   state: string;
   [key: string]: any;
+}
+
+/**
+ * Sanitize CSV values to prevent formula injection attacks
+ * Excel/Sheets formulas start with =, +, -, @, or tab/carriage return
+ */
+function sanitizeValue(value: any): string {
+  if (value === null || value === undefined) return '';
+  const str = String(value).trim();
+  
+  // Detect and neutralize formula injection attempts
+  if (str.match(/^[=+\-@\t\r]/)) {
+    // Prefix with single quote to disable formula execution
+    return "'" + str;
+  }
+  
+  // Remove null bytes and other control characters
+  return str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 }
 
 function parseCSV(csvText: string): CSVRow[] {
@@ -33,15 +56,30 @@ function parseCSV(csvText: string): CSVRow[] {
   console.log(`Parsed ${data.length} rows from CSV`);
   console.log('Sample parsed row:', data[0]);
   
-  // Map flexible column names
+  // Map flexible column names with sanitization
   return data.map((row: any) => {
-    const mapped: any = { ...row };
+    const mapped: any = {};
+    
+    // Sanitize all values from the original row
+    for (const [key, value] of Object.entries(row)) {
+      mapped[key] = typeof value === 'string' ? sanitizeValue(value) : value;
+    }
     
     // Find and normalize zip code
     const zipVariations = ['zip_code', 'zip', 'postal_code', 'zipcode'];
     for (const variant of zipVariations) {
       if (row[variant]) {
-        mapped.zip_code = String(row[variant]).trim();
+        const zipValue = String(row[variant]).trim();
+        // Validate zip code format (US 5-digit or 5+4)
+        if (/^\d{5}(-\d{4})?$/.test(zipValue)) {
+          mapped.zip_code = zipValue;
+        } else {
+          // Try to extract 5 digits
+          const digits = zipValue.replace(/\D/g, '').slice(0, 5);
+          if (digits.length === 5) {
+            mapped.zip_code = digits;
+          }
+        }
         break;
       }
     }
@@ -52,7 +90,8 @@ function parseCSV(csvText: string): CSVRow[] {
       if (row[variant] !== undefined && row[variant] !== null && row[variant] !== '') {
         const cleanValue = String(row[variant]).replace(/[$,]/g, '');
         const parsed = parseFloat(cleanValue);
-        if (!isNaN(parsed)) {
+        // Validate reasonable price range (avoid injection via extreme values)
+        if (!isNaN(parsed) && parsed > 0 && parsed < 100000000) {
           mapped.median_listing_price = parsed;
           break;
         }
@@ -63,14 +102,14 @@ function parseCSV(csvText: string): CSVRow[] {
     const yoyVariations = ['median_listing_price_yoy', 'median_listing_price_yy', 'yoy_change', 'year_over_year', 'yoy'];
     for (const variant of yoyVariations) {
       if (row[variant] !== undefined && row[variant] !== null) {
-        mapped.median_listing_price_yoy = String(row[variant]);
+        mapped.median_listing_price_yoy = sanitizeValue(String(row[variant]));
         break;
       }
     }
     
-    // Find city and state
-    mapped.city = row.city || row.zip_name || row.region_name || '';
-    mapped.state = row.state || row.state_code || '';
+    // Find city and state with sanitization
+    mapped.city = sanitizeValue(row.city || row.zip_name || row.region_name || '');
+    mapped.state = sanitizeValue(row.state || row.state_code || '');
     
     return mapped;
   });
@@ -154,6 +193,25 @@ serve(async (req) => {
       )
     }
 
+    // SECURITY: Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      return new Response(
+        JSON.stringify({ error: `File size exceeds maximum of ${MAX_FILE_SIZE / 1024 / 1024}MB` }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
+    }
+
+    // SECURITY: Validate file type by MIME type and extension
+    const isValidMime = ALLOWED_MIME_TYPES.includes(file.type);
+    const isValidExtension = file.name.toLowerCase().endsWith('.csv');
+    
+    if (!isValidMime && !isValidExtension) {
+      return new Response(
+        JSON.stringify({ error: 'Only CSV files are allowed' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
+    }
+
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -180,14 +238,48 @@ serve(async (req) => {
       )
     }
 
-    // Upload to Supabase Storage
-    const fileName = `market-data-${Date.now()}-${file.name}`
+    // SECURITY: Pre-parse and validate CSV content before storage
     const fileBuffer = await file.arrayBuffer()
+    const csvText = new TextDecoder().decode(fileBuffer)
+    
+    let parsedRows: CSVRow[];
+    try {
+      parsedRows = parseCSV(csvText);
+    } catch (parseError) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid CSV format: ' + (parseError as Error).message }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
+    }
+
+    // SECURITY: Validate row count
+    if (parsedRows.length > MAX_ROWS) {
+      return new Response(
+        JSON.stringify({ error: `CSV exceeds maximum of ${MAX_ROWS} rows. Found: ${parsedRows.length}` }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
+    }
+
+    // SECURITY: Validate required columns exist with valid data
+    const validRows = parsedRows.filter(row => row.zip_code && row.median_listing_price);
+    if (validRows.length === 0) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'CSV must contain zip_code and median_listing_price columns with valid data',
+          detected_columns: Object.keys(parsedRows[0] || {}),
+          sample_row: parsedRows[0] || null
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
+    }
+
+    // Upload to Supabase Storage (now validated)
+    const fileName = `market-data-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
     
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('newsletter-csvs')
       .upload(fileName, fileBuffer, {
-        contentType: file.type,
+        contentType: 'text/csv',
         upsert: false
       })
 
@@ -219,8 +311,7 @@ serve(async (req) => {
       )
     }
 
-    // Process and store CSV data
-    const csvText = new TextDecoder().decode(fileBuffer)
+    // Process and store CSV data (already validated)
     const processedRows = await processAndStoreCSVData(fileRecord.id, csvText, supabase)
 
     return new Response(
@@ -237,7 +328,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Upload error:', error)
     return new Response(
-      JSON.stringify({ error: 'Upload failed: ' + error.message }),
+      JSON.stringify({ error: 'Upload failed: ' + (error as Error).message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }
