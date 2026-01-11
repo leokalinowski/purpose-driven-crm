@@ -1,18 +1,58 @@
 import { Button } from '@/components/ui/button';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 export function ExportButtons() {
-  const exportPDF = async () => {
-    const el = document.getElementById('dashboard-root');
-    if (!el) return;
-    const canvas = await html2canvas(el, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save('dashboard.pdf');
+  const exportPDF = () => {
+    // Use browser's native print dialog for PDF generation
+    // This is secure and doesn't require vulnerable external libraries
+    const printContents = document.getElementById('dashboard-root');
+    if (!printContents) return;
+
+    // Create a new window with the dashboard content for printing
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to export PDF');
+      return;
+    }
+
+    // Copy styles from the current document
+    const styles = Array.from(document.styleSheets)
+      .map(styleSheet => {
+        try {
+          return Array.from(styleSheet.cssRules)
+            .map(rule => rule.cssText)
+            .join('\n');
+        } catch {
+          // Handle cross-origin stylesheets
+          return '';
+        }
+      })
+      .join('\n');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Dashboard Export</title>
+          <style>
+            ${styles}
+            @media print {
+              body { margin: 0; padding: 20px; }
+              @page { size: A4; margin: 20mm; }
+            }
+          </style>
+        </head>
+        <body>
+          ${printContents.innerHTML}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    
+    // Wait for content to load then trigger print
+    printWindow.onload = () => {
+      printWindow.print();
+      printWindow.close();
+    };
   };
 
   const exportCSV = () => {
