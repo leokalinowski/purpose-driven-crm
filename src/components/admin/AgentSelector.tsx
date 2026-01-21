@@ -1,25 +1,29 @@
 import { useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
-import { useUserRole } from '@/hooks/useUserRole';
 import { useAgents } from '@/hooks/useAgents';
 
 interface AgentSelectorProps {
   selectedAgentId: string | null;
   onAgentSelect: (agentId: string | null) => void;
   includeAllOption?: boolean;
+  canManageAgents?: boolean;
 }
 
-export function AgentSelector({ selectedAgentId, onAgentSelect, includeAllOption = true }: AgentSelectorProps) {
+export function AgentSelector({
+  selectedAgentId,
+  onAgentSelect,
+  includeAllOption = true,
+  canManageAgents = false,
+}: AgentSelectorProps) {
   const { user } = useAuth();
-  const { isAdmin, isEditor } = useUserRole();
   const { agents, loading, fetchAgents, getAgentDisplayName } = useAgents();
 
   useEffect(() => {
-    if (user && (isAdmin || isEditor)) {
+    if (user && canManageAgents) {
       fetchAgents();
     }
-  }, [user, isAdmin, isEditor, fetchAgents]);
+  }, [user, canManageAgents, fetchAgents]);
 
   if (loading) {
     return (
