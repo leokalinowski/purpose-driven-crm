@@ -1477,7 +1477,8 @@ export type Database = {
           brokerage: string | null
           brokerage_info: string | null
           can_email_marketing: boolean | null
-          clickup_social_list_id: string | null
+          clickup_editing_task_list_id: string | null
+          clickup_video_deliverables_list_id: string | null
           created_at: string
           editors: string[] | null
           email: string | null
@@ -1511,7 +1512,8 @@ export type Database = {
           brokerage?: string | null
           brokerage_info?: string | null
           can_email_marketing?: boolean | null
-          clickup_social_list_id?: string | null
+          clickup_editing_task_list_id?: string | null
+          clickup_video_deliverables_list_id?: string | null
           created_at?: string
           editors?: string[] | null
           email?: string | null
@@ -1545,7 +1547,8 @@ export type Database = {
           brokerage?: string | null
           brokerage_info?: string | null
           can_email_marketing?: boolean | null
-          clickup_social_list_id?: string | null
+          clickup_editing_task_list_id?: string | null
+          clickup_video_deliverables_list_id?: string | null
           created_at?: string
           editors?: string[] | null
           email?: string | null
@@ -2291,7 +2294,7 @@ export type Database = {
       normalize_phone: { Args: { phone_input: string }; Returns: string }
     }
     Enums: {
-      app_role: "admin" | "agent"
+      app_role: "admin" | "agent" | "editor"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2419,7 +2422,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "agent"],
+      app_role: ["admin", "agent", "editor"],
     },
   },
 } as const
