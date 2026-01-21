@@ -14,7 +14,7 @@ export default function EditorLanding() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
-  const { isAdmin, isEditor, loading: roleLoading } = useUserRole();
+  const { isAdmin, isEditor, loading: roleLoading, error: roleError, refetch: refetchRole } = useUserRole();
 
   const [selectedAgentUserId, setSelectedAgentUserId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -24,12 +24,10 @@ export default function EditorLanding() {
   useEffect(() => {
     if (authLoading || roleLoading) return;
     if (!user) {
-      navigate('/auth');
+      navigate(`/auth?redirect=${encodeURIComponent('/internal/editor')}`, { replace: true });
       return;
     }
-    if (!canAccess) {
-      navigate('/');
-    }
+    // NOTE: Do not redirect on role verification errors; show retry UI instead.
   }, [authLoading, roleLoading, user, canAccess, navigate]);
 
   const submitDisabled = useMemo(() => submitting || !selectedAgentUserId || !canAccess, [submitting, selectedAgentUserId, canAccess]);
@@ -66,6 +64,87 @@ export default function EditorLanding() {
     }
   };
 
+  if (authLoading || roleLoading) {
+    return (
+      <>
+        <Helmet>
+          <title>Editor Intake</title>
+          <meta name="robots" content="noindex, nofollow" />
+        </Helmet>
+
+        <main className="min-h-screen flex items-center justify-center p-6">
+          <Card className="w-full max-w-xl">
+            <CardHeader>
+              <CardTitle>Verifying access…</CardTitle>
+              <CardDescription>Please wait.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="h-10 w-64 bg-muted animate-pulse rounded-md" />
+                <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+      </>
+    );
+  }
+
+  if (user && roleError) {
+    return (
+      <>
+        <Helmet>
+          <title>Editor Intake</title>
+          <meta name="robots" content="noindex, nofollow" />
+        </Helmet>
+
+        <main className="min-h-screen flex items-center justify-center p-6">
+          <Card className="w-full max-w-xl">
+            <CardHeader>
+              <CardTitle>Unable to verify permissions</CardTitle>
+              <CardDescription>
+                Please retry. If this persists, open the browser console and share the error.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-sm text-muted-foreground break-words">
+                {(roleError as any)?.message ? (roleError as any).message : 'Role lookup failed.'}
+              </div>
+              <Button type="button" onClick={refetchRole} className="w-full">
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        </main>
+      </>
+    );
+  }
+
+  if (user && !canAccess) {
+    return (
+      <>
+        <Helmet>
+          <title>Editor Intake</title>
+          <meta name="robots" content="noindex, nofollow" />
+        </Helmet>
+
+        <main className="min-h-screen flex items-center justify-center p-6">
+          <Card className="w-full max-w-xl">
+            <CardHeader>
+              <CardTitle>Not authorized</CardTitle>
+              <CardDescription>This page is limited to admins and editors.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button type="button" variant="outline" className="w-full" onClick={() => navigate('/', { replace: true })}>
+                Go to Dashboard
+              </Button>
+            </CardContent>
+          </Card>
+        </main>
+      </>
+    );
+  }
+
   return (
     <>
       <Helmet>
@@ -87,6 +166,7 @@ export default function EditorLanding() {
                   selectedAgentId={selectedAgentUserId}
                   onAgentSelect={setSelectedAgentUserId}
                   includeAllOption={false}
+                  canManageAgents={canAccess}
                 />
               </div>
 

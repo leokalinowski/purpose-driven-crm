@@ -53,6 +53,13 @@ const Auth = () => {
   const { signIn, signUp, signInWithGoogle, user } = useAuth();
   const navigate = useNavigate();
 
+  const getSafeRedirectPath = () => {
+    const params = new URLSearchParams(window.location.search);
+    const redirect = params.get('redirect') || '/';
+    // Prevent open redirects.
+    return redirect.startsWith('/') ? redirect : '/';
+  };
+
   const updateProfileData = (field: keyof AgentProfileData, value: string | string[]) => {
     setProfileData(prev => ({ ...prev, [field]: value }));
   };
@@ -75,7 +82,7 @@ const Auth = () => {
 
   useEffect(() => {
     if (user) {
-      navigate('/');
+      navigate(getSafeRedirectPath(), { replace: true });
     }
   }, [user, navigate]);
 
@@ -93,7 +100,7 @@ const Auth = () => {
           variant: 'destructive',
         });
       } else {
-        navigate('/');
+        navigate(getSafeRedirectPath(), { replace: true });
         return;
       }
     } catch (err: any) {

@@ -73,6 +73,7 @@ export default function AdminSocialScheduler() {
             <AgentSelector 
               selectedAgentId={selectedAgentId} 
               onAgentSelect={setSelectedAgentId}
+              canManageAgents={true}
             />
           </div>
 

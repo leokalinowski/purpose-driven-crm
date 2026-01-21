@@ -118,6 +118,7 @@ const AdminDashboard = () => {
               <AgentSelector 
                 selectedAgentId={selectedAgentId}
                 onAgentSelect={setSelectedAgentId}
+                canManageAgents={isAdmin}
               />
             </div>
             
