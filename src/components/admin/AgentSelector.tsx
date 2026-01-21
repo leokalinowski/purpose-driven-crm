@@ -7,18 +7,19 @@ import { useAgents } from '@/hooks/useAgents';
 interface AgentSelectorProps {
   selectedAgentId: string | null;
   onAgentSelect: (agentId: string | null) => void;
+  includeAllOption?: boolean;
 }
 
-export function AgentSelector({ selectedAgentId, onAgentSelect }: AgentSelectorProps) {
+export function AgentSelector({ selectedAgentId, onAgentSelect, includeAllOption = true }: AgentSelectorProps) {
   const { user } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, isEditor } = useUserRole();
   const { agents, loading, fetchAgents, getAgentDisplayName } = useAgents();
 
   useEffect(() => {
-    if (user && isAdmin) {
+    if (user && (isAdmin || isEditor)) {
       fetchAgents();
     }
-  }, [user, isAdmin, fetchAgents]);
+  }, [user, isAdmin, isEditor, fetchAgents]);
 
   if (loading) {
     return (
@@ -35,15 +36,19 @@ export function AgentSelector({ selectedAgentId, onAgentSelect }: AgentSelectorP
   }
 
   return (
-    <Select value={selectedAgentId || 'all'} onValueChange={(value) => {
+    <Select value={selectedAgentId || (includeAllOption ? 'all' : '')} onValueChange={(value) => {
       console.info('Agent selected:', value);
-      onAgentSelect(value === 'all' ? null : value);
+      if (includeAllOption) {
+        onAgentSelect(value === 'all' ? null : value);
+        return;
+      }
+      onAgentSelect(value || null);
     }}>
       <SelectTrigger className="w-64">
         <SelectValue placeholder="Select a person" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all">All Agents</SelectItem>
+        {includeAllOption && <SelectItem value="all">All Agents</SelectItem>}
         {agents.map((agent) => (
           <SelectItem key={agent.user_id} value={agent.user_id}>
             {getAgentDisplayName(agent)}

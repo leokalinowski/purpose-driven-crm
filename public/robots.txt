@@ -12,3 +12,6 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+# Internal utilities (best-effort; primary protection is auth + role gating)
+Disallow: /internal/

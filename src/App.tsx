@@ -30,6 +30,7 @@ import SocialScheduler from "./pages/SocialScheduler";
 import AdminSocialScheduler from "./pages/AdminSocialScheduler";
 import AdminSphereSyncRecovery from "./pages/AdminSphereSyncRecovery";
 import EventPublicPage from "./pages/EventPublicPage";
+import EditorLanding from "./pages/EditorLanding";
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,7 @@ const AppContent = () => {
         <Route path="/admin/spheresync-recovery" element={<AdminSphereSyncRecovery />} />
         <Route path="/oauth-callback" element={<OAuthCallback />} />
         <Route path="/event/:slug" element={<EventPublicPage />} />
+        <Route path="/internal/editor" element={<EditorLanding />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>

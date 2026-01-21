@@ -1,4 +1,3 @@
-
 project_id = "cguoaokqwgqvzkqqezcq"
 
 [functions.admin-contacts-import]
@@ -69,3 +68,6 @@ verify_jwt = false
 
 [functions.import-resend-history]
 verify_jwt = true
+
+[functions.make-agent-webhook]
+verify_jwt = false
