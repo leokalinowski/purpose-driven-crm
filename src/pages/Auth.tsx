@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { cleanupAuthState } from '@/utils/auth';
 import { Chrome, ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react';
 import authBackground from '@/assets/auth-background.jpg';
+import { z } from 'zod';
 
 interface AgentProfileData {
   firstName?: string;
@@ -33,6 +34,8 @@ const Auth = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [signupStep, setSignupStep] = useState(1);
   const [showSignInSwitch, setShowSignInSwitch] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   
   // Agent profile data
   const [profileData, setProfileData] = useState<AgentProfileData>({
@@ -248,6 +251,47 @@ const Auth = () => {
         variant: "destructive",
       });
       setGoogleLoading(false);
+    }
+  };
+
+  const requestPasswordReset = async () => {
+    const emailSchema = z.string().trim().email('Please enter a valid email address.').max(255);
+    const parsed = emailSchema.safeParse(email);
+    if (!parsed.success) {
+      toast({
+        title: 'Invalid email',
+        description: parsed.error.issues[0]?.message ?? 'Please enter a valid email.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      const redirectTo = `${window.location.origin}/auth/reset`;
+      const { error } = await supabase.auth.resetPasswordForEmail(parsed.data, { redirectTo });
+
+      if (error) {
+        toast({
+          title: 'Could not send reset link',
+          description: error.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      toast({
+        title: 'Check your email',
+        description: "If an account exists for that email, we've sent a password reset link.",
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Unexpected error',
+        description: err?.message ?? 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -618,7 +662,34 @@ const Auth = () => {
                     className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
                     placeholder="Enter your password"
                   />
+                  <div className="flex items-center justify-end">
+                    <button
+                      type="button"
+                      className="text-sm font-medium text-primary hover:underline"
+                      onClick={() => setShowForgotPassword((v) => !v)}
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
                 </div>
+
+                {showForgotPassword && (
+                  <div className="rounded-lg border border-gray-200 bg-white/70 p-3">
+                    <p className="text-sm text-gray-600 mb-3">
+                      Enter your email and we’ll send you a password reset link.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 rounded-lg transition-all duration-300"
+                      onClick={requestPasswordReset}
+                      disabled={resetLoading}
+                    >
+                      {resetLoading ? 'Sending link…' : 'Send reset link'}
+                    </Button>
+                  </div>
+                )}
+
                 <Button 
                   type="submit" 
                   className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]" 
