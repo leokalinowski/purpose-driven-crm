@@ -11,6 +11,7 @@ import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import Auth from "./pages/Auth";
 import OAuthCallback from "./pages/OAuthCallback";
 import Index from "./pages/Index";
+import ResetPassword from "./pages/ResetPassword";
 import SphereSyncTasks from "./pages/SphereSyncTasks";
 import Database from "./pages/Database";
 import Events from "./pages/Events";
@@ -43,6 +44,7 @@ const AppContent = () => {
     <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/auth" element={<Auth />} />
+          <Route path="/auth/reset" element={<ResetPassword />} />
         <Route path="/spheresync-tasks" element={<SphereSyncTasks />} />
         <Route path="/database" element={<Database />} />
         <Route path="/events" element={<Events />} />
