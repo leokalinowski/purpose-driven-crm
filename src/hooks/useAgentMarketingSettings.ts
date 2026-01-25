@@ -21,6 +21,7 @@ export interface AgentMarketingSettings {
   what_not_to_say: string | null;
   thumbnail_guidelines: string | null;
   // Integration IDs
+  metricool_brand_id: string | null;
   metricool_creds: Json | null;
   clickup_editing_task_list_id: string | null;
   clickup_video_deliverables_list_id: string | null;
