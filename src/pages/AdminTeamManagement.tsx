@@ -14,7 +14,8 @@ import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useAgents, Agent } from '@/hooks/useAgents';
-import { Copy, Mail, Plus, Users, Clock, CheckCircle, XCircle, Trash2, Edit, Shield, ShieldCheck, Upload, X } from 'lucide-react';
+import { AgentMarketingSettingsForm } from '@/components/admin/AgentMarketingSettingsForm';
+import { Copy, Mail, Plus, Users, Clock, CheckCircle, XCircle, Trash2, Edit, Shield, ShieldCheck, Upload, X, Settings2 } from 'lucide-react';
 import { format, isAfter } from 'date-fns';
 
 interface Invitation {
@@ -62,6 +63,9 @@ const AdminTeamManagement = () => {
   const [logoWhiteFile, setLogoWhiteFile] = useState<File | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
+  // Marketing settings dialog
+  const [marketingSettingsAgent, setMarketingSettingsAgent] = useState<Agent | null>(null);
+  const [marketingDialogOpen, setMarketingDialogOpen] = useState(false);
 
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -717,6 +721,19 @@ const AdminTeamManagement = () => {
                             Edit
                           </Button>
 
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setMarketingSettingsAgent(agent);
+                              setMarketingDialogOpen(true);
+                            }}
+                            className="gap-2"
+                          >
+                            <Settings2 className="h-4 w-4" />
+                            Marketing
+                          </Button>
+
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
@@ -1309,6 +1326,22 @@ const AdminTeamManagement = () => {
                 {editLoading ? 'Saving...' : 'Save Changes'}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Marketing Settings Dialog */}
+        <Dialog open={marketingDialogOpen} onOpenChange={setMarketingDialogOpen}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            {marketingSettingsAgent && (
+              <AgentMarketingSettingsForm
+                userId={marketingSettingsAgent.user_id}
+                agentName={getAgentDisplayName(marketingSettingsAgent)}
+                onClose={() => {
+                  setMarketingDialogOpen(false);
+                  setMarketingSettingsAgent(null);
+                }}
+              />
+            )}
           </DialogContent>
         </Dialog>
       </div>
