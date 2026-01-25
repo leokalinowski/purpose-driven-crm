@@ -14,6 +14,78 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_marketing_settings: {
+        Row: {
+          brand_guidelines: string | null
+          clickup_editing_task_list_id: string | null
+          clickup_video_deliverables_list_id: string | null
+          created_at: string
+          editors: string[] | null
+          example_copy: string | null
+          gpt_prompt: string | null
+          headshot_url: string | null
+          id: string
+          logo_colored_url: string | null
+          logo_white_url: string | null
+          metricool_creds: Json | null
+          primary_color: string | null
+          secondary_color: string | null
+          shade_folder_id: string | null
+          target_audience: string | null
+          thumbnail_guidelines: string | null
+          tone_guidelines: string | null
+          updated_at: string
+          user_id: string
+          what_not_to_say: string | null
+        }
+        Insert: {
+          brand_guidelines?: string | null
+          clickup_editing_task_list_id?: string | null
+          clickup_video_deliverables_list_id?: string | null
+          created_at?: string
+          editors?: string[] | null
+          example_copy?: string | null
+          gpt_prompt?: string | null
+          headshot_url?: string | null
+          id?: string
+          logo_colored_url?: string | null
+          logo_white_url?: string | null
+          metricool_creds?: Json | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          shade_folder_id?: string | null
+          target_audience?: string | null
+          thumbnail_guidelines?: string | null
+          tone_guidelines?: string | null
+          updated_at?: string
+          user_id: string
+          what_not_to_say?: string | null
+        }
+        Update: {
+          brand_guidelines?: string | null
+          clickup_editing_task_list_id?: string | null
+          clickup_video_deliverables_list_id?: string | null
+          created_at?: string
+          editors?: string[] | null
+          example_copy?: string | null
+          gpt_prompt?: string | null
+          headshot_url?: string | null
+          id?: string
+          logo_colored_url?: string | null
+          logo_white_url?: string | null
+          metricool_creds?: Json | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          shade_folder_id?: string | null
+          target_audience?: string | null
+          thumbnail_guidelines?: string | null
+          tone_guidelines?: string | null
+          updated_at?: string
+          user_id?: string
+          what_not_to_say?: string | null
+        }
+        Relationships: []
+      }
       agents: {
         Row: {
           created_at: string | null
@@ -1482,6 +1554,7 @@ export type Database = {
           created_at: string
           editors: string[] | null
           email: string | null
+          "Example Copy": string | null
           example_copy: string | null
           first_name: string | null
           gpt_prompt: string | null
@@ -1502,10 +1575,14 @@ export type Database = {
           secondary_color: string | null
           shade_folder_id: string | null
           state_licenses: string[] | null
+          "Target Audience": string | null
           team_name: string | null
+          "Thumbnail Guidelines": string | null
+          "Tone Guidelines": string | null
           updated_at: string
           user_id: string
           website: string | null
+          "What NOT to Say": string | null
         }
         Insert: {
           brand_guidelines?: string | null
@@ -1517,6 +1594,7 @@ export type Database = {
           created_at?: string
           editors?: string[] | null
           email?: string | null
+          "Example Copy"?: string | null
           example_copy?: string | null
           first_name?: string | null
           gpt_prompt?: string | null
@@ -1537,10 +1615,14 @@ export type Database = {
           secondary_color?: string | null
           shade_folder_id?: string | null
           state_licenses?: string[] | null
+          "Target Audience"?: string | null
           team_name?: string | null
+          "Thumbnail Guidelines"?: string | null
+          "Tone Guidelines"?: string | null
           updated_at?: string
           user_id: string
           website?: string | null
+          "What NOT to Say"?: string | null
         }
         Update: {
           brand_guidelines?: string | null
@@ -1552,6 +1634,7 @@ export type Database = {
           created_at?: string
           editors?: string[] | null
           email?: string | null
+          "Example Copy"?: string | null
           example_copy?: string | null
           first_name?: string | null
           gpt_prompt?: string | null
@@ -1572,10 +1655,14 @@ export type Database = {
           secondary_color?: string | null
           shade_folder_id?: string | null
           state_licenses?: string[] | null
+          "Target Audience"?: string | null
           team_name?: string | null
+          "Thumbnail Guidelines"?: string | null
+          "Tone Guidelines"?: string | null
           updated_at?: string
           user_id?: string
           website?: string | null
+          "What NOT to Say"?: string | null
         }
         Relationships: []
       }
