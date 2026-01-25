@@ -15,48 +15,15 @@ serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ success: false, error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const makeWebhookUrl = Deno.env.get("MAKE_WEBHOOK_URL") ?? "";
 
-    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
       throw new Error("Missing Supabase environment variables");
     }
     if (!makeWebhookUrl) {
       throw new Error("MAKE_WEBHOOK_URL is not configured");
-    }
-
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    // Verify the authenticated user using getClaims
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ success: false, error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const requesterUserId = claimsData.claims.sub;
-
-    // Role gate: editor or admin
-    const { data: userRole, error: roleError } = await supabaseAuth.rpc("get_current_user_role");
-    if (roleError || (userRole !== "admin" && userRole !== "editor")) {
-      return new Response(JSON.stringify({ success: false, error: "Forbidden" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
     const body = (await req.json().catch(() => ({}))) as JsonRecord;
@@ -86,8 +53,6 @@ serve(async (req) => {
 
     const makePayload = {
       submitted_at: new Date().toISOString(),
-      submitted_by_user_id: requesterUserId,
-      requester_role: userRole,
       agent_user_id: agentUserId,
       agent_profile: profile,
     };

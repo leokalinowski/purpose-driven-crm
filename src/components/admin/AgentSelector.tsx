@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAuth } from '@/hooks/useAuth';
 import { useAgents } from '@/hooks/useAgents';
 
 interface AgentSelectorProps {
@@ -16,14 +15,13 @@ export function AgentSelector({
   includeAllOption = true,
   canManageAgents = false,
 }: AgentSelectorProps) {
-  const { user } = useAuth();
   const { agents, loading, fetchAgents, getAgentDisplayName } = useAgents();
 
   useEffect(() => {
-    if (user && canManageAgents) {
+    if (canManageAgents) {
       fetchAgents();
     }
-  }, [user, canManageAgents, fetchAgents]);
+  }, [canManageAgents, fetchAgents]);
 
   if (loading) {
     return (
@@ -34,7 +32,7 @@ export function AgentSelector({
   if (agents.length === 0) {
     return (
       <div className="text-sm text-muted-foreground">
-        No profiles available. <a href="/admin/invitations" className="text-primary hover:underline">Invite team members</a>
+        No profiles available.
       </div>
     );
   }
