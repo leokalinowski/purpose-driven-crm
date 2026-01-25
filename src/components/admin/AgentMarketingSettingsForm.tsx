@@ -40,6 +40,15 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: Agent
           what_not_to_say: data.what_not_to_say,
           thumbnail_guidelines: data.thumbnail_guidelines,
           metricool_brand_id: data.metricool_brand_id,
+          metricool_embed_url: data.metricool_embed_url,
+          metricool_instagram_id: data.metricool_instagram_id,
+          metricool_facebook_id: data.metricool_facebook_id,
+          metricool_linkedin_id: data.metricool_linkedin_id,
+          metricool_threads_id: data.metricool_threads_id,
+          metricool_tiktok_id: data.metricool_tiktok_id,
+          metricool_twitter_id: data.metricool_twitter_id,
+          metricool_gmb_id: data.metricool_gmb_id,
+          metricool_youtube_id: data.metricool_youtube_id,
           clickup_editing_task_list_id: data.clickup_editing_task_list_id,
           clickup_video_deliverables_list_id: data.clickup_video_deliverables_list_id,
           shade_folder_id: data.shade_folder_id,
@@ -307,6 +316,93 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: Agent
                 <p className="text-xs text-muted-foreground">
                   Also known as Blog ID in Metricool
                 </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="metricool_embed_url">Embed URL</Label>
+                <Input
+                  id="metricool_embed_url"
+                  value={formData.metricool_embed_url || ''}
+                  onChange={(e) => handleChange('metricool_embed_url', e.target.value)}
+                  placeholder="https://app.metricool.com/..."
+                />
+              </div>
+              
+              <div className="pt-2">
+                <p className="text-sm font-medium mb-3">Platform IDs</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="metricool_instagram_id">Instagram</Label>
+                    <Input
+                      id="metricool_instagram_id"
+                      value={formData.metricool_instagram_id || ''}
+                      onChange={(e) => handleChange('metricool_instagram_id', e.target.value)}
+                      placeholder="Platform ID"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="metricool_facebook_id">Facebook</Label>
+                    <Input
+                      id="metricool_facebook_id"
+                      value={formData.metricool_facebook_id || ''}
+                      onChange={(e) => handleChange('metricool_facebook_id', e.target.value)}
+                      placeholder="Platform ID"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="metricool_linkedin_id">LinkedIn</Label>
+                    <Input
+                      id="metricool_linkedin_id"
+                      value={formData.metricool_linkedin_id || ''}
+                      onChange={(e) => handleChange('metricool_linkedin_id', e.target.value)}
+                      placeholder="Platform ID"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="metricool_threads_id">Threads</Label>
+                    <Input
+                      id="metricool_threads_id"
+                      value={formData.metricool_threads_id || ''}
+                      onChange={(e) => handleChange('metricool_threads_id', e.target.value)}
+                      placeholder="Platform ID"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="metricool_tiktok_id">TikTok</Label>
+                    <Input
+                      id="metricool_tiktok_id"
+                      value={formData.metricool_tiktok_id || ''}
+                      onChange={(e) => handleChange('metricool_tiktok_id', e.target.value)}
+                      placeholder="Platform ID"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="metricool_twitter_id">X / Twitter</Label>
+                    <Input
+                      id="metricool_twitter_id"
+                      value={formData.metricool_twitter_id || ''}
+                      onChange={(e) => handleChange('metricool_twitter_id', e.target.value)}
+                      placeholder="Platform ID"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="metricool_gmb_id">Google My Business</Label>
+                    <Input
+                      id="metricool_gmb_id"
+                      value={formData.metricool_gmb_id || ''}
+                      onChange={(e) => handleChange('metricool_gmb_id', e.target.value)}
+                      placeholder="Platform ID"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="metricool_youtube_id">YouTube</Label>
+                    <Input
+                      id="metricool_youtube_id"
+                      value={formData.metricool_youtube_id || ''}
+                      onChange={(e) => handleChange('metricool_youtube_id', e.target.value)}
+                      placeholder="Platform ID"
+                    />
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
