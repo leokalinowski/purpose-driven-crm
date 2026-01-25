@@ -20,9 +20,19 @@ export interface AgentMarketingSettings {
   tone_guidelines: string | null;
   what_not_to_say: string | null;
   thumbnail_guidelines: string | null;
-  // Integration IDs
+  // Metricool IDs
   metricool_brand_id: string | null;
+  metricool_embed_url: string | null;
+  metricool_instagram_id: string | null;
+  metricool_facebook_id: string | null;
+  metricool_linkedin_id: string | null;
+  metricool_threads_id: string | null;
+  metricool_tiktok_id: string | null;
+  metricool_twitter_id: string | null;
+  metricool_gmb_id: string | null;
+  metricool_youtube_id: string | null;
   metricool_creds: Json | null;
+  // Other Integration IDs
   clickup_editing_task_list_id: string | null;
   clickup_video_deliverables_list_id: string | null;
   shade_folder_id: string | null;

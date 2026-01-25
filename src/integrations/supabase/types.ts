@@ -29,6 +29,15 @@ export type Database = {
           logo_white_url: string | null
           metricool_brand_id: string | null
           metricool_creds: Json | null
+          metricool_embed_url: string | null
+          metricool_facebook_id: string | null
+          metricool_gmb_id: string | null
+          metricool_instagram_id: string | null
+          metricool_linkedin_id: string | null
+          metricool_threads_id: string | null
+          metricool_tiktok_id: string | null
+          metricool_twitter_id: string | null
+          metricool_youtube_id: string | null
           primary_color: string | null
           secondary_color: string | null
           shade_folder_id: string | null
@@ -53,6 +62,15 @@ export type Database = {
           logo_white_url?: string | null
           metricool_brand_id?: string | null
           metricool_creds?: Json | null
+          metricool_embed_url?: string | null
+          metricool_facebook_id?: string | null
+          metricool_gmb_id?: string | null
+          metricool_instagram_id?: string | null
+          metricool_linkedin_id?: string | null
+          metricool_threads_id?: string | null
+          metricool_tiktok_id?: string | null
+          metricool_twitter_id?: string | null
+          metricool_youtube_id?: string | null
           primary_color?: string | null
           secondary_color?: string | null
           shade_folder_id?: string | null
@@ -77,6 +95,15 @@ export type Database = {
           logo_white_url?: string | null
           metricool_brand_id?: string | null
           metricool_creds?: Json | null
+          metricool_embed_url?: string | null
+          metricool_facebook_id?: string | null
+          metricool_gmb_id?: string | null
+          metricool_instagram_id?: string | null
+          metricool_linkedin_id?: string | null
+          metricool_threads_id?: string | null
+          metricool_tiktok_id?: string | null
+          metricool_twitter_id?: string | null
+          metricool_youtube_id?: string | null
           primary_color?: string | null
           secondary_color?: string | null
           shade_folder_id?: string | null
