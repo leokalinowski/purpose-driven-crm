@@ -27,6 +27,7 @@ export type Database = {
           id: string
           logo_colored_url: string | null
           logo_white_url: string | null
+          metricool_brand_id: string | null
           metricool_creds: Json | null
           primary_color: string | null
           secondary_color: string | null
@@ -50,6 +51,7 @@ export type Database = {
           id?: string
           logo_colored_url?: string | null
           logo_white_url?: string | null
+          metricool_brand_id?: string | null
           metricool_creds?: Json | null
           primary_color?: string | null
           secondary_color?: string | null
@@ -73,6 +75,7 @@ export type Database = {
           id?: string
           logo_colored_url?: string | null
           logo_white_url?: string | null
+          metricool_brand_id?: string | null
           metricool_creds?: Json | null
           primary_color?: string | null
           secondary_color?: string | null

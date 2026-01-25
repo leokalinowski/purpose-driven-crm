@@ -39,6 +39,7 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: Agent
           tone_guidelines: data.tone_guidelines,
           what_not_to_say: data.what_not_to_say,
           thumbnail_guidelines: data.thumbnail_guidelines,
+          metricool_brand_id: data.metricool_brand_id,
           clickup_editing_task_list_id: data.clickup_editing_task_list_id,
           clickup_video_deliverables_list_id: data.clickup_video_deliverables_list_id,
           shade_folder_id: data.shade_folder_id,
@@ -285,6 +286,27 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: Agent
                   onChange={(e) => handleChange('clickup_video_deliverables_list_id', e.target.value)}
                   placeholder="ClickUp list ID..."
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Metricool</CardTitle>
+              <CardDescription>Metricool integration settings</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="metricool_brand_id">Metricool Brand ID (Blog ID)</Label>
+                <Input
+                  id="metricool_brand_id"
+                  value={formData.metricool_brand_id || ''}
+                  onChange={(e) => handleChange('metricool_brand_id', e.target.value)}
+                  placeholder="Enter Metricool Brand ID..."
+                />
+                <p className="text-xs text-muted-foreground">
+                  Also known as Blog ID in Metricool
+                </p>
               </div>
             </CardContent>
           </Card>
