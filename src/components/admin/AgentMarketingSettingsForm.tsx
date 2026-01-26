@@ -5,7 +5,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Palette, FileText, Link2 } from 'lucide-react';
+import { Loader2, Palette, FileText, Link2, Image as ImageIcon, Wallpaper } from 'lucide-react';
+import { AgentImagesGallery } from './AgentImagesGallery';
+import { AgentBackgroundsSelector } from './AgentBackgroundsSelector';
 import { useAgentMarketingSettings, AgentMarketingSettings, AgentMarketingSettingsInput } from '@/hooks/useAgentMarketingSettings';
 
 interface AgentMarketingSettingsFormProps {
@@ -92,18 +94,26 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: Agent
       </div>
 
       <Tabs defaultValue="branding" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
-            Branding
+            <span className="hidden sm:inline">Branding</span>
           </TabsTrigger>
           <TabsTrigger value="content" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
-            Content
+            <span className="hidden sm:inline">Content</span>
           </TabsTrigger>
           <TabsTrigger value="integrations" className="flex items-center gap-2">
             <Link2 className="h-4 w-4" />
-            Integrations
+            <span className="hidden sm:inline">Integrations</span>
+          </TabsTrigger>
+          <TabsTrigger value="images" className="flex items-center gap-2">
+            <ImageIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">Images</span>
+          </TabsTrigger>
+          <TabsTrigger value="backgrounds" className="flex items-center gap-2">
+            <Wallpaper className="h-4 w-4" />
+            <span className="hidden sm:inline">Backgrounds</span>
           </TabsTrigger>
         </TabsList>
 
@@ -434,6 +444,30 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: Agent
                   Enter editor emails or names separated by commas
                 </p>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="images" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Agent Images Gallery</CardTitle>
+              <CardDescription>Upload and manage images for this agent</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AgentImagesGallery userId={userId} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="backgrounds" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Linked Backgrounds</CardTitle>
+              <CardDescription>Select AI backgrounds to associate with this agent</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AgentBackgroundsSelector userId={userId} />
             </CardContent>
           </Card>
         </TabsContent>

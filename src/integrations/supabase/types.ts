@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_images: {
+        Row: {
+          created_at: string | null
+          id: string
+          image_type: string | null
+          image_url: string
+          name: string | null
+          notes: string | null
+          sort_order: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          image_type?: string | null
+          image_url: string
+          name?: string | null
+          notes?: string | null
+          sort_order?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          image_type?: string | null
+          image_url?: string
+          name?: string | null
+          notes?: string | null
+          sort_order?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       agent_marketing_settings: {
         Row: {
           brand_guidelines: string | null
@@ -203,6 +239,71 @@ export type Database = {
           id?: string
           prompt_template?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      background_agent_links: {
+        Row: {
+          background_id: string
+          created_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          background_id: string
+          created_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          background_id?: string
+          created_at?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "background_agent_links_background_id_fkey"
+            columns: ["background_id"]
+            isOneToOne: false
+            referencedRelation: "backgrounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      backgrounds: {
+        Row: {
+          background_url: string
+          category: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          name: string
+          notes: string | null
+          prompt: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          background_url: string
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          prompt?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          background_url?: string
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          prompt?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -1587,6 +1688,7 @@ export type Database = {
           "Example Copy": string | null
           example_copy: string | null
           first_name: string | null
+          full_name: string | null
           gpt_prompt: string | null
           headshot_url: string | null
           id: string
@@ -1627,6 +1729,7 @@ export type Database = {
           "Example Copy"?: string | null
           example_copy?: string | null
           first_name?: string | null
+          full_name?: string | null
           gpt_prompt?: string | null
           headshot_url?: string | null
           id?: string
@@ -1667,6 +1770,7 @@ export type Database = {
           "Example Copy"?: string | null
           example_copy?: string | null
           first_name?: string | null
+          full_name?: string | null
           gpt_prompt?: string | null
           headshot_url?: string | null
           id?: string
