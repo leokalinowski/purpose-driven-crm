@@ -20,6 +20,51 @@ function getISOWeekNumber(date: Date = new Date()): { week: number; year: number
   return { week: weekNumber, year: d.getUTCFullYear() };
 }
 
+// Balanced weekly call categories mapping (2 categories per week)
+const SPHERESYNC_CALLS: Record<number, string[]> = {
+  1: ['S', 'Q'], 2: ['M', 'X'], 3: ['B', 'Y'], 4: ['C', 'Z'], 5: ['H', 'U'], 
+  6: ['W', 'E'], 7: ['L', 'I'], 8: ['R', 'O'], 9: ['T', 'V'], 10: ['P', 'J'],
+  11: ['A', 'K'], 12: ['D', 'N'], 13: ['F', 'G'],
+  14: ['S', 'X'], 15: ['M', 'Y'], 16: ['B', 'Z'], 17: ['C', 'U'], 18: ['H', 'E'],
+  19: ['W', 'I'], 20: ['L', 'O'], 21: ['R', 'V'], 22: ['T', 'J'], 23: ['P', 'K'],
+  24: ['A', 'N'], 25: ['D', 'G'], 26: ['F', 'Q'],
+  27: ['S', 'Y'], 28: ['M', 'Z'], 29: ['B', 'U'], 30: ['C', 'E'], 31: ['H', 'I'],
+  32: ['W', 'O'], 33: ['L', 'V'], 34: ['R', 'J'], 35: ['T', 'K'], 36: ['P', 'N'],
+  37: ['A', 'G'], 38: ['D', 'Q'], 39: ['F', 'X'],
+  40: ['S', 'Z'], 41: ['M', 'U'], 42: ['B', 'E'], 43: ['C', 'I'], 44: ['H', 'O'],
+  45: ['W', 'V'], 46: ['L', 'J'], 47: ['R', 'K'], 48: ['T', 'N'], 49: ['P', 'G'],
+  50: ['A', 'Q'], 51: ['D', 'X'], 52: ['F', 'Y']
+};
+
+// Balanced weekly text categories (1 category per week)
+const SPHERESYNC_TEXTS: Record<number, string> = {
+  1: 'M', 2: 'B', 3: 'C', 4: 'H', 5: 'W', 6: 'L', 7: 'R', 8: 'T', 9: 'P',
+  10: 'A', 11: 'D', 12: 'F', 13: 'G',
+  14: 'S', 15: 'K', 16: 'N', 17: 'V', 18: 'J', 19: 'E', 20: 'I', 21: 'O',
+  22: 'U', 23: 'M', 24: 'B', 25: 'C', 26: 'H',
+  27: 'W', 28: 'L', 29: 'R', 30: 'T', 31: 'P', 32: 'A', 33: 'D', 34: 'F',
+  35: 'G', 36: 'S', 37: 'K', 38: 'N', 39: 'V',
+  40: 'J', 41: 'E', 42: 'I', 43: 'O', 44: 'U', 45: 'Q', 46: 'X', 47: 'Y', 
+  48: 'Z', 49: 'M', 50: 'B', 51: 'C', 52: 'H'
+};
+
+/**
+ * Get formatted letters display for this week
+ */
+function getLettersDisplay(weekNumber: number): string {
+  const callLetters = SPHERESYNC_CALLS[weekNumber] || [];
+  const textLetter = SPHERESYNC_TEXTS[weekNumber] || '';
+  
+  if (callLetters.length > 0 && textLetter) {
+    return `${callLetters.join(', ')} (calls) and ${textLetter} (texts)`;
+  } else if (callLetters.length > 0) {
+    return callLetters.join(', ');
+  } else if (textLetter) {
+    return textLetter;
+  }
+  return 'your assigned letters';
+}
+
 /**
  * Format lead name from lead data
  */
@@ -464,6 +509,46 @@ const handler = async (req: Request): Promise<Response> => {
 
         plainTextContent += `Total Tasks: ${agentTasks.length}\n\n`;
         
+        // Get letters for this week
+        const lettersDisplay = getLettersDisplay(targetWeek);
+        
+        // Add Rolling Audit Directive to plain text
+        plainTextContent += `THE ROLLING AUDIT DIRECTIVE\n`;
+        plainTextContent += `================================\n`;
+        plainTextContent += `Stop waiting for a "perfect" database. Build it while you move.\n`;
+        plainTextContent += `Before you begin your outreach today, execute the Expansion Pre-Check.\n\n`;
+        
+        plainTextContent += `STEP 1: VERIFY (The Scan)\n`;
+        plainTextContent += `Open your mobile phone contacts and social media friend lists.\n`;
+        plainTextContent += `Scroll specifically to the letters for this week: ${lettersDisplay}\n\n`;
+        
+        plainTextContent += `STEP 2: CAPTURE (The Comparison)\n`;
+        plainTextContent += `Compare your phone/social lists against the SphereSync™ Rotation below.\n`;
+        plainTextContent += `Who is missing from your system?\n`;
+        plainTextContent += `Who have you met recently that you forgot to input?\n`;
+        plainTextContent += `Action: Add these individuals to your CRM immediately.\n\n`;
+        
+        plainTextContent += `STEP 3: INTEGRATE (The Outreach)\n`;
+        plainTextContent += `Do not wait 12 weeks to speak with them. These new additions are now active.\n`;
+        plainTextContent += `Reach out to them today using the frameworks below.\n\n`;
+        
+        // Add Communication Frameworks to plain text
+        plainTextContent += `COMMUNICATION FRAMEWORKS: DORMANT TIES\n`;
+        plainTextContent += `=======================================\n`;
+        plainTextContent += `Use these frameworks when calling a contact you found during the Audit who has not heard from you in a long time.\n\n`;
+        
+        plainTextContent += `OPTION A: The Professional Update (For Clients/Colleagues)\n`;
+        plainTextContent += `"Hello [Name], it's [Your Name]. This is a bit of a random call, do you have a quick minute?\n`;
+        plainTextContent += `I'm currently going through an overhaul of my business operations and updating my professional network. I came across your name and realized I had completely failed to stay in touch.\n`;
+        plainTextContent += `I have never viewed you as just a name on a list, so I wanted to pick up the phone. How are you?"\n\n`;
+        
+        plainTextContent += `OPTION B: The Human Element (For Friends/Acquaintances)\n`;
+        plainTextContent += `"Hey [Name], it's [Your Name]. I was scrolling through my phone specifically looking for people I've missed connecting with, and your name popped up. I realized it's been way too long, so I wanted to correct that. What is the latest in your world?"\n\n`;
+        
+        plainTextContent += `DM/Text Option:\n`;
+        plainTextContent += `"Hi [Name] – hope you're well. I'm doing an update of my professional network this week and realized we haven't actually spoken in ages.\n`;
+        plainTextContent += `I'd love to catch up properly soon, but for now, I just wanted to send a quick wave. How are things going with you?"\n\n`;
+        
         // Add conversation starters to plain text
         plainTextContent += `CONVERSATION STARTERS:\n`;
         plainTextContent += `Not sure what to say? Try one of these proven openers:\n\n`;
@@ -484,6 +569,68 @@ const handler = async (req: Request): Promise<Response> => {
               <p style="margin: 5px 0;">📱 Text Tasks: ${textTasks.length}</p>
             </div>
 
+            <!-- Rolling Audit Directive Section -->
+            <div style="background: #fff7ed; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #f97316;">
+              <h3 style="color: #c2410c; margin-top: 0;">📋 THE ROLLING AUDIT Directive</h3>
+              <p style="color: #374151; font-weight: 600; margin-bottom: 15px;">Stop waiting for a "perfect" database. Build it while you move.</p>
+              <p style="color: #6b7280; margin-bottom: 20px;">Before you begin your outreach today, execute the Expansion Pre-Check.</p>
+              
+              <div style="margin-bottom: 20px; background: #ffedd5; padding: 15px; border-radius: 6px;">
+                <strong style="color: #ea580c;">🔍 STEP 1: VERIFY (The Scan)</strong>
+                <p style="color: #374151; margin: 8px 0 0 0;">Open your mobile phone contacts and social media friend lists.</p>
+                <p style="color: #374151; margin: 5px 0 0 0;">Scroll specifically to the letters for this week: <strong style="color: #c2410c;">${lettersDisplay}</strong></p>
+              </div>
+              
+              <div style="margin-bottom: 20px; background: #ffedd5; padding: 15px; border-radius: 6px;">
+                <strong style="color: #ea580c;">📊 STEP 2: CAPTURE (The Comparison)</strong>
+                <p style="color: #374151; margin: 8px 0 0 0;">Compare your phone/social lists against the SphereSync™ Rotation below.</p>
+                <ul style="color: #374151; margin: 8px 0 0 0; padding-left: 20px;">
+                  <li>Who is missing from your system?</li>
+                  <li>Who have you met recently that you forgot to input?</li>
+                </ul>
+                <p style="color: #c2410c; font-weight: 600; margin: 10px 0 0 0;">Action: Add these individuals to your CRM immediately.</p>
+              </div>
+              
+              <div style="background: #ffedd5; padding: 15px; border-radius: 6px;">
+                <strong style="color: #ea580c;">🎯 STEP 3: INTEGRATE (The Outreach)</strong>
+                <p style="color: #374151; margin: 8px 0 0 0;">Do not wait 12 weeks to speak with them. These new additions are now active.</p>
+                <p style="color: #374151; margin: 5px 0 0 0;">Reach out to them today using the frameworks below.</p>
+              </div>
+            </div>
+
+            <!-- Communication Frameworks Section -->
+            <div style="background: #faf5ff; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #9333ea;">
+              <h3 style="color: #7c3aed; margin-top: 0;">💬 COMMUNICATION FRAMEWORKS: DORMANT TIES</h3>
+              <p style="color: #6b7280; margin-bottom: 20px;">Use these frameworks when calling a contact you found during the Audit who has not heard from you in a long time.</p>
+              
+              <div style="margin-bottom: 20px; background: #f3e8ff; padding: 15px; border-radius: 6px;">
+                <strong style="color: #7c3aed;">OPTION A: The Professional Update</strong>
+                <p style="color: #6b7280; font-size: 12px; margin: 5px 0;">(For Clients/Colleagues)</p>
+                <p style="color: #374151; margin: 10px 0 0 0; font-style: italic; line-height: 1.6;">
+                  "Hello [Name], it's [Your Name]. This is a bit of a random call, do you have a quick minute?<br><br>
+                  I'm currently going through an overhaul of my business operations and updating my professional network. I came across your name and realized I had completely failed to stay in touch.<br><br>
+                  I have never viewed you as just a name on a list, so I wanted to pick up the phone. How are you?"
+                </p>
+              </div>
+              
+              <div style="margin-bottom: 20px; background: #ede9fe; padding: 15px; border-radius: 6px;">
+                <strong style="color: #7c3aed;">OPTION B: The Human Element</strong>
+                <p style="color: #6b7280; font-size: 12px; margin: 5px 0;">(For Friends/Acquaintances)</p>
+                <p style="color: #374151; margin: 10px 0 0 0; font-style: italic; line-height: 1.6;">
+                  "Hey [Name], it's [Your Name]. I was scrolling through my phone specifically looking for people I've missed connecting with, and your name popped up. I realized it's been way too long, so I wanted to correct that. What is the latest in your world?"
+                </p>
+              </div>
+              
+              <div style="background: #e9d5ff; padding: 15px; border-radius: 6px;">
+                <strong style="color: #7c3aed;">📱 DM/Text Option</strong>
+                <p style="color: #374151; margin: 10px 0 0 0; font-style: italic; line-height: 1.6;">
+                  "Hi [Name] – hope you're well. I'm doing an update of my professional network this week and realized we haven't actually spoken in ages.<br><br>
+                  I'd love to catch up properly soon, but for now, I just wanted to send a quick wave. How are things going with you?"
+                </p>
+              </div>
+            </div>
+
+            <!-- Conversation Starters Section -->
             <div style="background: #eff6ff; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #2563eb;">
               <h3 style="color: #1e40af; margin-top: 0;">💡 Conversation Starters</h3>
               <p style="color: #374151; margin-bottom: 15px;">Not sure what to say? Try one of these proven openers:</p>
