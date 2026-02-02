@@ -1,207 +1,166 @@
 
 
-## Implementation Plan: Agent Images Gallery and AI Backgrounds System
+## Implementation Plan: Add Rolling Audit Section to SphereSync Email
 
 ### Overview
-This plan implements two new features:
-1. A gallery system for storing multiple images per agent
-2. A centralized AI backgrounds table with client linking capability
+Add the "Rolling Audit Directive" section with communication frameworks to the weekly SphereSync email, placed strategically after the task summary and before the Conversation Starters section.
 
 ---
 
-### Part 1: Agent Images Gallery
+### Content Placement Strategy
 
-**Database Changes:**
-
-Create a new `agent_images` table to store multiple images per agent:
-
-```text
-Table: agent_images
-- id: uuid (primary key)
-- user_id: uuid (references agent)
-- image_url: text (stored in Supabase Storage)
-- image_type: text (e.g., 'headshot', 'logo', 'promotional', 'other')
-- name: text (optional display name)
-- notes: text (optional)
-- sort_order: integer (for ordering)
-- created_at: timestamp
-- updated_at: timestamp
-```
-
-RLS Policies:
-- Admins can manage all images
-- Users can view their own images
-
-**UI Changes:**
-
-Add an "Images" tab to the `AgentMarketingSettingsForm` component with:
-- Grid display of uploaded images with thumbnails
-- Upload button for adding new images
-- Image type selector (dropdown)
-- Delete functionality per image
-- Drag-and-drop reordering (optional enhancement)
+The email will flow in this order:
+1. **Header** - Greeting and week info
+2. **Call Tasks** - Green section with contacts to call
+3. **Text Tasks** - Red section with contacts to text
+4. **Summary Box** - Task counts
+5. **NEW: Rolling Audit Directive** - Yellow/orange section (prominent call to action)
+6. **NEW: Communication Frameworks** - Purple/blue section with scripts
+7. **Conversation Starters** - Blue section (existing, moves down)
+8. **Footer** - Closing instructions
 
 ---
 
-### Part 2: AI Backgrounds System
+### Custom Variables for the New Content
 
-**Database Changes:**
+The `[Insert Letters]` placeholder will be replaced dynamically with the actual letters for this week:
 
-Create a `backgrounds` table for centralized AI-generated backgrounds:
+**For Call Letters**: Pulls from `SPHERESYNC_CALLS[weekNumber]` (e.g., "S and Q" for week 1)
+**For Text Letter**: Pulls from `SPHERESYNC_TEXTS[weekNumber]` (e.g., "M" for week 1)
 
-```text
-Table: backgrounds
-- id: uuid (primary key)
-- name: text (required)
-- background_url: text (image URL)
-- prompt: text (AI generation prompt)
-- category: text (e.g., 'real-estate', 'lifestyle', 'abstract')
-- notes: text (optional)
-- created_at: timestamp
-- updated_at: timestamp
-- created_by: uuid (admin who created it)
-```
-
-Create a junction table for many-to-many client linking:
-
-```text
-Table: background_agent_links
-- id: uuid (primary key)
-- background_id: uuid (references backgrounds)
-- user_id: uuid (references agent)
-- created_at: timestamp
-```
-
-RLS Policies:
-- Admins can manage all backgrounds
-- Admins can manage all links
-- Users can view backgrounds linked to them
-
-**UI Changes:**
-
-Add a "Backgrounds" tab to the `AgentMarketingSettingsForm` component with:
-- Table/grid showing all available backgrounds
-- Checkboxes to link/unlink backgrounds to the current agent
-- Display columns: Name, Thumbnail, Category, Notes
-- Filter by category
-
-Create a new admin page or section for managing the master backgrounds list:
-- Form to add new backgrounds (name, upload image, prompt, category, notes)
-- Edit and delete existing backgrounds
-- View which clients are linked to each background
+The `[Your Name]` and `[Name]` placeholders in the scripts are kept as-is since they're instructional templates.
 
 ---
 
-### File Changes Summary
+### File Changes
 
-**New Files:**
-1. `src/hooks/useAgentImages.ts` - Hook for agent images CRUD
-2. `src/hooks/useBackgrounds.ts` - Hook for backgrounds management
-3. `src/components/admin/AgentImagesGallery.tsx` - Images gallery component
-4. `src/components/admin/BackgroundsManager.tsx` - Backgrounds management for admin
-5. `src/components/admin/AgentBackgroundsSelector.tsx` - Background selection per agent
-
-**Modified Files:**
-1. `src/components/admin/AgentMarketingSettingsForm.tsx` - Add Images and Backgrounds tabs
-2. `src/hooks/useAgentMarketingSettings.ts` - Update type definitions
-3. `supabase/migrations/[timestamp]_create_agent_images_table.sql` - New migration
-4. `supabase/migrations/[timestamp]_create_backgrounds_tables.sql` - New migration
+**Modified File:**
+`supabase/functions/spheresync-email-function/index.ts`
 
 ---
 
-### Technical Details
+### HTML Content Structure
 
-**Database Migrations:**
-
-Migration 1 - Agent Images:
-```sql
-CREATE TABLE agent_images (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  image_url text NOT NULL,
-  image_type text DEFAULT 'other',
-  name text,
-  notes text,
-  sort_order integer DEFAULT 0,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-
--- RLS policies for admin management and user read access
-```
-
-Migration 2 - Backgrounds System:
-```sql
-CREATE TABLE backgrounds (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text NOT NULL,
-  background_url text NOT NULL,
-  prompt text,
-  category text,
-  notes text,
-  created_by uuid,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-
-CREATE TABLE background_agent_links (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  background_id uuid NOT NULL REFERENCES backgrounds(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL,
-  created_at timestamptz DEFAULT now(),
-  UNIQUE(background_id, user_id)
-);
-
--- RLS policies for admin management
-```
-
-**Storage:**
-- Continue using existing `agent-assets` bucket for agent-uploaded images
-- Create new `backgrounds` bucket for admin-uploaded AI backgrounds
-
-**Component Architecture:**
+**Section 1: Rolling Audit Directive**
 
 ```text
-AgentMarketingSettingsForm
-├── Tab: Branding (existing)
-├── Tab: Content (existing)
-├── Tab: Integrations (existing)
-├── Tab: Images (new)
-│   └── AgentImagesGallery
-│       ├── Image grid with thumbnails
-│       ├── Upload button
-│       └── Delete per image
-└── Tab: Backgrounds (new)
-    └── AgentBackgroundsSelector
-        ├── Grid of all backgrounds
-        ├── Checkbox to link/unlink
-        └── Category filter
+Style: Orange/yellow accent card
+Placement: After task summary box (line ~485)
+
+Content:
+- Header: "THE ROLLING AUDIT Directive"
+- Subheader: Stop waiting for a "perfect" database...
+- STEP 1: VERIFY (The Scan) - with this week's letters inserted
+- STEP 2: CAPTURE (The Comparison)
+- STEP 3: INTEGRATE (The Outreach)
 ```
+
+**Section 2: Communication Frameworks**
+
+```text
+Style: Purple accent card (distinct from conversation starters)
+Placement: Directly after Rolling Audit
+
+Content:
+- Header: "COMMUNICATION FRAMEWORKS: DORMANT TIES"
+- OPTION A: The Professional Update (For Clients/Colleagues)
+- OPTION B: The Human Element (For Friends/Acquaintances)
+- DM/Text Option
+```
+
+---
+
+### Dynamic Variable Injection
+
+The edge function will compute and inject:
+
+```javascript
+// Get this week's letters
+const callLetters = SPHERESYNC_CALLS[targetWeek] || [];
+const textLetter = SPHERESYNC_TEXTS[targetWeek] || '';
+
+// Format for display: "S, Q (calls) and M (texts)"
+const allLetters = [...callLetters, textLetter].filter(Boolean);
+const lettersDisplay = callLetters.length > 0 && textLetter 
+  ? `${callLetters.join(', ')} (calls) and ${textLetter} (texts)`
+  : allLetters.join(', ');
+```
+
+This ensures every email automatically shows the correct letters for that specific week.
+
+---
+
+### Plain Text Version
+
+The plain text email will include simplified versions:
+
+```text
+THE ROLLING AUDIT DIRECTIVE
+================================
+Stop waiting for a "perfect" database. Build it while you move.
+
+STEP 1: VERIFY (The Scan)
+Open your mobile phone contacts and social media friend lists.
+Scroll specifically to the letters for this week: S, Q (calls) and M (texts)
+
+STEP 2: CAPTURE (The Comparison)
+Compare your phone/social lists against the SphereSync Rotation below.
+Who is missing from your system?
+Who have you met recently that you forgot to input?
+Action: Add these individuals to your CRM immediately.
+
+STEP 3: INTEGRATE (The Outreach)
+Do not wait 12 weeks to speak with them...
+
+COMMUNICATION FRAMEWORKS: DORMANT TIES
+=======================================
+OPTION A: The Professional Update
+"Hello [Name], it's [Your Name]..."
+
+OPTION B: The Human Element
+"Hey [Name], it's [Your Name]..."
+
+DM/Text Option:
+"Hi [Name] – hope you're well..."
+```
+
+---
+
+### Visual Design (HTML)
+
+**Rolling Audit Section:**
+- Background: Light orange (`#fff7ed`)
+- Border-left: Orange (`#f97316`)
+- Icons: Clipboard, Search, Target emojis
+
+**Communication Frameworks Section:**
+- Background: Light purple (`#faf5ff`)
+- Border-left: Purple (`#9333ea`)
+- Subsections: Each option in a slightly different shade
 
 ---
 
 ### Implementation Steps
 
-1. **Database Setup**
-   - Create `agent_images` table with RLS
-   - Create `backgrounds` table with RLS
-   - Create `background_agent_links` junction table with RLS
-   - Create `backgrounds` storage bucket
+1. Add `SPHERESYNC_CALLS` and `SPHERESYNC_TEXTS` constants to the edge function (if not already present)
+2. Compute the `lettersDisplay` variable using the target week
+3. Insert Rolling Audit HTML section after the summary box (around line 485)
+4. Insert Communication Frameworks HTML section after Rolling Audit
+5. Keep existing Conversation Starters section (it moves down)
+6. Update plain text version with same content structure
+7. Deploy and test with a sample email
 
-2. **Backend Hooks**
-   - Create `useAgentImages` hook for agent image CRUD
-   - Create `useBackgrounds` hook for backgrounds management
+---
 
-3. **Agent Images Gallery**
-   - Build `AgentImagesGallery` component with upload and display
-   - Add "Images" tab to marketing settings form
+### Example Output
 
-4. **Backgrounds System**
-   - Build `AgentBackgroundsSelector` for per-agent linking
-   - Build `BackgroundsManager` for admin master list management
-   - Add "Backgrounds" tab to marketing settings form
+For **Week 5** the email would show:
 
-5. **Integration**
-   - Update `AgentMarketingSettingsForm` with new tabs
-   - Test upload and linking functionality
+> **THE ROLLING AUDIT Directive**
+> 
+> Stop waiting for a "perfect" database. Build it while you move.
+>
+> **STEP 1: VERIFY (The Scan)**
+> Open your mobile phone contacts and social media friend lists.
+> Scroll specifically to the letters for this week: **H, U (calls) and W (texts)**
 
