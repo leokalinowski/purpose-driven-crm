@@ -273,7 +273,6 @@ export type Database = {
       }
       backgrounds: {
         Row: {
-          background_url: string
           category: string | null
           created_at: string | null
           created_by: string | null
@@ -284,7 +283,6 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          background_url: string
           category?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -295,7 +293,6 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          background_url?: string
           category?: string | null
           created_at?: string | null
           created_by?: string | null
