@@ -1,73 +1,114 @@
-## Support Hub & Action Items System
 
-### Status: Phase 1-4 Complete ✅
 
-The Support Hub system has been implemented with the following components:
+## Fix ClickUp Integration for Support Hub
 
----
+### Current State
 
-### Database Tables Created
-
-1. **`support_tickets`** - Stores agent support requests
-2. **`agent_action_items`** - Stores system-generated blockers for agents
-3. **`support_config`** - Admin-configurable assignee mappings for categories
-
-All tables have proper RLS policies for agent/admin access.
+| Item | Status |
+|------|--------|
+| `CLICKUP_API_TOKEN` | ✅ Configured |
+| `CLICKUP_WEBHOOK_SECRET` | ✅ Configured |
+| `CLICKUP_SUPPORT_LIST_ID` | ❌ Missing |
+| `support_config` assignee IDs | ❌ All NULL |
 
 ---
 
-### Frontend Components
+### Step-by-Step Fix
 
-- `src/pages/Support.tsx` - Main Support Hub page
-- `src/components/support/ActionItemsBanner.tsx` - High priority urgent banners
-- `src/components/support/ActionItemsCard.tsx` - Medium/low priority cards
-- `src/components/support/TicketForm.tsx` - Submit ticket form
-- `src/components/support/TicketHistory.tsx` - List of agent's tickets
-- `src/components/support/SupportWidget.tsx` - Dashboard widget
+#### Step 1: Add CLICKUP_SUPPORT_LIST_ID Secret
 
-### Hooks
+You need to provide the ClickUp List ID where support tickets will be created.
 
-- `src/hooks/useSupportTickets.ts` - Ticket CRUD + admin functions
-- `src/hooks/useActionItems.ts` - Action items fetching and dismissal
+**How to find it:**
+1. Open ClickUp and navigate to your Support list
+2. Click the three dots (⋮) next to the list name
+3. Select "Copy link"
+4. The URL will look like: `https://app.clickup.com/123456/v/li/901234567`
+5. The List ID is the last number: `901234567`
 
-### Edge Functions
-
-- `supabase/functions/create-support-ticket/index.ts` - Creates ticket + ClickUp task
-- `supabase/functions/support-ticket-webhook/index.ts` - Syncs ClickUp status changes
-- `supabase/functions/generate-action-items/index.ts` - Detects blockers for agents
+Once you have it, I'll add it as a secret.
 
 ---
 
-### Configuration Required
+#### Step 2: Get ClickUp User IDs for Assignees
 
-To enable ClickUp integration, add these secrets:
+To auto-assign tickets to team members, we need their ClickUp user IDs.
 
-1. **`CLICKUP_SUPPORT_LIST_ID`** - The ClickUp list ID where tickets should be created
+**How to find ClickUp User IDs:**
+1. In ClickUp, go to Settings → Teams
+2. Click on your workspace/team
+3. For each member, you can find their ID via the ClickUp API
 
-The system already has `CLICKUP_API_TOKEN` configured.
-
-To configure assignees per category, update the `support_config` table with ClickUp user IDs.
-
----
-
-### Action Item Detection
-
-The `generate-action-items` function checks for:
-
-| Item Type | Detection | Priority |
-|-----------|-----------|----------|
-| `no_contacts` | No contacts in database | High |
-| `no_metricool` | No active Metricool link | Medium |
-| `no_coaching` | No coaching submission in 7 days | Low |
-| `incomplete_profile` | Missing headshot or phone | Low |
-
-Run the function manually or set up a cron job to detect blockers periodically.
+**Alternatively**, I can create a simple edge function to fetch all team members from ClickUp and display their IDs. This would make mapping easier.
 
 ---
 
-### Future Enhancements (Phase 5)
+#### Step 3: Update support_config Table
 
-- [ ] Admin view for all tickets across agents
-- [ ] Badge count on sidebar for unresolved items
-- [ ] ClickUp webhook registration UI
-- [ ] More action item types (pending_posts, incomplete_event)
+Once we have the user IDs, update the `support_config` table:
+
+| Category | Assignee Name | ClickUp User ID |
+|----------|---------------|-----------------|
+| database | [Name] | [ID] |
+| social | [Name] | [ID] |
+| events | [Name] | [ID] |
+| newsletter | [Name] | [ID] |
+| spheresync | [Name] | [ID] |
+| technical | Leonardo | [ID] |
+| general | Leonardo | [ID] |
+
+---
+
+#### Step 4: Build Admin UI for Config Management (Optional)
+
+Create an admin page to manage support config:
+- View/edit assignee mappings
+- See all support tickets across agents
+- Update ticket statuses manually
+
+---
+
+### Implementation Plan
+
+**Phase 1: Secrets & Testing**
+1. Add `CLICKUP_SUPPORT_LIST_ID` secret
+2. Create helper edge function to fetch ClickUp team members
+3. Test ticket creation with ClickUp sync
+
+**Phase 2: Assignee Configuration**
+1. Populate `support_config` with correct ClickUp user IDs
+2. Test that tickets are assigned to the right people
+
+**Phase 3: Admin Dashboard (if desired)**
+1. Create admin page for ticket management
+2. Add support config editor
+
+---
+
+### Questions to Confirm
+
+1. **Do you have a Support List already created in ClickUp?** If not, we should create one first.
+
+2. **Who handles each category?** Please provide names for:
+   - Database/CRM issues
+   - Social Media issues
+   - Events issues
+   - Newsletter issues
+   - SphereSync issues
+   - Technical issues
+   - General requests
+
+3. **Would you like me to create a helper function to fetch your ClickUp team member IDs?** This would output all member names and IDs so you can easily map them.
+
+---
+
+### Technical Details
+
+The edge function `create-support-ticket` is already correctly structured:
+- Line 27: Reads `CLICKUP_API_TOKEN` 
+- Line 84: Reads `CLICKUP_SUPPORT_LIST_ID`
+- Line 101: Uses `clickup_assignee_id` from `support_config`
+- Lines 104-120: Creates task in ClickUp with tags and assignees
+
+Once secrets are configured and assignee IDs populated, tickets will automatically sync to ClickUp.
+
