@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_action_items: {
+        Row: {
+          action_url: string | null
+          agent_id: string
+          created_at: string
+          description: string | null
+          dismissed_until: string | null
+          id: string
+          is_dismissed: boolean
+          item_type: string
+          priority: string
+          resolved_at: string | null
+          title: string
+        }
+        Insert: {
+          action_url?: string | null
+          agent_id: string
+          created_at?: string
+          description?: string | null
+          dismissed_until?: string | null
+          id?: string
+          is_dismissed?: boolean
+          item_type: string
+          priority?: string
+          resolved_at?: string | null
+          title: string
+        }
+        Update: {
+          action_url?: string | null
+          agent_id?: string
+          created_at?: string
+          description?: string | null
+          dismissed_until?: string | null
+          id?: string
+          is_dismissed?: boolean
+          item_type?: string
+          priority?: string
+          resolved_at?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_action_items_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       agent_images: {
         Row: {
           created_at: string | null
@@ -2205,6 +2255,86 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contacts"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_config: {
+        Row: {
+          assignee_name: string | null
+          category: string
+          clickup_assignee_id: string | null
+          created_at: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_name?: string | null
+          category: string
+          clickup_assignee_id?: string | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_name?: string | null
+          category?: string
+          clickup_assignee_id?: string | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      support_tickets: {
+        Row: {
+          agent_id: string
+          assigned_to: string | null
+          category: string
+          clickup_task_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          priority: string
+          resolved_at: string | null
+          status: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          assigned_to?: string | null
+          category: string
+          clickup_task_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          priority?: string
+          resolved_at?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          assigned_to?: string | null
+          category?: string
+          clickup_task_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          priority?: string
+          resolved_at?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }

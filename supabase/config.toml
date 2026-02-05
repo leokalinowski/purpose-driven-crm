@@ -71,3 +71,12 @@ verify_jwt = true
 
 [functions.make-agent-webhook]
 verify_jwt = false
+
+[functions.create-support-ticket]
+verify_jwt = false
+
+[functions.support-ticket-webhook]
+verify_jwt = false
+
+[functions.generate-action-items]
+verify_jwt = false

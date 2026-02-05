@@ -7,6 +7,7 @@ import { AgentActivityWidget } from '@/components/agent/AgentActivityWidget';
 import { AgentPerformanceCharts } from '@/components/agent/AgentPerformanceCharts';
 import { ExportButtons } from '@/components/dashboard/ExportButtons';
 import { DashboardRefreshButton } from '@/components/dashboard/DashboardRefreshButton';
+import { SupportWidget } from '@/components/support/SupportWidget';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
@@ -85,6 +86,11 @@ const Index = () => {
         {/* Personal KPI Cards */}
         <div>
           <AgentMetricsCards />
+        </div>
+
+        {/* Support & Action Items Widget */}
+        <div>
+          <SupportWidget />
         </div>
 
         {/* Today's Focus & Priority Tasks */}
