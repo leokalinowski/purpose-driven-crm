@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { format } from 'date-fns';
-import { Ticket, Clock, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Ticket, Clock, CheckCircle, AlertCircle, Loader2, MessageSquare } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SupportTicket } from '@/hooks/useSupportTickets';
+import { TicketDetailDialog } from './TicketDetailDialog';
 
 interface TicketHistoryProps {
   tickets: SupportTicket[];
@@ -41,9 +43,18 @@ const categoryLabels: Record<string, string> = {
   spheresync: 'SphereSync',
   technical: 'Technical',
   general: 'General',
+  coaching: 'Coaching',
 };
 
 export function TicketHistory({ tickets, isLoading }: TicketHistoryProps) {
+  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const handleTicketClick = (ticket: SupportTicket) => {
+    setSelectedTicket(ticket);
+    setDialogOpen(true);
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -65,59 +76,74 @@ export function TicketHistory({ tickets, isLoading }: TicketHistoryProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Ticket className="h-5 w-5" />
-          My Tickets
-        </CardTitle>
-        <CardDescription>
-          Track the status of your support requests
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {tickets.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <Ticket className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p>No tickets yet</p>
-            <p className="text-sm">Submit a request above and it will appear here</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {tickets.map((ticket) => {
-              const status = statusConfig[ticket.status] || statusConfig.open;
-              return (
-                <div
-                  key={ticket.id}
-                  className="flex items-start justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium truncate">{ticket.subject}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {categoryLabels[ticket.category] || ticket.category}
-                      </Badge>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Ticket className="h-5 w-5" />
+            My Tickets
+          </CardTitle>
+          <CardDescription>
+            Click on a ticket to view details and communicate with support
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {tickets.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Ticket className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p>No tickets yet</p>
+              <p className="text-sm">Submit a request above and it will appear here</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {tickets.map((ticket) => {
+                const status = statusConfig[ticket.status] || statusConfig.open;
+                return (
+                  <div
+                    key={ticket.id}
+                    onClick={() => handleTicketClick(ticket)}
+                    className="flex items-start justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium truncate group-hover:text-primary transition-colors">
+                          {ticket.subject}
+                        </span>
+                        <Badge variant="outline" className="text-xs">
+                          {categoryLabels[ticket.category] || ticket.category}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {format(new Date(ticket.created_at), 'MMM d, yyyy')}
+                        </span>
+                        {ticket.assigned_to && (
+                          <span>Assigned to: {ticket.assigned_to}</span>
+                        )}
+                        <span className="flex items-center gap-1 text-primary">
+                          <MessageSquare className="h-3 w-3" />
+                          View conversation
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {format(new Date(ticket.created_at), 'MMM d, yyyy')}
-                      </span>
-                      {ticket.assigned_to && (
-                        <span>Assigned to: {ticket.assigned_to}</span>
-                      )}
-                    </div>
+                    <Badge className={`flex items-center gap-1 ${status.color}`}>
+                      {status.icon}
+                      {status.label}
+                    </Badge>
                   </div>
-                  <Badge className={`flex items-center gap-1 ${status.color}`}>
-                    {status.icon}
-                    {status.label}
-                  </Badge>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <TicketDetailDialog
+        ticket={selectedTicket}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
+    </>
   );
 }
