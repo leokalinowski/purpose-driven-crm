@@ -15,6 +15,33 @@ interface TicketRequest {
   priority: string;
 }
 
+interface AgentProfile {
+  first_name: string | null;
+  last_name: string | null;
+  full_name: string | null;
+  email: string | null;
+  phone_number: string | null;
+  office_number: string | null;
+  brokerage: string | null;
+  team_name: string | null;
+  license_number: string | null;
+  license_states: string[] | null;
+  state_licenses: string[] | null;
+  office_address: string | null;
+  website: string | null;
+  created_at: string | null;
+}
+
+interface PlatformMetrics {
+  databaseSize: number;
+  tasksThisWeek: number;
+  tasksCompleted: number;
+  scoreboardStatus: string;
+  lastCoachingDate: string | null;
+  openTickets: number;
+  pendingActionItems: number;
+}
+
 // ClickUp Custom Field IDs for Hub Agent Support list
 const CLICKUP_FIELDS = {
   AGENT: 'c347f26e-8bb8-4f72-bc50-42345a3fe968',
@@ -37,25 +64,58 @@ const AGENT_OPTIONS: Record<string, string> = {
 
 // Map inquiry type (category) to ClickUp dropdown option IDs
 const INQUIRY_TYPE_OPTIONS: Record<string, string> = {
-  'general': '3a45e9fd-9d11-49f6-ad71-c8e78e9653d7',    // General Inquiry
-  'database': 'd54ab778-c6f7-4f54-a1aa-087ca7ebd962',   // Support Request
-  'social': 'd54ab778-c6f7-4f54-a1aa-087ca7ebd962',     // Support Request
-  'events': 'd54ab778-c6f7-4f54-a1aa-087ca7ebd962',     // Support Request
-  'newsletter': 'd54ab778-c6f7-4f54-a1aa-087ca7ebd962', // Support Request
-  'spheresync': 'd54ab778-c6f7-4f54-a1aa-087ca7ebd962', // Support Request
-  'technical': 'd54ab778-c6f7-4f54-a1aa-087ca7ebd962',  // Support Request
-  'coaching': '0f1f6aac-1a12-4a15-9daa-b3b3f23b3cf7',   // Feedback
+  'general': '3a45e9fd-9d11-49f6-ad71-c8e78e9653d7',
+  'database': 'd54ab778-c6f7-4f54-a1aa-087ca7ebd962',
+  'social': 'd54ab778-c6f7-4f54-a1aa-087ca7ebd962',
+  'events': 'd54ab778-c6f7-4f54-a1aa-087ca7ebd962',
+  'newsletter': 'd54ab778-c6f7-4f54-a1aa-087ca7ebd962',
+  'spheresync': 'd54ab778-c6f7-4f54-a1aa-087ca7ebd962',
+  'technical': 'd54ab778-c6f7-4f54-a1aa-087ca7ebd962',
+  'coaching': '0f1f6aac-1a12-4a15-9daa-b3b3f23b3cf7',
 };
 
 // Map priority to ClickUp severity dropdown option IDs
 const SEVERITY_OPTIONS: Record<string, string> = {
-  'high': '7616aa5e-cfc5-4303-bbd8-e2aaac0b156e',    // High
-  'medium': '8a6d08e0-d273-4757-8078-05c7c7cc354f',  // Medium
-  'low': '3e54e01d-8d4a-4549-b24b-21b4b2719b35',     // Low
+  'high': '7616aa5e-cfc5-4303-bbd8-e2aaac0b156e',
+  'medium': '8a6d08e0-d273-4757-8078-05c7c7cc354f',
+  'low': '3e54e01d-8d4a-4549-b24b-21b4b2719b35',
 };
 
+// Get current ISO week number and year
+function getCurrentWeekInfo(): { week: number; year: number } {
+  const now = new Date();
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const days = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
+  const week = Math.ceil((days + startOfYear.getDay() + 1) / 7);
+  return { week, year: now.getFullYear() };
+}
+
+// Format date for display
+function formatDate(dateString: string | null): string {
+  if (!dateString) return 'Not available';
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  } catch {
+    return 'Not available';
+  }
+}
+
+// Format phone for display
+function formatPhone(phone: string | null): string {
+  if (!phone) return 'Not provided';
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.length === 10) {
+    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+  }
+  return phone;
+}
+
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -90,7 +150,6 @@ serve(async (req) => {
     const body: TicketRequest = await req.json();
     console.log('Creating support ticket:', body);
 
-    // Validate required fields
     if (!body.category || !body.subject || !body.priority) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: category, subject, priority' }),
@@ -98,19 +157,111 @@ serve(async (req) => {
       );
     }
 
-    // Get agent profile for context
+    // Fetch comprehensive agent profile
     const { data: profile } = await supabase
       .from('profiles')
-      .select('first_name, last_name, email, phone_number, full_name')
+      .select(`
+        first_name, last_name, full_name, email, phone_number,
+        office_number, brokerage, team_name, license_number,
+        license_states, state_licenses, office_address, website, created_at
+      `)
       .eq('user_id', user.id)
       .single();
 
-    const agentName = profile?.full_name || 
-      (profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Unknown Agent');
-    const agentEmail = profile?.email || user.email || 'unknown';
-    const agentPhone = profile?.phone_number || '';
+    const agentProfile = profile as AgentProfile | null;
+    const agentName = agentProfile?.full_name || 
+      (agentProfile ? `${agentProfile.first_name || ''} ${agentProfile.last_name || ''}`.trim() : 'Unknown Agent');
+    const agentEmail = agentProfile?.email || user.email || 'unknown';
+    const agentPhone = agentProfile?.phone_number || '';
 
-    console.log('Agent info:', { agentName, agentEmail, agentPhone });
+    console.log('Agent info:', { agentName, agentEmail });
+
+    // Fetch platform metrics in parallel
+    const { week: currentWeek, year: currentYear } = getCurrentWeekInfo();
+
+    const [
+      databaseSizeResult,
+      tasksThisWeekResult,
+      tasksCompletedResult,
+      latestCoachingResult,
+      openTicketsResult,
+      pendingActionItemsResult
+    ] = await Promise.all([
+      // Database size
+      supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', user.id),
+      
+      // SphereSync tasks this week
+      supabase
+        .from('spheresync_tasks')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', user.id)
+        .eq('week_number', currentWeek)
+        .eq('year', currentYear),
+      
+      // Completed tasks this week
+      supabase
+        .from('spheresync_tasks')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', user.id)
+        .eq('week_number', currentWeek)
+        .eq('year', currentYear)
+        .eq('completed', true),
+      
+      // Latest coaching submission
+      supabase
+        .from('coaching_submissions')
+        .select('week_ending, week_number, year')
+        .eq('agent_id', user.id)
+        .order('week_ending', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      
+      // Open tickets count
+      supabase
+        .from('support_tickets')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', user.id)
+        .in('status', ['open', 'in_progress']),
+      
+      // Pending action items
+      supabase
+        .from('agent_action_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', user.id)
+        .is('resolved_at', null)
+        .eq('is_dismissed', false)
+    ]);
+
+    // Calculate scoreboard status
+    let scoreboardStatus = 'Not Submitted';
+    const latestCoaching = latestCoachingResult.data;
+    if (latestCoaching) {
+      if (latestCoaching.week_number === currentWeek && latestCoaching.year === currentYear) {
+        scoreboardStatus = `Submitted (Week ${currentWeek}, ${currentYear})`;
+      } else if (
+        latestCoaching.year < currentYear || 
+        (latestCoaching.year === currentYear && latestCoaching.week_number < currentWeek - 1)
+      ) {
+        scoreboardStatus = `Overdue (Last: Week ${latestCoaching.week_number}, ${latestCoaching.year})`;
+      } else {
+        scoreboardStatus = `Last: Week ${latestCoaching.week_number}, ${latestCoaching.year}`;
+      }
+    }
+
+    const metrics: PlatformMetrics = {
+      databaseSize: databaseSizeResult.count || 0,
+      tasksThisWeek: tasksThisWeekResult.count || 0,
+      tasksCompleted: tasksCompletedResult.count || 0,
+      scoreboardStatus,
+      lastCoachingDate: latestCoaching?.week_ending || null,
+      openTickets: openTicketsResult.count || 0,
+      pendingActionItems: pendingActionItemsResult.count || 0,
+    };
+
+    console.log('Platform metrics:', metrics);
 
     // Get support config for assignee
     const { data: config } = await supabase
@@ -129,65 +280,55 @@ serve(async (req) => {
       try {
         console.log('Creating ClickUp task in list:', clickupListId);
         
-        // Map priority to ClickUp priority (1=Urgent, 2=High, 3=Normal, 4=Low)
         const priorityMap: Record<string, number> = {
           'high': 2,
           'medium': 3,
           'low': 4,
         };
 
-        // Build custom fields array
         const customFields: Array<{ id: string; value: any }> = [];
 
-        // Set Agent dropdown if we can match the name
         const agentOptionId = findAgentOption(agentName);
         if (agentOptionId) {
           customFields.push({
             id: CLICKUP_FIELDS.AGENT,
             value: agentOptionId,
           });
-          console.log('Mapped agent to dropdown:', agentName, '->', agentOptionId);
         }
 
-        // Set Inquiry Type based on category
         const inquiryTypeId = INQUIRY_TYPE_OPTIONS[body.category];
         if (inquiryTypeId) {
           customFields.push({
             id: CLICKUP_FIELDS.INQUIRY_TYPE,
             value: inquiryTypeId,
           });
-          console.log('Mapped category to inquiry type:', body.category, '->', inquiryTypeId);
         }
 
-        // Set Severity Level based on priority
         const severityId = SEVERITY_OPTIONS[body.priority];
         if (severityId) {
           customFields.push({
             id: CLICKUP_FIELDS.SEVERITY_LEVEL,
             value: severityId,
           });
-          console.log('Mapped priority to severity:', body.priority, '->', severityId);
         }
 
-        // Set phone number if available
         if (agentPhone) {
           customFields.push({
             id: CLICKUP_FIELDS.CLIENT_PHONE,
             value: agentPhone,
           });
-          console.log('Set phone number:', agentPhone);
         }
 
         const clickupPayload = {
           name: `[${body.category.toUpperCase()}] ${body.subject}`,
-          description: buildDescription(agentName, agentEmail, agentPhone, body.category, body.priority, body.description),
+          description: buildEnhancedDescription(agentProfile, metrics, body),
           priority: priorityMap[body.priority] || 3,
           tags: [body.category, 'hub-portal'],
           assignees: config?.clickup_assignee_id ? [parseInt(config.clickup_assignee_id)] : [],
           custom_fields: customFields,
         };
 
-        console.log('ClickUp payload:', JSON.stringify(clickupPayload, null, 2));
+        console.log('ClickUp payload created with enhanced description');
 
         const clickupResponse = await fetch(`https://api.clickup.com/api/v2/list/${clickupListId}/task`, {
           method: 'POST',
@@ -208,7 +349,6 @@ serve(async (req) => {
         }
       } catch (clickupError) {
         console.error('Failed to create ClickUp task:', clickupError);
-        // Continue without ClickUp - ticket will still be saved locally
       }
     } else {
       console.log('ClickUp integration not configured (missing API token or list ID)');
@@ -260,12 +400,10 @@ serve(async (req) => {
 
 // Helper function to find agent option ID by name (fuzzy match)
 function findAgentOption(agentName: string): string | null {
-  // Direct match
   if (AGENT_OPTIONS[agentName]) {
     return AGENT_OPTIONS[agentName];
   }
   
-  // Try to find partial match
   const normalizedName = agentName.toLowerCase().trim();
   for (const [name, id] of Object.entries(AGENT_OPTIONS)) {
     if (normalizedName.includes(name.toLowerCase()) || 
@@ -277,27 +415,54 @@ function findAgentOption(agentName: string): string | null {
   return null;
 }
 
-// Helper function to build rich description
-function buildDescription(
-  agentName: string, 
-  agentEmail: string, 
-  agentPhone: string,
-  category: string,
-  priority: string,
-  details?: string
+// Build enhanced description with agent profile and platform metrics
+function buildEnhancedDescription(
+  profile: AgentProfile | null,
+  metrics: PlatformMetrics,
+  ticket: TicketRequest
 ): string {
-  let description = `### Ticket Details\n\n`;
-  description += `**Agent:** ${agentName}\n`;
-  description += `**Email:** ${agentEmail}\n`;
-  if (agentPhone) {
-    description += `**Phone:** ${agentPhone}\n`;
-  }
-  description += `**Category:** ${category}\n`;
-  description += `**Priority:** ${priority}\n\n`;
+  const agentName = profile?.full_name || 
+    (profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Unknown Agent');
+  
+  const licenseStates = profile?.state_licenses || profile?.license_states || [];
+  const statesDisplay = licenseStates.length > 0 ? licenseStates.join(', ') : 'Not specified';
+  
+  const completionRate = metrics.tasksThisWeek > 0 
+    ? ((metrics.tasksCompleted / metrics.tasksThisWeek) * 100).toFixed(1) 
+    : '0';
+
+  let description = `## Agent Profile\n\n`;
+  description += `**Name:** ${agentName}\n`;
+  description += `**Email:** ${profile?.email || 'Not provided'}\n`;
+  description += `**Phone:** ${formatPhone(profile?.phone_number)}\n`;
+  description += `**Office:** ${formatPhone(profile?.office_number)}\n`;
+  description += `**Brokerage:** ${profile?.brokerage || 'Not specified'}\n`;
+  description += `**Team:** ${profile?.team_name || 'Not specified'}\n`;
+  description += `**License:** ${profile?.license_number || 'Not provided'} (${statesDisplay})\n`;
+  description += `**Office Address:** ${profile?.office_address || 'Not provided'}\n`;
+  description += `**Website:** ${profile?.website || 'Not provided'}\n`;
+  description += `**Member Since:** ${formatDate(profile?.created_at)}\n\n`;
+  
   description += `---\n\n`;
-  description += `### Description\n\n`;
-  description += details || 'No additional details provided.';
-  description += `\n\n---\n*Submitted via Hub Agent Support Portal*`;
+  description += `## Platform Engagement\n\n`;
+  description += `| Metric | Value |\n`;
+  description += `|--------|-------|\n`;
+  description += `| Database Size | ${metrics.databaseSize.toLocaleString()} contacts |\n`;
+  description += `| Tasks This Week | ${metrics.tasksThisWeek} assigned |\n`;
+  description += `| Tasks Completed | ${metrics.tasksCompleted} (${completionRate}%) |\n`;
+  description += `| Scoreboard | ${metrics.scoreboardStatus} |\n`;
+  description += `| Open Tickets | ${metrics.openTickets} other |\n`;
+  description += `| Action Items | ${metrics.pendingActionItems} pending |\n\n`;
+  
+  description += `---\n\n`;
+  description += `## Ticket Information\n\n`;
+  description += `**Category:** ${ticket.category.charAt(0).toUpperCase() + ticket.category.slice(1)}\n`;
+  description += `**Priority:** ${ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)}\n\n`;
+  
+  description += `---\n\n`;
+  description += `## Issue Description\n\n`;
+  description += ticket.description || 'No additional details provided.';
+  description += `\n\n---\n\n*Submitted via Hub Agent Support Portal*`;
   
   return description;
 }
