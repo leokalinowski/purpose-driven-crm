@@ -14,7 +14,8 @@ import {
   Share,
   Database,
   FileText,
-  RotateCcw
+  RotateCcw,
+  LifeBuoy
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -43,7 +44,7 @@ const menuItems = [
   { title: 'E-Newsletter', url: '/newsletter', icon: Mail },
   { title: 'Social Media', url: '/social-scheduler', icon: Share },
   { title: 'Success Scoreboard', url: '/coaching', icon: TrendingUp },
-  // Transaction Coordination hidden from menu but route remains accessible via direct URL
+  { title: 'Support Hub', url: '/support', icon: LifeBuoy },
 ];
 
 export function AppSidebar() {
