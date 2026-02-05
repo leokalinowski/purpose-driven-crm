@@ -27,6 +27,29 @@ async function verifySignature(secret: string, payload: string, signature: strin
   return signature === expectedSignature;
 }
 
+// Map ClickUp status to Hub status
+function mapClickUpStatusToHub(clickupStatus: string): 'open' | 'in_progress' | 'resolved' | null {
+  const status = clickupStatus.toLowerCase().trim();
+  
+  // Open statuses
+  if (status === 'to do' || status === 'open' || status === 'new' || status === 'pending') {
+    return 'open';
+  }
+  
+  // In progress statuses
+  if (status.includes('progress') || status === 'working' || status === 'in review' || status === 'active') {
+    return 'in_progress';
+  }
+  
+  // Resolved/closed statuses
+  if (status === 'done' || status === 'complete' || status === 'completed' || 
+      status === 'closed' || status === 'resolved' || status === 'fixed') {
+    return 'resolved';
+  }
+  
+  return null;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -43,11 +66,16 @@ serve(async (req) => {
     // Get raw body for signature verification
     const rawBody = await req.text();
     
+    // Log incoming webhook for debugging
+    console.log('Received support ticket webhook');
+    console.log('Headers:', Object.fromEntries(req.headers.entries()));
+    
     // Verify webhook signature if secret is configured
     if (webhookSecret) {
-      const signature = req.headers.get('x-signature');
+      const signature = req.headers.get('x-signature') || req.headers.get('x-clickup-signature');
       if (signature) {
-        const isValid = await verifySignature(webhookSecret, rawBody, signature);
+        const sigToVerify = signature.replace(/^sha256=/, '');
+        const isValid = await verifySignature(webhookSecret, rawBody, sigToVerify);
         if (!isValid) {
           console.warn('Invalid webhook signature');
           return new Response(
@@ -55,16 +83,20 @@ serve(async (req) => {
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+        console.log('Signature verified successfully');
       }
     }
 
     const payload = JSON.parse(rawBody);
-    console.log('ClickUp webhook received:', payload.event);
+    console.log('Webhook payload:', JSON.stringify(payload).slice(0, 2000));
 
-    // Handle different ClickUp events
-    const { event, task_id, history_items } = payload;
+    // Extract task_id from various possible locations in the payload
+    const taskId = payload.task_id || payload.task?.id || payload.history_items?.[0]?.parent_id;
+    const event = payload.event;
 
-    if (!task_id) {
+    console.log('Event type:', event, 'Task ID:', taskId);
+
+    if (!taskId) {
       console.log('No task_id in webhook payload, ignoring');
       return new Response(
         JSON.stringify({ success: true, message: 'No task_id, ignored' }),
@@ -76,43 +108,81 @@ serve(async (req) => {
     const { data: ticket, error: findError } = await supabase
       .from('support_tickets')
       .select('*')
-      .eq('clickup_task_id', task_id)
+      .eq('clickup_task_id', taskId)
       .single();
 
     if (findError || !ticket) {
-      console.log('No ticket found for ClickUp task:', task_id);
+      console.log('No ticket found for ClickUp task:', taskId);
       return new Response(
         JSON.stringify({ success: true, message: 'No matching ticket found' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Found ticket:', ticket.id, 'for ClickUp task:', task_id);
+    console.log('Found ticket:', ticket.id, 'for ClickUp task:', taskId);
 
-    // Process history items for status changes
+    // Process updates based on event type and history items
     const updates: Record<string, unknown> = {};
 
-    if (history_items && Array.isArray(history_items)) {
-      for (const item of history_items) {
+    // Handle taskStatusUpdated event
+    if (event === 'taskStatusUpdated' && payload.history_items) {
+      for (const item of payload.history_items) {
+        if (item.field === 'status') {
+          const newStatusName = item.after?.status || item.after;
+          console.log('Status change detected:', item.before, '->', newStatusName);
+          
+          const hubStatus = mapClickUpStatusToHub(String(newStatusName));
+          if (hubStatus) {
+            updates.status = hubStatus;
+            if (hubStatus === 'resolved') {
+              updates.resolved_at = new Date().toISOString();
+            }
+            console.log('Mapped to hub status:', hubStatus);
+          }
+        }
+      }
+    }
+
+    // Handle taskUpdated event (general updates)
+    if (event === 'taskUpdated' && payload.history_items) {
+      for (const item of payload.history_items) {
         // Status change
         if (item.field === 'status') {
-          const clickupStatus = item.after?.status?.toLowerCase() || '';
-          console.log('ClickUp status changed to:', clickupStatus);
+          const newStatusName = item.after?.status || item.after;
+          console.log('Status change detected:', item.before, '->', newStatusName);
           
-          // Map ClickUp statuses to our statuses
-          if (clickupStatus.includes('progress') || clickupStatus.includes('working')) {
-            updates.status = 'in_progress';
-          } else if (clickupStatus.includes('done') || clickupStatus.includes('complete') || clickupStatus.includes('closed')) {
-            updates.status = 'resolved';
-            updates.resolved_at = new Date().toISOString();
-          } else if (clickupStatus.includes('open') || clickupStatus.includes('to do')) {
-            updates.status = 'open';
+          const hubStatus = mapClickUpStatusToHub(String(newStatusName));
+          if (hubStatus) {
+            updates.status = hubStatus;
+            if (hubStatus === 'resolved') {
+              updates.resolved_at = new Date().toISOString();
+            }
+            console.log('Mapped to hub status:', hubStatus);
           }
         }
 
         // Assignee change
-        if (item.field === 'assignee_add') {
-          const assigneeName = item.after?.username || item.after?.email || null;
+        if (item.field === 'assignee_add' || item.field === 'assignee') {
+          const assigneeName = item.after?.username || item.after?.email || item.after?.name || null;
+          if (assigneeName) {
+            updates.assigned_to = assigneeName;
+            console.log('Assignee updated to:', assigneeName);
+          }
+        }
+
+        // Assignee removed
+        if (item.field === 'assignee_rem') {
+          // Only clear if this was the only assignee
+          console.log('Assignee removed');
+        }
+      }
+    }
+
+    // Handle taskAssigneeUpdated event
+    if (event === 'taskAssigneeUpdated' && payload.history_items) {
+      for (const item of payload.history_items) {
+        if (item.field === 'assignee_add' || item.field === 'assignee') {
+          const assigneeName = item.after?.username || item.after?.email || item.after?.name || null;
           if (assigneeName) {
             updates.assigned_to = assigneeName;
             console.log('Assignee updated to:', assigneeName);
@@ -121,8 +191,23 @@ serve(async (req) => {
       }
     }
 
+    // Also check for direct status in payload (some webhook formats)
+    if (payload.status && !updates.status) {
+      const statusName = payload.status.status || payload.status;
+      const hubStatus = mapClickUpStatusToHub(String(statusName));
+      if (hubStatus && hubStatus !== ticket.status) {
+        updates.status = hubStatus;
+        if (hubStatus === 'resolved') {
+          updates.resolved_at = new Date().toISOString();
+        }
+        console.log('Direct status mapped to:', hubStatus);
+      }
+    }
+
     // Update ticket if we have changes
     if (Object.keys(updates).length > 0) {
+      updates.updated_at = new Date().toISOString();
+      
       const { error: updateError } = await supabase
         .from('support_tickets')
         .update(updates)
@@ -137,10 +222,12 @@ serve(async (req) => {
       }
 
       console.log('Ticket updated successfully:', ticket.id, updates);
+    } else {
+      console.log('No updates to apply');
     }
 
     return new Response(
-      JSON.stringify({ success: true, updated: Object.keys(updates).length > 0 }),
+      JSON.stringify({ success: true, updated: Object.keys(updates).length > 0, updates }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

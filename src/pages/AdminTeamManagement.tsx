@@ -15,7 +15,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useAgents, Agent } from '@/hooks/useAgents';
 import { AgentMarketingSettingsForm } from '@/components/admin/AgentMarketingSettingsForm';
-import { Copy, Mail, Plus, Users, Clock, CheckCircle, XCircle, Trash2, Edit, Shield, ShieldCheck, Upload, X, Settings2 } from 'lucide-react';
+import { Copy, Mail, Plus, Users, Clock, CheckCircle, XCircle, Trash2, Edit, Shield, ShieldCheck, Upload, X, Settings2, Webhook } from 'lucide-react';
+import { SupportWebhookManager } from '@/components/admin/SupportWebhookManager';
 import { format, isAfter } from 'date-fns';
 
 interface Invitation {
@@ -651,7 +652,7 @@ const AdminTeamManagement = () => {
         </div>
 
         <Tabs defaultValue="team" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="team" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Team Members ({agents.length})
@@ -659,6 +660,10 @@ const AdminTeamManagement = () => {
             <TabsTrigger value="invitations" className="flex items-center gap-2">
               <Mail className="h-4 w-4" />
               Invitations ({invitations.length})
+            </TabsTrigger>
+            <TabsTrigger value="integrations" className="flex items-center gap-2">
+              <Webhook className="h-4 w-4" />
+              Integrations
             </TabsTrigger>
           </TabsList>
 
@@ -932,6 +937,10 @@ const AdminTeamManagement = () => {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="integrations" className="space-y-6">
+            <SupportWebhookManager />
           </TabsContent>
         </Tabs>
 

@@ -86,3 +86,6 @@ verify_jwt = false
 
 [functions.clickup-get-list-fields]
 verify_jwt = false
+
+[functions.register-support-webhook]
+verify_jwt = true
