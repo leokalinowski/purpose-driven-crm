@@ -1,166 +1,249 @@
 
 
-## Implementation Plan: Add Rolling Audit Section to SphereSync Email
+## Support Hub & Action Items System
 
 ### Overview
-Add the "Rolling Audit Directive" section with communication frameworks to the weekly SphereSync email, placed strategically after the task summary and before the Conversation Starters section.
+Build a comprehensive "Support Hub" for agents that combines two key features:
+1. **Ticketing System** - Submit issues/requests that create ClickUp tasks with category tags
+2. **Action Items Dashboard** - System-generated blockers that require agent attention
+
+The system will include a dedicated `/support` page plus a compact widget on the agent dashboard.
 
 ---
 
-### Content Placement Strategy
-
-The email will flow in this order:
-1. **Header** - Greeting and week info
-2. **Call Tasks** - Green section with contacts to call
-3. **Text Tasks** - Red section with contacts to text
-4. **Summary Box** - Task counts
-5. **NEW: Rolling Audit Directive** - Yellow/orange section (prominent call to action)
-6. **NEW: Communication Frameworks** - Purple/blue section with scripts
-7. **Conversation Starters** - Blue section (existing, moves down)
-8. **Footer** - Closing instructions
-
----
-
-### Custom Variables for the New Content
-
-The `[Insert Letters]` placeholder will be replaced dynamically with the actual letters for this week:
-
-**For Call Letters**: Pulls from `SPHERESYNC_CALLS[weekNumber]` (e.g., "S and Q" for week 1)
-**For Text Letter**: Pulls from `SPHERESYNC_TEXTS[weekNumber]` (e.g., "M" for week 1)
-
-The `[Your Name]` and `[Name]` placeholders in the scripts are kept as-is since they're instructional templates.
-
----
-
-### File Changes
-
-**Modified File:**
-`supabase/functions/spheresync-email-function/index.ts`
-
----
-
-### HTML Content Structure
-
-**Section 1: Rolling Audit Directive**
+### Architecture
 
 ```text
-Style: Orange/yellow accent card
-Placement: After task summary box (line ~485)
-
-Content:
-- Header: "THE ROLLING AUDIT Directive"
-- Subheader: Stop waiting for a "perfect" database...
-- STEP 1: VERIFY (The Scan) - with this week's letters inserted
-- STEP 2: CAPTURE (The Comparison)
-- STEP 3: INTEGRATE (The Outreach)
++------------------+     +------------------+     +------------------+
+|   Agent Dashboard |     |    Support Hub    |     |     ClickUp      |
+|     (Widget)      |---->|   (Full Page)     |---->|  (Single List)   |
++------------------+     +------------------+     +------------------+
+        |                        |                        |
+        v                        v                        v
++------------------+     +------------------+     +------------------+
+| Action Items     |     | Ticket Form      |     | Webhook Sync     |
+| (System-Gen)     |     | + Ticket History |     | (Status Updates) |
++------------------+     +------------------+     +------------------+
 ```
 
-**Section 2: Communication Frameworks**
+---
+
+### Database Changes
+
+**New Table: `support_tickets`**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| agent_id | uuid | Reference to profiles.user_id |
+| category | text | database, social, events, newsletter, spheresync, technical, general |
+| subject | text | Brief description |
+| description | text | Detailed message |
+| priority | text | low, medium, high |
+| status | text | open, in_progress, resolved, closed |
+| clickup_task_id | text | ClickUp task ID for sync |
+| assigned_to | text | Team member name (from ClickUp) |
+| created_at | timestamptz | When submitted |
+| updated_at | timestamptz | Last status change |
+| resolved_at | timestamptz | When marked resolved |
+
+**New Table: `agent_action_items`**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| agent_id | uuid | Reference to profiles.user_id |
+| item_type | text | no_contacts, no_metricool, no_coaching, pending_posts, incomplete_profile, incomplete_event |
+| priority | text | high, medium, low |
+| title | text | Display title |
+| description | text | What needs to be done |
+| action_url | text | Where to go to resolve |
+| is_dismissed | boolean | If agent dismissed temporarily |
+| dismissed_until | timestamptz | When to show again |
+| created_at | timestamptz | When detected |
+| resolved_at | timestamptz | When condition cleared |
+
+---
+
+### ClickUp Integration
+
+**Configuration Required:**
+- One "Support" list in ClickUp (you'll provide the List ID)
+- Tags for categories: Database, Social, Events, Newsletter, SphereSync, Technical, General
+
+**Assignee Mapping (configurable in admin settings):**
+
+| Category | Default Assignee |
+|----------|-----------------|
+| Database/CRM | [Team member] |
+| Social Media | [Team member] |
+| Events | [Team member] |
+| Newsletter | [Team member] |
+| SphereSync | [Team member] |
+| Technical | Leonardo |
+| General | Leonardo |
+
+---
+
+### New Edge Functions
+
+**1. `create-support-ticket/index.ts`**
+- Receives ticket data from frontend
+- Creates ClickUp task with appropriate tag and assignee
+- Stores ticket in `support_tickets` table
+- Returns confirmation
+
+**2. `support-ticket-webhook/index.ts`**
+- Receives ClickUp webhook updates
+- Syncs status changes back to `support_tickets`
+- Updates assigned_to when changed in ClickUp
+
+**3. `generate-action-items/index.ts`**
+- Runs on cron or triggered by events
+- Checks each agent for missing setup items
+- Creates/updates entries in `agent_action_items`
+- Auto-resolves when condition is met
+
+---
+
+### Action Item Detection Logic
+
+| Item Type | Detection Query | Priority | Action URL |
+|-----------|----------------|----------|------------|
+| `no_contacts` | `COUNT(contacts) = 0` | High | /database |
+| `no_metricool` | `metricool_links.is_active = false` | Medium | /social-scheduler |
+| `no_coaching_week` | No `coaching_submissions` in 7 days | Low | /coaching |
+| `incomplete_profile` | Missing `headshot_url` or `phone_number` | Low | /profile (new) |
+| `no_events` | `COUNT(events) = 0` AND agent onboarded > 30 days | Low | /events |
+
+---
+
+### Frontend Components
+
+**1. New Page: `/support` (Support Hub)**
 
 ```text
-Style: Purple accent card (distinct from conversation starters)
-Placement: Directly after Rolling Audit
-
-Content:
-- Header: "COMMUNICATION FRAMEWORKS: DORMANT TIES"
-- OPTION A: The Professional Update (For Clients/Colleagues)
-- OPTION B: The Human Element (For Friends/Acquaintances)
-- DM/Text Option
++-------------------------------------------------------+
+|  Support Hub                                          |
++-------------------------------------------------------+
+|                                                       |
+|  [!] ACTION ITEMS (3 urgent, 2 pending)               |
+|  +---------------------------------------------------+|
+|  | [Banner] Upload your contacts to get started     ||
+|  |          with SphereSync → [Go to Database]      ||
+|  +---------------------------------------------------+|
+|  | [Card] Connect Metricool for social media        ||
+|  | [Card] Submit this week's coaching numbers       ||
+|  +---------------------------------------------------+|
+|                                                       |
+|  SUBMIT A REQUEST                                     |
+|  +---------------------------------------------------+|
+|  | Category: [Dropdown]                             ||
+|  | Subject:  [Text input]                           ||
+|  | Priority: [Low] [Medium] [High]                  ||
+|  | Details:  [Textarea]                             ||
+|  |                                 [Submit Request] ||
+|  +---------------------------------------------------+|
+|                                                       |
+|  MY TICKETS                                           |
+|  +---------------------------------------------------+|
+|  | #123 | Can't upload CSV | Database | In Progress ||
+|  | #122 | Event graphics   | Events   | Resolved    ||
+|  +---------------------------------------------------+|
++-------------------------------------------------------+
 ```
 
----
-
-### Dynamic Variable Injection
-
-The edge function will compute and inject:
-
-```javascript
-// Get this week's letters
-const callLetters = SPHERESYNC_CALLS[targetWeek] || [];
-const textLetter = SPHERESYNC_TEXTS[targetWeek] || '';
-
-// Format for display: "S, Q (calls) and M (texts)"
-const allLetters = [...callLetters, textLetter].filter(Boolean);
-const lettersDisplay = callLetters.length > 0 && textLetter 
-  ? `${callLetters.join(', ')} (calls) and ${textLetter} (texts)`
-  : allLetters.join(', ');
-```
-
-This ensures every email automatically shows the correct letters for that specific week.
-
----
-
-### Plain Text Version
-
-The plain text email will include simplified versions:
+**2. Dashboard Widget (Agent Dashboard)**
 
 ```text
-THE ROLLING AUDIT DIRECTIVE
-================================
-Stop waiting for a "perfect" database. Build it while you move.
-
-STEP 1: VERIFY (The Scan)
-Open your mobile phone contacts and social media friend lists.
-Scroll specifically to the letters for this week: S, Q (calls) and M (texts)
-
-STEP 2: CAPTURE (The Comparison)
-Compare your phone/social lists against the SphereSync Rotation below.
-Who is missing from your system?
-Who have you met recently that you forgot to input?
-Action: Add these individuals to your CRM immediately.
-
-STEP 3: INTEGRATE (The Outreach)
-Do not wait 12 weeks to speak with them...
-
-COMMUNICATION FRAMEWORKS: DORMANT TIES
-=======================================
-OPTION A: The Professional Update
-"Hello [Name], it's [Your Name]..."
-
-OPTION B: The Human Element
-"Hey [Name], it's [Your Name]..."
-
-DM/Text Option:
-"Hi [Name] – hope you're well..."
++------------------------------------------+
+|  Support & Action Items             [→]  |
++------------------------------------------+
+|  [!] 2 items need your attention         |
+|  • Upload contacts to Database           |
+|  • Connect Metricool                     |
+|                                          |
+|  Recent Tickets:                         |
+|  • CSV upload help - In Progress         |
++------------------------------------------+
 ```
 
----
-
-### Visual Design (HTML)
-
-**Rolling Audit Section:**
-- Background: Light orange (`#fff7ed`)
-- Border-left: Orange (`#f97316`)
-- Icons: Clipboard, Search, Target emojis
-
-**Communication Frameworks Section:**
-- Background: Light purple (`#faf5ff`)
-- Border-left: Purple (`#9333ea`)
-- Subsections: Each option in a slightly different shade
+**3. Sidebar Navigation Update**
+- Add "Support Hub" item with icon (HelpCircle or LifeBuoy)
+- Show badge count for unresolved action items
 
 ---
 
-### Implementation Steps
+### File Changes Summary
 
-1. Add `SPHERESYNC_CALLS` and `SPHERESYNC_TEXTS` constants to the edge function (if not already present)
-2. Compute the `lettersDisplay` variable using the target week
-3. Insert Rolling Audit HTML section after the summary box (around line 485)
-4. Insert Communication Frameworks HTML section after Rolling Audit
-5. Keep existing Conversation Starters section (it moves down)
-6. Update plain text version with same content structure
-7. Deploy and test with a sample email
+**New Files:**
+- `src/pages/Support.tsx` - Main Support Hub page
+- `src/components/support/ActionItemsBanner.tsx` - High priority banner
+- `src/components/support/ActionItemsCard.tsx` - Medium/low priority cards
+- `src/components/support/TicketForm.tsx` - Submit ticket form
+- `src/components/support/TicketHistory.tsx` - List of agent's tickets
+- `src/components/support/SupportWidget.tsx` - Dashboard compact widget
+- `src/hooks/useActionItems.ts` - Fetch action items for agent
+- `src/hooks/useSupportTickets.ts` - Ticket CRUD operations
+- `supabase/functions/create-support-ticket/index.ts` - Create ticket + ClickUp
+- `supabase/functions/support-ticket-webhook/index.ts` - ClickUp sync
+- `supabase/functions/generate-action-items/index.ts` - Detect blockers
+
+**Modified Files:**
+- `src/App.tsx` - Add /support route
+- `src/components/layout/AppSidebar.tsx` - Add Support Hub nav item
+- `src/pages/Index.tsx` - Add SupportWidget component
+- `supabase/config.toml` - Add new edge functions
+
+**New Database Migration:**
+- Create `support_tickets` table with RLS policies
+- Create `agent_action_items` table with RLS policies
+- Create `support_config` table for assignee mappings
 
 ---
 
-### Example Output
+### Configuration Required After Implementation
 
-For **Week 5** the email would show:
+You'll need to provide:
+1. **ClickUp Support List ID** - The list where tickets should be created
+2. **ClickUp Team ID** - For webhook registration
+3. **Assignee Mapping** - ClickUp user IDs for each category (can be configured in admin settings)
 
-> **THE ROLLING AUDIT Directive**
-> 
-> Stop waiting for a "perfect" database. Build it while you move.
->
-> **STEP 1: VERIFY (The Scan)**
-> Open your mobile phone contacts and social media friend lists.
-> Scroll specifically to the letters for this week: **H, U (calls) and W (texts)**
+---
+
+### Implementation Phases
+
+**Phase 1: Database & Core Infrastructure**
+- Create database tables and migrations
+- Set up RLS policies
+- Create basic hooks for data fetching
+
+**Phase 2: Action Items System**
+- Implement detection logic
+- Build action items components
+- Add dashboard widget
+
+**Phase 3: Ticketing System**
+- Create ticket submission form
+- Build ClickUp integration edge function
+- Implement webhook for status sync
+
+**Phase 4: Support Hub Page**
+- Build full Support Hub page
+- Add ticket history view
+- Integrate all components
+
+**Phase 5: Polish & Admin Settings**
+- Add admin view for all tickets
+- Create assignee configuration UI
+- Add notification badges
+
+---
+
+### Security Considerations
+
+- Agents can only see their own tickets and action items (RLS)
+- Admins can see all tickets across agents
+- ClickUp webhook validates signature before processing
+- Service role key used only in edge functions
 
