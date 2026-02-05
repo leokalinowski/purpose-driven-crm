@@ -83,3 +83,6 @@ verify_jwt = false
 
 [functions.clickup-get-workspace-structure]
 verify_jwt = false
+
+[functions.clickup-get-list-fields]
+verify_jwt = false
