@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 
-export type TicketCategory = 'database' | 'social' | 'events' | 'newsletter' | 'spheresync' | 'technical' | 'general';
+export type TicketCategory = 'database' | 'social' | 'events' | 'newsletter' | 'spheresync' | 'technical' | 'general' | 'coaching';
 export type TicketPriority = 'low' | 'medium' | 'high';
 export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
 

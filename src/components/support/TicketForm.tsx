@@ -26,6 +26,7 @@ const categories: { value: TicketCategory; label: string }[] = [
   { value: 'events', label: 'Events' },
   { value: 'newsletter', label: 'Newsletter' },
   { value: 'spheresync', label: 'SphereSync' },
+  { value: 'coaching', label: 'Success Scoreboard / Coaching' },
   { value: 'technical', label: 'Technical Issue' },
   { value: 'general', label: 'General Question' },
 ];
