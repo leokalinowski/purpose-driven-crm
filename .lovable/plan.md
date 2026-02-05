@@ -1,92 +1,78 @@
 
-## Configure Support Ticket Category Assignments
+
+## Explore ClickUp Workspace Structure
 
 ### Summary
 
-Update the support system to route tickets to the correct team members via ClickUp, and add a new "Coaching/Success Scoreboard" category assigned to Pam.
+Create a utility edge function to fetch and display the complete ClickUp workspace hierarchy (Workspace → Spaces → Folders → Lists) so we can identify the correct List ID for support tickets.
+
+---
+
+### Current State
+
+- **CLICKUP_SUPPORT_LIST_ID** secret exists but we need to verify it points to the correct location
+- The `create-support-ticket` function uses this List ID to create tasks
+- Team ID for "Real Estate on Purpose" is: `9011620633`
 
 ---
 
 ### Implementation Details
 
-#### 1. Update support_config Table
+#### 1. Create New Edge Function: `clickup-get-workspace-structure`
 
-Update existing categories with correct assignee names and ClickUp IDs:
+This function will:
+1. Fetch all Spaces in the "Real Estate on Purpose" team
+2. For each Space, fetch all Folders
+3. For each Folder, fetch all Lists
+4. Also fetch "folderless" lists directly in each Space
+5. Return a complete hierarchy for review
 
-| Category | Assignee Name | ClickUp ID |
-|----------|---------------|------------|
-| database | Leonardo | 90173434 |
-| newsletter | Leonardo | 90173434 |
-| spheresync | Leonardo | 90173434 |
-| technical | Leonardo | 90173434 |
-| social | JJ Gagliardi | 4478890 |
-| events | Kate Atkinson | 87391446 |
-| general | Kate Atkinson | 87391446 |
+**ClickUp API endpoints needed:**
+- `GET /team/{team_id}/space` - Get all spaces
+- `GET /space/{space_id}/folder` - Get folders in a space
+- `GET /folder/{folder_id}/list` - Get lists in a folder
+- `GET /space/{space_id}/list` - Get folderless lists
 
-Add new coaching category:
+#### 2. Test and Identify Correct List
 
-| Category | Assignee Name | ClickUp ID |
-|----------|---------------|------------|
-| coaching | Pam O'Bryant | 81570896 |
+After creating the function, we'll call it to see the full structure and identify:
+- The correct Space (e.g., "Support", "Operations", etc.)
+- The correct Folder (if applicable)
+- The correct List for support tickets
 
-#### 2. Update TypeScript Types
+#### 3. Update CLICKUP_SUPPORT_LIST_ID Secret
 
-Add 'coaching' to the `TicketCategory` type in `useSupportTickets.ts`:
-
-```typescript
-export type TicketCategory = 'database' | 'social' | 'events' | 'newsletter' | 'spheresync' | 'technical' | 'general' | 'coaching';
-```
-
-#### 3. Update TicketForm Categories
-
-Add the coaching option to the categories dropdown in `TicketForm.tsx`:
-
-```typescript
-const categories: { value: TicketCategory; label: string }[] = [
-  { value: 'database', label: 'Database / CRM' },
-  { value: 'social', label: 'Social Media' },
-  { value: 'events', label: 'Events' },
-  { value: 'newsletter', label: 'Newsletter' },
-  { value: 'spheresync', label: 'SphereSync' },
-  { value: 'coaching', label: 'Success Scoreboard / Coaching' },  // NEW
-  { value: 'technical', label: 'Technical Issue' },
-  { value: 'general', label: 'General Question' },
-];
-```
+Once we identify the correct list, update the secret with the proper List ID.
 
 ---
 
-### Files to Modify
+### Files to Create
 
-| File | Change |
-|------|--------|
-| `src/hooks/useSupportTickets.ts` | Add 'coaching' to TicketCategory type |
-| `src/components/support/TicketForm.tsx` | Add coaching category to dropdown |
+| File | Purpose |
+|------|---------|
+| `supabase/functions/clickup-get-workspace-structure/index.ts` | Fetch and display ClickUp hierarchy |
 
-### Database Changes
+---
 
-Execute SQL to update `support_config`:
+### Edge Function Code Structure
 
-```sql
--- Update existing categories with ClickUp IDs
-UPDATE support_config SET assignee_name = 'Leonardo', clickup_assignee_id = '90173434' WHERE category = 'database';
-UPDATE support_config SET assignee_name = 'Leonardo', clickup_assignee_id = '90173434' WHERE category = 'newsletter';
-UPDATE support_config SET assignee_name = 'Leonardo', clickup_assignee_id = '90173434' WHERE category = 'spheresync';
-UPDATE support_config SET assignee_name = 'Leonardo', clickup_assignee_id = '90173434' WHERE category = 'technical';
-UPDATE support_config SET assignee_name = 'JJ Gagliardi', clickup_assignee_id = '4478890' WHERE category = 'social';
-UPDATE support_config SET assignee_name = 'Kate Atkinson', clickup_assignee_id = '87391446' WHERE category = 'events';
-UPDATE support_config SET assignee_name = 'Kate Atkinson', clickup_assignee_id = '87391446' WHERE category = 'general';
-
--- Add new coaching category
-INSERT INTO support_config (category, assignee_name, clickup_assignee_id)
-VALUES ('coaching', 'Pam O''Bryant', '81570896');
+```typescript
+// Pseudocode structure
+1. Get CLICKUP_API_TOKEN from secrets
+2. Fetch spaces for team 9011620633
+3. For each space:
+   - Fetch folders
+   - For each folder, fetch lists
+   - Fetch folderless lists
+4. Return structured hierarchy with IDs and names
 ```
 
 ---
 
 ### After Implementation
 
-Once approved, tickets will automatically:
-1. Create a task in ClickUp when submitted
-2. Assign to the correct team member based on category
-3. Include the new "Success Scoreboard / Coaching" option for agents
+1. Call the new edge function to see the workspace structure
+2. Review the output together to identify the correct Support Tickets list
+3. Update CLICKUP_SUPPORT_LIST_ID with the correct value
+4. Test ticket creation to verify it lands in the right place
+
