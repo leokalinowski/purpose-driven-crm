@@ -27,12 +27,12 @@ async function verifySignature(secret: string, payload: string, signature: strin
   return signature === expectedSignature;
 }
 
-// Map ClickUp status to Hub status
+// Map ClickUp status to Hub status (for native webhook format with status names)
 function mapClickUpStatusToHub(clickupStatus: string): 'open' | 'in_progress' | 'resolved' | null {
   const status = clickupStatus.toLowerCase().trim();
   
   // Open statuses
-  if (status === 'to do' || status === 'open' || status === 'new' || status === 'pending') {
+  if (status === 'to do' || status === 'open' || status === 'new' || status === 'pending' || status === 'not started') {
     return 'open';
   }
   
@@ -48,6 +48,16 @@ function mapClickUpStatusToHub(clickupStatus: string): 'open' | 'in_progress' | 
   }
   
   return null;
+}
+
+// Map ClickUp status IDs to Hub statuses (for Automation payloads)
+function mapClickUpStatusIdToHub(statusId: string): 'open' | 'in_progress' | 'resolved' | null {
+  const statusMap: Record<string, 'open' | 'in_progress' | 'resolved'> = {
+    'sc901113093436_osIH6GQo': 'open',        // not started
+    'sc901113093436_fcd5I7DS': 'in_progress', // in progress
+    'sc901113093436_pbrX12ce': 'resolved',    // resolved
+  };
+  return statusMap[statusId] || null;
 }
 
 serve(async (req) => {
@@ -90,8 +100,14 @@ serve(async (req) => {
     const payload = JSON.parse(rawBody);
     console.log('Webhook payload:', JSON.stringify(payload).slice(0, 2000));
 
+    // Detect ClickUp Automation format (payload wrapped in "payload" object)
+    const isAutomationPayload = payload.auto_id && payload.trigger_id && payload.payload;
+    const taskData = isAutomationPayload ? payload.payload : payload;
+    
+    console.log('Is Automation payload:', isAutomationPayload);
+
     // Extract task_id from various possible locations in the payload
-    const taskId = payload.task_id || payload.task?.id || payload.history_items?.[0]?.parent_id;
+    const taskId = taskData.id || payload.task_id || payload.task?.id || payload.history_items?.[0]?.parent_id;
     const event = payload.event;
 
     console.log('Event type:', event, 'Task ID:', taskId);
@@ -123,6 +139,20 @@ serve(async (req) => {
 
     // Process updates based on event type and history items
     const updates: Record<string, unknown> = {};
+
+    // Handle ClickUp Automation payloads (status_id based)
+    if (isAutomationPayload && taskData.status_id) {
+      const hubStatus = mapClickUpStatusIdToHub(taskData.status_id);
+      console.log('Automation status_id:', taskData.status_id, '-> Hub status:', hubStatus);
+      
+      if (hubStatus && hubStatus !== ticket.status) {
+        updates.status = hubStatus;
+        if (hubStatus === 'resolved') {
+          updates.resolved_at = new Date().toISOString();
+        }
+        console.log('Status update queued from Automation payload');
+      }
+    }
 
     // Handle taskStatusUpdated event
     if (event === 'taskStatusUpdated' && payload.history_items) {
