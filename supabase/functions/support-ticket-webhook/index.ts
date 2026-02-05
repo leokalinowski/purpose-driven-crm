@@ -1,12 +1,31 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import * as crypto from "https://deno.land/std@0.168.0/crypto/mod.ts";
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
+
+async function verifySignature(secret: string, payload: string, signature: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signatureBuffer = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(payload)
+  );
+  const expectedSignature = Array.from(new Uint8Array(signatureBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+  return signature === expectedSignature;
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -28,24 +47,8 @@ serve(async (req) => {
     if (webhookSecret) {
       const signature = req.headers.get('x-signature');
       if (signature) {
-        const encoder = new TextEncoder();
-        const key = await crypto.subtle.importKey(
-          "raw",
-          encoder.encode(webhookSecret),
-          { name: "HMAC", hash: "SHA-256" },
-          false,
-          ["sign"]
-        );
-        const signatureBuffer = await crypto.subtle.sign(
-          "HMAC",
-          key,
-          encoder.encode(rawBody)
-        );
-        const expectedSignature = Array.from(new Uint8Array(signatureBuffer))
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join('');
-        
-        if (signature !== expectedSignature) {
+        const isValid = await verifySignature(webhookSecret, rawBody, signature);
+        if (!isValid) {
           console.warn('Invalid webhook signature');
           return new Response(
             JSON.stringify({ error: 'Invalid signature' }),
