@@ -1,5 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from "../_shared/cors.ts";
 
 function parseXMLResponse(xmlText: string): DNCApiResponse {
@@ -46,7 +45,7 @@ function parseXMLResponse(xmlText: string): DNCApiResponse {
     return {
       isOK: false,
       isDNC: false,
-      error: `XML parsing failed: ${error.message}`,
+      error: `XML parsing failed: ${(error as Error).message}`,
       rawResponse: xmlText
     };
   }
@@ -65,7 +64,7 @@ interface DNCApiResponse {
   rawResponse?: string;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -74,6 +73,7 @@ serve(async (req) => {
   // Authentication check for admin access
   const authHeader = req.headers.get('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.error('[DNC Check] No authorization header provided');
     return new Response(
       JSON.stringify({ error: "Authentication required" }),
       { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
@@ -84,6 +84,7 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
   if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('[DNC Check] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
     return new Response(
       JSON.stringify({ error: "Server configuration error" }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
@@ -98,6 +99,7 @@ serve(async (req) => {
   // Verify user is authenticated and is admin
   const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
   if (authError || !user) {
+    console.error('[DNC Check] Authentication failed:', authError?.message);
     return new Response(
       JSON.stringify({ error: "Invalid authentication" }),
       { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
@@ -109,6 +111,7 @@ serve(async (req) => {
     .rpc('get_current_user_role');
 
   if (roleError || userRole !== 'admin') {
+    console.error('[DNC Check] Admin access required. User role:', userRole, 'Error:', roleError?.message);
     return new Response(
       JSON.stringify({ error: "Admin access required" }),
       { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
@@ -116,36 +119,34 @@ serve(async (req) => {
   }
 
   // Parse request body to check for force recheck
-  let requestData = {};
+  let requestData: Record<string, unknown> = {};
   try {
     const body = await req.text();
     if (body) {
       requestData = JSON.parse(body);
     }
   } catch (error) {
-    console.log('No JSON body provided, using defaults');
+    console.log('[DNC Check] No JSON body provided, using defaults');
   }
 
-  const forceRecheck = (requestData as any)?.forceRecheck || false;
-  const specificAgentId = (requestData as any)?.agentId || null;
-  console.log(`Starting DNC check automation... Force recheck: ${forceRecheck}, Specific agent: ${specificAgentId || 'all'}`);
+  const forceRecheck = requestData?.forceRecheck || false;
+  const specificAgentId = requestData?.agentId as string | null || null;
+  console.log(`[DNC Check] Starting automation... Force recheck: ${forceRecheck}, Specific agent: ${specificAgentId || 'all'}`);
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     const dncApiKey = Deno.env.get('DNC_API_KEY');
     
     if (!dncApiKey) {
+      console.error('[DNC Check] DNC_API_KEY not configured');
       throw new Error('DNC_API_KEY not configured');
     }
 
-    console.log(`Using DNC API Key: ${dncApiKey.substring(0, 8)}...${dncApiKey.substring(dncApiKey.length - 4)}`);
+    console.log(`[DNC Check] Using DNC API Key: ${dncApiKey.substring(0, 8)}...${dncApiKey.substring(dncApiKey.length - 4)}`);
     
     // Test API with the provided phone number
-    console.log('Testing API with phone 4432201181...');
+    console.log('[DNC Check] Testing API with phone 4432201181...');
     try {
       const testResponse = await fetch(`https://api.realvalidation.com/rpvWebService/DNCLookup.php?phone=4432201181&token=${dncApiKey}`, {
         method: 'GET',
@@ -156,14 +157,14 @@ serve(async (req) => {
       
       if (testResponse.ok) {
         const testXml = await testResponse.text();
-        console.log('Test API Response:', testXml);
+        console.log('[DNC Check] Test API Response:', testXml);
         const testResult = parseXMLResponse(testXml);
-        console.log('Test API Parsed Result:', testResult);
+        console.log('[DNC Check] Test API Parsed Result:', testResult);
       } else {
-        console.error(`Test API call failed: ${testResponse.status} ${testResponse.statusText}`);
+        console.error(`[DNC Check] Test API call failed: ${testResponse.status} ${testResponse.statusText}`);
       }
     } catch (testError) {
-      console.error('Test API call error:', testError);
+      console.error('[DNC Check] Test API call error:', testError);
     }
 
     // Get cutoff date (30 days ago) - only used if not forcing recheck
@@ -172,9 +173,9 @@ serve(async (req) => {
     const cutoffDate = thirtyDaysAgo.toISOString();
 
     if (forceRecheck) {
-      console.log('Force recheck enabled: checking ALL contacts with phone numbers');
+      console.log('[DNC Check] Force recheck enabled: checking ALL contacts with phone numbers');
     } else {
-      console.log(`Checking contacts not checked since: ${cutoffDate}`);
+      console.log(`[DNC Check] Checking contacts not checked since: ${cutoffDate}`);
     }
 
     // Get agents to process
@@ -190,7 +191,7 @@ serve(async (req) => {
         .in('role', ['agent', 'admin']);
       agents = result.data;
       agentsError = result.error;
-      console.log(`Processing specific agent: ${specificAgentId}`);
+      console.log(`[DNC Check] Processing specific agent: ${specificAgentId}`);
     } else {
       // Process all agents and admins
       const result = await supabase
@@ -199,14 +200,15 @@ serve(async (req) => {
         .in('role', ['agent', 'admin']);
       agents = result.data;
       agentsError = result.error;
-      console.log('Processing all agents and admins');
+      console.log('[DNC Check] Processing all agents and admins');
     }
 
     if (agentsError) {
+      console.error('[DNC Check] Failed to fetch agents:', agentsError.message);
       throw new Error(`Failed to fetch agents: ${agentsError.message}`);
     }
 
-    console.log(`Found ${agents?.length || 0} agent(s) to process`);
+    console.log(`[DNC Check] Found ${agents?.length || 0} agent(s) to process`);
 
     let totalChecked = 0;
     let totalFlagged = 0;
@@ -214,7 +216,7 @@ serve(async (req) => {
 
     // Process each agent
     for (const agent of agents || []) {
-      console.log(`Processing agent: ${agent.user_id}`);
+      console.log(`[DNC Check] Processing agent: ${agent.user_id}`);
       
       let agentChecked = 0;
       let agentFlagged = 0;
@@ -235,7 +237,7 @@ serve(async (req) => {
             .not('phone', 'eq', '');
           contacts = result.data;
           contactsError = result.error;
-          console.log(`Query: ALL non-DNC contacts for agent ${agent.user_id} WHERE dnc = false AND phone IS NOT NULL AND phone != '' (FORCE RECHECK)`);
+          console.log(`[DNC Check] Query: ALL non-DNC contacts for agent ${agent.user_id} WHERE dnc = false AND phone IS NOT NULL AND phone != '' (FORCE RECHECK)`);
         } else {
           // Normal check: only contacts that haven't been checked or are older than 30 days AND are NOT already marked as DNC
           const result = await supabase
@@ -248,17 +250,17 @@ serve(async (req) => {
             .not('phone', 'eq', '');
           contacts = result.data;
           contactsError = result.error;
-          console.log(`Query: non-DNC contacts for agent ${agent.user_id} WHERE dnc = false AND (dnc_last_checked IS NULL OR dnc_last_checked < '${cutoffDate}') AND phone IS NOT NULL AND phone != ''`);
+          console.log(`[DNC Check] Query: non-DNC contacts for agent ${agent.user_id} WHERE dnc = false AND (dnc_last_checked IS NULL OR dnc_last_checked < '${cutoffDate}') AND phone IS NOT NULL AND phone != ''`);
         }
 
         if (contactsError) {
           const errorMsg = `Failed to fetch contacts for agent ${agent.user_id}: ${contactsError.message}`;
-          console.error(errorMsg);
+          console.error(`[DNC Check] ${errorMsg}`);
           agentErrors.push(errorMsg);
           continue;
         }
 
-        console.log(`Found ${contacts?.length || 0} contacts to check for agent ${agent.user_id}`);
+        console.log(`[DNC Check] Found ${contacts?.length || 0} contacts to check for agent ${agent.user_id}`);
 
         if (!contacts || contacts.length === 0) {
           // Log empty run for this agent
@@ -271,17 +273,17 @@ serve(async (req) => {
           continue;
         }
 
-        // Process contacts in batches of 100 to avoid overwhelming the API
-        const batchSize = 100;
+        // Process contacts in batches of 50 to avoid overwhelming the API and timeout
+        const batchSize = 50;
         for (let i = 0; i < contacts.length; i += batchSize) {
           const batch = contacts.slice(i, i + batchSize);
-          console.log(`Processing batch ${Math.floor(i/batchSize) + 1} for agent ${agent.user_id} (${batch.length} contacts)`);
+          console.log(`[DNC Check] Processing batch ${Math.floor(i/batchSize) + 1} for agent ${agent.user_id} (${batch.length} contacts)`);
 
           // Process each contact in the batch
           for (const contact of batch) {
             try {
               // Add small delay to avoid rate limiting
-              await new Promise(resolve => setTimeout(resolve, 100));
+              await new Promise(resolve => setTimeout(resolve, 50));
 
               // Normalize phone number (handle both 10 and 11 digit formats)
               const phoneDigits = contact.phone.replace(/\D/g, '');
@@ -327,7 +329,7 @@ serve(async (req) => {
 
               if (updateError) {
                 const errorMsg = `Failed to update contact ${contact.id}: ${updateError.message}`;
-                console.error(errorMsg);
+                console.error(`[DNC Check] ${errorMsg}`);
                 agentErrors.push(errorMsg);
                 totalErrors++;
               } else {
@@ -337,13 +339,13 @@ serve(async (req) => {
                 if (isDNC) {
                   agentFlagged++;
                   totalFlagged++;
-                  console.log(`Flagged contact ${contact.id} (phone: ${contact.phone}) as DNC`);
+                  console.log(`[DNC Check] Flagged contact ${contact.id} (phone: ${contact.phone}) as DNC`);
                 }
               }
 
             } catch (error) {
-              const errorMsg = `Error checking contact ${contact.id} (phone: ${contact.phone}): ${error.message}`;
-              console.error(errorMsg);
+              const errorMsg = `Error checking contact ${contact.id} (phone: ${contact.phone}): ${(error as Error).message}`;
+              console.error(`[DNC Check] ${errorMsg}`);
               agentErrors.push(errorMsg);
               totalErrors++;
 
@@ -354,18 +356,18 @@ serve(async (req) => {
                   .update({ dnc_last_checked: new Date().toISOString() })
                   .eq('id', contact.id);
               } catch (updateError) {
-                console.error(`Failed to update last_checked for contact ${contact.id}: ${updateError.message}`);
+                console.error(`[DNC Check] Failed to update last_checked for contact ${contact.id}: ${(updateError as Error).message}`);
               }
             }
           }
 
           // Small delay between batches
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
 
       } catch (error) {
-        const errorMsg = `Error processing agent ${agent.user_id}: ${error.message}`;
-        console.error(errorMsg);
+        const errorMsg = `Error processing agent ${agent.user_id}: ${(error as Error).message}`;
+        console.error(`[DNC Check] ${errorMsg}`);
         agentErrors.push(errorMsg);
       }
 
@@ -378,14 +380,14 @@ serve(async (req) => {
       });
 
       if (logError) {
-        console.error(`Failed to log results for agent ${agent.user_id}: ${logError.message}`);
+        console.error(`[DNC Check] Failed to log results for agent ${agent.user_id}: ${logError.message}`);
       }
 
-      console.log(`Agent ${agent.user_id} completed: ${agentChecked} checked, ${agentFlagged} flagged, ${agentErrors.length} errors`);
+      console.log(`[DNC Check] Agent ${agent.user_id} completed: ${agentChecked} checked, ${agentFlagged} flagged, ${agentErrors.length} errors`);
     }
 
     const summary = `DNC check completed: ${totalChecked} contacts checked, ${totalFlagged} flagged as DNC, ${totalErrors} errors`;
-    console.log(summary);
+    console.log(`[DNC Check] ${summary}`);
 
     return new Response(JSON.stringify({
       success: true,
@@ -402,11 +404,11 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('DNC check automation failed:', error);
+    console.error('[DNC Check] Automation failed:', error);
     
     return new Response(JSON.stringify({
       success: false,
-      error: error.message
+      error: (error as Error).message
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

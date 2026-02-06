@@ -4,7 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Upload, Search, ChevronLeft, ChevronRight, Users, Shield } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Plus, Upload, Search, ChevronLeft, ChevronRight, Users, RefreshCw } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { ContactTable } from '@/components/database/ContactTable';
 import { ContactForm } from '@/components/database/ContactForm';
@@ -19,6 +20,7 @@ import { EnrichedContact } from '@/utils/dataEnrichment';
 
 import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useDNCStats } from '@/hooks/useDNCStats';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
@@ -26,7 +28,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 const Database = () => {
   const { user, loading: authLoading } = useAuth();
-  
+  const { isAdmin, loading: roleLoading } = useUserRole();
   // All hooks must be called unconditionally (Rules of Hooks)
   const {
     contacts,
@@ -464,42 +466,55 @@ const Database = () => {
           </div>
         </div>
         
-        {/* DNC Statistics Dashboard */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex gap-2">
-                <DNCCheckButton 
-                  variant="default" 
-                  size="default" 
-                  onRun={handleDNCCheck}
-                  checking={dncChecking}
+        {/* DNC Statistics Dashboard - Admin Only */}
+        {isAdmin && (
+          <>
+            {/* DNC Check Progress Indicator */}
+            {dncChecking && (
+              <Alert className="border-primary/50 bg-primary/10">
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                <AlertDescription>
+                  DNC check in progress. Stats will update automatically when complete.
+                </AlertDescription>
+              </Alert>
+            )}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex gap-2">
+                    <DNCCheckButton 
+                      variant="default" 
+                      size="default" 
+                      onRun={handleDNCCheck}
+                      checking={dncChecking}
+                    />
+                    <DNCCheckButton 
+                      variant="destructive" 
+                      size="default" 
+                      forceRecheck={true}
+                      onRun={handleDNCCheck}
+                      checking={dncChecking}
+                    />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <DNCStatsCard 
+                  stats={stats || {
+                    totalContacts: 0,
+                    dncContacts: 0,
+                    nonDncContacts: 0,
+                    neverChecked: 0,
+                    missingPhone: 0,
+                    needsRecheck: 0,
+                    lastChecked: null,
+                  }} 
+                  loading={dncLoading} 
                 />
-                <DNCCheckButton 
-                  variant="destructive" 
-                  size="default" 
-                  forceRecheck={true}
-                  onRun={handleDNCCheck}
-                  checking={dncChecking}
-                />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <DNCStatsCard 
-              stats={stats || {
-                totalContacts: 0,
-                dncContacts: 0,
-                nonDncContacts: 0,
-                neverChecked: 0,
-                missingPhone: 0,
-                needsRecheck: 0,
-                lastChecked: null,
-              }} 
-              loading={dncLoading} 
-            />
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </>
+        )}
         
         {/* Data Quality Dashboard */}
         <DataQualityDashboard
