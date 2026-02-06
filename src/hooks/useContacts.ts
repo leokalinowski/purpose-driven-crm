@@ -150,7 +150,20 @@ export const useContacts = () => {
   ]);
 
   const addContact = async (contactData: ContactInput) => {
-    if (!user || !effectiveAgentId) throw new Error('User not authenticated');
+    // Validate session before attempting insert
+    if (!user || !effectiveAgentId) {
+      console.error('[addContact] No user authenticated', { 
+        user: !!user, 
+        effectiveAgentId 
+      });
+      throw new Error('User not authenticated. Please refresh and try again.');
+    }
+
+    console.log('[addContact] Inserting contact:', {
+      agent_id: effectiveAgentId,
+      last_name: contactData.last_name,
+      first_name: contactData.first_name,
+    });
 
     const { data, error } = await supabase
       .from('contacts')
@@ -164,10 +177,19 @@ export const useContacts = () => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('[addContact] Insert failed:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw error;
+    }
+
+    console.log('[addContact] Success:', { id: data?.id });
 
     // Note: DNC checks are now handled by monthly automation only
-
     fetchContacts();
     return data;
   };
