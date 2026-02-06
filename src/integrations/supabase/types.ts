@@ -2570,6 +2570,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_duplicate_rsvp: {
+        Args: { p_email: string; p_event_id: string }
+        Returns: boolean
+      }
       check_rsvp_duplicate: {
         Args: { p_email: string; p_event_id: string }
         Returns: boolean
@@ -2593,6 +2597,13 @@ export type Database = {
       format_phone_display: { Args: { phone_input: string }; Returns: string }
       generate_event_slug: { Args: { title: string }; Returns: string }
       get_current_user_role: { Args: never; Returns: string }
+      get_own_rsvp: {
+        Args: { p_email: string; p_event_id: string }
+        Returns: {
+          id: string
+          status: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
