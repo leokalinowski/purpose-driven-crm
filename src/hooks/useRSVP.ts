@@ -59,15 +59,18 @@ export const useRSVP = () => {
 
       // Check capacity if max_capacity is set
       if (event.max_capacity && event.current_rsvp_count >= event.max_capacity) {
-        // Check if there's already an RSVP for this email
-        const { data: existingRSVP } = await supabase
-          .from('event_rsvps')
-          .select('id, status')
-          .eq('event_id', eventId)
-          .eq('email', formData.email.toLowerCase())
-          .single();
+        // Check if there's already a confirmed RSVP for this email using secure RPC
+        const { data: isDuplicate, error: dupError } = await supabase
+          .rpc('check_duplicate_rsvp', {
+            p_event_id: eventId,
+            p_email: formData.email.toLowerCase()
+          });
 
-        if (existingRSVP && existingRSVP.status === 'confirmed') {
+        if (dupError) {
+          console.error('Error checking duplicate RSVP:', dupError);
+        }
+
+        if (isDuplicate) {
           throw new Error('You have already RSVPed for this event');
         }
 
@@ -95,15 +98,18 @@ export const useRSVP = () => {
         return rsvp as RSVP;
       }
 
-      // Check for duplicate RSVP
-      const { data: existingRSVP } = await supabase
-        .from('event_rsvps')
-        .select('id, status')
-        .eq('event_id', eventId)
-        .eq('email', formData.email.toLowerCase())
-        .single();
+      // Check for duplicate RSVP using secure RPC
+      const { data: isDuplicate, error: dupError } = await supabase
+        .rpc('check_duplicate_rsvp', {
+          p_event_id: eventId,
+          p_email: formData.email.toLowerCase()
+        });
 
-      if (existingRSVP && existingRSVP.status === 'confirmed') {
+      if (dupError) {
+        console.error('Error checking duplicate RSVP:', dupError);
+      }
+
+      if (isDuplicate) {
         throw new Error('You have already RSVPed for this event');
       }
 
@@ -155,21 +161,32 @@ export const useRSVP = () => {
     }
   };
 
-  // Get RSVP by email and event (public)
+  // Get RSVP by email and event (public) - uses secure RPC
   const getRSVPByEmail = async (eventId: string, email: string): Promise<RSVP | null> => {
     try {
+      // Use secure RPC that only returns the user's own RSVP
       const { data, error } = await supabase
-        .from('event_rsvps')
-        .select('*')
-        .eq('event_id', eventId)
-        .eq('email', email.toLowerCase())
-        .single();
+        .rpc('get_own_rsvp', {
+          p_event_id: eventId,
+          p_email: email.toLowerCase()
+        });
 
-      if (error && error.code !== 'PGRST116') {
-        throw error;
+      if (error) {
+        console.error('Error fetching RSVP:', error);
+        return null;
       }
 
-      return data as RSVP | null;
+      // RPC returns an array, get first result
+      if (data && data.length > 0) {
+        return {
+          id: data[0].id,
+          status: data[0].status,
+          event_id: eventId,
+          email: email.toLowerCase(),
+        } as RSVP;
+      }
+
+      return null;
     } catch (err) {
       console.error('Error fetching RSVP:', err);
       return null;
