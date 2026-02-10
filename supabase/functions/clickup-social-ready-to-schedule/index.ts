@@ -268,9 +268,7 @@ Deno.serve(async (req) => {
     if (mktErr || !mktSettings) throw new Error(`Marketing settings not found for user: ${profile.user_id}`);
 
     const metricoolBrandId = mktSettings.metricool_brand_id;
-    const metricoolUserId = mktSettings.metricool_user_id;
     if (!metricoolBrandId) throw new Error("Missing metricool_brand_id in agent_marketing_settings");
-    if (!metricoolUserId) throw new Error("Missing metricool_user_id in agent_marketing_settings");
 
     await logStep(supabase, runId!, "fetch_agent_settings", "success", { clientId }, {
       user_id: profile.user_id,
@@ -331,7 +329,7 @@ Deno.serve(async (req) => {
     // ── 7. Metricool: normalize media URL ────────────────────────────
     if (!METRICOOL_API_KEY) throw new Error("Missing METRICOOL_API_KEY");
 
-    const normalizeUrl = `https://app.metricool.com/actions/normalize/image/url?url=${encodeURIComponent(videoDownloadUrl)}&userId=${metricoolUserId}&blogId=${metricoolBrandId}`;
+    const normalizeUrl = `https://app.metricool.com/actions/normalize/image/url?url=${encodeURIComponent(videoDownloadUrl)}&userId=${metricoolBrandId}&blogId=${metricoolBrandId}`;
     const normalizeResp = await fetchWithRetry(normalizeUrl, {
       headers: { Authorization: `Bearer ${METRICOOL_API_KEY}` },
     });
@@ -403,7 +401,7 @@ Deno.serve(async (req) => {
     };
 
     const scheduleResp = await fetchWithRetry(
-      `https://app.metricool.com/api/v2/scheduler/posts?userId=${metricoolUserId}&blogId=${metricoolBrandId}`,
+      `https://app.metricool.com/api/v2/scheduler/posts?userId=${metricoolBrandId}&blogId=${metricoolBrandId}`,
       {
         method: "POST",
         headers: {
