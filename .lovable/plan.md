@@ -1,52 +1,44 @@
 
-# Fix: ClickUp Automation Payload Parsing
+# Fetch Transcript from Shade Before Generating Copy
 
 ## Problem
+The task description contains metadata (Path, ID, Drive ID, Transcription ID) -- not the actual transcript text. The AI is generating copy based on the task name instead of the real video dialogue.
 
-When you click "Generate Social Copy" in ClickUp, the Automation sends a webhook with this structure:
+## Solution
+Add a new step in `clickup-generate-copy-webhook` to fetch the transcript from the Shade API before calling `generate-social-copy`.
 
-```text
-{
-  "auto_id": "...",
-  "trigger_id": "...",
-  "payload": {
-    "id": "868hdxjj1",    <-- task ID is here
-    "name": "Approval Request ...",
-    ...
-  }
-}
-```
+## How It Works
 
-But both webhook functions look for the task ID at:
-- `payload.task_id` (not present)
-- `payload.task.id` (not present)
+1. **Parse the task description** to extract the Shade Asset ID and Drive ID from the `text_content` field (format: `ID: {uuid}\nDrive ID: {uuid}`)
+2. **Call the Shade API** to get the transcript utterances:
+   ```
+   GET https://api.shade.inc/assets/{asset_id}/transcription/utterances?drive_id={drive_id}
+   Authorization: Bearer {SHADE_API_KEY}
+   ```
+3. **Concatenate the utterances** into a single transcript string
+4. **Pass the transcript** to `generate-social-copy` instead of the raw task description
 
-So they log **"No task_id in payload, skipping"** and do nothing.
+## Technical Changes
 
-## Fix
+### File: `supabase/functions/clickup-generate-copy-webhook/index.ts`
 
-Update the task ID extraction line in **both** webhook functions to also check `payload.payload.id` (the ClickUp Automation format):
+**Add `SHADE_API_KEY` and `SHADE_DRIVE_ID` environment variables** (already configured as secrets).
 
-### File 1: `supabase/functions/clickup-generate-copy-webhook/index.ts` (line 145)
+**New step between "extract_fields" and "call_generate_social_copy":**
 
-```
-// BEFORE
-const taskId = payload?.task_id || payload?.task?.id;
+- Parse `text_content` from the task description using regex to extract:
+  - `ID:` line as the Shade Asset ID
+  - `Drive ID:` line (fallback to the `SHADE_DRIVE_ID` env var)
+- Call `GET /assets/{asset_id}/transcription/utterances?drive_id={drive_id}` with `Authorization: Bearer {SHADE_API_KEY}`
+- Extract and join the utterance text into a single transcript string
+- If the Shade fetch fails (no transcription available, API error), fall back to the task name as `video_description` (current behavior, but logged as a warning)
 
-// AFTER
-const taskId = payload?.task_id || payload?.task?.id || payload?.payload?.id;
-```
+**Update the generate payload** to use the fetched transcript instead of `task.description`.
 
-### File 2: `supabase/functions/clickup-social-ready-to-schedule/index.ts` (line 174)
+**Update the custom field Video Transcription in the original ClickUp Task.
 
-```
-// BEFORE
-const taskId = payload?.task_id || payload?.task?.id;
+### No other files change
+The `generate-social-copy` function already accepts a `transcript` parameter and uses it correctly.
 
-// AFTER
-const taskId = payload?.task_id || payload?.task?.id || payload?.payload?.id;
-```
-
-## Deployment
-
-Redeploy both `clickup-generate-copy-webhook` and `clickup-social-ready-to-schedule`.
+### Deployment
+Redeploy `clickup-generate-copy-webhook`.
