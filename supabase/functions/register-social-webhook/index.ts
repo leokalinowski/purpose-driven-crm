@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
   });
 
   try {
-    const { team_id } = await req.json();
+    const { team_id, type } = await req.json();
 
     if (!team_id) {
       return new Response(JSON.stringify({ error: "team_id is required" }), {
@@ -36,46 +36,69 @@ Deno.serve(async (req) => {
       });
     }
 
-    const webhookEndpoint = `${SUPABASE_URL}/functions/v1/clickup-social-ready-to-schedule`;
+    // Determine which webhook(s) to register
+    // type: "schedule" | "generate" | undefined (both)
+    const registrations: Array<{ endpoint: string; events: string[]; label: string }> = [];
 
-    // Register webhook in ClickUp for taskStatusUpdated events
-    const resp = await fetch(`https://api.clickup.com/api/v2/team/${team_id}/webhook`, {
-      method: "POST",
-      headers: {
-        Authorization: CLICKUP_API_TOKEN,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        endpoint: webhookEndpoint,
+    if (!type || type === "schedule") {
+      registrations.push({
+        endpoint: `${SUPABASE_URL}/functions/v1/clickup-social-ready-to-schedule`,
         events: ["taskStatusUpdated"],
-      }),
-    });
-
-    const body = await resp.json();
-
-    if (!resp.ok) {
-      throw new Error(`ClickUp webhook registration failed [${resp.status}]: ${JSON.stringify(body)}`);
+        label: "social-scheduling",
+      });
     }
 
-    const webhookId = body?.id || body?.webhook?.id;
+    if (!type || type === "generate") {
+      registrations.push({
+        endpoint: `${SUPABASE_URL}/functions/v1/clickup-generate-copy-webhook`,
+        events: ["taskUpdated"],
+        label: "social-generate-copy",
+      });
+    }
 
-    // Save webhook registration record
-    await supabase.from("clickup_webhooks").insert({
-      webhook_id: webhookId,
-      list_id: "social-scheduling",
-      team_id,
-      active: true,
-    });
+    const results: any[] = [];
 
-    console.log("Social webhook registered:", { webhookId, team_id, endpoint: webhookEndpoint });
+    for (const reg of registrations) {
+      const resp = await fetch(`https://api.clickup.com/api/v2/team/${team_id}/webhook`, {
+        method: "POST",
+        headers: {
+          Authorization: CLICKUP_API_TOKEN,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          endpoint: reg.endpoint,
+          events: reg.events,
+        }),
+      });
+
+      const body = await resp.json();
+
+      if (!resp.ok) {
+        throw new Error(`ClickUp webhook registration failed for ${reg.label} [${resp.status}]: ${JSON.stringify(body)}`);
+      }
+
+      const webhookId = body?.id || body?.webhook?.id;
+
+      // Save webhook registration record
+      await supabase.from("clickup_webhooks").insert({
+        webhook_id: webhookId,
+        list_id: reg.label,
+        team_id,
+        active: true,
+      });
+
+      console.log(`Webhook registered (${reg.label}):`, { webhookId, team_id, endpoint: reg.endpoint });
+
+      results.push({
+        webhook_id: webhookId,
+        endpoint: reg.endpoint,
+        events: reg.events,
+        label: reg.label,
+      });
+    }
 
     return new Response(
-      JSON.stringify({
-        ok: true,
-        webhook_id: webhookId,
-        endpoint: webhookEndpoint,
-        events: ["taskStatusUpdated"],
-      }),
+      JSON.stringify({ ok: true, webhooks: results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err: any) {
