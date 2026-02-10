@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
     const payload = JSON.parse(bodyText);
     console.log("Ready-to-schedule webhook:", JSON.stringify(payload).slice(0, 2000));
 
-    const taskId: string | undefined = payload?.task_id || payload?.task?.id;
+    const taskId: string | undefined = payload?.task_id || payload?.task?.id || payload?.payload?.id;
     const eventId: string = payload?.event || payload?.webhook_id || "unknown";
 
     if (!taskId) {
