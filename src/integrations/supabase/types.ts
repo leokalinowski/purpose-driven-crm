@@ -748,6 +748,51 @@ export type Database = {
         }
         Relationships: []
       }
+      content_generation_results: {
+        Row: {
+          agent_marketing_settings_id: string | null
+          clickup_task_id: string
+          created_at: string
+          error_message: string | null
+          generated_at: string | null
+          id: string
+          shade_asset_id: string | null
+          social_copy: string | null
+          status: string
+          transcript_hash: string | null
+          youtube_description: string | null
+          youtube_titles: string | null
+        }
+        Insert: {
+          agent_marketing_settings_id?: string | null
+          clickup_task_id: string
+          created_at?: string
+          error_message?: string | null
+          generated_at?: string | null
+          id?: string
+          shade_asset_id?: string | null
+          social_copy?: string | null
+          status?: string
+          transcript_hash?: string | null
+          youtube_description?: string | null
+          youtube_titles?: string | null
+        }
+        Update: {
+          agent_marketing_settings_id?: string | null
+          clickup_task_id?: string
+          created_at?: string
+          error_message?: string | null
+          generated_at?: string | null
+          id?: string
+          shade_asset_id?: string | null
+          social_copy?: string | null
+          status?: string
+          transcript_hash?: string | null
+          youtube_description?: string | null
+          youtube_titles?: string | null
+        }
+        Relationships: []
+      }
       dnc_logs: {
         Row: {
           agent_id: string
@@ -2092,6 +2137,45 @@ export type Database = {
         }
         Relationships: []
       }
+      social_shade_clickup_links: {
+        Row: {
+          agent_marketing_settings_id: string
+          clickup_task_id: string | null
+          created_at: string
+          file_name: string | null
+          id: string
+          shade_asset_id: string | null
+          shade_file_id: string
+          shade_path: string | null
+          transcription_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent_marketing_settings_id: string
+          clickup_task_id?: string | null
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          shade_asset_id?: string | null
+          shade_file_id: string
+          shade_path?: string | null
+          transcription_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent_marketing_settings_id?: string
+          clickup_task_id?: string | null
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          shade_asset_id?: string | null
+          shade_file_id?: string
+          shade_path?: string | null
+          transcription_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       spheresync_email_logs: {
         Row: {
           agent_id: string
@@ -2535,6 +2619,104 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      workflow_run_steps: {
+        Row: {
+          attempt: number
+          created_at: string
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          request: Json | null
+          response_body: Json | null
+          response_status: number | null
+          run_id: string
+          started_at: string | null
+          status: string
+          step_name: string
+        }
+        Insert: {
+          attempt?: number
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          request?: Json | null
+          response_body?: Json | null
+          response_status?: number | null
+          run_id: string
+          started_at?: string | null
+          status?: string
+          step_name: string
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          request?: Json | null
+          response_body?: Json | null
+          response_status?: number | null
+          run_id?: string
+          started_at?: string | null
+          status?: string
+          step_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_run_steps_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_runs: {
+        Row: {
+          created_at: string
+          error_details: Json | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          idempotency_key: string
+          input: Json | null
+          output: Json | null
+          started_at: string | null
+          status: string
+          triggered_by: string | null
+          workflow_name: string
+        }
+        Insert: {
+          created_at?: string
+          error_details?: Json | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key: string
+          input?: Json | null
+          output?: Json | null
+          started_at?: string | null
+          status?: string
+          triggered_by?: string | null
+          workflow_name: string
+        }
+        Update: {
+          created_at?: string
+          error_details?: Json | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string
+          input?: Json | null
+          output?: Json | null
+          started_at?: string | null
+          status?: string
+          triggered_by?: string | null
+          workflow_name?: string
         }
         Relationships: []
       }
