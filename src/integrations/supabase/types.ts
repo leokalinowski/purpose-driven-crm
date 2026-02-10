@@ -123,7 +123,6 @@ export type Database = {
           metricool_threads_id: string | null
           metricool_tiktok_id: string | null
           metricool_twitter_id: string | null
-          metricool_user_id: string | null
           metricool_youtube_id: string | null
           primary_color: string | null
           secondary_color: string | null
@@ -157,7 +156,6 @@ export type Database = {
           metricool_threads_id?: string | null
           metricool_tiktok_id?: string | null
           metricool_twitter_id?: string | null
-          metricool_user_id?: string | null
           metricool_youtube_id?: string | null
           primary_color?: string | null
           secondary_color?: string | null
@@ -191,7 +189,6 @@ export type Database = {
           metricool_threads_id?: string | null
           metricool_tiktok_id?: string | null
           metricool_twitter_id?: string | null
-          metricool_user_id?: string | null
           metricool_youtube_id?: string | null
           primary_color?: string | null
           secondary_color?: string | null
