@@ -253,28 +253,17 @@ Deno.serve(async (req) => {
       try {
         await logStep(supabase, runId!, "fetch_shade_transcript", "running", { shadeAssetId });
 
-        const shadeUrl = `https://api.shade.inc/assets/${shadeAssetId}/transcription/utterances?drive_id=${SHADE_DRIVE_ID}`;
+        const shadeUrl = `https://api.shade.inc/assets/${shadeAssetId}/transcription/file?drive_id=${SHADE_DRIVE_ID}&type=txt`;
         const shadeResp = await fetchWithRetry(shadeUrl, {
           headers: {
             Authorization: `Bearer ${SHADE_API_KEY}`,
-            "Content-Type": "application/json",
           },
         });
 
         if (shadeResp.ok) {
-          const shadeData = await shadeResp.json();
-          // Concatenate utterance texts
-          const utterances = Array.isArray(shadeData)
-            ? shadeData
-            : (shadeData?.utterances || shadeData?.data || []);
-
-          transcript = utterances
-            .map((u: any) => u.text || u.utterance || "")
-            .filter(Boolean)
-            .join(" ");
+          transcript = await shadeResp.text();
 
           await logStep(supabase, runId!, "fetch_shade_transcript", "success", null, {
-            utteranceCount: utterances.length,
             transcriptLength: transcript.length,
           });
         } else {
