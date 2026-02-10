@@ -1,44 +1,40 @@
 
-# Fetch Transcript from Shade Before Generating Copy
+# Fix: Allow Regeneration of Social Copy
 
 ## Problem
-The task description contains metadata (Path, ID, Drive ID, Transcription ID) -- not the actual transcript text. The AI is generating copy based on the task name instead of the real video dialogue.
+The idempotency check uses `generate-copy:{taskId}` as the key. Once a task succeeds, clicking "Generate Social Copy" again is blocked with "Already generated copy for this task." This prevents regeneration after fixes or when the user wants fresh output.
 
 ## Solution
-Add a new step in `clickup-generate-copy-webhook` to fetch the transcript from the Shade API before calling `generate-social-copy`.
-
-## How It Works
-
-1. **Parse the task description** to extract the Shade Asset ID and Drive ID from the `text_content` field (format: `ID: {uuid}\nDrive ID: {uuid}`)
-2. **Call the Shade API** to get the transcript utterances:
-   ```
-   GET https://api.shade.inc/assets/{asset_id}/transcription/utterances?drive_id={drive_id}
-   Authorization: Bearer {SHADE_API_KEY}
-   ```
-3. **Concatenate the utterances** into a single transcript string
-4. **Pass the transcript** to `generate-social-copy` instead of the raw task description
+Change the idempotency key to include the ClickUp Automation's unique trigger instance ID (`auto_id`), which is different each time the automation fires. This way:
+- Each automation trigger gets its own run (allows regeneration)
+- The same webhook delivery retried by ClickUp is still deduplicated (same `auto_id`)
 
 ## Technical Changes
 
 ### File: `supabase/functions/clickup-generate-copy-webhook/index.ts`
 
-**Add `SHADE_API_KEY` and `SHADE_DRIVE_ID` environment variables** (already configured as secrets).
+Update the idempotency key construction (around line 133):
 
-**New step between "extract_fields" and "call_generate_social_copy":**
+```
+// BEFORE
+const idempotencyKey = `generate-copy:${taskId}`;
 
-- Parse `text_content` from the task description using regex to extract:
-  - `ID:` line as the Shade Asset ID
-  - `Drive ID:` line (fallback to the `SHADE_DRIVE_ID` env var)
-- Call `GET /assets/{asset_id}/transcription/utterances?drive_id={drive_id}` with `Authorization: Bearer {SHADE_API_KEY}`
-- Extract and join the utterance text into a single transcript string
-- If the Shade fetch fails (no transcription available, API error), fall back to the task name as `video_description` (current behavior, but logged as a warning)
+// AFTER
+const autoId = payload?.auto_id || "";
+const idempotencyKey = autoId
+  ? `generate-copy:${taskId}:${autoId}`
+  : `generate-copy:${taskId}`;
+```
 
-**Update the generate payload** to use the fetched transcript instead of `task.description`.
+This ensures:
+- Each time the user triggers the ClickUp Automation, a new `auto_id` is generated, so it gets a fresh run
+- If ClickUp retries the same webhook delivery (same `auto_id`), it is still deduplicated
+- Backward compatible: if `auto_id` is missing, falls back to task-only key
 
-**Update the custom field Video Transcription in the original ClickUp Task.
+### Immediate Fix
+After deploying, the existing successful run for task `868hdxjj1` won't block the next trigger because the next automation will have a new `auto_id`.
 
 ### No other files change
-The `generate-social-copy` function already accepts a `transcript` parameter and uses it correctly.
 
 ### Deployment
 Redeploy `clickup-generate-copy-webhook`.
