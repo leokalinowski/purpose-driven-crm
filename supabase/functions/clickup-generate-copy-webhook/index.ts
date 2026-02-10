@@ -67,33 +67,6 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3): P
   return fetch(url, options);
 }
 
-// ── Step Logger ──────────────────────────────────────────────────────
-
-async function logStep(
-  supabase: any,
-  runId: string,
-  stepName: string,
-  status: "running" | "success" | "failed",
-  input?: any,
-  output?: any,
-  errorMsg?: string,
-) {
-  try {
-    await supabase.from("workflow_run_steps").insert({
-      run_id: runId,
-      step_name: stepName,
-      status,
-      request: input || null,
-      response_body: output || null,
-      error_message: errorMsg?.slice(0, 2000) || null,
-      started_at: new Date().toISOString(),
-      finished_at: status !== "running" ? new Date().toISOString() : null,
-    });
-  } catch (e: any) {
-    console.error("Failed to log step:", e.message);
-  }
-}
-
 // ── Main Handler ─────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -112,7 +85,6 @@ Deno.serve(async (req) => {
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const CLICKUP_API_TOKEN = Deno.env.get("CLICKUP_API_TOKEN");
   const CLICKUP_WEBHOOK_SECRET = Deno.env.get("CLICKUP_WEBHOOK_SECRET");
-  const SHADE_API_KEY = Deno.env.get("SHADE_API_KEY");
   const SHADE_DRIVE_ID = Deno.env.get("SHADE_DRIVE_ID");
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -125,8 +97,6 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
-
-  let runId: string | null = null;
 
   try {
     // ── 1. Parse & verify webhook ────────────────────────────────────
@@ -171,30 +141,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Create or reuse run
-    if (existingRun) {
-      runId = existingRun.id;
-      await supabase
-        .from("workflow_runs")
-        .update({ status: "running", started_at: new Date().toISOString(), error_message: null })
-        .eq("id", runId);
-    } else {
-      const { data: newRun, error: runErr } = await supabase
-        .from("workflow_runs")
-        .insert({
-          workflow_name: "generate-copy",
-          idempotency_key: idempotencyKey,
-          triggered_by: "clickup_webhook",
-          input: { task_id: taskId },
-          status: "running",
-          started_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-      if (runErr) throw runErr;
-      runId = newRun.id;
-    }
-
     // ── 3. Fetch ClickUp task ────────────────────────────────────────
     if (!CLICKUP_API_TOKEN) throw new Error("Missing CLICKUP_API_TOKEN");
 
@@ -206,7 +152,6 @@ Deno.serve(async (req) => {
       throw new Error(`ClickUp task fetch failed [${taskResp.status}]: ${errText}`);
     }
     const task = await taskResp.json();
-    await logStep(supabase, runId!, "fetch_clickup_task", "success", { task_id: taskId }, { name: task.name, status: task?.status?.status });
 
     // ── 4. Check "Generate Social Copy" checkbox ─────────────────────
     const checkboxField = getCustomField(task, "Generate Social Copy");
@@ -214,27 +159,16 @@ Deno.serve(async (req) => {
 
     if (!isChecked) {
       console.log(`"Generate Social Copy" checkbox is not checked — skipping`);
-      await supabase
-        .from("workflow_runs")
-        .update({ status: "skipped", finished_at: new Date().toISOString(), error_message: "Checkbox not checked" })
-        .eq("id", runId);
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "checkbox_not_checked" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    await logStep(supabase, runId!, "check_checkbox", "success", null, { checked: true });
-
     // ── 5. Extract custom fields ─────────────────────────────────────
     const clientId = getCustomFieldValue(task, "Client ID (Supabase)");
     const shadeAssetIdField = getCustomFieldValue(task, "Shade Asset ID");
 
-    await logStep(supabase, runId!, "extract_fields", "success", null, {
-      clientId,
-      shadeAssetIdField,
-    });
-
-    // ── 5b. Parse Shade asset ID from task description ─────────────
+    // Parse Shade asset ID from task description
     const textContent = task?.text_content || task?.description || "";
     const idMatch = textContent.match(/\bID:\s*([a-f0-9-]{36})/i);
     const driveIdMatch = textContent.match(/\bDrive ID:\s*([a-f0-9-]{36})/i);
@@ -242,187 +176,63 @@ Deno.serve(async (req) => {
     const shadeAssetId = shadeAssetIdField || (idMatch ? idMatch[1] : null);
     const shadeDriveId = driveIdMatch ? driveIdMatch[1] : SHADE_DRIVE_ID;
 
-    await logStep(supabase, runId!, "parse_shade_ids", "success", null, {
-      shadeAssetId,
-      shadeDriveId: SHADE_DRIVE_ID ? "present" : "missing",
-      parsedFromDescription: !!idMatch,
-    });
-
-    // ── 5c. Fetch transcript from Shade API ──────────────────────────
-    let transcript = "";
-
-    if (shadeAssetId && SHADE_API_KEY && shadeDriveId) {
-      try {
-        await logStep(supabase, runId!, "fetch_shade_transcript", "running", { shadeAssetId });
-
-        const shadeUrl = `https://api.shade.inc/assets/${shadeAssetId}/transcription/file?drive_id=${shadeDriveId}&type=txt`;
-        const shadeResp = await fetchWithRetry(shadeUrl, {
-          headers: {
-            Authorization: SHADE_API_KEY,
-          },
-        });
-
-        if (shadeResp.ok) {
-          transcript = await shadeResp.text();
-
-          await logStep(supabase, runId!, "fetch_shade_transcript", "success", null, {
-            transcriptLength: transcript.length,
-          });
-        } else {
-          const errText = await shadeResp.text();
-          console.warn(`Shade transcript fetch failed [${shadeResp.status}]: ${errText}`);
-          await logStep(supabase, runId!, "fetch_shade_transcript", "failed", null, null,
-            `Shade API [${shadeResp.status}]: ${errText.slice(0, 500)}`);
-        }
-      } catch (e: any) {
-        console.warn("Shade transcript fetch error:", e.message);
-        await logStep(supabase, runId!, "fetch_shade_transcript", "failed", null, null, e.message);
-      }
-    } else {
-      console.log("Skipping Shade fetch: missing asset ID, API key, or drive ID");
-      await logStep(supabase, runId!, "fetch_shade_transcript", "skipped", null, {
-        hasAssetId: !!shadeAssetId,
-        hasApiKey: !!SHADE_API_KEY,
-        hasDriveId: !!SHADE_DRIVE_ID,
-      });
-    }
-
-    // ── 6. Call generate-social-copy function ────────────────────────
-    const generatePayload = {
-      clickup_task_id: taskId,
-      transcript: transcript || undefined,
-      video_description: !transcript ? task?.name : undefined,
-      client_id: clientId || undefined,
-      shade_asset_id: shadeAssetId || undefined,
+    // ── 6. Enqueue into workflow_runs ────────────────────────────────
+    const enrichedInput = {
+      task_id: taskId,
+      task_name: task.name,
+      clickup_task_data: { custom_fields: task.custom_fields },
+      shade_asset_id: shadeAssetId,
+      shade_drive_id: shadeDriveId,
+      client_id: clientId,
     };
 
-    await logStep(supabase, runId!, "call_generate_social_copy", "running", {
-      ...generatePayload,
-      transcriptLength: transcript.length,
-    });
-
-    const genResp = await fetch(`${SUPABASE_URL}/functions/v1/generate-social-copy`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(generatePayload),
-    });
-
-    const genBody = await genResp.json();
-
-    if (!genResp.ok) {
-      throw new Error(`generate-social-copy failed [${genResp.status}]: ${JSON.stringify(genBody)}`);
+    if (existingRun) {
+      // Reuse existing run, set back to queued
+      await supabase
+        .from("workflow_runs")
+        .update({
+          status: "queued",
+          input: enrichedInput,
+          error_message: null,
+          started_at: null,
+          finished_at: null,
+        })
+        .eq("id", existingRun.id);
+      console.log("Re-queued existing run:", existingRun.id);
+    } else {
+      const { error: insertErr } = await supabase
+        .from("workflow_runs")
+        .insert({
+          workflow_name: "generate-copy",
+          idempotency_key: idempotencyKey,
+          triggered_by: "clickup_webhook",
+          input: enrichedInput,
+          status: "queued",
+        });
+      if (insertErr) throw insertErr;
+      console.log("Queued new run for task:", taskId);
     }
 
-    await logStep(supabase, runId!, "call_generate_social_copy", "success", null, {
-      id: genBody.id,
-      duplicate: genBody.duplicate || false,
-      copyLength: genBody.social_copy?.length || 0,
-    });
-
-    // ── 6b. Write generated content back to ClickUp ──────────────────
-    const fieldUpdates: { name: string; value: string }[] = [];
-
-    // Social copy
-    if (genBody.social_copy) {
-      fieldUpdates.push({ name: "Generated Copy", value: genBody.social_copy });
-    }
-
-    // YT Title — first from the array
-    if (genBody.youtube_titles) {
-      try {
-        const titles = typeof genBody.youtube_titles === "string"
-          ? JSON.parse(genBody.youtube_titles)
-          : genBody.youtube_titles;
-        if (Array.isArray(titles) && titles.length > 0) {
-          fieldUpdates.push({ name: "YT Title", value: titles[0] });
-        }
-      } catch {
-        console.warn("Could not parse youtube_titles:", genBody.youtube_titles);
-      }
-    }
-
-    // YT Description
-    if (genBody.youtube_description) {
-      fieldUpdates.push({ name: "YT Description", value: genBody.youtube_description });
-    }
-
-    // Write transcript back to ClickUp
-    if (transcript) {
-      fieldUpdates.push({ name: "Video Transcription", value: transcript });
-    }
-
-    const clickupUpdateResults: Record<string, string> = {};
-
-    for (const update of fieldUpdates) {
-      const field = getCustomField(task, update.name);
-      if (!field?.id) {
-        console.warn(`ClickUp field "${update.name}" not found on task — skipping`);
-        clickupUpdateResults[update.name] = "field_not_found";
-        continue;
-      }
-      try {
-        const resp = await fetchWithRetry(
-          `https://api.clickup.com/api/v2/task/${taskId}/field/${field.id}`,
-          {
-            method: "POST",
-            headers: { Authorization: CLICKUP_API_TOKEN!, "Content-Type": "application/json" },
-            body: JSON.stringify({ value: update.value }),
-          },
-        );
-        if (!resp.ok) {
-          const errText = await resp.text();
-          console.warn(`Failed to update "${update.name}" [${resp.status}]: ${errText}`);
-          clickupUpdateResults[update.name] = `error_${resp.status}`;
-        } else {
-          clickupUpdateResults[update.name] = "success";
-        }
-      } catch (e: any) {
-        console.warn(`Error updating "${update.name}":`, e.message);
-        clickupUpdateResults[update.name] = `exception: ${e.message}`;
-      }
-    }
-
-    await logStep(supabase, runId!, "update_clickup_fields", "success", null, clickupUpdateResults);
-
-    // ── 7. Mark run as success ───────────────────────────────────────
-    await supabase
-      .from("workflow_runs")
-      .update({
-        status: "success",
-        finished_at: new Date().toISOString(),
-        output: {
-          content_id: genBody.id,
-          duplicate: genBody.duplicate || false,
-          task_name: task.name,
+    // ── 7. Trigger processor (fire-and-forget) ──────────────────────
+    try {
+      fetch(`${SUPABASE_URL}/functions/v1/process-copy-queue`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          "Content-Type": "application/json",
         },
-      })
-      .eq("id", runId);
-
-    console.log("Content generation triggered successfully:", { taskId, contentId: genBody.id });
+        body: JSON.stringify({ trigger: "webhook" }),
+      }).catch(() => {}); // fire-and-forget
+    } catch {
+      // ignore - cron will pick it up
+    }
 
     return new Response(
-      JSON.stringify({
-        ok: true,
-        content_id: genBody.id,
-        duplicate: genBody.duplicate || false,
-        social_copy: genBody.social_copy,
-      }),
+      JSON.stringify({ ok: true, queued: true, task_id: taskId }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err: any) {
     console.error("clickup-generate-copy-webhook error:", err);
-
-    if (runId) {
-      await logStep(supabase, runId, "error", "failed", null, null, err.message);
-      await supabase
-        .from("workflow_runs")
-        .update({ status: "failed", finished_at: new Date().toISOString(), error_message: err.message?.slice(0, 2000) })
-        .eq("id", runId);
-    }
-
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
