@@ -112,6 +112,8 @@ Deno.serve(async (req) => {
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const CLICKUP_API_TOKEN = Deno.env.get("CLICKUP_API_TOKEN");
   const CLICKUP_WEBHOOK_SECRET = Deno.env.get("CLICKUP_WEBHOOK_SECRET");
+  const SHADE_API_KEY = Deno.env.get("SHADE_API_KEY");
+  const SHADE_DRIVE_ID = Deno.env.get("SHADE_DRIVE_ID");
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return new Response(JSON.stringify({ error: "Missing Supabase config" }), {
@@ -222,15 +224,75 @@ Deno.serve(async (req) => {
 
     // ── 5. Extract custom fields ─────────────────────────────────────
     const clientId = getCustomFieldValue(task, "Client ID (Supabase)");
-    const shadeAssetId = getCustomFieldValue(task, "Shade Asset ID");
-    const transcript = task?.description || "";
+    const shadeAssetIdField = getCustomFieldValue(task, "Shade Asset ID");
 
     await logStep(supabase, runId!, "extract_fields", "success", null, {
       clientId,
-      shadeAssetId,
-      hasTranscript: !!transcript,
-      transcriptLength: transcript.length,
+      shadeAssetIdField,
     });
+
+    // ── 5b. Parse Shade IDs from task description ────────────────────
+    const textContent = task?.text_content || task?.description || "";
+    const idMatch = textContent.match(/\bID:\s*([a-f0-9-]{36})/i);
+    const driveIdMatch = textContent.match(/\bDrive ID:\s*([a-f0-9-]{36})/i);
+
+    const shadeAssetId = shadeAssetIdField || (idMatch ? idMatch[1] : null);
+    const shadeDriveId = driveIdMatch ? driveIdMatch[1] : SHADE_DRIVE_ID;
+
+    await logStep(supabase, runId!, "parse_shade_ids", "success", null, {
+      shadeAssetId,
+      shadeDriveId: shadeDriveId ? "present" : "missing",
+      parsedFromDescription: !!idMatch,
+    });
+
+    // ── 5c. Fetch transcript from Shade API ──────────────────────────
+    let transcript = "";
+
+    if (shadeAssetId && SHADE_API_KEY) {
+      try {
+        await logStep(supabase, runId!, "fetch_shade_transcript", "running", { shadeAssetId });
+
+        const shadeUrl = `https://api.shade.inc/assets/${shadeAssetId}/transcription/utterances${shadeDriveId ? `?drive_id=${shadeDriveId}` : ""}`;
+        const shadeResp = await fetchWithRetry(shadeUrl, {
+          headers: {
+            Authorization: `Bearer ${SHADE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (shadeResp.ok) {
+          const shadeData = await shadeResp.json();
+          // Concatenate utterance texts
+          const utterances = Array.isArray(shadeData)
+            ? shadeData
+            : (shadeData?.utterances || shadeData?.data || []);
+
+          transcript = utterances
+            .map((u: any) => u.text || u.utterance || "")
+            .filter(Boolean)
+            .join(" ");
+
+          await logStep(supabase, runId!, "fetch_shade_transcript", "success", null, {
+            utteranceCount: utterances.length,
+            transcriptLength: transcript.length,
+          });
+        } else {
+          const errText = await shadeResp.text();
+          console.warn(`Shade transcript fetch failed [${shadeResp.status}]: ${errText}`);
+          await logStep(supabase, runId!, "fetch_shade_transcript", "failed", null, null,
+            `Shade API [${shadeResp.status}]: ${errText.slice(0, 500)}`);
+        }
+      } catch (e: any) {
+        console.warn("Shade transcript fetch error:", e.message);
+        await logStep(supabase, runId!, "fetch_shade_transcript", "failed", null, null, e.message);
+      }
+    } else {
+      console.log("Skipping Shade fetch: no asset ID or API key");
+      await logStep(supabase, runId!, "fetch_shade_transcript", "skipped", null, {
+        hasAssetId: !!shadeAssetId,
+        hasApiKey: !!SHADE_API_KEY,
+      });
+    }
 
     // ── 6. Call generate-social-copy function ────────────────────────
     const generatePayload = {
@@ -241,7 +303,10 @@ Deno.serve(async (req) => {
       shade_asset_id: shadeAssetId || undefined,
     };
 
-    await logStep(supabase, runId!, "call_generate_social_copy", "running", generatePayload);
+    await logStep(supabase, runId!, "call_generate_social_copy", "running", {
+      ...generatePayload,
+      transcriptLength: transcript.length,
+    });
 
     const genResp = await fetch(`${SUPABASE_URL}/functions/v1/generate-social-copy`, {
       method: "POST",
@@ -289,6 +354,11 @@ Deno.serve(async (req) => {
     // YT Description
     if (genBody.youtube_description) {
       fieldUpdates.push({ name: "YT Description", value: genBody.youtube_description });
+    }
+
+    // Write transcript back to ClickUp
+    if (transcript) {
+      fieldUpdates.push({ name: "Video Transcription", value: transcript });
     }
 
     const clickupUpdateResults: Record<string, string> = {};
