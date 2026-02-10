@@ -1,82 +1,117 @@
 
 
-# Fix: Metricool User ID and Shade Folder Path Corrections
+# Scenario 05 Gap Analysis: What's Missing or Broken
 
-## Changes Summary
+## CRITICAL: Column Name Mismatches (will cause runtime failures)
 
-Two corrections to the Scenario 05 implementation based on your clarifications:
+The edge function writes to `workflow_runs` and `workflow_run_steps` using column names that **do not exist** in the actual database tables. Every run will fail with insert errors.
 
-### 1. Metricool: Use brand_id as userId (no separate column needed)
+### workflow_runs table
 
-The `metricool_user_id` column we just added is unnecessary -- the `metricool_brand_id` already serves as both the `userId` and `blogId` parameters in the Metricool API calls.
+| Edge function writes | Actual column in DB | Fix needed |
+|---|---|---|
+| `workflow_type` | `workflow_name` | Rename in code |
+| `trigger_source` | `triggered_by` | Rename in code |
+| `trigger_data` | `input` | Rename in code (and it's jsonb, not text) |
 
-**What changes:**
-- Remove the `metricool_user_id` column from `agent_marketing_settings` (drop migration)
-- Update `clickup-social-ready-to-schedule` to use `metricool_brand_id` for both `userId` and `blogId` parameters in all Metricool API calls
-- Remove the `metricool_user_id` reference from the TypeScript types and the hook interface
+The unique index is on `(workflow_name, idempotency_key)`, so using the wrong column name means idempotency won't work either.
 
-### 2. Shade: Store parent folder path, not subfolder
+### workflow_run_steps table
 
-The current `shade_folder_id` values point to a specific subfolder (e.g. `/Clients/Timothy Raiford/Social Upload/01 upload`), but files move between folders during the workflow. We need to store the parent folder path so the system can search across all subfolders.
+| Edge function writes | Actual column in DB | Fix needed |
+|---|---|---|
+| `input_data` | `request` (jsonb) | Rename in code |
+| `output_data` | Does not exist | Use `response_body` (jsonb) |
 
-**What changes:**
-- Update each agent's `shade_folder_id` to the parent path (e.g. `/Clients/Timothy Raiford/Social Upload/`) by trimming the trailing `/01 upload` segment
-- This way, Scenario 02 (file watcher) can search within the parent and find files regardless of which subfolder they're in
-- Scenario 05 itself already gets the specific Shade Asset ID from the ClickUp task custom field, so it doesn't rely on the folder path -- but having the correct parent path is important for Scenario 02
+The `logStep` helper also writes `input_data`/`output_data` as stringified text, but the actual columns are `jsonb` type, so the data format needs to change too.
 
----
+## CRITICAL: Missing social platforms in providers array
 
-## Technical Details
+The edge function builds Metricool providers for Facebook, Instagram, LinkedIn, Threads, and YouTube -- but **skips three platforms** that have data in the DB:
 
-### Migration 1: Drop `metricool_user_id` column
+| Platform | DB column | Has agent data? | In edge function? |
+|---|---|---|---|
+| TikTok | `metricool_tiktok_id` | Yes (Traci, Samir) | **NO** |
+| Twitter/X | `metricool_twitter_id` | No data yet | **NO** |
+| Google My Business | `metricool_gmb_id` | No data yet | **NO** |
 
-```sql
-ALTER TABLE agent_marketing_settings
-DROP COLUMN IF EXISTS metricool_user_id;
+TikTok is the most urgent since two agents have active TikTok IDs.
+
+## REQUIRED: ClickUp Webhook Registration
+
+The edge function is deployed and ready at:
+```
+https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/clickup-social-ready-to-schedule
 ```
 
-### Migration 2: Update Shade folder paths to parent
+But **no webhook has been registered in ClickUp** to actually trigger it. You need to either:
+- Register it via ClickUp API (using `clickup-register-and-sync` or similar)
+- Or manually add it in ClickUp workspace settings
 
-```sql
-UPDATE agent_marketing_settings
-SET shade_folder_id = regexp_replace(shade_folder_id, '/\d+ upload$', '/')
-WHERE shade_folder_id LIKE '%/_ upload'
-   OR shade_folder_id LIKE '%/__ upload';
-```
+The webhook should fire on a specific trigger -- likely a **status change** to "Ready to Schedule" or a custom automation. The exact ClickUp List ID and trigger event need to be confirmed.
 
-This trims `/01 upload`, `/02 upload`, etc. to just `/`, giving us:
-- `/Clients/Timothy Raiford/Social Upload/` (instead of `/Clients/Timothy Raiford/Social Upload/01 upload`)
+## MINOR: Hook interface out of sync
 
-### Edge Function Update: `clickup-social-ready-to-schedule`
+`src/hooks/useAgentMarketingSettings.ts` still references `metricool_user_id` in the TypeScript interface (line was not removed in the last edit), though the DB column was dropped. This won't break Scenario 05 (edge function only) but will cause TypeScript errors if the hook is used.
 
-Lines 270-273 change from:
+## Summary of Fixes
 
+### 1. Fix workflow_runs column names in edge function
+Update the insert/update calls to use actual column names: `workflow_name`, `triggered_by`, `input`, and proper jsonb format.
+
+### 2. Fix workflow_run_steps column names in logStep helper
+Change `input_data` to `request` and `output_data` to `response_body`, and pass objects (not stringified text) since the columns are jsonb.
+
+### 3. Add TikTok, Twitter/X, and GMB to providers
+Add three more provider blocks in the scheduling section, matching the pattern of the existing five.
+
+### 4. Remove `metricool_user_id` from useAgentMarketingSettings.ts interface
+Clean up the TypeScript interface to match the current schema.
+
+### 5. Register ClickUp webhook (manual step)
+You need to register the webhook URL in ClickUp, targeting the correct List and trigger event (e.g., status changed to "Ready to Schedule"). This is a configuration step, not a code change.
+
+### Technical Details: Code Changes
+
+**File: `supabase/functions/clickup-social-ready-to-schedule/index.ts`**
+
+Insert block (lines 208-221) changes from:
 ```typescript
-const metricoolBrandId = mktSettings.metricool_brand_id;
-const metricoolUserId = mktSettings.metricool_user_id;
-if (!metricoolBrandId) throw new Error("Missing metricool_brand_id");
-if (!metricoolUserId) throw new Error("Missing metricool_user_id");
+workflow_type: "schedule",
+trigger_source: "clickup_webhook",
+trigger_data: JSON.stringify({...}).slice(0, 5000),
 ```
-
 To:
-
 ```typescript
-const metricoolBrandId = mktSettings.metricool_brand_id;
-if (!metricoolBrandId) throw new Error("Missing metricool_brand_id");
+workflow_name: "schedule",
+triggered_by: "clickup_webhook",
+input: { task_id: taskId, event: eventId },
 ```
 
-And all Metricool API calls change `userId=${metricoolUserId}` to `userId=${metricoolBrandId}`.
+logStep helper (lines 98-121) changes column references:
+```typescript
+// Before
+input_data: input ? JSON.stringify(input).slice(0, 5000) : null,
+output_data: output ? JSON.stringify(output).slice(0, 5000) : null,
 
-### TypeScript Type Update
+// After
+request: input || null,
+response_body: output || null,
+```
 
-Remove `metricool_user_id` from:
-- `src/hooks/useAgentMarketingSettings.ts` (interface)
-- `src/integrations/supabase/types.ts` (auto-generated, will update after migration)
+Add TikTok provider (after Threads block, ~line 375):
+```typescript
+if (mktSettings.metricool_tiktok_id) {
+  providers.push({
+    blogKey: mktSettings.metricool_tiktok_id,
+    network: "TIKTOK",
+  });
+}
+```
 
-### Files Modified
+Similarly for Twitter and GMB.
 
-1. New migration SQL (drop column + update paths)
-2. `supabase/functions/clickup-social-ready-to-schedule/index.ts` -- use `metricool_brand_id` everywhere
-3. `src/hooks/useAgentMarketingSettings.ts` -- remove `metricool_user_id` from interface
-4. `src/integrations/supabase/types.ts` -- remove `metricool_user_id` from types
+**File: `src/hooks/useAgentMarketingSettings.ts`**
+
+Remove the `metricool_user_id` line from the `AgentMarketingSettings` interface.
 
