@@ -264,6 +264,66 @@ Deno.serve(async (req) => {
       copyLength: genBody.social_copy?.length || 0,
     });
 
+    // ── 6b. Write generated content back to ClickUp ──────────────────
+    const fieldUpdates: { name: string; value: string }[] = [];
+
+    // Social copy
+    if (genBody.social_copy) {
+      fieldUpdates.push({ name: "Generated Copy", value: genBody.social_copy });
+    }
+
+    // YT Title — first from the array
+    if (genBody.youtube_titles) {
+      try {
+        const titles = typeof genBody.youtube_titles === "string"
+          ? JSON.parse(genBody.youtube_titles)
+          : genBody.youtube_titles;
+        if (Array.isArray(titles) && titles.length > 0) {
+          fieldUpdates.push({ name: "YT Title", value: titles[0] });
+        }
+      } catch {
+        console.warn("Could not parse youtube_titles:", genBody.youtube_titles);
+      }
+    }
+
+    // YT Description
+    if (genBody.youtube_description) {
+      fieldUpdates.push({ name: "YT Description", value: genBody.youtube_description });
+    }
+
+    const clickupUpdateResults: Record<string, string> = {};
+
+    for (const update of fieldUpdates) {
+      const field = getCustomField(task, update.name);
+      if (!field?.id) {
+        console.warn(`ClickUp field "${update.name}" not found on task — skipping`);
+        clickupUpdateResults[update.name] = "field_not_found";
+        continue;
+      }
+      try {
+        const resp = await fetchWithRetry(
+          `https://api.clickup.com/api/v2/task/${taskId}/field/${field.id}`,
+          {
+            method: "POST",
+            headers: { Authorization: CLICKUP_API_TOKEN!, "Content-Type": "application/json" },
+            body: JSON.stringify({ value: update.value }),
+          },
+        );
+        if (!resp.ok) {
+          const errText = await resp.text();
+          console.warn(`Failed to update "${update.name}" [${resp.status}]: ${errText}`);
+          clickupUpdateResults[update.name] = `error_${resp.status}`;
+        } else {
+          clickupUpdateResults[update.name] = "success";
+        }
+      } catch (e: any) {
+        console.warn(`Error updating "${update.name}":`, e.message);
+        clickupUpdateResults[update.name] = `exception: ${e.message}`;
+      }
+    }
+
+    await logStep(supabase, runId!, "update_clickup_fields", "success", null, clickupUpdateResults);
+
     // ── 7. Mark run as success ───────────────────────────────────────
     await supabase
       .from("workflow_runs")
