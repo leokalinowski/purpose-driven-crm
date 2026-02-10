@@ -1,34 +1,40 @@
 
 
-# Fix Shade API Connection
+# Fix Shade API + Duplicate Block
 
-## Root Cause
-The 403 "User does not have permission" error is caused by the `drive_id` handling. The current code tries to parse a Drive ID from the ClickUp task description and, if found, uses that **instead** of the reliable `SHADE_DRIVE_ID` environment variable. If the parsed value is wrong or from a different context, the Shade API rejects the request.
+## Two Issues to Fix
 
-Since the Drive ID is always the same (as you confirmed), the code should always use the `SHADE_DRIVE_ID` secret and not try to override it from the task description.
+### Issue 1: Wrong Shade API Endpoint
+Your working Make scenario uses this URL pattern:
+```
+/assets/{asset_id}/transcription/file?drive_id=...&type=txt
+```
+Our code uses `/transcription/utterances` -- a different endpoint that's returning 403. Switching to the exact endpoint and parameters that work in Make will fix the permission error.
 
-## Changes
+### Issue 2: Duplicate Block in Content Generation
+The `generate-social-copy` function checks for an existing completed record and returns `{ duplicate: true }` with **no copy data**. The webhook then has nothing to write back to ClickUp -- hence no field updates. On re-triggers, this blocks all regeneration.
 
-### File: `supabase/functions/clickup-generate-copy-webhook/index.ts`
+---
 
-1. **Always use `SHADE_DRIVE_ID` env var** -- remove the regex-based `driveIdMatch` override. The `drive_id` is constant and already stored as a secret.
+## Technical Changes
 
-2. **Require `SHADE_DRIVE_ID`** before attempting the Shade API call (same pattern as `clickup-social-ready-to-schedule` which already does `if (!SHADE_API_KEY || !SHADE_DRIVE_ID) throw new Error(...)`).
+### File 1: `supabase/functions/clickup-generate-copy-webhook/index.ts`
 
-3. **Keep the utterances endpoint** -- the docs confirm `/transcription/utterances` returns `[{speaker, start, end, text, words}]` which gives the full transcription. No endpoint change needed.
+**Switch to `/transcription/file` endpoint with `type=txt`:**
+- Change URL from:
+  `https://api.shade.inc/assets/${shadeAssetId}/transcription/utterances?drive_id=${SHADE_DRIVE_ID}`
+- To:
+  `https://api.shade.inc/assets/${shadeAssetId}/transcription/file?drive_id=${SHADE_DRIVE_ID}&type=txt`
+- Since this returns plain text (not JSON), change `shadeResp.json()` to `shadeResp.text()`
+- Remove the utterance array parsing -- the response IS the transcript string directly
+- Remove the `"Content-Type": "application/json"` header from the Shade request (we're requesting a text file)
 
-4. **Always include `drive_id` as a required query param** -- change from conditional `${shadeDriveId ? ... : ""}` to always including it.
+### File 2: `supabase/functions/generate-social-copy/index.ts`
 
-### Specific code changes:
-
-- Remove the `driveIdMatch` regex line and the conditional drive ID logic
-- Set `shadeDriveId = SHADE_DRIVE_ID` directly
-- Guard the Shade fetch with: `if (shadeAssetId && SHADE_API_KEY && SHADE_DRIVE_ID)`
-- Simplify the URL to: `` `https://api.shade.inc/assets/${shadeAssetId}/transcription/utterances?drive_id=${SHADE_DRIVE_ID}` ``
-
-### No other files change
-The `clickup-social-ready-to-schedule` function already handles Shade correctly (always uses `SHADE_DRIVE_ID` env var, always passes it).
+**Allow regeneration by deleting old record:**
+- When an existing completed record is found, delete it instead of returning early
+- This lets each new webhook trigger produce fresh content
 
 ### Deployment
-Redeploy `clickup-generate-copy-webhook`.
+Redeploy both `clickup-generate-copy-webhook` and `generate-social-copy`.
 
