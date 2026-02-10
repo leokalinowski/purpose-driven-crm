@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
     const payload = JSON.parse(bodyText);
     console.log("Generate-copy webhook received:", JSON.stringify(payload).slice(0, 2000));
 
-    const taskId: string | undefined = payload?.task_id || payload?.task?.id;
+    const taskId: string | undefined = payload?.task_id || payload?.task?.id || payload?.payload?.id;
     if (!taskId) {
       console.log("No task_id in payload, skipping");
       return new Response(JSON.stringify({ ok: true, skipped: true }), {
