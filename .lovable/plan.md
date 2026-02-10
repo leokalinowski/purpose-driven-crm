@@ -1,115 +1,82 @@
 
-# Scenario 05: "Ready to Schedule" - Migration Plan
 
-## What This Scenario Does
+# Fix: Metricool User ID and Shade Folder Path Corrections
 
-When a reviewed video is marked "Ready to Schedule" in ClickUp (via custom field/automation), it:
-1. Fetches the ClickUp task details
-2. Looks up the agent's profile and marketing settings in Supabase
-3. Reads the "Publish Date" custom field from the ClickUp task
-4. Downloads the video file URL from Shade
-5. Normalizes the video URL through Metricool's API
-6. Schedules the post across all connected platforms (Facebook, Instagram, LinkedIn, Threads, YouTube) via Metricool's scheduler API
+## Changes Summary
 
-## Key Discovery: Metricool (not Postiz)
+Two corrections to the Scenario 05 implementation based on your clarifications:
 
-The existing `social-schedule` edge function uses **Postiz** for scheduling. However, this Make scenario uses **Metricool** directly. We will replicate the Make behavior and use Metricool, since that is what is actually connected to the agents' social accounts.
+### 1. Metricool: Use brand_id as userId (no separate column needed)
 
-## ClickUp Custom Fields Used
+The `metricool_user_id` column we just added is unnecessary -- the `metricool_brand_id` already serves as both the `userId` and `blogId` parameters in the Metricool API calls.
 
-From the blueprint:
-- **"Client ID (Supabase)"** - maps to `profiles.id`
-- **"Shade Asset ID"** - used to download video from Shade
-- **"Publish Date"** - unix timestamp (ms) for when to schedule the post
+**What changes:**
+- Remove the `metricool_user_id` column from `agent_marketing_settings` (drop migration)
+- Update `clickup-social-ready-to-schedule` to use `metricool_brand_id` for both `userId` and `blogId` parameters in all Metricool API calls
+- Remove the `metricool_user_id` reference from the TypeScript types and the hook interface
 
-## Data Flow
+### 2. Shade: Store parent folder path, not subfolder
 
-```text
-ClickUp webhook (task_id)
-  |
-  v
-Fetch ClickUp task --> extract custom fields
-  |
-  v
-Supabase: profiles (by Client ID) --> agent_marketing_settings (by user_id)
-  |
-  v
-Shade: GET /assets/{asset_id}/download --> video download URL
-  |
-  v
-Metricool: normalize video URL --> normalized media URL
-  |
-  v
-Metricool: POST /v2/scheduler/posts --> schedule across all platforms
+The current `shade_folder_id` values point to a specific subfolder (e.g. `/Clients/Timothy Raiford/Social Upload/01 upload`), but files move between folders during the workflow. We need to store the parent folder path so the system can search across all subfolders.
+
+**What changes:**
+- Update each agent's `shade_folder_id` to the parent path (e.g. `/Clients/Timothy Raiford/Social Upload/`) by trimming the trailing `/01 upload` segment
+- This way, Scenario 02 (file watcher) can search within the parent and find files regardless of which subfolder they're in
+- Scenario 05 itself already gets the specific Shade Asset ID from the ClickUp task custom field, so it doesn't rely on the folder path -- but having the correct parent path is important for Scenario 02
+
+---
+
+## Technical Details
+
+### Migration 1: Drop `metricool_user_id` column
+
+```sql
+ALTER TABLE agent_marketing_settings
+DROP COLUMN IF EXISTS metricool_user_id;
 ```
 
-## Edge Function: `clickup-social-ready-to-schedule`
+### Migration 2: Update Shade folder paths to parent
 
-### Configuration
-- `verify_jwt = false` (ClickUp webhook cannot send JWTs)
-- Validates ClickUp webhook signature via `CLICKUP_WEBHOOK_SECRET`
+```sql
+UPDATE agent_marketing_settings
+SET shade_folder_id = regexp_replace(shade_folder_id, '/\d+ upload$', '/')
+WHERE shade_folder_id LIKE '%/_ upload'
+   OR shade_folder_id LIKE '%/__ upload';
+```
 
-### Flow (step by step)
+This trims `/01 upload`, `/02 upload`, etc. to just `/`, giving us:
+- `/Clients/Timothy Raiford/Social Upload/` (instead of `/Clients/Timothy Raiford/Social Upload/01 upload`)
 
-1. **Parse webhook payload**, extract `task_id`
-2. **Idempotency check**: Insert into `workflow_runs` with key `schedule:{task_id}:{event_id}`. If already succeeded, return 200 immediately
-3. **Fetch ClickUp task** via API (uses `CLICKUP_API_TOKEN`)
-4. **Extract custom fields by name**:
-   - "Client ID (Supabase)" -- the profile ID
-   - "Shade Asset ID" -- for video download
-   - "Publish Date" -- unix ms timestamp
-5. **Query Supabase**: `profiles` by id, then `agent_marketing_settings` by `user_id`
-6. **Shade download URL**: `GET https://api.shade.inc/assets/{assetId}/download?drive_id={SHADE_DRIVE_ID}&origin_type=SOURCE&asset_id={assetId}` -- returns a URL to the video file
-7. **Metricool normalize**: `GET /actions/normalize/image/url?url={encodedShadeUrl}&userId=4142885&blogId={metricool_brand_id}` -- returns a Metricool-ready media URL
-8. **Metricool schedule**: `POST /v2/scheduler/posts` with the full payload:
-   - `autoPublish: true`, `draft: false`
-   - `publicationDate` from the ClickUp "Publish Date" field (formatted as `YYYY-MM-DDTHH:mm:ss`, timezone `America/New_York`)
-   - `media: [normalizedUrl]`
-   - `providers` array built from `metricool_facebook_id`, `metricool_instagram_id`, `metricool_linkedin_id`, `metricool_threads_id`, `metricool_youtube_id`
-   - Platform-specific data: Instagram as REEL, YouTube as short (public), etc.
-   - `text: ""` (empty -- the social copy is not included in the scheduling payload per the blueprint)
-9. **Log result** to `workflow_runs` / `workflow_run_steps`
-10. **Return 200** with summary
+### Edge Function Update: `clickup-social-ready-to-schedule`
 
-### Reliability Mechanics
-- Same patterns as Scenarios 02/03: idempotency keys, per-step logging, retry with backoff on 429/5xx
-- If Shade download succeeds but Metricool fails, the step is logged and can be retried from admin UI
-- If Metricool normalize succeeds but scheduling fails, same pattern
+Lines 270-273 change from:
 
-## Secrets Needed
+```typescript
+const metricoolBrandId = mktSettings.metricool_brand_id;
+const metricoolUserId = mktSettings.metricool_user_id;
+if (!metricoolBrandId) throw new Error("Missing metricool_brand_id");
+if (!metricoolUserId) throw new Error("Missing metricool_user_id");
+```
 
-Already configured:
-- `CLICKUP_API_TOKEN`
-- `CLICKUP_WEBHOOK_SECRET`
-- `SHADE_API_KEY`
-- `SHADE_DRIVE_ID`
+To:
 
-Need to verify/add:
-- **Metricool API credentials** -- The Make scenario uses a Metricool connection. We need the Metricool API key as a Supabase secret. The existing `metricool-proxy` edge function does not use an API key (it is a URL proxy). We will need a `METRICOOL_API_KEY` secret and possibly a `METRICOOL_USER_ID` (hardcoded as `4142885` in the blueprint).
+```typescript
+const metricoolBrandId = mktSettings.metricool_brand_id;
+if (!metricoolBrandId) throw new Error("Missing metricool_brand_id");
+```
 
-## Database Changes
+And all Metricool API calls change `userId=${metricoolUserId}` to `userId=${metricoolBrandId}`.
 
-No new tables needed -- this scenario reuses the `workflow_runs` and `workflow_run_steps` tables already created in Phase 1. Optionally, we could log scheduled post records to the existing `social_posts` table for tracking.
+### TypeScript Type Update
 
-## Admin UI Addition
+Remove `metricool_user_id` from:
+- `src/hooks/useAgentMarketingSettings.ts` (interface)
+- `src/integrations/supabase/types.ts` (auto-generated, will update after migration)
 
-Add a "Schedule" workflow type to the existing workflow admin dashboard (being built for Scenarios 02/03), so admins can:
-- See scheduling runs and their status
-- Retry failed scheduling attempts
-- Manually trigger scheduling for a specific ClickUp task
+### Files Modified
 
-## Implementation Sequence
+1. New migration SQL (drop column + update paths)
+2. `supabase/functions/clickup-social-ready-to-schedule/index.ts` -- use `metricool_brand_id` everywhere
+3. `src/hooks/useAgentMarketingSettings.ts` -- remove `metricool_user_id` from interface
+4. `src/integrations/supabase/types.ts` -- remove `metricool_user_id` from types
 
-1. Add `METRICOOL_API_KEY` and `METRICOOL_USER_ID` secrets
-2. Create `clickup-social-ready-to-schedule` edge function with full flow
-3. Add `verify_jwt = false` config entry
-4. Integrate into the workflow admin UI (already being built)
-5. Register the ClickUp webhook URL for the "Ready to Schedule" automation
-
-## Open Questions
-
-Before implementing, I need you to confirm:
-- **Metricool API Key**: Do you have a Metricool API key we can add as a secret? (The Make scenario uses a connection called "My Metricool API Key connection")
-- **Metricool User ID**: The blueprint hardcodes `userId=4142885`. Is this the same for all agents, or should it come from config?
-- **Social copy text**: The blueprint sends `text: ""` (empty). Is the social copy added separately later, or should we pull it from the ClickUp task / `content_generation_results` table?
-- **YouTube title**: The blueprint references `{{youtubeTitle}}` in the YouTube data. Where does this come from? Should we pull it from `content_generation_results` (generated in Scenario 03)?
