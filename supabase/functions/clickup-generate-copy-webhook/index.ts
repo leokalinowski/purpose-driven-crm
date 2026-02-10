@@ -234,28 +234,26 @@ Deno.serve(async (req) => {
       shadeAssetIdField,
     });
 
-    // ── 5b. Parse Shade IDs from task description ────────────────────
+    // ── 5b. Parse Shade asset ID from task description ─────────────
     const textContent = task?.text_content || task?.description || "";
     const idMatch = textContent.match(/\bID:\s*([a-f0-9-]{36})/i);
-    const driveIdMatch = textContent.match(/\bDrive ID:\s*([a-f0-9-]{36})/i);
 
     const shadeAssetId = shadeAssetIdField || (idMatch ? idMatch[1] : null);
-    const shadeDriveId = driveIdMatch ? driveIdMatch[1] : SHADE_DRIVE_ID;
 
     await logStep(supabase, runId!, "parse_shade_ids", "success", null, {
       shadeAssetId,
-      shadeDriveId: shadeDriveId ? "present" : "missing",
+      shadeDriveId: SHADE_DRIVE_ID ? "present" : "missing",
       parsedFromDescription: !!idMatch,
     });
 
     // ── 5c. Fetch transcript from Shade API ──────────────────────────
     let transcript = "";
 
-    if (shadeAssetId && SHADE_API_KEY) {
+    if (shadeAssetId && SHADE_API_KEY && SHADE_DRIVE_ID) {
       try {
         await logStep(supabase, runId!, "fetch_shade_transcript", "running", { shadeAssetId });
 
-        const shadeUrl = `https://api.shade.inc/assets/${shadeAssetId}/transcription/utterances${shadeDriveId ? `?drive_id=${shadeDriveId}` : ""}`;
+        const shadeUrl = `https://api.shade.inc/assets/${shadeAssetId}/transcription/utterances?drive_id=${SHADE_DRIVE_ID}`;
         const shadeResp = await fetchWithRetry(shadeUrl, {
           headers: {
             Authorization: `Bearer ${SHADE_API_KEY}`,
@@ -290,10 +288,11 @@ Deno.serve(async (req) => {
         await logStep(supabase, runId!, "fetch_shade_transcript", "failed", null, null, e.message);
       }
     } else {
-      console.log("Skipping Shade fetch: no asset ID or API key");
+      console.log("Skipping Shade fetch: missing asset ID, API key, or drive ID");
       await logStep(supabase, runId!, "fetch_shade_transcript", "skipped", null, {
         hasAssetId: !!shadeAssetId,
         hasApiKey: !!SHADE_API_KEY,
+        hasDriveId: !!SHADE_DRIVE_ID,
       });
     }
 
