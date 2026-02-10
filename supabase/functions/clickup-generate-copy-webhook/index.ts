@@ -122,23 +122,40 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── 2. Idempotency check ─────────────────────────────────────────
-    const autoId = payload?.auto_id || "";
-    const idempotencyKey = autoId
-      ? `generate-copy:${taskId}:${autoId}`
-      : `generate-copy:${taskId}`;
+    // ── 2. Idempotency check (task-level, not per-trigger) ─────────
+    const idempotencyKey = `generate-copy:${taskId}`;
 
     const { data: existingRun } = await supabase
       .from("workflow_runs")
-      .select("id, status")
+      .select("id, status, output")
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
 
-    if (existingRun?.status === "success") {
-      console.log("Already generated copy for this task:", idempotencyKey);
-      return new Response(JSON.stringify({ ok: true, duplicate: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (existingRun) {
+      const status = existingRun.status;
+
+      // Already in progress — don't double-queue
+      if (status === "queued" || status === "running") {
+        console.log(`Run already ${status} for task ${taskId}, skipping`);
+        return new Response(JSON.stringify({ ok: true, already_processing: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Truly complete — transcript was written back to ClickUp
+      if (status === "success") {
+        const clickupUpdates = (existingRun.output as any)?.clickup_updates;
+        if (clickupUpdates?.["Video Transcription"] === "success") {
+          console.log("Already fully completed for task:", taskId);
+          return new Response(JSON.stringify({ ok: true, duplicate: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        // Otherwise allow re-queue (transcript was missing last time)
+        console.log("Previous run succeeded but transcript was not written — re-queuing");
+      }
+
+      // failed / skipped / incomplete success → will be re-queued below
     }
 
     // ── 3. Fetch ClickUp task ────────────────────────────────────────
@@ -187,12 +204,13 @@ Deno.serve(async (req) => {
     };
 
     if (existingRun) {
-      // Reuse existing run, set back to queued
+      // Reuse existing run, reset to queued with fresh input
       await supabase
         .from("workflow_runs")
         .update({
           status: "queued",
           input: enrichedInput,
+          output: null,
           error_message: null,
           started_at: null,
           finished_at: null,
