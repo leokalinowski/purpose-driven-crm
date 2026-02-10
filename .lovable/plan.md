@@ -1,40 +1,36 @@
 
 
-# Fix Shade API + Duplicate Block
+# Fix: Use Asset-Specific Drive ID from Task Description
 
-## Two Issues to Fix
+## Problem
+The Shade API is still returning 403 because the code uses the `SHADE_DRIVE_ID` environment secret, but the task description contains the correct, asset-specific Drive ID (`434a697c-9f1f-43e5-b9db-93e02a28bd5a`). Your working Make scenario also uses the Drive ID associated with each specific asset. Since the transcript fetch fails, the `transcript` variable stays empty, and the "Video Transcription" field update is skipped entirely.
 
-### Issue 1: Wrong Shade API Endpoint
-Your working Make scenario uses this URL pattern:
+## Fix
+
+### File: `supabase/functions/clickup-generate-copy-webhook/index.ts`
+
+**Re-add Drive ID parsing from task description, with env var fallback:**
+
+Around line 237 (where `textContent` and `idMatch` already exist), add a regex to extract the Drive ID from the description:
+
 ```
-/assets/{asset_id}/transcription/file?drive_id=...&type=txt
+const driveIdMatch = textContent.match(/\bDrive ID:\s*([a-f0-9-]{36})/i);
+const shadeDriveId = driveIdMatch ? driveIdMatch[1] : SHADE_DRIVE_ID;
 ```
-Our code uses `/transcription/utterances` -- a different endpoint that's returning 403. Switching to the exact endpoint and parameters that work in Make will fix the permission error.
 
-### Issue 2: Duplicate Block in Content Generation
-The `generate-social-copy` function checks for an existing completed record and returns `{ duplicate: true }` with **no copy data**. The webhook then has nothing to write back to ClickUp -- hence no field updates. On re-triggers, this blocks all regeneration.
+Then on line 256, change the URL from using `SHADE_DRIVE_ID` to `shadeDriveId`:
 
----
+```
+const shadeUrl = `https://api.shade.inc/assets/${shadeAssetId}/transcription/file?drive_id=${shadeDriveId}&type=txt`;
+```
 
-## Technical Changes
+Also update the guard on line 252 to use `shadeDriveId`:
 
-### File 1: `supabase/functions/clickup-generate-copy-webhook/index.ts`
+```
+if (shadeAssetId && SHADE_API_KEY && shadeDriveId) {
+```
 
-**Switch to `/transcription/file` endpoint with `type=txt`:**
-- Change URL from:
-  `https://api.shade.inc/assets/${shadeAssetId}/transcription/utterances?drive_id=${SHADE_DRIVE_ID}`
-- To:
-  `https://api.shade.inc/assets/${shadeAssetId}/transcription/file?drive_id=${SHADE_DRIVE_ID}&type=txt`
-- Since this returns plain text (not JSON), change `shadeResp.json()` to `shadeResp.text()`
-- Remove the utterance array parsing -- the response IS the transcript string directly
-- Remove the `"Content-Type": "application/json"` header from the Shade request (we're requesting a text file)
-
-### File 2: `supabase/functions/generate-social-copy/index.ts`
-
-**Allow regeneration by deleting old record:**
-- When an existing completed record is found, delete it instead of returning early
-- This lets each new webhook trigger produce fresh content
+This way each task uses its own Drive ID (which is what Shade requires for permissions), falling back to the secret if the description doesn't contain one.
 
 ### Deployment
-Redeploy both `clickup-generate-copy-webhook` and `generate-social-copy`.
-
+Redeploy `clickup-generate-copy-webhook`.
