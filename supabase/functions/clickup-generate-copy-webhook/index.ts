@@ -237,8 +237,10 @@ Deno.serve(async (req) => {
     // ── 5b. Parse Shade asset ID from task description ─────────────
     const textContent = task?.text_content || task?.description || "";
     const idMatch = textContent.match(/\bID:\s*([a-f0-9-]{36})/i);
+    const driveIdMatch = textContent.match(/\bDrive ID:\s*([a-f0-9-]{36})/i);
 
     const shadeAssetId = shadeAssetIdField || (idMatch ? idMatch[1] : null);
+    const shadeDriveId = driveIdMatch ? driveIdMatch[1] : SHADE_DRIVE_ID;
 
     await logStep(supabase, runId!, "parse_shade_ids", "success", null, {
       shadeAssetId,
@@ -249,11 +251,11 @@ Deno.serve(async (req) => {
     // ── 5c. Fetch transcript from Shade API ──────────────────────────
     let transcript = "";
 
-    if (shadeAssetId && SHADE_API_KEY && SHADE_DRIVE_ID) {
+    if (shadeAssetId && SHADE_API_KEY && shadeDriveId) {
       try {
         await logStep(supabase, runId!, "fetch_shade_transcript", "running", { shadeAssetId });
 
-        const shadeUrl = `https://api.shade.inc/assets/${shadeAssetId}/transcription/file?drive_id=${SHADE_DRIVE_ID}&type=txt`;
+        const shadeUrl = `https://api.shade.inc/assets/${shadeAssetId}/transcription/file?drive_id=${shadeDriveId}&type=txt`;
         const shadeResp = await fetchWithRetry(shadeUrl, {
           headers: {
             Authorization: `Bearer ${SHADE_API_KEY}`,
