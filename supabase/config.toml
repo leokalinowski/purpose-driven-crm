@@ -92,3 +92,9 @@ verify_jwt = true
 
 [functions.clickup-social-ready-to-schedule]
 verify_jwt = false
+
+[functions.generate-social-copy]
+verify_jwt = false
+
+[functions.register-social-webhook]
+verify_jwt = true

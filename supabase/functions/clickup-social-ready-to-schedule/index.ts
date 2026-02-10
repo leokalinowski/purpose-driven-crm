@@ -232,7 +232,20 @@ Deno.serve(async (req) => {
       throw new Error(`ClickUp task fetch failed [${taskResp.status}]: ${errText}`);
     }
     const task = await taskResp.json();
-    await logStep(supabase, runId!, "fetch_clickup_task", "success", { task_id: taskId }, { name: task.name });
+    await logStep(supabase, runId!, "fetch_clickup_task", "success", { task_id: taskId }, { name: task.name, status: task?.status?.status });
+
+    // ── 3b. Status filter — only process "Ready to Schedule" ─────────
+    const taskStatus = task?.status?.status?.toLowerCase();
+    if (taskStatus !== "ready to schedule") {
+      console.log(`Task status is "${task?.status?.status}", not "Ready to Schedule" — skipping`);
+      await supabase
+        .from("workflow_runs")
+        .update({ status: "skipped", finished_at: new Date().toISOString(), error_message: `Wrong status: ${task?.status?.status}` })
+        .eq("id", runId);
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "wrong_status", actual_status: task?.status?.status }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // ── 4. Extract custom fields ─────────────────────────────────────
     const clientId = getCustomFieldValue(task, "Client ID (Supabase)");
@@ -331,7 +344,7 @@ Deno.serve(async (req) => {
 
     const normalizeUrl = `https://app.metricool.com/actions/normalize/image/url?url=${encodeURIComponent(videoDownloadUrl)}&userId=${metricoolBrandId}&blogId=${metricoolBrandId}`;
     const normalizeResp = await fetchWithRetry(normalizeUrl, {
-      headers: { Authorization: `Bearer ${METRICOOL_API_KEY}` },
+      headers: { "X-Mc-Auth": METRICOOL_API_KEY },
     });
     if (!normalizeResp.ok) {
       const errText = await normalizeResp.text();
@@ -423,7 +436,7 @@ Deno.serve(async (req) => {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${METRICOOL_API_KEY}`,
+          "X-Mc-Auth": METRICOOL_API_KEY,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(schedulePayload),
