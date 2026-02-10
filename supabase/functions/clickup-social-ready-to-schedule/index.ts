@@ -109,8 +109,8 @@ async function logStep(
       run_id: runId,
       step_name: stepName,
       status,
-      input_data: input ? JSON.stringify(input).slice(0, 5000) : null,
-      output_data: output ? JSON.stringify(output).slice(0, 5000) : null,
+      request: input || null,
+      response_body: output || null,
       error_message: errorMsg?.slice(0, 2000) || null,
       started_at: new Date().toISOString(),
       finished_at: status !== "running" ? new Date().toISOString() : null,
@@ -208,10 +208,10 @@ Deno.serve(async (req) => {
       const { data: newRun, error: runErr } = await supabase
         .from("workflow_runs")
         .insert({
-          workflow_type: "schedule",
+          workflow_name: "schedule",
           idempotency_key: idempotencyKey,
-          trigger_source: "clickup_webhook",
-          trigger_data: JSON.stringify({ task_id: taskId, event: eventId }).slice(0, 5000),
+          triggered_by: "clickup_webhook",
+          input: { task_id: taskId, event: eventId },
           status: "running",
           started_at: new Date().toISOString(),
         })
@@ -372,6 +372,24 @@ Deno.serve(async (req) => {
       providers.push({
         blogKey: mktSettings.metricool_threads_id,
         network: "THREADS",
+      });
+    }
+    if (mktSettings.metricool_tiktok_id) {
+      providers.push({
+        blogKey: mktSettings.metricool_tiktok_id,
+        network: "TIKTOK",
+      });
+    }
+    if (mktSettings.metricool_twitter_id) {
+      providers.push({
+        blogKey: mktSettings.metricool_twitter_id,
+        network: "TWITTER",
+      });
+    }
+    if (mktSettings.metricool_gmb_id) {
+      providers.push({
+        blogKey: mktSettings.metricool_gmb_id,
+        network: "GOOGLE_MY_BUSINESS",
       });
     }
     if (mktSettings.metricool_youtube_id) {
