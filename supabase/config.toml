@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.register-social-webhook]
 verify_jwt = true
+
+[functions.clickup-generate-copy-webhook]
+verify_jwt = false
