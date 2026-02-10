@@ -258,7 +258,7 @@ Deno.serve(async (req) => {
         const shadeUrl = `https://api.shade.inc/assets/${shadeAssetId}/transcription/file?drive_id=${shadeDriveId}&type=txt`;
         const shadeResp = await fetchWithRetry(shadeUrl, {
           headers: {
-            Authorization: `Bearer ${SHADE_API_KEY}`,
+            Authorization: SHADE_API_KEY,
           },
         });
 

@@ -323,7 +323,7 @@ Deno.serve(async (req) => {
 
     const shadeUrl = `https://api.shade.inc/assets/${shadeAssetId}/download?drive_id=${SHADE_DRIVE_ID}&origin_type=SOURCE&asset_id=${shadeAssetId}`;
     const shadeResp = await fetchWithRetry(shadeUrl, {
-      headers: { Authorization: `Bearer ${SHADE_API_KEY}` },
+      headers: { Authorization: SHADE_API_KEY },
     });
     if (!shadeResp.ok) {
       const errText = await shadeResp.text();
