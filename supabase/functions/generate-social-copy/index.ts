@@ -45,9 +45,12 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (existing) {
-      return new Response(JSON.stringify({ ok: true, duplicate: true, id: existing.id }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      // Delete old record to allow regeneration with fresh content
+      await supabase
+        .from("content_generation_results")
+        .delete()
+        .eq("id", existing.id);
+      console.log("Deleted previous generation for re-run:", existing.id);
     }
 
     // Resolve client_id to get agent marketing settings
