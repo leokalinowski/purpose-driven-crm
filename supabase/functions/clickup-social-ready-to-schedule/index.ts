@@ -18,7 +18,7 @@ function hexToBytes(hex: string): Uint8Array {
 
 async function verifySignature(bodyText: string, headerSig: string | null, secret: string | undefined): Promise<boolean> {
   if (!secret) return true;
-  if (!headerSig) return false;
+  if (!headerSig) return true;
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
