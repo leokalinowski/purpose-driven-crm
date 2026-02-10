@@ -153,7 +153,10 @@ Deno.serve(async (req) => {
     }
 
     // ── 2. Idempotency check ─────────────────────────────────────────
-    const idempotencyKey = `generate-copy:${taskId}`;
+    const autoId = payload?.auto_id || "";
+    const idempotencyKey = autoId
+      ? `generate-copy:${taskId}:${autoId}`
+      : `generate-copy:${taskId}`;
 
     const { data: existingRun } = await supabase
       .from("workflow_runs")
