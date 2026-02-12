@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Upload, Search, ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import { Plus, Upload, Search, ChevronLeft, ChevronRight, Users, Download, Loader2 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { ContactTable } from '@/components/database/ContactTable';
 import { ContactForm } from '@/components/database/ContactForm';
@@ -474,6 +474,74 @@ const AdminDatabaseManagement = () => {
 
   const [showContactForm, setShowContactForm] = useState(false);
   const [showCSVUpload, setShowCSVUpload] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const exportContacts = async () => {
+    if (!selectedViewingAgent) return;
+    setExporting(true);
+    try {
+      const allData: any[] = [];
+      const BATCH = 1000;
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('contacts')
+          .select('*')
+          .eq('agent_id', selectedViewingAgent)
+          .order('last_name', { ascending: true })
+          .range(from, from + BATCH - 1);
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allData.push(...data);
+          from += BATCH;
+          if (data.length < BATCH) hasMore = false;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      if (allData.length === 0) {
+        toast({ title: 'No Data', description: 'No contacts found for this agent.' });
+        return;
+      }
+
+      const esc = (v: any) => {
+        if (v == null) return '';
+        const s = String(v);
+        return s.includes(',') || s.includes('"') || s.includes('\n')
+          ? '"' + s.replace(/"/g, '""') + '"'
+          : s;
+      };
+
+      const headers = ['First Name','Last Name','Email','Phone','Address 1','Address 2','City','State','Zip Code','Tags','DNC','Notes','Category','Last Activity Date','Activity Count'];
+      const rows = allData.map(c => [
+        esc(c.first_name), esc(c.last_name), esc(c.email), esc(c.phone),
+        esc(c.address_1), esc(c.address_2), esc(c.city), esc(c.state), esc(c.zip_code),
+        esc(c.tags?.join('; ')), esc(c.dnc ? 'Yes' : 'No'), esc(c.notes),
+        esc(c.category), esc(c.last_activity_date), esc(c.activity_count ?? 0),
+      ].join(','));
+
+      const csv = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      const agentName = getViewingAgentName(selectedViewingAgent).replace(/\s+/g, '_');
+      const date = new Date().toISOString().slice(0, 10);
+      link.download = `${agentName}_contacts_${date}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+
+      toast({ title: 'Export Complete', description: `${allData.length} contacts exported.` });
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({ title: 'Export Failed', description: 'Could not export contacts.', variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
   const [viewingTouchpointsContact, setViewingTouchpointsContact] = useState<Contact | null>(null);
@@ -831,6 +899,15 @@ const AdminDatabaseManagement = () => {
               />
             )}
 
+            <Button
+              onClick={exportContacts}
+              variant="outline"
+              disabled={!selectedViewingAgent || exporting}
+              title="Export all contacts for this agent as CSV"
+            >
+              {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+              Export CSV
+            </Button>
             <Button
               onClick={() => setShowCSVUpload(true)}
               variant="outline"
