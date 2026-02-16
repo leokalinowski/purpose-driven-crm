@@ -6,6 +6,33 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Verify webhook using HMAC-SHA256 signature
+async function verifyWebhookSignature(bodyText: string, signature: string | null, secret: string): Promise<boolean> {
+  if (!signature) return false;
+  
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify']
+  );
+  
+  const sigHex = signature.replace(/^sha256=/, '');
+  const sigBytes = new Uint8Array(Math.ceil(sigHex.length / 2));
+  for (let i = 0; i < sigBytes.length; i++) {
+    sigBytes[i] = parseInt(sigHex.substr(i * 2, 2), 16);
+  }
+  
+  return await crypto.subtle.verify(
+    'HMAC',
+    key,
+    sigBytes,
+    encoder.encode(bodyText)
+  );
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -13,7 +40,44 @@ serve(async (req) => {
   }
 
   try {
-    const webhookData = await req.json()
+    const bodyText = await req.text()
+    
+    // Authenticate webhook request
+    const WEBHOOK_SECRET = Deno.env.get('OPENTOCLOSE_WEBHOOK_SECRET')
+    const API_KEY = Deno.env.get('OPENTOCLOSE_API_KEY')
+    
+    if (WEBHOOK_SECRET) {
+      // Prefer HMAC signature verification
+      const signature = req.headers.get('x-signature') || req.headers.get('x-webhook-signature')
+      const isValid = await verifyWebhookSignature(bodyText, signature, WEBHOOK_SECRET)
+      if (!isValid) {
+        console.warn('Invalid OpenToClose webhook signature - rejecting request')
+        return new Response(
+          JSON.stringify({ error: 'Invalid signature' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      console.log('✅ Webhook signature verified')
+    } else if (API_KEY) {
+      // Fallback: validate using API key header
+      const providedKey = req.headers.get('x-api-key') || req.headers.get('authorization')?.replace('Bearer ', '')
+      if (providedKey !== API_KEY) {
+        console.warn('Invalid OpenToClose API key - rejecting request')
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      console.log('✅ Webhook authenticated via API key')
+    } else {
+      console.error('No OPENTOCLOSE_WEBHOOK_SECRET or OPENTOCLOSE_API_KEY configured - rejecting request')
+      return new Response(
+        JSON.stringify({ error: 'Webhook authentication not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    
+    const webhookData = JSON.parse(bodyText)
     
     console.log('Received OpenToClose webhook:', JSON.stringify(webhookData, null, 2))
 
