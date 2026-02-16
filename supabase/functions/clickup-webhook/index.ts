@@ -16,7 +16,10 @@ function hexToBytes(hex: string): Uint8Array {
 }
 
 async function verifySignature(bodyText: string, headerSig: string | null, secret: string | undefined) {
-  if (!secret) return true; // If no secret configured, skip verification
+  if (!secret) {
+    console.error('CLICKUP_WEBHOOK_SECRET is not configured - rejecting request');
+    return false;
+  }
   if (!headerSig) return false;
   const key = await crypto.subtle.importKey(
     "raw",
