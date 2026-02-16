@@ -14,17 +14,28 @@ const DELAY_BETWEEN_ZIPS_MS = 2000; // 2 seconds between ZIP batches
 // Helper function for delays
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Simple token generation for unsubscribe links
-function generateUnsubscribeToken(email: string, agentId: string): string {
-  const secret = Deno.env.get('UNSUBSCRIBE_SECRET') || 'default-secret';
-  const data = `${email}:${agentId}:${secret}`;
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    const char = data.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
+// Cryptographically secure token generation using HMAC-SHA256
+async function generateUnsubscribeToken(email: string, agentId: string): Promise<string> {
+  const secret = Deno.env.get('UNSUBSCRIBE_SECRET');
+  if (!secret) {
+    throw new Error('UNSUBSCRIBE_SECRET must be configured');
   }
-  return Math.abs(hash).toString(36);
+  
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const data = encoder.encode(`${email}:${agentId}`);
+  const signature = await crypto.subtle.sign('HMAC', key, data);
+  
+  return Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 // Email validation regex
@@ -203,7 +214,7 @@ interface FailureData {
   attempts: number;
 }
 
-function generateStandardFooter(agent: AgentProfile, contactEmail: string): string {
+async function generateStandardFooter(agent: AgentProfile, contactEmail: string): Promise<string> {
   const agentName = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || 'Your Real Estate Agent';
   const agentEmail = agent.email || '';
   const teamName = agent.team_name || '';
@@ -218,7 +229,7 @@ function generateStandardFooter(agent: AgentProfile, contactEmail: string): stri
   const companyLine = [teamName, brokerage].filter(Boolean).join(' | ');
   
   // Generate secure unsubscribe link
-  const unsubscribeToken = generateUnsubscribeToken(contactEmail, agent.user_id);
+  const unsubscribeToken = await generateUnsubscribeToken(contactEmail, agent.user_id);
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
   const unsubscribeUrl = `${supabaseUrl}/functions/v1/newsletter-unsubscribe?email=${encodeURIComponent(contactEmail)}&agent_id=${agent.user_id}&token=${unsubscribeToken}`;
   
@@ -522,10 +533,10 @@ serve(async (req) => {
 
           try {
             // Combine Grok's email content with standardized footer (passing contact email for unsubscribe link)
-            const finalEmailHtml = emailData.html_email + generateStandardFooter(agent, contact.email);
+            const finalEmailHtml = emailData.html_email + await generateStandardFooter(agent, contact.email);
             
             // Generate unsubscribe URL for headers
-            const unsubscribeToken = generateUnsubscribeToken(contact.email, agent.user_id);
+            const unsubscribeToken = await generateUnsubscribeToken(contact.email, agent.user_id);
             const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
             const unsubscribeUrl = `${supabaseUrl}/functions/v1/newsletter-unsubscribe?email=${encodeURIComponent(contact.email)}&agent_id=${agent.user_id}&token=${unsubscribeToken}`;
             

@@ -13,23 +13,43 @@ interface UnsubscribeRequest {
   token?: string; // For verification
 }
 
-// Simple token generation for unsubscribe links
-function generateUnsubscribeToken(email: string, agentId: string): string {
-  const secret = Deno.env.get('UNSUBSCRIBE_SECRET') || 'default-secret';
-  const data = `${email}:${agentId}:${secret}`;
-  // Simple hash - in production you might want a more robust solution
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    const char = data.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
+// Cryptographically secure token generation using HMAC-SHA256
+async function generateUnsubscribeToken(email: string, agentId: string): Promise<string> {
+  const secret = Deno.env.get('UNSUBSCRIBE_SECRET');
+  if (!secret) {
+    throw new Error('UNSUBSCRIBE_SECRET must be configured');
   }
-  return Math.abs(hash).toString(36);
+  
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const data = encoder.encode(`${email}:${agentId}`);
+  const signature = await crypto.subtle.sign('HMAC', key, data);
+  
+  return Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
-function verifyUnsubscribeToken(email: string, agentId: string, token: string): boolean {
-  const expectedToken = generateUnsubscribeToken(email, agentId);
-  return token === expectedToken;
+async function verifyUnsubscribeToken(email: string, agentId: string, token: string): Promise<boolean> {
+  try {
+    const expectedToken = await generateUnsubscribeToken(email, agentId);
+    // Constant-time comparison to prevent timing attacks
+    if (expectedToken.length !== token.length) return false;
+    let result = 0;
+    for (let i = 0; i < expectedToken.length; i++) {
+      result |= expectedToken.charCodeAt(i) ^ token.charCodeAt(i);
+    }
+    return result === 0;
+  } catch {
+    return false;
+  }
 }
 
 serve(async (req) => {
@@ -60,7 +80,7 @@ serve(async (req) => {
       }
 
       // Verify token if provided
-      if (token && agentId && !verifyUnsubscribeToken(email, agentId, token)) {
+      if (token && agentId && !(await verifyUnsubscribeToken(email, agentId, token))) {
         return new Response(generateErrorPage('Invalid unsubscribe link'), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'text/html' },

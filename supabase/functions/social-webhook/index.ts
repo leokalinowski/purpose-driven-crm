@@ -22,6 +22,34 @@ interface PostizWebhookPayload {
   };
 }
 
+// Verify webhook signature using HMAC-SHA256
+async function verifyWebhookSignature(bodyText: string, signature: string | null, secret: string): Promise<boolean> {
+  if (!signature) return false;
+  
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify']
+  );
+  
+  // Support both raw hex and "sha256=" prefixed signatures
+  const sigHex = signature.replace(/^sha256=/, '');
+  const sigBytes = new Uint8Array(Math.ceil(sigHex.length / 2));
+  for (let i = 0; i < sigBytes.length; i++) {
+    sigBytes[i] = parseInt(sigHex.substr(i * 2, 2), 16);
+  }
+  
+  return await crypto.subtle.verify(
+    'HMAC',
+    key,
+    sigBytes,
+    encoder.encode(bodyText)
+  );
+}
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -30,13 +58,42 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     console.log('🎣 Social Webhook received');
 
+    // Verify webhook authentication
+    const WEBHOOK_SECRET = Deno.env.get('POSTIZ_WEBHOOK_SECRET');
+    const bodyText = await req.text();
+    
+    if (WEBHOOK_SECRET) {
+      const signature = req.headers.get('x-signature') || req.headers.get('x-webhook-signature');
+      const isValid = await verifyWebhookSignature(bodyText, signature, WEBHOOK_SECRET);
+      if (!isValid) {
+        console.warn('❌ Invalid webhook signature - rejecting request');
+        return new Response(
+          JSON.stringify({ error: 'Invalid signature' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      console.log('✅ Webhook signature verified');
+    } else {
+      // Fallback: validate using API key header if no webhook secret configured
+      const apiKey = req.headers.get('x-api-key');
+      const expectedKey = Deno.env.get('POSTIZ_API_KEY');
+      if (!expectedKey || apiKey !== expectedKey) {
+        console.warn('❌ No POSTIZ_WEBHOOK_SECRET configured and API key validation failed - rejecting request');
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      console.log('✅ Webhook authenticated via API key');
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
     // Parse webhook payload
-    const payload: PostizWebhookPayload = await req.json();
+    const payload: PostizWebhookPayload = JSON.parse(bodyText);
     console.log('📦 Webhook payload:', payload);
 
     // Find the corresponding social post by Postiz ID
@@ -95,11 +152,10 @@ const handler = async (req: Request): Promise<Response> => {
         likes: payload.metrics.likes || 0,
         comments: payload.metrics.comments || 0,
         shares: payload.metrics.shares || 0,
-        engagement_rate: 0, // Calculate this later
+        engagement_rate: 0,
         clicks: 0,
       };
 
-      // Calculate engagement rate
       const totalEngagement = (analyticsData.likes + analyticsData.comments + analyticsData.shares);
       analyticsData.engagement_rate = analyticsData.reach > 0 ? (totalEngagement / analyticsData.reach) * 100 : 0;
 
@@ -111,7 +167,6 @@ const handler = async (req: Request): Promise<Response> => {
 
       if (analyticsError) {
         console.error('❌ Failed to update analytics:', analyticsError);
-        // Don't fail the webhook for analytics errors
       } else {
         console.log('✅ Analytics updated for post:', socialPost.id);
       }
@@ -134,7 +189,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.error('💥 Webhook processing error:', error);
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unknown webhook error'
+        error: 'Webhook processing error'
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -146,4 +201,3 @@ const handler = async (req: Request): Promise<Response> => {
 
 console.log('🌟 Social Webhook Handler Loaded');
 serve(handler);
-
