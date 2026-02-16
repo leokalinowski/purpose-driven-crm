@@ -9,6 +9,7 @@ import { useGlobalEmailTemplates, GlobalEmailTemplate } from '@/hooks/useGlobalE
 import { Loader2, Save, Eye, Globe } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getDefaultEmailTemplate } from '@/utils/emailTemplateBuilder'
+import { VisualEmailEditor } from './VisualEmailEditor'
 
 interface GlobalTemplateEditorProps {
   emailType: 'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show'
@@ -177,18 +178,12 @@ export const GlobalTemplateEditor: React.FC<GlobalTemplateEditorProps> = ({
             </div>
 
             <div>
-              <Label htmlFor="html-content">HTML Content</Label>
-              <Textarea
-                id="html-content"
-                value={htmlContent}
-                onChange={(e) => setHtmlContent(e.target.value)}
-                rows={20}
-                placeholder="Enter HTML email content..."
-                className="font-mono text-sm"
+              <Label>Email Content</Label>
+              <VisualEmailEditor
+                emailType={emailType}
+                htmlContent={htmlContent}
+                onHtmlChange={setHtmlContent}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Available variables: {'{event_title}'}, {'{event_date}'}, {'{event_time}'}, {'{event_description}'}, {'{event_location}'}, {'{agent_name}'}, {'{primary_color}'}, {'{secondary_color}'}, {'{headshot_url}'}, {'{logo_colored_url}'}
-              </p>
             </div>
 
             <div>

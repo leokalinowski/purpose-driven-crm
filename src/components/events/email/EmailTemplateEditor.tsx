@@ -10,6 +10,7 @@ import { Loader2, Save, Eye } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getDefaultEmailTemplate } from '@/utils/emailTemplateBuilder'
 import { useGlobalEmailTemplates } from '@/hooks/useGlobalEmailTemplates'
+import { VisualEmailEditor } from './VisualEmailEditor'
 
 interface EmailTemplateEditorProps {
   eventId: string
@@ -198,21 +199,12 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
             </div>
 
             <div>
-              <Label htmlFor="html-content">HTML Content</Label>
-              <Textarea
-                id="html-content"
-                value={htmlContent}
-                onChange={(e) => setHtmlContent(e.target.value)}
-                rows={20}
-                placeholder="Enter HTML email content..."
-                className="font-mono text-sm"
+              <Label>Email Content</Label>
+              <VisualEmailEditor
+                emailType={emailType}
+                htmlContent={htmlContent}
+                onHtmlChange={setHtmlContent}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Available variables: {'{event_title}'}, {'{event_date}'}, {'{event_time}'}, {'{event_description}'}, {'{event_location}'}, {'{agent_name}'}, {'{agent_email}'}, {'{agent_phone}'}, {'{agent_office_number}'}, {'{agent_office_address}'}, {'{agent_website}'}, {'{agent_brokerage}'}, {'{agent_team_name}'}, {'{primary_color}'}, {'{secondary_color}'}, {'{headshot_url}'}, {'{logo_colored_url}'}, {'{logo_white_url}'}
-              </p>
-              <p className="text-xs text-blue-600 mt-1">
-                💡 Tip: Use conditional blocks like {'{#if headshot_url}'}...{'{/if}'} to show content only when variables exist
-              </p>
             </div>
 
             <div>
