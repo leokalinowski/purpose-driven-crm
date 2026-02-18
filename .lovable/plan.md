@@ -1,65 +1,92 @@
 
 
-# Visual Email Template Editor
+# Sponsor Database (Admin Only)
 
-## Problem
+## Overview
 
-The current email template editors (both Global and Event-Specific) require editing raw HTML in a textarea. This is difficult for non-technical team members and error-prone.
+A new admin-only page to manage event sponsors with full tracking: company info, financials, event associations, contracts, and branding assets.
 
-## Solution
+## What You Get
 
-Replace the raw HTML textarea with a visual, block-based editor. The team edits structured sections using simple form fields, and the editor generates the HTML behind the scenes. Variables are inserted via clickable buttons -- no need to remember or type `{event_title}` manually.
+- A dedicated "Sponsor Database" page accessible only to admins
+- Full CRUD for sponsors: add, edit, delete, search, filter
+- Track company details, contact person, financials (amount, tier, payment status), event links, renewal dates, contract status, and logo
+- Link sponsors to specific events
+- Export sponsors as CSV
 
-## How It Works
+## Database Schema
 
-The editor presents the email as a series of editable sections:
+A new `sponsors` table with these columns:
 
-1. **Header Section** -- Toggle headshot and logo on/off (auto-populated from agent settings)
-2. **Heading** -- A text input for the main headline (e.g., "RSVP Confirmed!")
-3. **Body Paragraphs** -- Multiple text areas for the email body, with an "Add Paragraph" button. Each paragraph supports inserting variables via clickable chips.
-4. **Event Details Card** -- Auto-included block showing date/time/location/description (always present, uses variables automatically)
-5. **Host Info** -- Toggle agent name, team name, brokerage display
-6. **Footer / Contact Info** -- Toggle which contact fields appear (phone, email, office, website)
-7. **Colors** -- Primary and secondary color pickers (defaults from agent branding)
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | Primary key |
+| company_name | text | Required |
+| contact_name | text | |
+| contact_email | text | |
+| contact_phone | text | |
+| website | text | |
+| logo_url | text | |
+| sponsorship_tier | text | e.g. Gold, Silver, Bronze, Custom |
+| sponsorship_amount | numeric | Dollar amount |
+| payment_status | text | pending, paid, partial, overdue |
+| contract_status | text | draft, active, expired, cancelled |
+| renewal_date | date | |
+| notes | text | |
+| created_by | uuid | Admin who created it |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
 
-A row of **"Insert Variable" buttons** (chips/badges) sits above each text field. Clicking one inserts the variable at the cursor position. Variables include: Event Title, Event Date, Agent Name, etc.
+A join table `sponsor_events` to link sponsors to events:
 
-The **Preview** tab remains and shows the fully rendered email exactly as before.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | Primary key |
+| sponsor_id | uuid | FK to sponsors |
+| event_id | uuid | FK to events |
+| created_at | timestamptz | |
 
-The editor stores the structured data as JSON internally, and converts it to the same HTML format on save -- so existing templates and the email sending pipeline are fully compatible with no backend changes.
+RLS policies: admin-only for all operations on both tables, using `get_current_user_role() = 'admin'`.
 
-## Technical Details
+## New Files
 
-### New File: `src/components/events/email/VisualEmailEditor.tsx`
+### `src/pages/AdminSponsors.tsx`
+The main page with:
+- Search bar and tier/status filters
+- Table listing all sponsors with sortable columns
+- "Add Sponsor" button opening a dialog form
+- Click a row to edit inline or via dialog
+- Delete with confirmation
+- Export CSV button
+- Each sponsor row shows linked event count as a badge
 
-A new component that renders the block-based editor UI. It:
-- Accepts the same props as the current editors (`emailType`, initial `htmlContent`, `subject`)
-- Maintains state as a structured object (heading, paragraphs array, toggles for sections)
-- Has a `toHtml()` function that generates the same HTML structure as `getDefaultEmailTemplate()` from `emailTemplateBuilder.ts`
-- Includes an "Insert Variable" chip bar above text inputs with all available variables
-- On first load, if existing HTML is detected, it falls back to a raw HTML mode with a banner saying "This template was created in HTML mode -- switch to Visual to start fresh or continue in HTML"
-- Provides a toggle between "Visual" and "HTML" editing modes so power users can still access raw HTML if needed
+### `src/components/admin/SponsorForm.tsx`
+Reusable form (used for both add and edit) with fields for all columns. Includes:
+- Text inputs for company/contact info
+- Select dropdowns for tier, payment status, contract status
+- Date picker for renewal date
+- Multi-select for linking to events (fetched from events table)
+- URL input for logo
 
-### New File: `src/components/events/email/VariableInsertBar.tsx`
+### `src/hooks/useSponsors.ts`
+Hook providing:
+- Fetch all sponsors (with joined event count)
+- Create, update, delete sponsor
+- Link/unlink events
+- Search and filter logic
 
-A small reusable component that renders clickable Badge buttons for each available variable. When clicked, inserts the `{variable_name}` text at the current cursor position in the associated text field.
+## Modified Files
 
-Variables grouped by category:
-- **Event**: event_title, event_date, event_time, event_location, event_description
-- **Agent**: agent_name, agent_email, agent_phone, agent_office_number, agent_office_address, agent_website, agent_brokerage, agent_team_name
-- **Branding**: primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url
+### `src/components/layout/AppSidebar.tsx`
+Add a "Sponsor Database" link in the Administration section (using `Handshake` icon from lucide-react).
 
-### Modified Files
+### `src/App.tsx`
+Add route: `/admin/sponsors` pointing to `AdminSponsors` page.
 
-**`src/components/events/email/EmailTemplateEditor.tsx`**
-- Replace the raw HTML textarea section with the new `VisualEmailEditor` component
-- Keep the subject line input, active toggle, save button, and preview as-is
-- The visual editor outputs `htmlContent` which flows into the same save logic
+## Technical Notes
 
-**`src/components/events/email/GlobalTemplateEditor.tsx`**
-- Same changes as above -- replace HTML textarea with `VisualEmailEditor`
-
-### No Backend/Database Changes
-
-The visual editor generates the exact same HTML format. The hooks, edge functions, and email sending pipeline remain untouched.
+- No storage bucket needed -- logo_url is a plain text URL field (admins paste a link)
+- The page follows the same admin guard pattern as other admin pages (redirect if not admin)
+- Sponsor-event links are managed through the `sponsor_events` join table with cascading deletes
+- CSV export reuses the same batched-fetch pattern from the contact export feature
 
