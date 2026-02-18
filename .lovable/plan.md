@@ -1,89 +1,32 @@
 
 
-# Sponsor Database Enhancements
+# Fix: Sponsor Contact Insert Error
 
-## Overview
+## Problem
 
-Restructure the Sponsor Database to remove unused fields, add multi-contact support per company, track in-kind contributions alongside monetary ones, calculate historical totals, and allow logo file uploads.
+When creating a new sponsor, the `sponsor_contacts` insert fails because the code sets `id: undefined` in the contact rows. Supabase sends this as `null`, which violates the `NOT NULL` constraint on the `id` column (which has a `gen_random_uuid()` default that only kicks in when the column is omitted entirely).
 
-## Changes Summary
+The same issue exists in the `updateSponsor` mutation (line 145).
 
-1. **Remove** sponsorship_tier, contract_status, renewal_date columns
-2. **Add** `sponsor_contacts` table for multiple contacts per company (with region)
-3. **Add** `contribution_type` field to `sponsor_events` (money, food, venue, drinks, raffle, other)
-4. **Add** `contribution_amount` and `contribution_description` to `sponsor_events` so each event link tracks what was provided
-5. **Calculate** historical total from `sponsor_events` contribution amounts
-6. **Create** a `sponsor-logos` storage bucket for logo uploads
-7. **Update** all 3 files (hook, form, page) to reflect these changes
+## Solution
 
----
+In `src/hooks/useSponsors.ts`, destructure out the `id` (and `sponsor_id`) fields from each contact before inserting, rather than setting them to `undefined`.
 
-## Database Migration
+### Lines 119-122 (createSponsor)
+Change from:
+```ts
+const rows = contacts.map((c) => ({ ...c, sponsor_id: data.id, id: undefined }));
+```
+To:
+```ts
+const rows = contacts.map(({ id, sponsor_id, ...c }) => ({ ...c, sponsor_id: data.id }));
+```
 
-### Drop unused columns from `sponsors`
-- `sponsorship_tier`
-- `contract_status`
-- `renewal_date`
-- `contact_name`, `contact_email`, `contact_phone` (moved to separate table)
-- `sponsorship_amount` (now tracked per event in `sponsor_events`)
+### Lines 144-146 (updateSponsor)
+Same fix:
+```ts
+const rows = contacts.map(({ id, sponsor_id, ...c }) => ({ ...c, sponsor_id: id_param }));
+```
 
-### New table: `sponsor_contacts`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid | PK |
-| sponsor_id | uuid | FK to sponsors, ON DELETE CASCADE |
-| contact_name | text | Required |
-| contact_email | text | |
-| contact_phone | text | |
-| region | text | e.g. "DMV", "Hampton Roads" |
-| is_primary | boolean | Default false |
-| created_at | timestamptz | |
-
-Admin-only RLS.
-
-### Modify `sponsor_events` -- add columns
-| Column | Type | Notes |
-|--------|------|-------|
-| contribution_type | text | money, food, venue, drinks, raffle, other |
-| contribution_amount | numeric | Dollar value (if applicable) |
-| contribution_description | text | Free text, e.g. "Covered all catering" |
-
-### Create storage bucket `sponsor-logos`
-- Public bucket for logo display
-- Admin-only upload/delete RLS policies
-
----
-
-## File Changes
-
-### `src/hooks/useSponsors.ts`
-- Remove tier/contract/renewal from Sponsor interface
-- Remove single contact fields, add `contacts: SponsorContact[]`
-- Fetch `sponsor_contacts` alongside sponsors
-- Fetch `sponsor_events` with contribution data to compute `total_contributed` per sponsor
-- Add CRUD mutations for contacts (add/remove/update contacts inline)
-- Add logo upload/delete helpers using `supabase.storage.from('sponsor-logos')`
-
-### `src/components/admin/SponsorForm.tsx`
-- Remove tier, contract status, renewal date fields
-- Remove single contact fields
-- Add a "Contacts" section with ability to add multiple contacts (name, email, phone, region) -- inline add/remove rows
-- Change event linking to also capture contribution_type, contribution_amount, and contribution_description per event
-- Replace logo URL text input with a file upload input (with preview)
-
-### `src/pages/AdminSponsors.tsx`
-- Remove tier filter and tier/contract columns from table
-- Add "Total Contributed" column showing the sum from all linked events
-- Show primary contact in the Contact column (with a count badge if multiple)
-- Update CSV export to reflect new fields
-- Show logo from storage URL
-
----
-
-## Technical Details
-
-- Logo upload uses `supabase.storage.from('sponsor-logos').upload(...)` with a path like `{sponsor_id}/logo.{ext}`
-- Historical total is computed client-side by summing `contribution_amount` across all `sponsor_events` rows for each sponsor
-- The contribution_type uses a free-form approach with suggested values (money, food, venue, drinks, raffle, other) rather than a strict enum, for flexibility
-- Contacts are managed in a sub-form within the sponsor dialog -- no separate page needed
+This ensures the `id` key is never sent to Supabase, allowing the database default (`gen_random_uuid()`) to generate it automatically.
 
