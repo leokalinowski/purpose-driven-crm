@@ -117,7 +117,7 @@ export const useSponsors = () => {
       if (error) throw error;
 
       if (contacts?.length) {
-        const rows = contacts.map((c) => ({ ...c, sponsor_id: data.id, id: undefined }));
+        const rows = contacts.map(({ id, sponsor_id, ...c }) => ({ ...c, sponsor_id: data.id }));
         const { error: cErr } = await supabase.from('sponsor_contacts').insert(rows);
         if (cErr) throw cErr;
       }
@@ -142,7 +142,7 @@ export const useSponsors = () => {
       if (contacts !== undefined) {
         await supabase.from('sponsor_contacts').delete().eq('sponsor_id', id);
         if (contacts.length) {
-          const rows = contacts.map((c) => ({ ...c, sponsor_id: id, id: undefined }));
+          const rows = contacts.map(({ id: _id, sponsor_id: _sid, ...c }) => ({ ...c, sponsor_id: id }));
           const { error: cErr } = await supabase.from('sponsor_contacts').insert(rows);
           if (cErr) throw cErr;
         }
