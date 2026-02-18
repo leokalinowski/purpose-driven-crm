@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,11 +37,26 @@ export function SponsorForm({ sponsor, onSubmit, onCancel, isLoading }: SponsorF
   const eventsQuery = useQuery({
     queryKey: ['events-for-sponsors'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('events').select('id, title, event_date').order('event_date', { ascending: false });
+      const { data, error } = await supabase.from('events').select('id, title, event_date, agent_id').order('event_date', { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
   });
+
+  const profilesQuery = useQuery({
+    queryKey: ['profiles-for-sponsor-events'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('profiles').select('user_id, full_name');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const agentMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (profilesQuery.data ?? []).forEach((p) => m.set(p.user_id, p.full_name));
+    return m;
+  }, [profilesQuery.data]);
 
   useEffect(() => {
     if (sponsor) {
@@ -201,7 +216,8 @@ export function SponsorForm({ sponsor, onSubmit, onCancel, isLoading }: SponsorF
                 <div className="flex items-center gap-2">
                   <Checkbox checked={c.selected} onCheckedChange={() => toggleEvent(idx)} />
                   <span className="text-sm font-medium">{ev.title}</span>
-                  <Badge variant="outline" className="text-xs">{format(parseISO(ev.event_date), 'MMM d, yyyy')}</Badge>
+                   <Badge variant="outline" className="text-xs">{format(parseISO(ev.event_date), 'MMM d, yyyy')}</Badge>
+                   <span className="text-xs text-muted-foreground">({agentMap.get(ev.agent_id ?? '') ?? 'Unassigned'})</span>
                 </div>
                 {c.selected && (
                   <div className="grid grid-cols-3 gap-2 pl-6">

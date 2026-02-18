@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Download, Pencil, Trash2, Search, ExternalLink } from 'lucide-react';
+import { Plus, Download, Pencil, Trash2, Search, ExternalLink, ImageDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AdminSponsors() {
@@ -81,6 +81,21 @@ export default function AdminSponsors() {
       updateSponsor.mutate({ id: editing.id, ...rest }, { onSuccess });
     } else {
       createSponsor.mutate({ ...rest, created_by: user?.id ?? null } as any, { onSuccess: (d) => onSuccess(d) });
+    }
+  };
+
+  const handleDownloadLogo = async (url: string, companyName: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const ext = url.split('.').pop()?.split('?')[0] ?? 'png';
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${companyName.replace(/\s+/g, '-').toLowerCase()}-logo.${ext}`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      /* ignore download errors */
     }
   };
 
@@ -155,10 +170,17 @@ export default function AdminSponsors() {
                       <TableRow key={s.id}>
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
-                            {s.logo_url && <img src={s.logo_url} alt="" className="h-6 w-6 rounded object-contain" />}
+                            {s.logo_url && (
+                              <>
+                                <img src={s.logo_url} alt="" className="h-6 w-6 rounded object-contain" />
+                                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleDownloadLogo(s.logo_url!, s.company_name)}>
+                                  <ImageDown className="h-3 w-3 text-muted-foreground" />
+                                </Button>
+                              </>
+                            )}
                             <span>{s.company_name}</span>
                             {s.website && (
-                              <a href={s.website} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
+                              <a href={s.website.startsWith('http') ? s.website : `https://${s.website}`} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
                                 <ExternalLink className="h-3 w-3" />
                               </a>
                             )}
