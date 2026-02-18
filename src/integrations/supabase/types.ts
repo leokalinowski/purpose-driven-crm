@@ -2342,6 +2342,99 @@ export type Database = {
           },
         ]
       }
+      sponsor_events: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          sponsor_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          sponsor_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          sponsor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_events_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_events_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sponsors: {
+        Row: {
+          company_name: string
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          contract_status: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          logo_url: string | null
+          notes: string | null
+          payment_status: string | null
+          renewal_date: string | null
+          sponsorship_amount: number | null
+          sponsorship_tier: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          company_name: string
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          contract_status?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          logo_url?: string | null
+          notes?: string | null
+          payment_status?: string | null
+          renewal_date?: string | null
+          sponsorship_amount?: number | null
+          sponsorship_tier?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          company_name?: string
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          contract_status?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          logo_url?: string | null
+          notes?: string | null
+          payment_status?: string | null
+          renewal_date?: string | null
+          sponsorship_amount?: number | null
+          sponsorship_tier?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
       support_config: {
         Row: {
           assignee_name: string | null
