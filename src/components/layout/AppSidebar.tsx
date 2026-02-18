@@ -15,7 +15,8 @@ import {
   Database,
   FileText,
   RotateCcw,
-  LifeBuoy
+  LifeBuoy,
+  Handshake
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -198,6 +199,17 @@ export function AppSidebar() {
                     <Link to="/admin/email-logs">
                       <FileText />
                       <span>Email Logs</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location.pathname === '/admin/sponsors'}
+                  >
+                    <Link to="/admin/sponsors">
+                      <Handshake />
+                      <span>Sponsor Database</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
