@@ -2342,20 +2342,70 @@ export type Database = {
           },
         ]
       }
+      sponsor_contacts: {
+        Row: {
+          contact_email: string | null
+          contact_name: string
+          contact_phone: string | null
+          created_at: string
+          id: string
+          is_primary: boolean
+          region: string | null
+          sponsor_id: string
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_name: string
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          region?: string | null
+          sponsor_id: string
+        }
+        Update: {
+          contact_email?: string | null
+          contact_name?: string
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          region?: string | null
+          sponsor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_contacts_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sponsor_events: {
         Row: {
+          contribution_amount: number | null
+          contribution_description: string | null
+          contribution_type: string | null
           created_at: string
           event_id: string
           id: string
           sponsor_id: string
         }
         Insert: {
+          contribution_amount?: number | null
+          contribution_description?: string | null
+          contribution_type?: string | null
           created_at?: string
           event_id: string
           id?: string
           sponsor_id: string
         }
         Update: {
+          contribution_amount?: number | null
+          contribution_description?: string | null
+          contribution_type?: string | null
           created_at?: string
           event_id?: string
           id?: string
@@ -2381,55 +2431,34 @@ export type Database = {
       sponsors: {
         Row: {
           company_name: string
-          contact_email: string | null
-          contact_name: string | null
-          contact_phone: string | null
-          contract_status: string | null
           created_at: string
           created_by: string | null
           id: string
           logo_url: string | null
           notes: string | null
           payment_status: string | null
-          renewal_date: string | null
-          sponsorship_amount: number | null
-          sponsorship_tier: string | null
           updated_at: string
           website: string | null
         }
         Insert: {
           company_name: string
-          contact_email?: string | null
-          contact_name?: string | null
-          contact_phone?: string | null
-          contract_status?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           logo_url?: string | null
           notes?: string | null
           payment_status?: string | null
-          renewal_date?: string | null
-          sponsorship_amount?: number | null
-          sponsorship_tier?: string | null
           updated_at?: string
           website?: string | null
         }
         Update: {
           company_name?: string
-          contact_email?: string | null
-          contact_name?: string | null
-          contact_phone?: string | null
-          contract_status?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           logo_url?: string | null
           notes?: string | null
           payment_status?: string | null
-          renewal_date?: string | null
-          sponsorship_amount?: number | null
-          sponsorship_tier?: string | null
           updated_at?: string
           website?: string | null
         }
