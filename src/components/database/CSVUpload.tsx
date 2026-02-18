@@ -177,13 +177,10 @@ export const CSVUpload = ({ open, onOpenChange, onUpload }: CSVUploadProps) => {
       // Detect XLSX by extension or ZIP signature (PK)
       const isXlsx = file.name.toLowerCase().endsWith('.xlsx') || (bytes[0] === 0x50 && bytes[1] === 0x4b);
       if (isXlsx) {
-        console.debug('[CSVUpload] Detected XLSX. Importing via xlsx parser.');
+        console.debug('[CSVUpload] Detected XLSX. Importing via read-excel-file.');
         toast({ title: 'Info', description: 'Excel workbook detected (.xlsx). Importing first sheet.' });
-        const XLSX: any = await import('xlsx');
-        const workbook = XLSX.read(buffer, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const aoa: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        const readXlsxFile = (await import('read-excel-file')).default;
+        const aoa = await readXlsxFile(file);
 
         if (!aoa || aoa.length === 0) throw new Error('The Excel sheet is empty.');
         // Find header row as the one with the most non-empty cells
