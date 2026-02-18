@@ -1,92 +1,89 @@
 
 
-# Sponsor Database (Admin Only)
+# Sponsor Database Enhancements
 
 ## Overview
 
-A new admin-only page to manage event sponsors with full tracking: company info, financials, event associations, contracts, and branding assets.
+Restructure the Sponsor Database to remove unused fields, add multi-contact support per company, track in-kind contributions alongside monetary ones, calculate historical totals, and allow logo file uploads.
 
-## What You Get
+## Changes Summary
 
-- A dedicated "Sponsor Database" page accessible only to admins
-- Full CRUD for sponsors: add, edit, delete, search, filter
-- Track company details, contact person, financials (amount, tier, payment status), event links, renewal dates, contract status, and logo
-- Link sponsors to specific events
-- Export sponsors as CSV
+1. **Remove** sponsorship_tier, contract_status, renewal_date columns
+2. **Add** `sponsor_contacts` table for multiple contacts per company (with region)
+3. **Add** `contribution_type` field to `sponsor_events` (money, food, venue, drinks, raffle, other)
+4. **Add** `contribution_amount` and `contribution_description` to `sponsor_events` so each event link tracks what was provided
+5. **Calculate** historical total from `sponsor_events` contribution amounts
+6. **Create** a `sponsor-logos` storage bucket for logo uploads
+7. **Update** all 3 files (hook, form, page) to reflect these changes
 
-## Database Schema
+---
 
-A new `sponsors` table with these columns:
+## Database Migration
 
+### Drop unused columns from `sponsors`
+- `sponsorship_tier`
+- `contract_status`
+- `renewal_date`
+- `contact_name`, `contact_email`, `contact_phone` (moved to separate table)
+- `sponsorship_amount` (now tracked per event in `sponsor_events`)
+
+### New table: `sponsor_contacts`
 | Column | Type | Notes |
 |--------|------|-------|
-| id | uuid | Primary key |
-| company_name | text | Required |
-| contact_name | text | |
+| id | uuid | PK |
+| sponsor_id | uuid | FK to sponsors, ON DELETE CASCADE |
+| contact_name | text | Required |
 | contact_email | text | |
 | contact_phone | text | |
-| website | text | |
-| logo_url | text | |
-| sponsorship_tier | text | e.g. Gold, Silver, Bronze, Custom |
-| sponsorship_amount | numeric | Dollar amount |
-| payment_status | text | pending, paid, partial, overdue |
-| contract_status | text | draft, active, expired, cancelled |
-| renewal_date | date | |
-| notes | text | |
-| created_by | uuid | Admin who created it |
+| region | text | e.g. "DMV", "Hampton Roads" |
+| is_primary | boolean | Default false |
 | created_at | timestamptz | |
-| updated_at | timestamptz | |
 
-A join table `sponsor_events` to link sponsors to events:
+Admin-only RLS.
 
+### Modify `sponsor_events` -- add columns
 | Column | Type | Notes |
 |--------|------|-------|
-| id | uuid | Primary key |
-| sponsor_id | uuid | FK to sponsors |
-| event_id | uuid | FK to events |
-| created_at | timestamptz | |
+| contribution_type | text | money, food, venue, drinks, raffle, other |
+| contribution_amount | numeric | Dollar value (if applicable) |
+| contribution_description | text | Free text, e.g. "Covered all catering" |
 
-RLS policies: admin-only for all operations on both tables, using `get_current_user_role() = 'admin'`.
+### Create storage bucket `sponsor-logos`
+- Public bucket for logo display
+- Admin-only upload/delete RLS policies
 
-## New Files
+---
 
-### `src/pages/AdminSponsors.tsx`
-The main page with:
-- Search bar and tier/status filters
-- Table listing all sponsors with sortable columns
-- "Add Sponsor" button opening a dialog form
-- Click a row to edit inline or via dialog
-- Delete with confirmation
-- Export CSV button
-- Each sponsor row shows linked event count as a badge
-
-### `src/components/admin/SponsorForm.tsx`
-Reusable form (used for both add and edit) with fields for all columns. Includes:
-- Text inputs for company/contact info
-- Select dropdowns for tier, payment status, contract status
-- Date picker for renewal date
-- Multi-select for linking to events (fetched from events table)
-- URL input for logo
+## File Changes
 
 ### `src/hooks/useSponsors.ts`
-Hook providing:
-- Fetch all sponsors (with joined event count)
-- Create, update, delete sponsor
-- Link/unlink events
-- Search and filter logic
+- Remove tier/contract/renewal from Sponsor interface
+- Remove single contact fields, add `contacts: SponsorContact[]`
+- Fetch `sponsor_contacts` alongside sponsors
+- Fetch `sponsor_events` with contribution data to compute `total_contributed` per sponsor
+- Add CRUD mutations for contacts (add/remove/update contacts inline)
+- Add logo upload/delete helpers using `supabase.storage.from('sponsor-logos')`
 
-## Modified Files
+### `src/components/admin/SponsorForm.tsx`
+- Remove tier, contract status, renewal date fields
+- Remove single contact fields
+- Add a "Contacts" section with ability to add multiple contacts (name, email, phone, region) -- inline add/remove rows
+- Change event linking to also capture contribution_type, contribution_amount, and contribution_description per event
+- Replace logo URL text input with a file upload input (with preview)
 
-### `src/components/layout/AppSidebar.tsx`
-Add a "Sponsor Database" link in the Administration section (using `Handshake` icon from lucide-react).
+### `src/pages/AdminSponsors.tsx`
+- Remove tier filter and tier/contract columns from table
+- Add "Total Contributed" column showing the sum from all linked events
+- Show primary contact in the Contact column (with a count badge if multiple)
+- Update CSV export to reflect new fields
+- Show logo from storage URL
 
-### `src/App.tsx`
-Add route: `/admin/sponsors` pointing to `AdminSponsors` page.
+---
 
-## Technical Notes
+## Technical Details
 
-- No storage bucket needed -- logo_url is a plain text URL field (admins paste a link)
-- The page follows the same admin guard pattern as other admin pages (redirect if not admin)
-- Sponsor-event links are managed through the `sponsor_events` join table with cascading deletes
-- CSV export reuses the same batched-fetch pattern from the contact export feature
+- Logo upload uses `supabase.storage.from('sponsor-logos').upload(...)` with a path like `{sponsor_id}/logo.{ext}`
+- Historical total is computed client-side by summing `contribution_amount` across all `sponsor_events` rows for each sponsor
+- The contribution_type uses a free-form approach with suggested values (money, food, venue, drinks, raffle, other) rather than a strict enum, for flexibility
+- Contacts are managed in a sub-form within the sponsor dialog -- no separate page needed
 
