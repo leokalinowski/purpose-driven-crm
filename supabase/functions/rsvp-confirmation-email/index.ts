@@ -135,8 +135,71 @@ serve(async (req) => {
 
     const isWaitlist = rsvp.status === 'waitlist';
 
-    // Build email HTML with modern, branded design
-    const emailHtml = `
+    // Template resolution: event-specific → global → hardcoded fallback
+    let emailSubject = ''
+    let emailHtml = ''
+
+    // Helper to replace template variables with actual data
+    function replaceVariables(content: string): string {
+      return content
+        .replace(/{event_title}/g, event.title)
+        .replace(/{event_date}/g, formattedDate)
+        .replace(/{event_time}/g, formattedTime)
+        .replace(/{event_description}/g, event.description || '')
+        .replace(/{event_location}/g, event.location || '')
+        .replace(/{agent_name}/g, agentName)
+        .replace(/{agent_email}/g, agentEmail)
+        .replace(/{agent_phone}/g, phoneNumber)
+        .replace(/{agent_office_number}/g, officeNumber)
+        .replace(/{agent_office_address}/g, officeAddress)
+        .replace(/{agent_website}/g, website)
+        .replace(/{agent_brokerage}/g, brokerage)
+        .replace(/{agent_team_name}/g, teamName)
+        .replace(/{primary_color}/g, primaryColor)
+        .replace(/{secondary_color}/g, secondaryColor)
+        .replace(/{headshot_url}/g, headshotUrl)
+        .replace(/{logo_colored_url}/g, logoUrl)
+        .replace(/{logo_white_url}/g, agent?.logo_white_url || '')
+        .replace(/\{#if ([^}]+)\}([\s\S]*?)\{\/if\}/g, (_, varName, inner) => {
+          const val = inner.trim()
+          return val ? inner : ''
+        })
+    }
+
+    // 1. Check event-specific template
+    const { data: eventTemplate } = await supabase
+      .from('event_email_templates')
+      .select('*')
+      .eq('event_id', event_id)
+      .eq('email_type', 'confirmation')
+      .eq('is_active', true)
+      .single()
+
+    if (eventTemplate) {
+      emailSubject = replaceVariables(eventTemplate.subject)
+      emailHtml = replaceVariables(eventTemplate.html_content)
+    } else {
+      // 2. Check global template
+      const { data: globalTemplate } = await supabase
+        .from('global_email_templates')
+        .select('*')
+        .eq('email_type', 'confirmation')
+        .eq('is_active', true)
+        .single()
+
+      if (globalTemplate) {
+        emailSubject = replaceVariables(globalTemplate.subject)
+        emailHtml = replaceVariables(globalTemplate.html_content)
+      }
+    }
+
+    // 3. Fallback to hardcoded HTML if no saved template found
+    if (!emailHtml) {
+      emailSubject = isWaitlist
+        ? `Waitlist Confirmation: ${event.title}`
+        : `RSVP Confirmed: ${event.title}`
+
+      emailHtml = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -149,141 +212,43 @@ serve(async (req) => {
             <tr>
               <td align="center">
                 <table role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-                  <!-- Header with gradient -->
                   <tr>
                     <td style="background: linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%); padding: 40px 30px; text-align: center;">
                       ${logoUrl ? `<img src="${logoUrl}" alt="${agentName}" style="max-width: 150px; height: auto; margin-bottom: 15px; border-radius: 8px; background: rgba(255,255,255,0.1); padding: 8px;" />` : ''}
                       ${headshotUrl && !logoUrl ? `<img src="${headshotUrl}" alt="${agentName}" style="max-width: 100px; height: 100px; margin-bottom: 15px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.3); object-fit: cover;" />` : ''}
-                      <h1 style="color: #ffffff; margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">
-                        ${isWaitlist ? 'You\'re on the Waitlist!' : 'RSVP Confirmed!'}
-                      </h1>
+                      <h1 style="color: #ffffff; margin: 0; font-size: 32px; font-weight: 700;">${isWaitlist ? "You're on the Waitlist!" : 'RSVP Confirmed!'}</h1>
                     </td>
                   </tr>
-                  
-                  <!-- Main Content -->
                   <tr>
                     <td style="padding: 40px 30px;">
-                      <p style="font-size: 18px; color: #1f2937; margin: 0 0 25px 0; font-weight: 500;">
-                        Hi ${rsvp.name},
-                      </p>
+                      <p style="font-size: 18px; color: #1f2937; margin: 0 0 25px 0; font-weight: 500;">Hi ${rsvp.name},</p>
                       <p style="font-size: 16px; color: #4b5563; margin: 0 0 30px 0; line-height: 1.7;">
-                        ${isWaitlist 
-                          ? `Thank you for your interest in <strong style="color: ${primaryColor};">${event.title}</strong>. The event is currently at capacity, but we've added you to our waitlist. We'll notify you immediately if a spot becomes available.`
+                        ${isWaitlist
+                          ? `Thank you for your interest in <strong style="color: ${primaryColor};">${event.title}</strong>. We've added you to our waitlist.`
                           : `Thank you for RSVPing to <strong style="color: ${primaryColor};">${event.title}</strong>! We're excited to have you join us.`
                         }
                       </p>
-
-                      <!-- Event Details Card -->
-                      <div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); border-left: 5px solid ${primaryColor}; padding: 25px; margin: 30px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
-                        <h2 style="margin: 0 0 20px 0; color: ${primaryColor}; font-size: 22px; font-weight: 600;">Event Details</h2>
-                        <table role="presentation" style="width: 100%; border-collapse: collapse;">
-                          <tr>
-                            <td style="padding: 8px 0; color: #374151; font-weight: 600; width: 100px;">Event:</td>
-                            <td style="padding: 8px 0; color: #1f2937;">${event.title}</td>
-                          </tr>
-                          <tr>
-                            <td style="padding: 8px 0; color: #374151; font-weight: 600;">Date:</td>
-                            <td style="padding: 8px 0; color: #1f2937;">${formattedDate}</td>
-                          </tr>
-                          <tr>
-                            <td style="padding: 8px 0; color: #374151; font-weight: 600;">Time:</td>
-                            <td style="padding: 8px 0; color: #1f2937;">${formattedTime}</td>
-                          </tr>
-                          ${event.location ? `
-                          <tr>
-                            <td style="padding: 8px 0; color: #374151; font-weight: 600;">Location:</td>
-                            <td style="padding: 8px 0; color: #1f2937;">${event.location}</td>
-                          </tr>
-                          ` : ''}
-                          <tr>
-                            <td style="padding: 8px 0; color: #374151; font-weight: 600;">Guests:</td>
-                            <td style="padding: 8px 0; color: #1f2937;">${rsvp.guest_count} ${rsvp.guest_count === 1 ? 'guest' : 'guests'}</td>
-                          </tr>
-                        </table>
+                      <div style="background: #f9fafb; border-left: 5px solid ${primaryColor}; padding: 25px; margin: 30px 0; border-radius: 8px;">
+                        <h2 style="margin: 0 0 20px 0; color: ${primaryColor}; font-size: 22px;">Event Details</h2>
+                        <p style="margin: 8px 0; color: #1f2937;"><strong>Event:</strong> ${event.title}</p>
+                        <p style="margin: 8px 0; color: #1f2937;"><strong>Date:</strong> ${formattedDate}</p>
+                        <p style="margin: 8px 0; color: #1f2937;"><strong>Time:</strong> ${formattedTime}</p>
+                        ${event.location ? `<p style="margin: 8px 0; color: #1f2937;"><strong>Location:</strong> ${event.location}</p>` : ''}
+                        <p style="margin: 8px 0; color: #1f2937;"><strong>Guests:</strong> ${rsvp.guest_count}</p>
                       </div>
-
-                      ${event.description ? `
-                      <div style="margin: 30px 0;">
-                        <h3 style="color: #1f2937; font-size: 20px; font-weight: 600; margin: 0 0 12px 0;">About This Event</h3>
-                        <p style="color: #6b7280; line-height: 1.7; margin: 0;">${event.description}</p>
-                      </div>
-                      ` : ''}
-
-                      ${isWaitlist ? `
-                      <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #fbbf24; padding: 20px; border-radius: 8px; margin: 30px 0;">
-                        <p style="margin: 0; color: #92400e; font-size: 15px; font-weight: 500;">
-                          <strong>⏳ Waitlist Status:</strong> You'll receive an email notification if a spot becomes available. Please keep an eye on your inbox!
-                        </p>
-                      </div>
-                      ` : `
-                      <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border: 2px solid #10b981; padding: 20px; border-radius: 8px; margin: 30px 0;">
-                        <p style="margin: 0; color: #065f46; font-size: 15px; font-weight: 500;">
-                          <strong>✓ Confirmed:</strong> Your RSVP has been confirmed. We'll send you a reminder closer to the event date.
-                        </p>
-                      </div>
-                      `}
-
-                      <!-- Agent Contact Section -->
                       <div style="margin-top: 40px; padding-top: 30px; border-top: 2px solid #e5e7eb;">
-                        <h3 style="color: #1f2937; font-size: 20px; font-weight: 600; margin: 0 0 20px 0;">Your Event Host</h3>
-                        <div style="background: #f9fafb; padding: 25px; border-radius: 8px;">
-                          <p style="margin: 0 0 12px 0; color: #1f2937; font-size: 18px; font-weight: 600;">
-                            ${agentName}${agentName.includes('REALTOR') ? '' : ' - REALTOR®'}
-                          </p>
-                          ${teamName || brokerage ? `
-                          <p style="margin: 0 0 12px 0; color: #4b5563; font-size: 15px;">
-                            ${teamName ? `<strong>${teamName}</strong>` : ''}${teamName && brokerage ? ' | ' : ''}${brokerage ? brokerage : ''}
-                          </p>
-                          ` : ''}
-                          ${officeAddress ? `
-                          <p style="margin: 0 0 12px 0; color: #4b5563; font-size: 14px; line-height: 1.6;">
-                            📍 ${officeAddress}
-                          </p>
-                          ` : ''}
-                          ${stateLicenses ? `
-                          <p style="margin: 0 0 15px 0; color: #6b7280; font-size: 13px;">
-                            Licensed in ${stateLicenses}
-                          </p>
-                          ` : ''}
-                          <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
-                            ${phoneNumber ? `
-                            <p style="margin: 8px 0; color: #1f2937; font-size: 15px;">
-                              📱 <a href="tel:${phoneNumber.replace(/\D/g, '')}" style="color: ${primaryColor}; text-decoration: none; font-weight: 500;">${phoneNumber}</a>
-                            </p>
-                            ` : ''}
-                            ${officeNumber ? `
-                            <p style="margin: 8px 0; color: #1f2937; font-size: 15px;">
-                              ☎️ <a href="tel:${officeNumber.replace(/\D/g, '')}" style="color: ${primaryColor}; text-decoration: none; font-weight: 500;">Office: ${officeNumber}</a>
-                            </p>
-                            ` : ''}
-                            ${agentEmail ? `
-                            <p style="margin: 8px 0; color: #1f2937; font-size: 15px;">
-                              📧 <a href="mailto:${agentEmail}" style="color: ${primaryColor}; text-decoration: none; font-weight: 500;">${agentEmail}</a>
-                            </p>
-                            ` : ''}
-                            ${website ? `
-                            <p style="margin: 8px 0; color: #1f2937; font-size: 15px;">
-                              🌐 <a href="${website.startsWith('http') ? website : 'https://' + website}" style="color: ${primaryColor}; text-decoration: none; font-weight: 500;" target="_blank">${website}</a>
-                            </p>
-                            ` : ''}
-                          </div>
-                        </div>
-                        <p style="margin: 20px 0 0 0; color: #6b7280; font-size: 14px; text-align: center;">
-                          Questions? Reply to this email or contact ${agentName}${phoneNumber ? ` at ${phoneNumber}` : ''}.
-                        </p>
+                        <h3 style="color: #1f2937; font-size: 20px; margin: 0 0 20px 0;">Your Event Host</h3>
+                        <p style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #1f2937;">${agentName}</p>
+                        ${teamName || brokerage ? `<p style="margin: 0 0 12px 0; color: #4b5563;">${teamName ? `<strong>${teamName}</strong>` : ''}${teamName && brokerage ? ' | ' : ''}${brokerage}</p>` : ''}
+                        ${phoneNumber ? `<p style="margin: 8px 0;">📱 <a href="tel:${phoneNumber.replace(/\D/g, '')}" style="color: ${primaryColor};">${phoneNumber}</a></p>` : ''}
+                        ${agentEmail ? `<p style="margin: 8px 0;">📧 <a href="mailto:${agentEmail}" style="color: ${primaryColor};">${agentEmail}</a></p>` : ''}
+                        ${website ? `<p style="margin: 8px 0;">🌐 <a href="${website.startsWith('http') ? website : 'https://' + website}" style="color: ${primaryColor};">${website}</a></p>` : ''}
                       </div>
                     </td>
                   </tr>
-                  
-                  <!-- Footer -->
                   <tr>
                     <td style="background-color: #f9fafb; padding: 25px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
-                      <p style="margin: 0 0 8px 0; color: #9ca3af; font-size: 12px;">
-                        This is an automated confirmation email. If you need to cancel your RSVP, please contact the event organizer.
-                      </p>
-                      <p style="margin: 0; color: #9ca3af; font-size: 12px;">
-                        Real Estate on Purpose | REOP Event Engine™
-                      </p>
+                      <p style="margin: 0; color: #9ca3af; font-size: 12px;">Real Estate on Purpose | REOP Event Engine™</p>
                     </td>
                   </tr>
                 </table>
@@ -292,7 +257,12 @@ serve(async (req) => {
           </table>
         </body>
       </html>
-    `;
+      `
+    } else if (!emailSubject) {
+      emailSubject = isWaitlist
+        ? `Waitlist Confirmation: ${event.title}`
+        : `RSVP Confirmed: ${event.title}`
+    }
 
     // Send email
     const resend = new Resend(RESEND_API_KEY);
@@ -300,9 +270,7 @@ serve(async (req) => {
     const { data, error: emailError } = await resend.emails.send({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: rsvp.email,
-      subject: isWaitlist
-        ? `Waitlist Confirmation: ${event.title}`
-        : `RSVP Confirmed: ${event.title}`,
+      subject: emailSubject,
       html: emailHtml,
       reply_to: agentEmail,
     });
@@ -320,7 +288,7 @@ serve(async (req) => {
         rsvp_id: rsvp.id,
         email_type: 'confirmation',
         recipient_email: rsvp.email,
-        subject: isWaitlist ? `Waitlist Confirmation: ${event.title}` : `RSVP Confirmed: ${event.title}`,
+        subject: emailSubject,
         status: 'sent',
         sent_at: new Date().toISOString(),
         resend_id: data?.id
@@ -339,7 +307,7 @@ serve(async (req) => {
           recipient_email: rsvp.email,
           recipient_name: rsvp.name,
           agent_id: event.agent_id,
-          subject: isWaitlist ? `Waitlist Confirmation: ${event.title}` : `RSVP Confirmed: ${event.title}`,
+          subject: emailSubject,
           status: 'sent',
           resend_email_id: data?.id,
           metadata: {

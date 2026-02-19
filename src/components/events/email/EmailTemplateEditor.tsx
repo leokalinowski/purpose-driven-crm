@@ -12,10 +12,31 @@ import { getDefaultEmailTemplate } from '@/utils/emailTemplateBuilder'
 import { useGlobalEmailTemplates } from '@/hooks/useGlobalEmailTemplates'
 import { VisualEmailEditor } from './VisualEmailEditor'
 
+export interface EventPreviewData {
+  title?: string
+  event_date?: string
+  location?: string
+  description?: string
+  agent_name?: string
+  agent_email?: string
+  agent_phone?: string
+  agent_office_number?: string
+  agent_office_address?: string
+  agent_website?: string
+  agent_brokerage?: string
+  agent_team_name?: string
+  primary_color?: string
+  secondary_color?: string
+  headshot_url?: string
+  logo_colored_url?: string
+  logo_white_url?: string
+}
+
 interface EmailTemplateEditorProps {
   eventId: string
   emailType: 'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show'
   onSave?: () => void
+  eventData?: EventPreviewData
 }
 
 const EMAIL_TYPE_LABELS = {
@@ -29,7 +50,8 @@ const EMAIL_TYPE_LABELS = {
 export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
   eventId,
   emailType,
-  onSave
+  onSave,
+  eventData
 }) => {
   const { templates, createTemplate, updateTemplate, getTemplateByType } = useEmailTemplates(eventId)
   const { getTemplateByType: getGlobalTemplate } = useGlobalEmailTemplates()
@@ -117,25 +139,30 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
   }
 
   const renderPreview = () => {
+    const d = eventData
+    const eventDate = d?.event_date ? new Date(d.event_date) : null
+    const formattedDate = eventDate ? eventDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Saturday, March 15, 2025'
+    const formattedTime = eventDate ? eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '6:00 PM'
+
     let previewContent = htmlContent
-      .replace(/{event_title}/g, '[Event Title]')
-      .replace(/{event_date}/g, '[Event Date]')
-      .replace(/{event_time}/g, '[Event Time]')
-      .replace(/{event_description}/g, '[Event Description - This is a sample description of what the event is about.]')
-      .replace(/{event_location}/g, '[Event Location]')
-      .replace(/{agent_name}/g, '[Agent Name]')
-      .replace(/{agent_email}/g, 'agent@example.com')
-      .replace(/{agent_phone}/g, '(555) 123-4567')
-      .replace(/{agent_office_number}/g, '(555) 987-6543')
-      .replace(/{agent_office_address}/g, '123 Main St, City, State 12345')
-      .replace(/{agent_website}/g, 'https://example.com')
-      .replace(/{agent_brokerage}/g, '[Brokerage Name]')
-      .replace(/{agent_team_name}/g, '[Team Name]')
-      .replace(/{primary_color}/g, '#2563eb')
-      .replace(/{secondary_color}/g, '#1e40af')
-      .replace(/{headshot_url}/g, 'https://via.placeholder.com/100')
-      .replace(/{logo_colored_url}/g, 'https://via.placeholder.com/200x60')
-      .replace(/{logo_white_url}/g, 'https://via.placeholder.com/200x60/ffffff/000000')
+      .replace(/{event_title}/g, d?.title || 'Sample Event Title')
+      .replace(/{event_date}/g, formattedDate)
+      .replace(/{event_time}/g, formattedTime)
+      .replace(/{event_description}/g, d?.description || 'Join us for an exciting event with great networking opportunities.')
+      .replace(/{event_location}/g, d?.location || '123 Main Street, Suite 100')
+      .replace(/{agent_name}/g, d?.agent_name || 'Jane Smith')
+      .replace(/{agent_email}/g, d?.agent_email || 'agent@example.com')
+      .replace(/{agent_phone}/g, d?.agent_phone || '(555) 123-4567')
+      .replace(/{agent_office_number}/g, d?.agent_office_number || '(555) 987-6543')
+      .replace(/{agent_office_address}/g, d?.agent_office_address || '123 Main St, City, State 12345')
+      .replace(/{agent_website}/g, d?.agent_website || 'https://example.com')
+      .replace(/{agent_brokerage}/g, d?.agent_brokerage || 'Premier Realty')
+      .replace(/{agent_team_name}/g, d?.agent_team_name || 'The Smith Team')
+      .replace(/{primary_color}/g, d?.primary_color || '#2563eb')
+      .replace(/{secondary_color}/g, d?.secondary_color || '#1e40af')
+      .replace(/{headshot_url}/g, d?.headshot_url || 'https://via.placeholder.com/100')
+      .replace(/{logo_colored_url}/g, d?.logo_colored_url || 'https://via.placeholder.com/200x60')
+      .replace(/{logo_white_url}/g, d?.logo_white_url || 'https://via.placeholder.com/200x60/ffffff/000000')
 
     // Handle conditional blocks - show all for preview
     previewContent = previewContent.replace(/\{#if ([^}]+)\}([\s\S]*?)\{\/if\}/g, '$2')
@@ -175,7 +202,7 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
             <div>
               <Label>Subject Preview</Label>
               <div className="p-2 bg-gray-50 rounded border text-sm font-medium">
-                {subject.replace(/{event_title}/g, '[Event Title]')}
+                {subject.replace(/{event_title}/g, eventData?.title || 'Sample Event Title')}
               </div>
             </div>
             <div>

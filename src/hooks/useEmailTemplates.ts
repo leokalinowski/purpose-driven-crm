@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 
 export interface EmailTemplate {
@@ -43,10 +44,6 @@ export interface EmailRecord {
   updated_at: string
 }
 
-// Note: event_email_templates and event_emails tables don't exist in the database schema
-// This hook provides stub implementations that return empty data
-// The email functionality needs database tables to be created first
-
 export const useEmailTemplates = (eventId?: string) => {
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [loading, setLoading] = useState(false)
@@ -54,24 +51,57 @@ export const useEmailTemplates = (eventId?: string) => {
 
   const fetchTemplates = useCallback(async () => {
     if (!eventId) return
-    // Table event_email_templates doesn't exist - return empty array
-    console.warn('event_email_templates table does not exist in database')
-    setTemplates([])
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('event_email_templates')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('email_type')
+
+      if (error) throw error
+      setTemplates((data || []) as unknown as EmailTemplate[])
+    } catch (error) {
+      console.error('Error fetching event email templates:', error)
+      setTemplates([])
+    } finally {
+      setLoading(false)
+    }
   }, [eventId])
 
   const createTemplate = async (template: Omit<EmailTemplate, 'id' | 'created_at' | 'updated_at'>): Promise<EmailTemplate> => {
-    console.warn('Cannot create template - event_email_templates table does not exist')
-    throw new Error('Email templates feature requires database setup')
+    const { data, error } = await supabase
+      .from('event_email_templates')
+      .insert(template)
+      .select()
+      .single()
+
+    if (error) throw error
+    await fetchTemplates()
+    return data as unknown as EmailTemplate
   }
 
   const updateTemplate = async (id: string, updates: Partial<EmailTemplate>): Promise<EmailTemplate> => {
-    console.warn('Cannot update template - event_email_templates table does not exist')
-    throw new Error('Email templates feature requires database setup')
+    const { data, error } = await supabase
+      .from('event_email_templates')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    await fetchTemplates()
+    return data as unknown as EmailTemplate
   }
 
   const deleteTemplate = async (id: string): Promise<void> => {
-    console.warn('Cannot delete template - event_email_templates table does not exist')
-    throw new Error('Email templates feature requires database setup')
+    const { error } = await supabase
+      .from('event_email_templates')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
+    await fetchTemplates()
   }
 
   const getTemplateByType = (emailType: string) => {
@@ -79,18 +109,27 @@ export const useEmailTemplates = (eventId?: string) => {
   }
 
   const sendReminderEmails = async (eventId: string, emailType: 'reminder_7day' | 'reminder_1day') => {
-    console.warn('Email sending not implemented - requires database setup')
-    return { message: 'Email feature not configured' }
+    const { data, error } = await supabase.functions.invoke('event-reminder-email', {
+      body: { eventId, emailType }
+    })
+    if (error) throw error
+    return data
   }
 
   const sendThankYouEmails = async (eventId: string) => {
-    console.warn('Email sending not implemented - requires database setup')
-    return { message: 'Email feature not configured' }
+    const { data, error } = await supabase.functions.invoke('event-reminder-email', {
+      body: { eventId, emailType: 'thank_you' }
+    })
+    if (error) throw error
+    return data
   }
 
   const sendNoShowEmails = async (eventId: string) => {
-    console.warn('Email sending not implemented - requires database setup')
-    return { message: 'Email feature not configured' }
+    const { data, error } = await supabase.functions.invoke('event-reminder-email', {
+      body: { eventId, emailType: 'no_show' }
+    })
+    if (error) throw error
+    return data
   }
 
   useEffect(() => {
@@ -128,18 +167,34 @@ export const useEmailMetrics = (eventId?: string) => {
 
   const fetchMetrics = useCallback(async () => {
     if (!eventId) return
-    // Table event_emails doesn't exist - return empty data
-    console.warn('event_emails table does not exist in database')
-    setEmails([])
-    setMetrics({
-      total_sent: 0,
-      delivered: 0,
-      opened: 0,
-      clicked: 0,
-      replied: 0,
-      bounced: 0,
-      failed: 0
-    })
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('event_emails')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      const records = (data || []) as unknown as EmailRecord[]
+      setEmails(records)
+
+      setMetrics({
+        total_sent: records.filter(e => e.status === 'sent').length,
+        delivered: records.filter(e => e.delivered_at).length,
+        opened: records.filter(e => e.opened_at).length,
+        clicked: records.filter(e => e.clicked_at).length,
+        replied: records.filter(e => e.replied_at).length,
+        bounced: records.filter(e => e.bounced_at).length,
+        failed: records.filter(e => e.status === 'failed').length
+      })
+    } catch (error) {
+      console.error('Error fetching email metrics:', error)
+      setEmails([])
+    } finally {
+      setLoading(false)
+    }
   }, [eventId])
 
   useEffect(() => {

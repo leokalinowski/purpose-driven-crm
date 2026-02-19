@@ -105,12 +105,12 @@ export const GlobalTemplateEditor: React.FC<GlobalTemplateEditorProps> = ({
 
   const renderPreview = () => {
     const previewContent = htmlContent
-      .replace(/{event_title}/g, '[Event Title]')
-      .replace(/{event_date}/g, '[Event Date]')
-      .replace(/{event_time}/g, '[Event Time]')
-      .replace(/{event_description}/g, '[Event Description]')
-      .replace(/{event_location}/g, '[Event Location]')
-      .replace(/{agent_name}/g, '[Agent Name]')
+      .replace(/{event_title}/g, 'Annual Client Appreciation Night')
+      .replace(/{event_date}/g, 'Saturday, April 12, 2025')
+      .replace(/{event_time}/g, '6:00 PM')
+      .replace(/{event_description}/g, 'Join us for an evening of great food, drinks, and networking with fellow homeowners and industry professionals.')
+      .replace(/{event_location}/g, '500 Park Avenue, Suite 200, Austin, TX')
+      .replace(/{agent_name}/g, 'Jane Smith')
       .replace(/{primary_color}/g, '#2563eb')
       .replace(/{secondary_color}/g, '#1e40af')
 
@@ -154,7 +154,7 @@ export const GlobalTemplateEditor: React.FC<GlobalTemplateEditorProps> = ({
             <div>
               <Label>Subject Preview</Label>
               <div className="p-2 bg-gray-50 rounded border text-sm font-medium">
-                {subject.replace(/{event_title}/g, '[Event Title]')}
+                {subject.replace(/{event_title}/g, 'Annual Client Appreciation Night')}
               </div>
             </div>
             <div>
