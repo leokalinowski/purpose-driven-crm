@@ -42,15 +42,7 @@ serve(async (req) => {
       });
     }
 
-    // Build profiles lookup for agent_id resolution
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("user_id, email");
-
-    const emailToUserId: Record<string, string> = {};
-    (profiles || []).forEach((p: any) => {
-      if (p.email) emailToUserId[p.email.toLowerCase()] = p.user_id;
-    });
+    // No need for profiles lookup — agent_id always comes from the event
 
     let totalSynced = 0;
     const errors: string[] = [];
@@ -76,17 +68,6 @@ serve(async (req) => {
       let synced = 0;
 
       for (const task of clickupTasks) {
-        // Resolve agent_id from assignees
-        let agentId: string | null = null;
-        if (Array.isArray(task.assignees) && task.assignees.length > 0) {
-          for (const assignee of task.assignees) {
-            const email = (assignee.email || "").toLowerCase();
-            if (email && emailToUserId[email]) {
-              agentId = emailToUserId[email];
-              break;
-            }
-          }
-        }
 
         // Parse dates
         let dueDate: string | null = null;
@@ -124,7 +105,7 @@ serve(async (req) => {
           due_date: dueDate,
           responsible_person: responsible || null,
           completed_at: isCompleted ? completedAt || new Date().toISOString() : null,
-          agent_id: agentId || (eventAgentId || null),
+          agent_id: eventAgentId || null,
           phase: phase,
           updated_at: new Date().toISOString(),
         };
