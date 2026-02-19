@@ -145,9 +145,13 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Events</SelectItem>
-              {events.map(e => (
-                <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>
-              ))}
+              {events.map(e => {
+                const agent = agents.find(a => a.user_id === e.agent_id);
+                const agentName = agent ? agent.name : 'Unassigned';
+                return (
+                  <SelectItem key={e.id} value={e.id}>{e.title} ({agentName})</SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>
