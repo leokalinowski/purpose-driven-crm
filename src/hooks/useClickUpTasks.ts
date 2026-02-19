@@ -11,6 +11,7 @@ export interface ClickUpTask {
   responsible_person: string | null;
   completed_at: string | null;
   agent_id: string | null;
+  phase: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -29,6 +30,23 @@ export interface TasksByResponsible {
   completed: number;
   progressPct: number;
 }
+
+export interface PhaseGroup {
+  phase: string;
+  label: string;
+  tasks: ClickUpTask[];
+  total: number;
+  completed: number;
+  progressPct: number;
+}
+
+const PHASE_LABELS: Record<string, string> = {
+  pre_event: 'Pre-Event',
+  event_day: 'Event Day',
+  post_event: 'Post-Event',
+};
+
+const PHASE_ORDER = ['pre_event', 'event_day', 'post_event'];
 
 export const useClickUpTasks = (eventId?: string) => {
   const [tasks, setTasks] = useState<ClickUpTask[]>([]);
@@ -124,5 +142,29 @@ export const useClickUpTasks = (eventId?: string) => {
     })).sort((a, b) => a.progressPct - b.progressPct);
   }, [tasks]);
 
-  return { tasks, stats, tasksByResponsible, loading, error, refetch: fetchTasks };
+  const tasksByPhase: PhaseGroup[] = useMemo(() => {
+    const groups: Record<string, ClickUpTask[]> = {};
+    tasks.forEach(t => {
+      const phase = t.phase || 'pre_event';
+      if (!groups[phase]) groups[phase] = [];
+      groups[phase].push(t);
+    });
+
+    return PHASE_ORDER
+      .filter(phase => groups[phase] && groups[phase].length > 0)
+      .map(phase => {
+        const phaseTasks = groups[phase];
+        const completed = phaseTasks.filter(t => t.completed_at !== null).length;
+        return {
+          phase,
+          label: PHASE_LABELS[phase] || phase,
+          tasks: phaseTasks,
+          total: phaseTasks.length,
+          completed,
+          progressPct: phaseTasks.length > 0 ? Math.round((completed / phaseTasks.length) * 100) : 0,
+        };
+      });
+  }, [tasks]);
+
+  return { tasks, stats, tasksByResponsible, tasksByPhase, loading, error, refetch: fetchTasks };
 };

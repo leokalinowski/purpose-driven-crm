@@ -3,6 +3,7 @@ import { Calendar, Target } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { EventProgressStats } from './EventProgressStats';
 import { EventTaskList } from './EventTaskList';
 import { useClickUpTasks } from '@/hooks/useClickUpTasks';
@@ -13,7 +14,7 @@ interface EventProgressDashboardProps {
 }
 
 export function EventProgressDashboard({ event }: EventProgressDashboardProps) {
-  const { tasks, stats, tasksByResponsible, loading } = useClickUpTasks(event.id);
+  const { tasks, stats, tasksByResponsible, tasksByPhase, loading } = useClickUpTasks(event.id);
 
   const eventDate = new Date(event.event_date);
   const today = new Date();
@@ -39,7 +40,7 @@ export function EventProgressDashboard({ event }: EventProgressDashboardProps) {
           <Target className="h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">No ClickUp Tasks Synced</h3>
           <p className="text-muted-foreground text-center max-w-md">
-            This event doesn't have any ClickUp tasks synced yet. Ask your admin to connect this event's ClickUp list and sync tasks.
+            This event doesn't have any ClickUp tasks synced yet. Ask your admin to link this event to ClickUp and sync tasks.
           </p>
         </CardContent>
       </Card>
@@ -92,6 +93,29 @@ export function EventProgressDashboard({ event }: EventProgressDashboardProps) {
       {/* Stats Cards */}
       <EventProgressStats stats={stats} />
 
+      {/* Phase Progress Breakdown */}
+      {tasksByPhase.length > 1 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Progress by Phase</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {tasksByPhase.map((group) => (
+              <div key={group.phase} className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">{group.label}</Badge>
+                    <span className="font-medium">{group.completed}/{group.total} tasks</span>
+                  </div>
+                  <span className="text-muted-foreground">{group.progressPct}%</span>
+                </div>
+                <Progress value={group.progressPct} className="h-2" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Breakdown by Responsible Person */}
       {tasksByResponsible.length > 1 && (
         <Card>
@@ -112,8 +136,8 @@ export function EventProgressDashboard({ event }: EventProgressDashboardProps) {
         </Card>
       )}
 
-      {/* Full Task List */}
-      <EventTaskList tasks={tasks} />
+      {/* Full Task List with phase grouping */}
+      <EventTaskList tasks={tasks} tasksByPhase={tasksByPhase} />
     </div>
   );
 }

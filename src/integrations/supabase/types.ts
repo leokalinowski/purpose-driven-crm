@@ -363,6 +363,7 @@ export type Database = {
           due_date: string | null
           event_id: string
           id: string
+          phase: string | null
           responsible_person: string | null
           status: string | null
           task_name: string
@@ -376,6 +377,7 @@ export type Database = {
           due_date?: string | null
           event_id: string
           id?: string
+          phase?: string | null
           responsible_person?: string | null
           status?: string | null
           task_name: string
@@ -389,6 +391,7 @@ export type Database = {
           due_date?: string | null
           event_id?: string
           id?: string
+          phase?: string | null
           responsible_person?: string | null
           status?: string | null
           task_name?: string
@@ -1173,7 +1176,11 @@ export type Database = {
           agent_id: string | null
           attendance_count: number | null
           brand_color: string | null
+          clickup_event_day_list_id: string | null
+          clickup_folder_id: string | null
           clickup_list_id: string | null
+          clickup_post_event_list_id: string | null
+          clickup_pre_event_list_id: string | null
           created_at: string
           created_by: string | null
           current_rsvp_count: number | null
@@ -1202,7 +1209,11 @@ export type Database = {
           agent_id?: string | null
           attendance_count?: number | null
           brand_color?: string | null
+          clickup_event_day_list_id?: string | null
+          clickup_folder_id?: string | null
           clickup_list_id?: string | null
+          clickup_post_event_list_id?: string | null
+          clickup_pre_event_list_id?: string | null
           created_at?: string
           created_by?: string | null
           current_rsvp_count?: number | null
@@ -1231,7 +1242,11 @@ export type Database = {
           agent_id?: string | null
           attendance_count?: number | null
           brand_color?: string | null
+          clickup_event_day_list_id?: string | null
+          clickup_folder_id?: string | null
           clickup_list_id?: string | null
+          clickup_post_event_list_id?: string | null
+          clickup_pre_event_list_id?: string | null
           created_at?: string
           created_by?: string | null
           current_rsvp_count?: number | null
