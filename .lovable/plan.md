@@ -1,159 +1,124 @@
 
 
-# Events Tracking System -- ClickUp Integration for Agents
+# Auto-Link ClickUp Event Folders to Hub Events and Sync Tasks
 
-## Overview
-Transform the agent-facing Events page from a simple RSVP viewer into a full **Events Tracking Dashboard** that pulls live task progress from ClickUp, similar to how the Support Hub pulls ticket data from ClickUp. Agents will see a visual breakdown of how their event preparation is going, powered by the `clickup_tasks` table that already syncs via the `clickup-webhook` edge function.
+## Problem
+The Hub events (like Samir's "The Real Estate Scholarship") have no connection to their ClickUp folders. The `clickup_list_id` on every event is null. The sync function sits idle because there's nothing to sync.
 
-## Current State
+Meanwhile, the ClickUp Events space already has perfectly organized folders per agent:
+- `Samir [03.14.26] The Real Estate Scholarship` (folder with 3 lists)
+- `Ashley [03.21.26] Purge & Perk` (folder with 3 lists)
+- `Tim [03.21.26] Right Sizing` (folder with 3 lists)
+- `Rashida [03.21.26] - The Real Estate Scholarship` (folder with 3 lists)
+- etc.
 
-**What exists today:**
-- The `clickup_tasks` table stores tasks synced from ClickUp (task name, status, due date, responsible person, completed_at), linked to events via `event_id`
-- The `clickup-webhook` edge function receives real-time updates from ClickUp and upserts into `clickup_tasks`
-- The `clickup-register-and-sync` edge function does an initial bulk sync of tasks tagged "event" from a ClickUp list
-- Events have a `clickup_list_id` field to link to their ClickUp list
-- The agent Events page currently only shows an event timeline list and RSVP management -- no task tracking
-- There's also a local `event_tasks` table for manually created tasks, but it's disconnected from ClickUp
+Each folder contains **Pre-Event**, **Event Day**, and **Post-Event** lists.
 
-**What's missing:**
-- Agents cannot see their ClickUp tasks at all on the Events page
-- No progress visualization (progress bars, countdown, task breakdown)
-- No way for admins to assign tasks to specific agents from the Hub
-- The `clickup_tasks` table has no `agent_id` column -- tasks are linked to events but not directly to agents
+## Solution
 
-## What We're Building
+### 1. Expand Database Schema
 
-### 1. Database Changes
+The current `events` table has a single `clickup_list_id` column, but each ClickUp event folder has 3 lists. We need to store the folder ID plus all 3 list IDs.
 
-**Add `agent_id` column to `clickup_tasks`:**
-- New nullable `agent_id` (uuid) column on `clickup_tasks`
-- This allows tasks to be mapped to specific agents, not just events
-- Update RLS: agents can SELECT where `agent_id = auth.uid()` OR via the existing event-based policy
+**Add columns to `events`:**
+| Column | Type | Purpose |
+|--------|------|---------|
+| `clickup_folder_id` | text | The ClickUp folder ID for the event |
+| `clickup_pre_event_list_id` | text | Pre-Event list ID |
+| `clickup_event_day_list_id` | text | Event Day list ID |
+| `clickup_post_event_list_id` | text | Post-Event list ID |
 
-**Add RLS policy for agent access:**
-- Agents can view `clickup_tasks` where their `agent_id` matches directly (not just through event ownership)
+The existing `clickup_list_id` stays as a fallback/legacy field.
 
-### 2. New Edge Function: `clickup-sync-event-tasks`
-A dedicated function that admins can trigger (or runs on a schedule) to:
-1. For each event with a `clickup_list_id`, fetch all tasks from that ClickUp list
-2. Match ClickUp assignees to Hub agents by comparing assignee email/username to `profiles` table
-3. Upsert into `clickup_tasks` with the resolved `agent_id`
-4. Return a summary of what was synced
+### 2. New Edge Function: `clickup-link-events`
 
-This also updates the existing `clickup-webhook` to resolve `agent_id` from ClickUp assignee data when processing real-time updates.
+An admin-triggered function that:
+1. Fetches all folders from the ClickUp **Events** space (ID: `90114016189`)
+2. For each folder, parses the name pattern: `AgentFirstName [date] Event Title`
+3. Matches to Hub events by comparing the event title AND the agent's first name (from `profiles`)
+4. Writes the folder ID and all 3 list IDs to the matched Hub event
+5. Returns a report of what was linked and what couldn't be matched
 
-### 3. New Component: `EventProgressDashboard`
-The main new component agents see on their Events page, replacing the current flat timeline. For the agent's next upcoming event, it shows:
+**Matching logic:**
+- Folder name: `Samir [03.14.26] The Real Estate Scholarship`
+- Hub event: title = `The Real Estate Scholarship`, agent = `Samir Redwan`
+- Match on: event title is contained in folder name AND agent first name is in folder name
 
-**Progress Header Card:**
-- Event title, date, days until event countdown
-- Overall progress bar (completed tasks / total tasks)
-- Quick stats: X of Y tasks done, Z overdue, W due this week
+### 3. Update `clickup-sync-event-tasks` to Use All 3 Lists
 
-**Task Breakdown by Category:**
-- Group tasks by responsible_person or by status
-- Visual progress per group (e.g., "Marketing: 4/6 done", "Venue: 2/3 done")
-- Color-coded status indicators (green = done, yellow = in progress, red = overdue)
+Currently syncs from a single `clickup_list_id`. Update to:
+1. For each event, sync tasks from all 3 lists (pre-event, event day, post-event)
+2. Tag each task with which phase it belongs to (add a `phase` column to `clickup_tasks`: pre_event, event_day, post_event)
+3. Skip the "event" tag filter since all tasks in these lists are event-related by definition
+4. Fall back to `clickup_list_id` if the new columns are not set (backward compatibility)
 
-**Task List (Collapsible):**
-- All tasks in a sortable, filterable list
-- Each task shows: name, status badge, due date, responsible person
-- Overdue tasks highlighted in red
-- Completed tasks shown with checkmark and strikethrough
+### 4. Add `phase` Column to `clickup_tasks`
 
-**Timeline/Milestone View:**
-- Visual timeline showing tasks plotted against the event date
-- Highlights upcoming deadlines in the next 7 days
+| Column | Type | Purpose |
+|--------|------|---------|
+| `phase` | text | "pre_event", "event_day", or "post_event" |
 
-### 4. Redesigned Agent Events Page (`/events`)
-Replace the current page layout with a tabbed approach:
+This lets the agent dashboard group tasks by phase, giving a clear picture of what needs to happen before, during, and after the event.
 
-| Tab | Content |
-|-----|---------|
-| **My Event** | EventProgressDashboard for next upcoming event (the hero view) |
-| **RSVPs** | Existing RSVPManagement component |
-| **All Events** | Existing event timeline list (past + future) |
+### 5. Update UI to Show Phase Grouping
 
-The "My Event" tab is the default, giving agents an immediate snapshot of where they stand.
+Update `EventProgressDashboard` and `EventTaskList` to group tasks by phase (Pre-Event / Event Day / Post-Event) with separate progress bars per phase.
 
-### 5. New Component: `EventsWidget` (Dashboard Home)
-A compact widget for the agent's main dashboard (like the existing `SupportWidget`), showing:
-- Next event name and date
-- Mini progress bar (X/Y tasks done)
-- Number of overdue tasks (with warning icon if any)
-- "View Details" link to `/events`
+### 6. Admin "Link Events" Button
 
-### 6. Admin: Assign Tasks to Agents
-On the Admin Events Management page (`/admin/events`), add a new tab "ClickUp Tasks" that shows:
-- All synced ClickUp tasks across all events
-- Ability to manually assign/reassign `agent_id` on any task
-- A "Sync Now" button that triggers `clickup-sync-event-tasks`
-- Progress overview per agent per event
+Add a button on the Admin Events Management page ("ClickUp Tasks" tab) that triggers `clickup-link-events`. Shows the matching results so the admin can verify before syncing.
 
-### 7. Update `clickup-webhook` Edge Function
-Modify the existing webhook handler to:
-- After fetching task detail from ClickUp, resolve assignee emails to `agent_id` using the `profiles` table
-- Include `agent_id` in the upsert payload
-
-## Architecture
+## Matching Example
 
 ```text
-ClickUp List (tasks tagged "event")
-        |
-        v
-clickup-webhook (real-time) + clickup-sync-event-tasks (bulk)
-        |
-        v
-clickup_tasks table (with new agent_id column)
-        |
-        v
-Agent Events Page --> EventProgressDashboard
-Admin Events Page --> Task assignment + sync controls
-Dashboard Home   --> EventsWidget (mini progress)
+ClickUp Folder                                    --> Hub Event Match
+--------------------------------------------------------------
+Samir [03.14.26] The Real Estate Scholarship      --> Samir Redwan's "The Real Estate Scholarship" (03/14)
+Ashley [03.21.26] Purge & Perk                    --> Ashley Spencer's "Purge & Perk" (03/21)
+Tim [03.21.26] Right Sizing                       --> Timothy Raiford's "Right Sizing" (03/21)
+Rashida [03.21.26] - The Real Estate Scholarship  --> Rashida Lambert's "The Real Estate Scholarship" (03/21)
+Amy [03.21.26] The Real Estate Scholarship        --> (no Hub event yet for Amy -- will report as unmatched)
 ```
 
 ## Files to Create
-- `src/components/events/EventProgressDashboard.tsx` -- Main progress tracker component
-- `src/components/events/EventTaskList.tsx` -- Filterable/sortable task list
-- `src/components/events/EventProgressStats.tsx` -- Stats cards (total, done, overdue, due soon)
-- `src/components/events/EventsWidget.tsx` -- Dashboard home widget
-- `src/components/admin/AdminEventTasks.tsx` -- Admin task management tab
-- `supabase/functions/clickup-sync-event-tasks/index.ts` -- Bulk sync edge function
-- Migration SQL for `clickup_tasks.agent_id` column + RLS update
+- `supabase/functions/clickup-link-events/index.ts` -- Auto-matching edge function
+- Migration SQL for new columns on `events` and `clickup_tasks`
 
 ## Files to Modify
-- `src/pages/Events.tsx` -- Redesign with tabs (My Event, RSVPs, All Events)
-- `src/pages/Index.tsx` -- Add EventsWidget to agent dashboard
-- `src/pages/AdminEventsManagement.tsx` -- Add ClickUp Tasks tab
-- `src/hooks/useEvents.ts` -- Add `fetchClickUpTasks` function to query `clickup_tasks`
-- `supabase/functions/clickup-webhook/index.ts` -- Resolve agent_id from assignees
-- `supabase/config.toml` -- Add new edge function entry
+- `supabase/functions/clickup-sync-event-tasks/index.ts` -- Sync from all 3 lists per event, tag with phase, remove "event" tag filter
+- `supabase/config.toml` -- Add `clickup-link-events` entry
+- `src/components/admin/AdminEventTasks.tsx` -- Add "Link Events to ClickUp" button
+- `src/components/events/EventProgressDashboard.tsx` -- Group tasks by phase
+- `src/components/events/EventTaskList.tsx` -- Show phase badges, filter by phase
+- `src/components/events/EventProgressStats.tsx` -- Phase-level progress stats
+- `src/hooks/useClickUpTasks.ts` -- Include phase in data model and grouping
 
 ## Technical Details
 
-### Agent ID Resolution (in edge functions)
-When a ClickUp task has assignees, resolve to Hub agent by:
-1. Get assignee email from ClickUp task detail
-2. Query `profiles` table: `WHERE email = assignee_email`
-3. If matched, set `agent_id` on the `clickup_tasks` row
-4. If not matched, leave `agent_id` null (task still visible via event ownership)
+### Folder Name Parsing
+The ClickUp folder names follow patterns like:
+- `Samir [03.14.26] The Real Estate Scholarship`
+- `Ashley [03.21.26] Purge & Perk`
+- `Rashida [03.21.26] - The Real Estate Scholarship`
 
-### Progress Calculation
+Parse with regex: `/^(\w+)\s+\[[\d.]+\]\s*-?\s*(.+)$/`
+- Group 1: Agent first name
+- Group 2: Event title
+
+### List Name Matching
+Inside each folder, lists are named "Pre-Event", "Event Day", "Post-Event" (with minor spelling variations like "Pre-Event"). Match using case-insensitive contains: `pre`, `day`, `post`.
+
+### Sync Flow After Linking
 ```text
-total_tasks = COUNT(*) WHERE event_id = X
-completed_tasks = COUNT(*) WHERE event_id = X AND completed_at IS NOT NULL
-overdue_tasks = COUNT(*) WHERE event_id = X AND completed_at IS NULL AND due_date < TODAY
-due_soon = COUNT(*) WHERE event_id = X AND completed_at IS NULL AND due_date BETWEEN TODAY AND TODAY+7
-progress_pct = (completed_tasks / total_tasks) * 100
+Admin clicks "Link Events" --> clickup-link-events runs
+  |-- Fetches Events space folders from ClickUp API
+  |-- Matches to Hub events by name + agent
+  |-- Writes folder_id + 3 list IDs to events table
+  |-- Returns match report
+
+Admin clicks "Sync Tasks" --> clickup-sync-event-tasks runs
+  |-- For each event with list IDs set
+  |-- Fetches tasks from all 3 lists (no tag filter needed)
+  |-- Upserts to clickup_tasks with phase + agent_id
+  |-- Agent sees progress on their Events page
 ```
-
-### New Hook: `useClickUpTasks(eventId)`
-Queries `clickup_tasks` for a given event, returns:
-- `tasks[]` with all fields
-- `stats` (total, completed, overdue, dueSoon, progressPct)
-- `tasksByResponsible` grouped data for breakdown charts
-- `loading`, `error` states
-
-### EventsWidget Data Flow
-Reuses `useEvents` to get the next event, then calls `useClickUpTasks(nextEvent.id)` for the progress stats. Renders a compact card similar to `SupportWidget`.
-
