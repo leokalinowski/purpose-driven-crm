@@ -3,14 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEvents } from '@/hooks/useEvents';
 import { Layout } from '@/components/layout/Layout';
-import { EventCard } from '@/components/events/EventCard';
-import { TaskManagement } from '@/components/events/TaskManagement';
+import { EventProgressDashboard } from '@/components/events/EventProgressDashboard';
 import { EventForm } from '@/components/events/EventForm';
 import { RSVPManagement } from '@/components/events/RSVPManagement';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Calendar, ExternalLink, Edit, Trash2 } from 'lucide-react';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 
@@ -23,9 +22,7 @@ const Events = () => {
   const { 
     events, 
     loading, 
-    getPreviousQuarterEvent, 
     getNextEvent,
-    updateEvent,
     deleteEvent
   } = useEvents();
 
@@ -48,33 +45,17 @@ const Events = () => {
             </div>
             <Skeleton className="h-10 w-32" />
           </div>
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-48" />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-20 w-full" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-48" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-64 w-full" />
-            </CardContent>
-          </Card>
+          <Skeleton className="h-40 w-full" />
+          <div className="grid grid-cols-4 gap-3">
+            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24" />)}
+          </div>
         </div>
       </Layout>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
-  const previousEvent = getPreviousQuarterEvent();
   const nextEvent = getNextEvent();
 
   return (
@@ -84,7 +65,7 @@ const Events = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Events</h1>
             <p className="text-muted-foreground">
-              Manage your events and track preparation tasks.
+              Track your event preparation progress and manage RSVPs.
             </p>
           </div>
           <Button onClick={() => setShowEventForm(true)}>
@@ -93,139 +74,164 @@ const Events = () => {
           </Button>
         </div>
 
+        <Tabs defaultValue="my-event" className="w-full">
+          <TabsList>
+            <TabsTrigger value="my-event">My Event</TabsTrigger>
+            <TabsTrigger value="rsvps">RSVPs</TabsTrigger>
+            <TabsTrigger value="all-events">All Events</TabsTrigger>
+          </TabsList>
 
-        {/* RSVP Management - Show for selected or next event */}
-        {(selectedEventId || nextEvent?.id) && (
-          <div className="mb-8">
-            <RSVPManagement 
-              eventId={selectedEventId || nextEvent?.id || ''}
-              publicSlug={events.find(e => e.id === (selectedEventId || nextEvent?.id))?.public_slug}
-            />
-          </div>
-        )}
+          {/* My Event Tab - Progress Dashboard */}
+          <TabsContent value="my-event" className="mt-4">
+            {nextEvent ? (
+              <EventProgressDashboard event={nextEvent} />
+            ) : (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Upcoming Events</h3>
+                  <p className="text-muted-foreground text-center mb-4">
+                    Create an event to start tracking your preparation progress.
+                  </p>
+                  <Button onClick={() => setShowEventForm(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Event
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
 
-        {/* All Events Timeline */}
-        {events.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-2xl font-bold">Event Timeline</h2>
-            <Card>
-              <CardHeader>
-                <CardTitle>All Events</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {events.map((event) => (
-                    <div 
-                      key={event.id} 
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"
-                    >
-                      <div className="flex-1">
-                        <h4 className="font-medium">{event.title}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(event.event_date).toLocaleDateString()}
-                        </p>
-                        {event.location && (
+          {/* RSVPs Tab */}
+          <TabsContent value="rsvps" className="mt-4">
+            {(selectedEventId || nextEvent?.id) ? (
+              <RSVPManagement 
+                eventId={selectedEventId || nextEvent?.id || ''}
+                publicSlug={events.find(e => e.id === (selectedEventId || nextEvent?.id))?.public_slug}
+              />
+            ) : (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  No events available for RSVP management.
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* All Events Tab */}
+          <TabsContent value="all-events" className="mt-4">
+            {events.length > 0 ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Event Timeline</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {events.map((event) => (
+                      <div 
+                        key={event.id} 
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"
+                      >
+                        <div className="flex-1">
+                          <h4 className="font-medium">{event.title}</h4>
                           <p className="text-sm text-muted-foreground">
-                            {event.location}
+                            {new Date(event.event_date).toLocaleDateString()}
                           </p>
-                        )}
-                        {event.public_slug && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <Badge variant="outline" className="text-xs">
-                              Published
-                            </Badge>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-xs"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                window.open(`/event/${event.public_slug}`, '_blank');
-                              }}
-                            >
-                              <ExternalLink className="h-3 w-3 mr-1" />
-                              View Public Page
-                            </Button>
-                          </div>
-                        )}
-                        {event.current_rsvp_count !== undefined && event.current_rsvp_count > 0 && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {event.current_rsvp_count} RSVP{event.current_rsvp_count !== 1 ? 's' : ''}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="text-right mr-4">
-                          {new Date(event.event_date) < new Date() ? (
-                            <span className="text-sm text-green-600">Completed</span>
-                          ) : (
-                            <span className="text-sm text-blue-600">Upcoming</span>
+                          {event.location && (
+                            <p className="text-sm text-muted-foreground">{event.location}</p>
+                          )}
+                          {event.public_slug && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge variant="outline" className="text-xs">Published</Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(`/event/${event.public_slug}`, '_blank');
+                                }}
+                              >
+                                <ExternalLink className="h-3 w-3 mr-1" />
+                                View Public Page
+                              </Button>
+                            </div>
+                          )}
+                          {event.current_rsvp_count !== undefined && event.current_rsvp_count > 0 && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {event.current_rsvp_count} RSVP{event.current_rsvp_count !== 1 ? 's' : ''}
+                            </p>
                           )}
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingEvent(event);
-                            setShowEventForm(true);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            if (confirm(`Are you sure you want to delete "${event.title}"? This action cannot be undone.`)) {
-                              try {
-                                await deleteEvent(event.id);
-                              } catch (error: any) {
-                                alert('Failed to delete event: ' + error.message);
+                        <div className="flex items-center gap-2">
+                          <div className="text-right mr-4">
+                            {new Date(event.event_date) < new Date() ? (
+                              <span className="text-sm text-green-600">Completed</span>
+                            ) : (
+                              <span className="text-sm text-blue-600">Upcoming</span>
+                            )}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingEvent(event);
+                              setShowEventForm(true);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (confirm(`Are you sure you want to delete "${event.title}"?`)) {
+                                try {
+                                  await deleteEvent(event.id);
+                                } catch (error: any) {
+                                  alert('Failed to delete event: ' + error.message);
+                                }
                               }
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedEventId(event.id === selectedEventId ? null : event.id);
-                          }}
-                        >
-                          {selectedEventId === event.id ? 'Hide RSVPs' : 'View RSVPs'}
-                        </Button>
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedEventId(event.id === selectedEventId ? null : event.id);
+                            }}
+                          >
+                            {selectedEventId === event.id ? 'Hide RSVPs' : 'View RSVPs'}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Events Yet</h3>
+                  <p className="text-muted-foreground text-center mb-4">
+                    Start by creating your first event.
+                  </p>
+                  <Button onClick={() => setShowEventForm(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Your First Event
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
 
-        {/* Empty State */}
-        {events.length === 0 && (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Events Yet</h3>
-              <p className="text-muted-foreground text-center mb-4">
-                Start by creating your first event to track progress and manage tasks.
-              </p>
-              <Button onClick={() => setShowEventForm(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Your First Event
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Event Form Modal */}
         {showEventForm && (
           <EventForm 
             event={editingEvent || undefined}

@@ -110,3 +110,6 @@ verify_jwt = false
 
 [functions.process-thumbnail-queue]
 verify_jwt = false
+
+[functions.clickup-sync-event-tasks]
+verify_jwt = false
