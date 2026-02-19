@@ -33,7 +33,8 @@ async function sendReminderEmails(
   agentsNeedingReminder: Array<{ user_id: string; first_name: string | null; last_name: string | null; email: string | null }>,
   supabase: any,
   currentWeek: number,
-  currentYear: number
+  currentYear: number,
+  reminderType: string
 ) {
   console.log(`[Background] Starting to send ${agentsNeedingReminder.length} reminder emails...`);
   
@@ -54,6 +55,7 @@ async function sendReminderEmails(
         .eq('agent_id', agent.user_id)
         .eq('week_number', currentWeek)
         .eq('year', currentYear)
+        .eq('reminder_type', reminderType)
         .single();
 
       if (existingLog) {
@@ -67,7 +69,7 @@ async function sendReminderEmails(
           
           <p>Hi ${agent.first_name || 'there'},</p>
           
-          <p>This is a friendly reminder to submit your Weekly Success Scoreboard before tomorrow's Thursday coaching Zoom session.</p>
+          <p>This is a friendly reminder to submit your Weekly Success Scoreboard before ${reminderType === 'wednesday' ? "Thursday's" : "today's"} coaching Zoom session.</p>
           
           <div style="background-color: #f8fafc; border-left: 4px solid #2563eb; padding: 16px; margin: 20px 0;">
             <p style="margin: 0; font-weight: 600;">What to submit in your scorecard:</p>
@@ -125,6 +127,7 @@ async function sendReminderEmails(
           agent_id: agent.user_id,
           week_number: currentWeek,
           year: currentYear,
+          reminder_type: reminderType,
           success: false,
           error_message: emailResponse.error.message || 'Unknown error'
         });
@@ -167,6 +170,7 @@ async function sendReminderEmails(
           agent_id: agent.user_id,
           week_number: currentWeek,
           year: currentYear,
+          reminder_type: reminderType,
           success: true
         });
 
@@ -214,6 +218,7 @@ async function sendReminderEmails(
           agent_id: agent.user_id,
           week_number: currentWeek,
           year: currentYear,
+          reminder_type: reminderType,
           success: false,
           error_message: error.message || 'Unknown error'
         });
@@ -259,7 +264,8 @@ serve(async (req) => {
   }
   
   const isCronSource = requestBody.source === 'cron' || requestBody.source === 'pg_cron';
-  console.log(`Request source - isCronJob header: ${isCronJob}, body source: ${requestBody.source}`);
+  const reminderType = requestBody.reminder_type || 'thursday';
+  console.log(`Request source - isCronJob header: ${isCronJob}, body source: ${requestBody.source}, reminder_type: ${reminderType}`);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -361,7 +367,7 @@ serve(async (req) => {
     // Start background task to send emails (doesn't block response)
     console.log("Starting background email task...");
     EdgeRuntime.waitUntil(
-      sendReminderEmails(agentsNeedingReminder, supabase, currentWeek, currentYear)
+      sendReminderEmails(agentsNeedingReminder, supabase, currentWeek, currentYear, reminderType)
     );
 
     const duration = Date.now() - startTime;
