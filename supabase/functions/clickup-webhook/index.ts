@@ -90,11 +90,11 @@ serve(async (req) => {
       });
     }
 
-    // Find the related event by clickup_list_id
+    // Find the related event by any of the list ID columns
     const { data: eventRow, error: eventErr } = await supabase
       .from("events")
-      .select("id")
-      .eq("clickup_list_id", listId)
+      .select("id, agent_id")
+      .or(`clickup_list_id.eq.${listId},clickup_pre_event_list_id.eq.${listId},clickup_event_day_list_id.eq.${listId},clickup_post_event_list_id.eq.${listId}`)
       .maybeSingle();
 
     if (eventErr) throw eventErr;
@@ -174,26 +174,9 @@ serve(async (req) => {
 
     const assignees = taskDetail?.assignees || [];
     let responsible = "";
-    let resolvedAgentId: string | null = null;
 
     if (Array.isArray(assignees) && assignees.length) {
       responsible = assignees.map((a: any) => a.username || a.email || a.id).join(", ");
-
-      // Resolve agent_id from assignee emails
-      for (const assignee of assignees) {
-        const email = (assignee.email || "").toLowerCase();
-        if (email) {
-          const { data: profileMatch } = await supabase
-            .from("profiles")
-            .select("user_id")
-            .eq("email", email)
-            .maybeSingle();
-          if (profileMatch) {
-            resolvedAgentId = profileMatch.user_id;
-            break;
-          }
-        }
-      }
     }
 
     const doneKeywords = ["done", "closed", "complete", "completed"];
@@ -207,7 +190,7 @@ serve(async (req) => {
       due_date: dueDate,
       responsible_person: responsible || null,
       completed_at: isCompleted ? completedAt || new Date().toISOString() : null,
-      agent_id: resolvedAgentId,
+      agent_id: eventRow.agent_id || null,
       updated_at: new Date().toISOString(),
     };
 
