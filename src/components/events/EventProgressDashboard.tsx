@@ -38,9 +38,9 @@ export function EventProgressDashboard({ event }: EventProgressDashboardProps) {
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-12">
           <Target className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No ClickUp Tasks Synced</h3>
+          <h3 className="text-lg font-semibold mb-2">No Checklist Items Yet</h3>
           <p className="text-muted-foreground text-center max-w-md">
-            This event doesn't have any ClickUp tasks synced yet. Ask your admin to link this event to ClickUp and sync tasks.
+            There are no checklist items for this event yet.
           </p>
         </CardContent>
       </Card>

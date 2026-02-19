@@ -2,12 +2,11 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { RefreshCw, Users, CheckCircle2, AlertTriangle, Link2 } from 'lucide-react';
+import { Users, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { format, isPast } from 'date-fns';
 
 interface ClickUpTaskRow {
@@ -43,9 +42,6 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
   const { toast } = useToast();
   const [tasks, setTasks] = useState<ClickUpTaskRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [linking, setLinking] = useState(false);
-  const [linkResult, setLinkResult] = useState<any>(null);
   const [eventFilter, setEventFilter] = useState<string>(
     events.length === 1 ? events[0].id : 'all'
   );
@@ -67,7 +63,7 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
       if (error) throw error;
       setTasks((data || []) as ClickUpTaskRow[]);
     } catch (err: any) {
-      console.error('Error fetching clickup tasks:', err);
+      console.error('Error fetching checklist:', err);
     } finally {
       setLoading(false);
     }
@@ -83,37 +79,22 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
     }
   }, [events]);
 
-  const handleLinkEvents = async () => {
-    try {
-      setLinking(true);
-      setLinkResult(null);
-      const { data, error } = await supabase.functions.invoke('clickup-link-events');
-      if (error) throw error;
-      setLinkResult(data);
-      toast({
-        title: 'Link Complete',
-        description: data?.message || 'Events linked to ClickUp folders',
-      });
-    } catch (err: any) {
-      toast({ title: 'Link Failed', description: err.message, variant: 'destructive' });
-    } finally {
-      setLinking(false);
-    }
-  };
+  // Realtime subscription for auto-updates
+  useEffect(() => {
+    if (eventFilter === 'all') return;
 
-  const handleSync = async () => {
-    try {
-      setSyncing(true);
-      const { data, error } = await supabase.functions.invoke('clickup-sync-event-tasks');
-      if (error) throw error;
-      toast({ title: 'Sync Complete', description: data?.message || 'Tasks synced successfully' });
-      fetchTasks();
-    } catch (err: any) {
-      toast({ title: 'Sync Failed', description: err.message, variant: 'destructive' });
-    } finally {
-      setSyncing(false);
-    }
-  };
+    const channel = supabase
+      .channel(`checklist-${eventFilter}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'clickup_tasks',
+        filter: `event_id=eq.${eventFilter}`,
+      }, () => fetchTasks())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [eventFilter]);
 
   const handleAssignAgent = async (taskId: string, agentId: string | null) => {
     try {
@@ -150,79 +131,32 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
 
   return (
     <div className="space-y-4">
-      {/* Actions Row */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        {events.length > 1 && (
-          <div className="flex items-center gap-4">
-            <Select value={eventFilter} onValueChange={setEventFilter}>
-              <SelectTrigger className="w-[250px]">
-                <SelectValue placeholder="Filter by event" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Events</SelectItem>
-                {events.map(e => {
-                  const agent = agents.find(a => a.user_id === e.agent_id);
-                  const agentName = agent ? agent.name : 'Unassigned';
-                  return (
-                    <SelectItem key={e.id} value={e.id}>{e.title} ({agentName})</SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        <div className="flex items-center gap-2">
-          <Button onClick={handleLinkEvents} disabled={linking} variant="outline">
-            <Link2 className={`h-4 w-4 mr-2 ${linking ? 'animate-spin' : ''}`} />
-            {linking ? 'Linking...' : 'Link Events to ClickUp'}
-          </Button>
-          <Button onClick={handleSync} disabled={syncing} variant="outline">
-            <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing...' : 'Sync Tasks'}
-          </Button>
+      {/* Event Filter (only when multiple events) */}
+      {events.length > 1 && (
+        <div className="flex items-center gap-4">
+          <Select value={eventFilter} onValueChange={setEventFilter}>
+            <SelectTrigger className="w-[250px]">
+              <SelectValue placeholder="Filter by event" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Events</SelectItem>
+              {events.map(e => {
+                const agent = agents.find(a => a.user_id === e.agent_id);
+                const agentName = agent ? agent.name : 'Unassigned';
+                return (
+                  <SelectItem key={e.id} value={e.id}>{e.title} ({agentName})</SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
         </div>
-      </div>
-
-      {/* Link Results */}
-      {linkResult && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Link Results</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            {linkResult.linked?.length > 0 && (
-              <div>
-                <p className="font-medium text-green-600">✓ Linked ({linkResult.linked.length}):</p>
-                {linkResult.linked.map((l: any, i: number) => (
-                  <p key={i} className="ml-4 text-muted-foreground">{l.folder} → {l.event}</p>
-                ))}
-              </div>
-            )}
-            {linkResult.alreadyLinked?.length > 0 && (
-              <div>
-                <p className="font-medium text-blue-600">Already Linked ({linkResult.alreadyLinked.length}):</p>
-                {linkResult.alreadyLinked.map((l: any, i: number) => (
-                  <p key={i} className="ml-4 text-muted-foreground">{l.folder} → {l.event}</p>
-                ))}
-              </div>
-            )}
-            {linkResult.unmatched?.length > 0 && (
-              <div>
-                <p className="font-medium text-amber-600">⚠ Unmatched ({linkResult.unmatched.length}):</p>
-                {linkResult.unmatched.map((u: any, i: number) => (
-                  <p key={i} className="ml-4 text-muted-foreground">{u.folder}: {u.reason}</p>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
       )}
 
       {/* Progress Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Total Tasks</p>
+            <p className="text-sm text-muted-foreground">Total Items</p>
             <p className="text-2xl font-bold">{totalTasks}</p>
           </CardContent>
         </Card>
@@ -253,17 +187,17 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
         </Card>
       </div>
 
-      {/* Tasks Table */}
+      {/* Checklist Table */}
       <Card>
         <CardHeader>
-          <CardTitle>ClickUp Tasks ({filteredTasks.length})</CardTitle>
-          <CardDescription>Manage task assignments and view sync status</CardDescription>
+          <CardTitle>Checklist ({filteredTasks.length})</CardTitle>
+          <CardDescription>Task assignments and completion status — updates automatically</CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-center py-8 text-muted-foreground">Loading tasks...</p>
+            <p className="text-center py-8 text-muted-foreground">Loading checklist...</p>
           ) : filteredTasks.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">No tasks found. Click "Link Events to ClickUp" first, then "Sync Tasks".</p>
+            <p className="text-center py-8 text-muted-foreground">No checklist items found.</p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
