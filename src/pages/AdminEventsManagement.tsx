@@ -11,14 +11,15 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 import { 
   Calendar, 
   Users, 
   Search, 
-  Filter, 
   Edit, 
   Trash2, 
   ExternalLink, 
@@ -26,12 +27,14 @@ import {
   Eye,
   CheckCircle2,
   Clock,
-  XCircle,
   TrendingUp,
-  Mail,
   MapPin,
-  FileText,
-  BarChart3
+  BarChart3,
+  ChevronDown,
+  ChevronRight,
+  Info,
+  ListChecks,
+  Mail
 } from 'lucide-react';
 import { format, startOfToday } from 'date-fns';
 import { EventForm } from '@/components/events/EventForm';
@@ -73,6 +76,8 @@ interface EventStats {
   avgAttendance: number;
 }
 
+type TaskStatsMap = Record<string, { total: number; completed: number }>;
+
 const AdminEventsManagement = () => {
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
@@ -88,8 +93,8 @@ const AdminEventsManagement = () => {
   const [selectedEvent, setSelectedEvent] = useState<EventWithAgent | null>(null);
   const [editingEvent, setEditingEvent] = useState<EventWithAgent | null | undefined>(undefined);
   const [deletingEvent, setDeletingEvent] = useState<EventWithAgent | null>(null);
-  const [viewingRSVPs, setViewingRSVPs] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'events' | 'emails' | 'clickup-tasks'>('events');
+  const [taskStats, setTaskStats] = useState<TaskStatsMap>({});
+  const [detailTab, setDetailTab] = useState('overview');
   const [stats, setStats] = useState<EventStats>({
     total: 0,
     published: 0,
@@ -110,12 +115,12 @@ const AdminEventsManagement = () => {
     if (isAdmin && user) {
       fetchEvents();
       fetchAgents();
+      fetchTaskStats();
     }
   }, [isAdmin, user]);
 
   const fetchAgents = async () => {
     try {
-      // First get all user_ids with agent/admin roles
       const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id')
@@ -130,7 +135,6 @@ const AdminEventsManagement = () => {
         return;
       }
 
-      // Then get profile data for those users
       const { data, error } = await supabase
         .from('profiles')
         .select('user_id, first_name, last_name')
@@ -147,10 +151,29 @@ const AdminEventsManagement = () => {
     }
   };
 
+  const fetchTaskStats = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('clickup_tasks')
+        .select('event_id, completed_at');
+
+      if (error) throw error;
+
+      const map: TaskStatsMap = {};
+      (data || []).forEach(row => {
+        if (!map[row.event_id]) map[row.event_id] = { total: 0, completed: 0 };
+        map[row.event_id].total++;
+        if (row.completed_at) map[row.event_id].completed++;
+      });
+      setTaskStats(map);
+    } catch (error) {
+      console.error('Error fetching task stats:', error);
+    }
+  };
+
   const fetchEvents = async () => {
     try {
       setLoading(true);
-      // Fetch events and profiles separately to avoid relationship query issues
       const { data: eventsData, error: eventsError } = await supabase
         .from('events')
         .select('*')
@@ -158,7 +181,6 @@ const AdminEventsManagement = () => {
 
       if (eventsError) throw eventsError;
 
-      // Fetch profiles for all unique agent_ids
       const agentIds = [...new Set((eventsData || []).map(e => e.agent_id).filter(Boolean))];
       let profilesMap: Record<string, any> = {};
 
@@ -252,6 +274,7 @@ const AdminEventsManagement = () => {
       });
 
       setDeletingEvent(null);
+      if (selectedEvent?.id === deletingEvent.id) setSelectedEvent(null);
       fetchEvents();
     } catch (error: any) {
       toast({
@@ -305,6 +328,21 @@ const AdminEventsManagement = () => {
     }
   };
 
+  const handleRowClick = (event: EventWithAgent) => {
+    if (selectedEvent?.id === event.id) {
+      setSelectedEvent(null);
+    } else {
+      setSelectedEvent(event);
+      setDetailTab('overview');
+    }
+  };
+
+  const getTaskProgressPct = (eventId: string) => {
+    const s = taskStats[eventId];
+    if (!s || s.total === 0) return null;
+    return Math.round((s.completed / s.total) * 100);
+  };
+
   if (roleLoading) {
     return (
       <Layout>
@@ -322,6 +360,7 @@ const AdminEventsManagement = () => {
   return (
     <Layout>
       <div className="container mx-auto p-6 max-w-7xl">
+        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Events Management</h1>
@@ -341,16 +380,8 @@ const AdminEventsManagement = () => {
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'events' | 'emails' | 'clickup-tasks')} className="w-full mt-6">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
-            <TabsTrigger value="events">Events Management</TabsTrigger>
-            <TabsTrigger value="emails">Email Management</TabsTrigger>
-            <TabsTrigger value="clickup-tasks">ClickUp Tasks</TabsTrigger>
-          </TabsList>
-
-            <TabsContent value="events" className="space-y-4 mt-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Events</CardTitle>
@@ -358,9 +389,7 @@ const AdminEventsManagement = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.total}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.published} published
-              </p>
+              <p className="text-xs text-muted-foreground">{stats.published} published</p>
             </CardContent>
           </Card>
 
@@ -371,9 +400,7 @@ const AdminEventsManagement = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.upcoming}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.past} past events
-              </p>
+              <p className="text-xs text-muted-foreground">{stats.past} past events</p>
             </CardContent>
           </Card>
 
@@ -397,9 +424,7 @@ const AdminEventsManagement = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.avgAttendance}</div>
-              <p className="text-xs text-muted-foreground">
-                Average per past event
-              </p>
+              <p className="text-xs text-muted-foreground">Average per past event</p>
             </CardContent>
           </Card>
         </div>
@@ -464,9 +489,7 @@ const AdminEventsManagement = () => {
         <Card>
           <CardHeader>
             <CardTitle>All Events ({filteredEvents.length})</CardTitle>
-            <CardDescription>
-              Manage events across all agents
-            </CardDescription>
+            <CardDescription>Click an event row to view details, RSVPs, tasks, and emails</CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -482,11 +505,13 @@ const AdminEventsManagement = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-8"></TableHead>
                       <TableHead>Event</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Agent</TableHead>
                       <TableHead>Location</TableHead>
                       <TableHead>RSVPs</TableHead>
+                      <TableHead>Tasks</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Published</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -498,120 +523,262 @@ const AdminEventsManagement = () => {
                       const agentName = event.profiles 
                         ? `${event.profiles.first_name || ''} ${event.profiles.last_name || ''}`.trim() || 'Unknown'
                         : 'Unknown';
+                      const isSelected = selectedEvent?.id === event.id;
+                      const taskPct = getTaskProgressPct(event.id);
+                      const taskStat = taskStats[event.id];
 
                       return (
-                        <TableRow key={event.id}>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium">{event.title}</div>
-                              {event.theme && (
-                                <div className="text-sm text-muted-foreground">{event.theme}</div>
+                        <>
+                          <TableRow
+                            key={event.id}
+                            className={cn(
+                              "cursor-pointer transition-colors",
+                              isSelected && "bg-primary/5 border-l-2 border-l-primary"
+                            )}
+                            onClick={() => handleRowClick(event)}
+                          >
+                            <TableCell className="w-8 px-2">
+                              {isSelected ? (
+                                <ChevronDown className="h-4 w-4 text-primary" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
                               )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-muted-foreground" />
-                              {(() => {
-                                const dateStr = event.event_date.split('T')[0];
-                                const [year, month, day] = dateStr.split('-');
-                                return format(new Date(parseInt(year), parseInt(month) - 1, parseInt(day)), 'MMM d, yyyy');
-                              })()}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {(() => {
-                                const timeStr = event.event_date.split('T')[1];
-                                if (timeStr) {
-                                  const [hours, minutes] = timeStr.split(':');
-                                  const hour24 = parseInt(hours);
-                                  const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
-                                  const ampm = hour24 >= 12 ? 'PM' : 'AM';
-                                  return `${hour12}:${minutes} ${ampm}`;
-                                }
-                                return '';
-                              })()}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div>{agentName}</div>
-                            {event.profiles?.team_name && (
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{event.title}</div>
+                                {event.theme && (
+                                  <div className="text-sm text-muted-foreground">{event.theme}</div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-muted-foreground" />
+                                {(() => {
+                                  const dateStr = event.event_date.split('T')[0];
+                                  const [year, month, day] = dateStr.split('-');
+                                  return format(new Date(parseInt(year), parseInt(month) - 1, parseInt(day)), 'MMM d, yyyy');
+                                })()}
+                              </div>
                               <div className="text-sm text-muted-foreground">
-                                {event.profiles.team_name}
+                                {(() => {
+                                  const timeStr = event.event_date.split('T')[1];
+                                  if (timeStr) {
+                                    const [hours, minutes] = timeStr.split(':');
+                                    const hour24 = parseInt(hours);
+                                    const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+                                    const ampm = hour24 >= 12 ? 'PM' : 'AM';
+                                    return `${hour12}:${minutes} ${ampm}`;
+                                  }
+                                  return '';
+                                })()}
                               </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {event.location ? (
-                              <div className="flex items-center gap-1">
-                                <MapPin className="h-3 w-3 text-muted-foreground" />
-                                <span className="text-sm">{event.location}</span>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                              <span>{event.current_rsvp_count || 0}</span>
-                              {event.max_capacity && (
-                                <span className="text-muted-foreground">/ {event.max_capacity}</span>
+                            </TableCell>
+                            <TableCell>
+                              <div>{agentName}</div>
+                              {event.profiles?.team_name && (
+                                <div className="text-sm text-muted-foreground">
+                                  {event.profiles.team_name}
+                                </div>
                               )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={status.variant}>
-                              {status.label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {event.is_published ? (
-                              <Badge variant="default" className="gap-1">
-                                <CheckCircle2 className="h-3 w-3" />
-                                Published
+                            </TableCell>
+                            <TableCell>
+                              {event.location ? (
+                                <div className="flex items-center gap-1">
+                                  <MapPin className="h-3 w-3 text-muted-foreground" />
+                                  <span className="text-sm">{event.location}</span>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4 text-muted-foreground" />
+                                <span>{event.current_rsvp_count || 0}</span>
+                                {event.max_capacity && (
+                                  <span className="text-muted-foreground">/ {event.max_capacity}</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {taskPct !== null ? (
+                                <div className="flex items-center gap-2 min-w-[80px]">
+                                  <Progress value={taskPct} className="h-2 flex-1" />
+                                  <span className={cn(
+                                    "text-xs font-medium whitespace-nowrap",
+                                    taskPct >= 75 ? "text-green-600" : taskPct >= 40 ? "text-amber-600" : "text-destructive"
+                                  )}>
+                                    {taskPct}%
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={status.variant}>
+                                {status.label}
                               </Badge>
-                            ) : (
-                              <Badge variant="secondary">
-                                Draft
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {event.is_published && event.public_slug && (
+                            </TableCell>
+                            <TableCell>
+                              {event.is_published ? (
+                                <Badge variant="default" className="gap-1">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Published
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary">
+                                  Draft
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                                {event.is_published && event.public_slug && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => window.open(`/event/${event.public_slug}`, '_blank')}
+                                  >
+                                    <ExternalLink className="h-4 w-4" />
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => window.open(`/event/${event.public_slug}`, '_blank')}
+                                  onClick={() => setEditingEvent(event as EventWithAgent)}
                                 >
-                                  <ExternalLink className="h-4 w-4" />
+                                  <Edit className="h-4 w-4" />
                                 </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setViewingRSVPs(event.id)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setEditingEvent(event as EventWithAgent)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setDeletingEvent(event)}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setDeletingEvent(event)}
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+
+                          {/* Expanded Detail Panel */}
+                          {isSelected && (
+                            <TableRow key={`${event.id}-detail`}>
+                              <TableCell colSpan={10} className="p-0 border-l-2 border-l-primary bg-muted/30">
+                                <div className="p-6">
+                                  <Tabs value={detailTab} onValueChange={setDetailTab}>
+                                    <TabsList>
+                                      <TabsTrigger value="overview" className="gap-1.5">
+                                        <Info className="h-4 w-4" />
+                                        Overview
+                                      </TabsTrigger>
+                                      <TabsTrigger value="rsvps" className="gap-1.5">
+                                        <Users className="h-4 w-4" />
+                                        RSVPs
+                                      </TabsTrigger>
+                                      <TabsTrigger value="tasks" className="gap-1.5">
+                                        <ListChecks className="h-4 w-4" />
+                                        ClickUp Tasks
+                                      </TabsTrigger>
+                                      <TabsTrigger value="emails" className="gap-1.5">
+                                        <Mail className="h-4 w-4" />
+                                        Emails
+                                      </TabsTrigger>
+                                    </TabsList>
+
+                                    <TabsContent value="overview" className="mt-4">
+                                      <Card>
+                                        <CardContent className="pt-6">
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-3">
+                                              <h3 className="text-lg font-semibold">{event.title}</h3>
+                                              {event.description && (
+                                                <p className="text-sm text-muted-foreground">{event.description}</p>
+                                              )}
+                                              <div className="space-y-2 text-sm">
+                                                <div className="flex items-center gap-2">
+                                                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                                                  <span>{format(new Date(event.event_date), 'EEEE, MMMM d, yyyy h:mm a')}</span>
+                                                </div>
+                                                {event.location && (
+                                                  <div className="flex items-center gap-2">
+                                                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                                                    <span>{event.location}</span>
+                                                  </div>
+                                                )}
+                                                <div className="flex items-center gap-2">
+                                                  <Users className="h-4 w-4 text-muted-foreground" />
+                                                  <span>Agent: {agentName}</span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                            <div className="space-y-3">
+                                              <div className="grid grid-cols-2 gap-3">
+                                                <div className="p-3 rounded-lg bg-background border">
+                                                  <p className="text-xs text-muted-foreground">RSVPs</p>
+                                                  <p className="text-xl font-bold">{event.current_rsvp_count || 0}{event.max_capacity ? ` / ${event.max_capacity}` : ''}</p>
+                                                </div>
+                                                <div className="p-3 rounded-lg bg-background border">
+                                                  <p className="text-xs text-muted-foreground">Tasks</p>
+                                                  <p className="text-xl font-bold">
+                                                    {taskStat ? `${taskStat.completed}/${taskStat.total}` : '—'}
+                                                  </p>
+                                                </div>
+                                                <div className="p-3 rounded-lg bg-background border">
+                                                  <p className="text-xs text-muted-foreground">Attendance</p>
+                                                  <p className="text-xl font-bold">{event.attendance_count || 0}</p>
+                                                </div>
+                                                <div className="p-3 rounded-lg bg-background border">
+                                                  <p className="text-xs text-muted-foreground">Leads</p>
+                                                  <p className="text-xl font-bold">{event.leads_generated || 0}</p>
+                                                </div>
+                                              </div>
+                                              {event.is_published && event.public_slug && (
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="w-full"
+                                                  onClick={() => window.open(`/event/${event.public_slug}`, '_blank')}
+                                                >
+                                                  <ExternalLink className="h-4 w-4 mr-2" />
+                                                  View Public Page
+                                                </Button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </CardContent>
+                                      </Card>
+                                    </TabsContent>
+
+                                    <TabsContent value="rsvps" className="mt-4">
+                                      <RSVPManagement
+                                        eventId={event.id}
+                                        publicSlug={event.public_slug}
+                                      />
+                                    </TabsContent>
+
+                                    <TabsContent value="tasks" className="mt-4">
+                                      <AdminEventTasks
+                                        events={[{ id: event.id, title: event.title, agent_id: event.agent_id }]}
+                                        agents={agents}
+                                      />
+                                    </TabsContent>
+
+                                    <TabsContent value="emails" className="mt-4">
+                                      <EmailManagement
+                                        eventId={event.id}
+                                        eventTitle={event.title}
+                                      />
+                                    </TabsContent>
+                                  </Tabs>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </>
                       );
                     })}
                   </TableBody>
@@ -620,22 +787,6 @@ const AdminEventsManagement = () => {
             )}
           </CardContent>
         </Card>
-          </TabsContent>
-
-          <TabsContent value="emails" className="space-y-4 mt-6">
-            <EmailManagement
-              eventId={selectedEvent?.id}
-              eventTitle={selectedEvent?.title}
-            />
-          </TabsContent>
-
-          <TabsContent value="clickup-tasks" className="space-y-4 mt-6">
-            <AdminEventTasks
-              events={events.map(e => ({ id: e.id, title: e.title, agent_id: e.agent_id }))}
-              agents={agents}
-            />
-          </TabsContent>
-        </Tabs>
 
         {/* Create/Edit Event Dialog */}
         {(editingEvent !== undefined) && (
@@ -648,24 +799,6 @@ const AdminEventsManagement = () => {
             isAdminMode={true}
             adminAgentId={editingEvent?.agent_id}
           />
-        )}
-
-        {/* View RSVPs Dialog */}
-        {viewingRSVPs && (
-          <Dialog open={!!viewingRSVPs} onOpenChange={() => setViewingRSVPs(null)}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>RSVP Management</DialogTitle>
-                <DialogDescription>
-                  View and manage RSVPs for this event
-                </DialogDescription>
-              </DialogHeader>
-              <RSVPManagement 
-                eventId={viewingRSVPs} 
-                publicSlug={events.find(e => e.id === viewingRSVPs)?.public_slug}
-              />
-            </DialogContent>
-          </Dialog>
         )}
 
         {/* Delete Confirmation */}
@@ -695,4 +828,3 @@ const AdminEventsManagement = () => {
 };
 
 export default AdminEventsManagement;
-
