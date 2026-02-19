@@ -140,9 +140,22 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
 
   const renderPreview = () => {
     const d = eventData
-    const eventDate = d?.event_date ? new Date(d.event_date) : null
-    const formattedDate = eventDate ? eventDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Saturday, March 15, 2025'
-    const formattedTime = eventDate ? eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '6:00 PM'
+    let formattedDate = 'Saturday, March 15, 2025'
+    let formattedTime = '6:00 PM'
+    if (d?.event_date) {
+      const [datePart, timePart] = d.event_date.split('T')
+      const [y, mo, dy] = datePart.split('-').map(Number)
+      const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
+      const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+      const dateObj = new Date(y, mo - 1, dy)
+      formattedDate = `${weekdays[dateObj.getDay()]}, ${months[mo-1]} ${dy}, ${y}`
+      if (timePart) {
+        const [h, mi] = timePart.substring(0, 5).split(':').map(Number)
+        const ampm = h >= 12 ? 'PM' : 'AM'
+        const hour12 = h % 12 || 12
+        formattedTime = `${hour12}:${String(mi).padStart(2, '0')} ${ampm}`
+      }
+    }
 
     let previewContent = htmlContent
       .replace(/{event_title}/g, d?.title || 'Sample Event Title')

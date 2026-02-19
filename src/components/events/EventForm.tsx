@@ -259,8 +259,8 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
       }
 
       const [hours, minutes] = eventTime.split(':');
-      // Create ISO datetime string
-      const eventDateTime = `${eventDate}T${hours}:${minutes}:00.000Z`;
+      // Store as unqualified local time - no Z suffix to avoid UTC interpretation
+      const eventDateTime = `${eventDate}T${hours}:${minutes}:00`;
 
       console.log('SAVING EVENT WITH:', {
         title: title.trim(),

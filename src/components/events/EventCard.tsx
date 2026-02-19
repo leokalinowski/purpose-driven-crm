@@ -35,7 +35,12 @@ export const EventCard = ({ event, type }: EventCardProps) => {
           <div className="flex items-center space-x-2">
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm">
-              {new Date(event.event_date).toLocaleDateString()}
+              {(() => {
+                const [datePart] = event.event_date.split('T');
+                const [y, m, d] = datePart.split('-').map(Number);
+                const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                return `${months[m-1]} ${d}, ${y}`;
+              })()}
             </span>
           </div>
 
