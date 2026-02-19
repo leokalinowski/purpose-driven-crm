@@ -10,6 +10,7 @@ const corsHeaders = {
 const CLICKUP_BASE = "https://api.clickup.com/api/v2";
 const TEAM_ID = "9011620633";
 const SPACE_ID = "90114016189";
+const EVENT_TEMPLATE_ID = "t-90117396506";
 
 async function clickupFetch(
   path: string,
@@ -81,28 +82,16 @@ serve(async (req) => {
     let folderId: string | null = null;
 
     try {
-      const templates = await clickupFetch(
-        `/team/${TEAM_ID}/folder_template`,
-        CLICKUP_API_TOKEN
+      console.log(`Creating folder from template ${EVENT_TEMPLATE_ID}`);
+      const created = await clickupFetch(
+        `/space/${SPACE_ID}/folder_template/${EVENT_TEMPLATE_ID}`,
+        CLICKUP_API_TOKEN,
+        { method: "POST", body: JSON.stringify({ name: folderName }) }
       );
-      console.log("Available folder templates:", JSON.stringify(templates));
-
-      const eventTemplate = (templates.templates || templates.folder_templates || []).find(
-        (t: any) => t.name?.toLowerCase().includes("event")
-      );
-
-      if (eventTemplate) {
-        console.log(`Found template: "${eventTemplate.name}" (${eventTemplate.id})`);
-        const created = await clickupFetch(
-          `/space/${SPACE_ID}/folder_template/${eventTemplate.id}`,
-          CLICKUP_API_TOKEN,
-          { method: "POST", body: JSON.stringify({ name: folderName }) }
-        );
-        folderId = created.id || created.folder?.id;
-        console.log("Folder created from template, ID:", folderId);
-      }
+      folderId = created.id || created.folder?.id;
+      console.log("Folder created from template, ID:", folderId);
     } catch (err: any) {
-      console.warn("Template lookup/creation failed, falling back to manual:", err.message);
+      console.warn("Template creation failed, falling back to manual:", err.message);
     }
 
     // 4. Fallback: create folder manually
