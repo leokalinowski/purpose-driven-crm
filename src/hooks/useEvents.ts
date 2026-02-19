@@ -203,6 +203,14 @@ export const useEvents = () => {
 
         // Immediately refresh tasks to show them in the UI
         await fetchEventTasks();
+
+        // Auto-create ClickUp folder (fire-and-forget)
+        supabase.functions.invoke('clickup-create-event-folder', {
+          body: { eventId: data.id, agentId: user.id, eventTitle: data.title, eventDate: data.event_date }
+        }).then(({ error: clickupErr }) => {
+          if (clickupErr) console.error('ClickUp folder creation failed:', clickupErr);
+          else console.log('ClickUp folder created for event:', data.id);
+        });
       }
 
       setEvents(prev => [data, ...prev]);
@@ -350,6 +358,16 @@ export const useEvents = () => {
           console.error('Error creating tasks:', tasksError);
           throw new Error(`Event created but failed to create tasks: ${tasksError.message}`);
         }
+      }
+
+      // Auto-create ClickUp folder (fire-and-forget)
+      if (data) {
+        supabase.functions.invoke('clickup-create-event-folder', {
+          body: { eventId: data.id, agentId: agentId, eventTitle: data.title, eventDate: data.event_date }
+        }).then(({ error: clickupErr }) => {
+          if (clickupErr) console.error('ClickUp folder creation failed (admin):', clickupErr);
+          else console.log('ClickUp folder created for event (admin):', data.id);
+        });
       }
 
       return data;

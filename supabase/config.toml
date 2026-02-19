@@ -116,3 +116,6 @@ verify_jwt = false
 
 [functions.clickup-link-events]
 verify_jwt = false
+
+[functions.clickup-create-event-folder]
+verify_jwt = false
