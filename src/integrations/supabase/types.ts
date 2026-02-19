@@ -1769,6 +1769,60 @@ export type Database = {
           },
         ]
       }
+      pipeline_survey_responses: {
+        Row: {
+          activity_types: string[] | null
+          additional_comments: string | null
+          additional_fields: string | null
+          agent_name: string
+          biggest_pain_point: string | null
+          created_at: string
+          desired_views: string[] | null
+          email: string
+          follow_up_automation: string | null
+          id: string
+          integration_priorities: string[] | null
+          mobile_importance: string | null
+          must_have_fields: string[] | null
+          pipeline_stages: string[] | null
+          separate_buyer_seller: string | null
+        }
+        Insert: {
+          activity_types?: string[] | null
+          additional_comments?: string | null
+          additional_fields?: string | null
+          agent_name: string
+          biggest_pain_point?: string | null
+          created_at?: string
+          desired_views?: string[] | null
+          email: string
+          follow_up_automation?: string | null
+          id?: string
+          integration_priorities?: string[] | null
+          mobile_importance?: string | null
+          must_have_fields?: string[] | null
+          pipeline_stages?: string[] | null
+          separate_buyer_seller?: string | null
+        }
+        Update: {
+          activity_types?: string[] | null
+          additional_comments?: string | null
+          additional_fields?: string | null
+          agent_name?: string
+          biggest_pain_point?: string | null
+          created_at?: string
+          desired_views?: string[] | null
+          email?: string
+          follow_up_automation?: string | null
+          id?: string
+          integration_priorities?: string[] | null
+          mobile_importance?: string | null
+          must_have_fields?: string[] | null
+          pipeline_stages?: string[] | null
+          separate_buyer_seller?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           brand_guidelines: string | null
