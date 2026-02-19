@@ -1,83 +1,51 @@
 
+# Rename "ClickUp Tasks" to "Checklist" + Auto-Sync + Remove Buttons
 
-# Fix: ClickUp Tasks Not Filtering by Selected Event
+## Changes
 
-## Problem
-When you expand an event row and click the "ClickUp Tasks" sub-tab, the `AdminEventTasks` component fetches **all** tasks from the `clickup_tasks` table and defaults the event filter dropdown to "All Events". This shows all 188 tasks instead of only tasks for the selected event.
+### 1. Rename all user-facing "ClickUp Tasks" labels to "Checklist"
 
-## Root Cause
-In `src/components/admin/AdminEventTasks.tsx`:
-- `fetchTasks()` queries `clickup_tasks` with no `.eq('event_id', ...)` filter
-- `eventFilter` state defaults to `'all'`
-- The component ignores the fact that it's being passed a single event
+| File | Before | After |
+|---|---|---|
+| `AdminEventsManagement.tsx` (sub-tab) | "ClickUp Tasks" | "Checklist" |
+| `AdminEventTasks.tsx` (card title) | "ClickUp Tasks (N)" | "Checklist (N)" |
+| `AdminEventTasks.tsx` (empty state) | "No tasks found. Click ..." | "No checklist items found." |
+| `EventProgressDashboard.tsx` (empty state heading) | "No ClickUp Tasks Synced" | "No Checklist Items Yet" |
+| `EventProgressDashboard.tsx` (empty state body) | "...link this event to ClickUp and sync tasks" | "...no checklist items for this event yet" |
 
-## Fix
-**File: `src/components/admin/AdminEventTasks.tsx`**
+### 2. Remove "Link Events to ClickUp" and "Sync Tasks" buttons
+From `AdminEventTasks.tsx`:
+- Delete the `handleLinkEvents` function, `linking` state, and the Link button
+- Delete the `handleSync` function, `syncing` state, and the Sync button
+- Delete the `linkResult` state and the Link Results card
+- Remove unused imports (`Link2`, `RefreshCw`)
 
-Two changes:
+### 3. Add Supabase Realtime subscription for auto-updates
+The ClickUp webhook already writes changes to the `clickup_tasks` table in real time. We just need to subscribe to those changes so the UI updates automatically.
 
-1. **Auto-set the event filter when only one event is passed**: Initialize `eventFilter` from the `events` prop. When `events.length === 1`, default to that event's ID instead of `'all'`.
+In `AdminEventTasks.tsx`, add a `useEffect` that subscribes to Postgres changes on `clickup_tasks` filtered by `event_id` (when a single event is selected). On any INSERT/UPDATE/DELETE, call `fetchTasks()` to refresh the data.
 
-2. **Filter the database query itself**: When a specific event is selected, add `.eq('event_id', eventId)` to the Supabase query so we don't fetch 188 rows unnecessarily.
-
-### Specific Code Changes
-
-**Change 1 — Initialize filter from props (around line 50)**
 ```typescript
-// Before
-const [eventFilter, setEventFilter] = useState<string>('all');
-
-// After
-const [eventFilter, setEventFilter] = useState<string>(
-  events.length === 1 ? events[0].id : 'all'
-);
-```
-
-**Change 2 — Filter the query (around line 53-58)**
-```typescript
-// Before
-const { data, error } = await supabase
-  .from('clickup_tasks')
-  .select('*')
-  .order('due_date', { ascending: true });
-
-// After
-let query = supabase
-  .from('clickup_tasks')
-  .select('*')
-  .order('due_date', { ascending: true });
-
-if (eventFilter !== 'all') {
-  query = query.eq('event_id', eventFilter);
-}
-
-const { data, error } = await query;
-```
-
-**Change 3 — Re-fetch when eventFilter changes (line 68-70)**
-```typescript
-// Before
 useEffect(() => {
-  fetchTasks();
-}, []);
+  if (eventFilter === 'all') return;
+  
+  const channel = supabase
+    .channel(`checklist-${eventFilter}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'clickup_tasks',
+      filter: `event_id=eq.${eventFilter}`,
+    }, () => fetchTasks())
+    .subscribe();
 
-// After
-useEffect(() => {
-  fetchTasks();
+  return () => { supabase.removeChannel(channel); };
 }, [eventFilter]);
 ```
 
-**Change 4 — Sync filter when events prop changes**
-Add an effect to update the filter if the parent passes a different event:
-```typescript
-useEffect(() => {
-  if (events.length === 1) {
-    setEventFilter(events[0].id);
-  }
-}, [events]);
-```
+This means whenever ClickUp sends a webhook and the task row is updated, the checklist will refresh automatically -- no manual sync needed.
 
-**Change 5 — Hide the "All Events" dropdown when only one event is passed**
-When `events.length === 1`, the event selector is redundant. Hide it or disable it so the UI is cleaner.
-
-These changes ensure that when the detail panel opens for a specific event, only that event's tasks are fetched and displayed.
+### Files Modified
+- `src/components/admin/AdminEventTasks.tsx` -- major cleanup (remove buttons, add realtime, rename labels)
+- `src/pages/AdminEventsManagement.tsx` -- rename sub-tab label
+- `src/components/events/EventProgressDashboard.tsx` -- rename empty state text
