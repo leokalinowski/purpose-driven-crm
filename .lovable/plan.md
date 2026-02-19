@@ -1,128 +1,83 @@
 
 
-# Redesign: Event-Centric Admin Events Page
+# Fix: ClickUp Tasks Not Filtering by Selected Event
 
-## Overview
-Replace the current 3-tab layout (Events Management / Email Management / ClickUp Tasks) with a single event-centric view where clicking an event row in the table reveals all related data (RSVPs, ClickUp Tasks, Emails) in an expandable detail panel below the table.
+## Problem
+When you expand an event row and click the "ClickUp Tasks" sub-tab, the `AdminEventTasks` component fetches **all** tasks from the `clickup_tasks` table and defaults the event filter dropdown to "All Events". This shows all 188 tasks instead of only tasks for the selected event.
 
-## Current Problems
-- Email Management and ClickUp Tasks live in separate tabs, disconnected from the event they belong to
-- You have to select an event again inside each tab
-- No task progress visibility in the events table itself
+## Root Cause
+In `src/components/admin/AdminEventTasks.tsx`:
+- `fetchTasks()` queries `clickup_tasks` with no `.eq('event_id', ...)` filter
+- `eventFilter` state defaults to `'all'`
+- The component ignores the fact that it's being passed a single event
 
-## New Layout
+## Fix
+**File: `src/components/admin/AdminEventTasks.tsx`**
 
-```text
-+---------------------------------------------------------------+
-| Events Management                      [Create Event] [Export] |
-| Manage all events across all agents...                         |
-+---------------------------------------------------------------+
-| [Stats Cards: Total | Upcoming | RSVPs | Avg Attendance]      |
-+---------------------------------------------------------------+
-| [Filters: Search | Status | Agent]                             |
-+---------------------------------------------------------------+
-| All Events (7)                                                 |
-| Event | Date | Agent | Location | RSVPs | Tasks | Status | ... |
-| -------|------|-------|----------|-------|-------|--------|------|
-| > The Real Estate Scholarship | Mar 21 | ... | 0/30 | 45% |..|
-+---------------------------------------------------------------+
-| EXPANDED DETAIL PANEL (when row clicked):                      |
-| [Overview] [RSVPs] [ClickUp Tasks] [Emails]                   |
-|                                                                |
-|  (sub-tab content for the selected event)                      |
-+---------------------------------------------------------------+
-| Right Sizing | Mar 21 | Timothy | ... | 0/35 | 20% | ...     |
-+---------------------------------------------------------------+
+Two changes:
+
+1. **Auto-set the event filter when only one event is passed**: Initialize `eventFilter` from the `events` prop. When `events.length === 1`, default to that event's ID instead of `'all'`.
+
+2. **Filter the database query itself**: When a specific event is selected, add `.eq('event_id', eventId)` to the Supabase query so we don't fetch 188 rows unnecessarily.
+
+### Specific Code Changes
+
+**Change 1 — Initialize filter from props (around line 50)**
+```typescript
+// Before
+const [eventFilter, setEventFilter] = useState<string>('all');
+
+// After
+const [eventFilter, setEventFilter] = useState<string>(
+  events.length === 1 ? events[0].id : 'all'
+);
 ```
 
-## Changes
+**Change 2 — Filter the query (around line 53-58)**
+```typescript
+// Before
+const { data, error } = await supabase
+  .from('clickup_tasks')
+  .select('*')
+  .order('due_date', { ascending: true });
 
-### 1. Add "Tasks %" Column to Events Table
-- Query `clickup_tasks` grouped by `event_id` to get completion percentages
-- Show a small progress bar + percentage in a new "Tasks" column
-- Fetch all task stats in one query when the page loads
+// After
+let query = supabase
+  .from('clickup_tasks')
+  .select('*')
+  .order('due_date', { ascending: true });
 
-### 2. Make Event Rows Clickable to Expand Detail Panel
-- Clicking a row sets `selectedEvent` and shows an expandable detail panel directly below the table (not a dialog)
-- The detail panel has 4 sub-tabs:
-  - **Overview**: Event info card (title, date, location, description, public page link, agent info)
-  - **RSVPs**: Existing `RSVPManagement` component, passed the selected event ID
-  - **ClickUp Tasks**: Existing `AdminEventTasks` component filtered to single event (or `EventTaskList`/`EventProgressDashboard`)
-  - **Emails**: Existing `EmailManagement` component, passed the selected event ID and title
-- Clicking the same row again collapses the panel
+if (eventFilter !== 'all') {
+  query = query.eq('event_id', eventFilter);
+}
 
-### 3. Remove Top-Level Tabs
-- Remove the 3-tab layout (Events Management / Email Management / ClickUp Tasks)
-- Everything lives on one page, contextually tied to the selected event
-- The "Link Events to ClickUp" and "Sync Tasks" buttons move into the ClickUp Tasks sub-tab of the detail panel (or stay as global actions in the header area)
-
-### 4. Visual Indicator for Selected Row
-- Highlight the selected row with a distinct background color
-- Add a chevron indicator showing which row is expanded
-
-## Files to Modify
-
-### `src/pages/AdminEventsManagement.tsx` (major refactor)
-- Remove top-level `Tabs` wrapper
-- Add task progress data fetch (batch query for all events)
-- Add "Tasks" column to table with progress bar
-- Add row click handler to toggle `selectedEvent`
-- Render detail panel with sub-tabs below table when an event is selected
-- Move stats/filters to always be visible (no longer inside a tab)
-- Keep "Link Events" and "Sync Tasks" buttons accessible (either in header or in the ClickUp sub-tab)
-
-### No new files needed
-- All sub-components (`RSVPManagement`, `EmailManagement`, `AdminEventTasks`/`EventProgressDashboard`) already accept `eventId` as a prop
-
-## Technical Details
-
-### Task Progress Batch Query
-On page load, fetch task completion stats for all events in one query:
-```sql
-SELECT event_id, 
-       COUNT(*) as total, 
-       COUNT(completed_at) as completed
-FROM clickup_tasks 
-GROUP BY event_id
-```
-Store as a `Record<string, { total: number; completed: number }>` map and look up per row.
-
-### Selected Event Detail Panel
-The detail panel renders below the table card (or inside it) with sub-tabs:
-```tsx
-{selectedEvent && (
-  <Card className="mt-4">
-    <Tabs defaultValue="overview">
-      <TabsList>
-        <TabsTrigger value="overview">Overview</TabsTrigger>
-        <TabsTrigger value="rsvps">RSVPs</TabsTrigger>
-        <TabsTrigger value="tasks">ClickUp Tasks</TabsTrigger>
-        <TabsTrigger value="emails">Emails</TabsTrigger>
-      </TabsList>
-      <TabsContent value="overview">...</TabsContent>
-      <TabsContent value="rsvps">
-        <RSVPManagement eventId={selectedEvent.id} />
-      </TabsContent>
-      <TabsContent value="tasks">
-        <AdminEventTasks events={[selectedEvent]} agents={agents} />
-      </TabsContent>
-      <TabsContent value="emails">
-        <EmailManagement eventId={selectedEvent.id} eventTitle={selectedEvent.title} />
-      </TabsContent>
-    </Tabs>
-  </Card>
-)}
+const { data, error } = await query;
 ```
 
-### Row Highlighting
-Selected row gets a distinct style:
-```tsx
-<TableRow 
-  className={cn(
-    "cursor-pointer",
-    selectedEvent?.id === event.id && "bg-primary/5 border-l-2 border-l-primary"
-  )}
-  onClick={() => setSelectedEvent(selectedEvent?.id === event.id ? null : event)}
-/>
+**Change 3 — Re-fetch when eventFilter changes (line 68-70)**
+```typescript
+// Before
+useEffect(() => {
+  fetchTasks();
+}, []);
+
+// After
+useEffect(() => {
+  fetchTasks();
+}, [eventFilter]);
 ```
 
+**Change 4 — Sync filter when events prop changes**
+Add an effect to update the filter if the parent passes a different event:
+```typescript
+useEffect(() => {
+  if (events.length === 1) {
+    setEventFilter(events[0].id);
+  }
+}, [events]);
+```
+
+**Change 5 — Hide the "All Events" dropdown when only one event is passed**
+When `events.length === 1`, the event selector is redundant. Hide it or disable it so the UI is cleaner.
+
+These changes ensure that when the detail panel opens for a specific event, only that event's tasks are fetched and displayed.
