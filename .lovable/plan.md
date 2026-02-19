@@ -1,79 +1,99 @@
 
 
-# Fix External Link, Add Logo Download, Show Agent on Event Contributions
+# Add Wednesday Afternoon Coaching Reminder
 
-## 1. Fix External Link 404
+## Current State
+- A cron job for **Wednesday at 1:00 PM ET** (job 6) already exists in `pg_cron` but it's blocked by the idempotency logic.
+- A cron job for **Thursday at 8:30 AM ET** (job 13) also exists and works correctly.
+- The edge function checks `coaching_reminder_logs` for an existing row matching `(agent_id, week_number, year)`. Since there's no distinction between Wednesday vs Thursday, whichever runs first blocks the other.
 
-The external link icon next to the company name opens the sponsor's `website` value. If it's stored without a protocol (e.g. `reop.com`), the browser treats it as a relative path within the app, causing a 404.
+## Plan
 
-**Fix in `AdminSponsors.tsx` (line 161):**
-- Before rendering the `href`, prepend `https://` if the URL doesn't already start with `http://` or `https://`.
+### 1. Add `reminder_type` column to `coaching_reminder_logs`
+Add a nullable text column `reminder_type` (values: `'wednesday'`, `'thursday'`) with a default of `'thursday'` so existing rows remain valid.
 
-## 2. Add Logo Download Button
+### 2. Update the edge function to accept and use `reminder_type`
+- Read `reminder_type` from the request body (default `'thursday'`).
+- Include `reminder_type` in the idempotency check so Wednesday and Thursday reminders are tracked independently.
+- Include `reminder_type` in log inserts.
+- Slightly adjust the Wednesday email copy (e.g., "before Thursday's coaching session" instead of "before tomorrow's").
 
-Add a small download button next to the logo thumbnail in the table. When clicked, it fetches the logo image and triggers a browser download.
+### 3. Update the Wednesday cron job body
+The existing cron job (job 6) needs its body updated to include `"reminder_type": "wednesday"` and `"source": "cron"`, plus the required `X-Cron-Job: true` header (currently missing).
 
-**Changes in `AdminSponsors.tsx`:**
-- Add a download icon button in the Company cell, visible only when `s.logo_url` exists.
-- The download function fetches the image URL as a blob and triggers a file save using a temporary anchor element.
-
-## 3. Show Agent Name on Event Contributions
-
-In the SponsorForm, each event in the "Event Contributions" list currently shows just the event title and date. We need to also show which agent is attached to that event.
-
-**Changes in `SponsorForm.tsx`:**
-- Update the events query (line 40) to also select `agent_id`.
-- Add a second query (or extend the existing one) to fetch agent names from the `profiles` table for the agent IDs found.
-- Display the agent name as a small badge or text next to each event title in the contributions list.
+### 4. Fix the Thursday cron job
+Job 13 is also missing the `X-Cron-Job` header and doesn't pass `source: "cron"` properly. We'll fix that too while we're at it.
 
 ---
 
 ## Technical Details
 
-### File: `src/pages/AdminSponsors.tsx`
-
-**External link fix (line 161):**
-```tsx
-const href = s.website.startsWith('http') ? s.website : `https://${s.website}`;
-<a href={href} target="_blank" ...>
+### Migration SQL
+```sql
+ALTER TABLE coaching_reminder_logs
+ADD COLUMN reminder_type text DEFAULT 'thursday';
 ```
 
-**Logo download button** -- add a Download icon button in the Company cell that:
-```tsx
-const handleDownloadLogo = async (url: string, companyName: string) => {
-  const response = await fetch(url);
-  const blob = await response.blob();
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${companyName}-logo.${url.split('.').pop()}`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-};
+### Edge Function Changes (`supabase/functions/coaching-reminder/index.ts`)
+
+**Read reminder_type from body:**
+```ts
+const reminderType = requestBody.reminder_type || 'thursday';
 ```
 
-### File: `src/components/admin/SponsorForm.tsx`
-
-**Event query update (line 40):**
-```tsx
-const { data, error } = await supabase
-  .from('events')
-  .select('id, title, event_date, agent_id')
-  .order('event_date', { ascending: false });
+**Idempotency check (lines 51-57) -- add filter:**
+```ts
+.eq('reminder_type', reminderType)
 ```
 
-**Agent names lookup** -- fetch profiles for the unique agent IDs:
-```tsx
-const agentIds = [...new Set(data.map(e => e.agent_id).filter(Boolean))];
-const { data: profiles } = await supabase
-  .from('profiles')
-  .select('id, full_name')
-  .in('id', agentIds);
-// Build a map: agentId -> name
+**Log inserts -- include reminder_type:**
+```ts
+{ ..., reminder_type: reminderType }
 ```
 
-**Display** -- show agent name next to each event title in the contributions scroll area:
-```tsx
-<span className="text-xs text-muted-foreground ml-1">
-  ({agentMap.get(ev.agent_id) ?? 'Unassigned'})
-</span>
+**Email copy adjustment:**
+- If `reminderType === 'wednesday'`: "...submit your Weekly Success Scoreboard before Thursday's coaching Zoom session."
+- If `reminderType === 'thursday'`: "...submit your Weekly Success Scoreboard before today's coaching Zoom session."
+
+### Cron Job Updates (run via SQL, not migration)
+
+**Drop and recreate Wednesday job (job 6):**
+```sql
+SELECT cron.unschedule(6);
+SELECT cron.schedule(
+  'coaching-reminder-wednesday',
+  '0 18 * * 3',
+  $$
+  SELECT net.http_post(
+    url:='https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/coaching-reminder',
+    headers:='{"Content-Type": "application/json", "Authorization": "Bearer <ANON_KEY>", "X-Cron-Job": "true"}'::jsonb,
+    body:='{"source": "cron", "reminder_type": "wednesday"}'::jsonb
+  ) as request_id;
+  $$
+);
 ```
+
+**Drop and recreate Thursday job (job 13):**
+```sql
+SELECT cron.unschedule(13);
+SELECT cron.schedule(
+  'coaching-reminder-thursday',
+  '30 13 * * 4',
+  $$
+  SELECT net.http_post(
+    url:='https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/coaching-reminder',
+    headers:='{"Content-Type": "application/json", "Authorization": "Bearer <ANON_KEY>", "X-Cron-Job": "true"}'::jsonb,
+    body:='{"source": "cron", "reminder_type": "thursday"}'::jsonb
+  ) as request_id;
+  $$
+);
+```
+
+### Summary of Changes
+| What | Action |
+|------|--------|
+| `coaching_reminder_logs` table | Add `reminder_type` column |
+| `coaching-reminder` edge function | Accept `reminder_type`, use in idempotency + logs, adjust email copy |
+| Wednesday cron job (job 6) | Recreate with correct headers and `reminder_type: "wednesday"` |
+| Thursday cron job (job 13) | Recreate with correct headers and `reminder_type: "thursday"` |
+
