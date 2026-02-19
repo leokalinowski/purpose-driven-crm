@@ -4,8 +4,6 @@ import {
   Calendar,
   Mail,
   TrendingUp,
-  UserCheck,
-  FileBarChart,
   Phone,
   LogOut,
   BarChart3,
@@ -17,7 +15,9 @@ import {
   RotateCcw,
   LifeBuoy,
   Handshake,
-  ClipboardList
+  ClipboardList,
+  ChevronRight,
+  type LucideIcon,
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -33,10 +33,50 @@ import {
   SidebarHeader,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useUserRole } from '@/hooks/useUserRole';
+
+interface AdminItem {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+}
+
+function AdminSubGroup({ label, icon: Icon, items, pathname }: {
+  label: string;
+  icon: LucideIcon;
+  items: AdminItem[];
+  pathname: string;
+}) {
+  const isGroupActive = items.some((item) => pathname === item.url);
+
+  return (
+    <Collapsible defaultOpen={isGroupActive}>
+      <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors group">
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="flex-1 text-left">{label}</span>
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <SidebarMenu className="ml-4 mt-0.5">
+          {items.map((item) => (
+            <SidebarMenuItem key={item.title}>
+              <SidebarMenuButton asChild isActive={pathname === item.url}>
+                <Link to={item.url}>
+                  <item.icon aria-hidden="true" />
+                  <span>{item.title}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 const menuItems = [
   { title: 'Agent Dashboard', url: '/', icon: Home },
@@ -103,129 +143,45 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel>Administration</SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton 
-                    asChild
-                    isActive={location.pathname === '/admin/dashboard'}
-                  >
-                    <Link to="/admin/dashboard">
-                      <BarChart3 />
-                      <span>Admin Dashboard</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton 
-                    asChild
-                    isActive={location.pathname === '/admin/spheresync-recovery'}
-                  >
-                    <Link to="/admin/spheresync-recovery">
-                      <RotateCcw />
-                      <span>SphereSync Recovery</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton 
-                    asChild
-                    isActive={location.pathname === '/admin/team-management'}
-                  >
-                    <Link to="/admin/team-management">
-                      <UserPlus />
-                      <span>Team Management</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === '/admin/database'}
-                  >
-                    <Link to="/admin/database">
-                      <Database />
-                      <span>Database Management</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === '/admin/events'}
-                  >
-                    <Link to="/admin/events">
-                      <Calendar />
-                      <span>Events Management</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === '/admin/newsletter'}
-                  >
-                    <Link to="/admin/newsletter">
-                      <Mail />
-                      <span>Newsletter Management</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === '/admin/social-scheduler'}
-                  >
-                    <Link to="/admin/social-scheduler">
-                      <Share />
-                      <span>Social Media</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === '/admin/coaching'}
-                  >
-                    <Link to="/admin/coaching">
-                      <TrendingUp />
-                      <span>Coaching Management</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === '/admin/email-logs'}
-                  >
-                    <Link to="/admin/email-logs">
-                      <FileText />
-                      <span>Email Logs</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === '/admin/sponsors'}
-                  >
-                    <Link to="/admin/sponsors">
-                      <Handshake />
-                      <span>Sponsor Database</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === '/admin/survey-results'}
-                  >
-                    <Link to="/admin/survey-results">
-                      <ClipboardList />
-                      <span>Survey Results</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
+              <AdminSubGroup
+                label="Dashboard & Team"
+                icon={BarChart3}
+                items={[
+                  { title: 'Admin Dashboard', url: '/admin/dashboard', icon: BarChart3 },
+                  { title: 'Team Management', url: '/admin/team-management', icon: UserPlus },
+                ]}
+                pathname={location.pathname}
+              />
+              <AdminSubGroup
+                label="Content & Comms"
+                icon={Mail}
+                items={[
+                  { title: 'Newsletter Management', url: '/admin/newsletter', icon: Mail },
+                  { title: 'Social Media', url: '/admin/social-scheduler', icon: Share },
+                  { title: 'Events Management', url: '/admin/events', icon: Calendar },
+                  { title: 'Email Logs', url: '/admin/email-logs', icon: FileText },
+                ]}
+                pathname={location.pathname}
+              />
+              <AdminSubGroup
+                label="Operations"
+                icon={Settings}
+                items={[
+                  { title: 'Database Management', url: '/admin/database', icon: Database },
+                  { title: 'SphereSync Recovery', url: '/admin/spheresync-recovery', icon: RotateCcw },
+                  { title: 'Coaching Management', url: '/admin/coaching', icon: TrendingUp },
+                ]}
+                pathname={location.pathname}
+              />
+              <AdminSubGroup
+                label="Business & Research"
+                icon={Handshake}
+                items={[
+                  { title: 'Sponsor Database', url: '/admin/sponsors', icon: Handshake },
+                  { title: 'Survey Results', url: '/admin/survey-results', icon: ClipboardList },
+                ]}
+                pathname={location.pathname}
+              />
             </SidebarGroupContent>
           </SidebarGroup>
         )}
