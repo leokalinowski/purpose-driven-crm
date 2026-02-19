@@ -46,15 +46,23 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
   const [syncing, setSyncing] = useState(false);
   const [linking, setLinking] = useState(false);
   const [linkResult, setLinkResult] = useState<any>(null);
-  const [eventFilter, setEventFilter] = useState<string>('all');
+  const [eventFilter, setEventFilter] = useState<string>(
+    events.length === 1 ? events[0].id : 'all'
+  );
 
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from('clickup_tasks')
         .select('*')
         .order('due_date', { ascending: true });
+
+      if (eventFilter !== 'all') {
+        query = query.eq('event_id', eventFilter);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setTasks((data || []) as ClickUpTaskRow[]);
@@ -67,7 +75,13 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
 
   useEffect(() => {
     fetchTasks();
-  }, []);
+  }, [eventFilter]);
+
+  useEffect(() => {
+    if (events.length === 1) {
+      setEventFilter(events[0].id);
+    }
+  }, [events]);
 
   const handleLinkEvents = async () => {
     try {
@@ -138,23 +152,25 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
     <div className="space-y-4">
       {/* Actions Row */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-4">
-          <Select value={eventFilter} onValueChange={setEventFilter}>
-            <SelectTrigger className="w-[250px]">
-              <SelectValue placeholder="Filter by event" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Events</SelectItem>
-              {events.map(e => {
-                const agent = agents.find(a => a.user_id === e.agent_id);
-                const agentName = agent ? agent.name : 'Unassigned';
-                return (
-                  <SelectItem key={e.id} value={e.id}>{e.title} ({agentName})</SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        </div>
+        {events.length > 1 && (
+          <div className="flex items-center gap-4">
+            <Select value={eventFilter} onValueChange={setEventFilter}>
+              <SelectTrigger className="w-[250px]">
+                <SelectValue placeholder="Filter by event" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Events</SelectItem>
+                {events.map(e => {
+                  const agent = agents.find(a => a.user_id === e.agent_id);
+                  const agentName = agent ? agent.name : 'Unassigned';
+                  return (
+                    <SelectItem key={e.id} value={e.id}>{e.title} ({agentName})</SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <Button onClick={handleLinkEvents} disabled={linking} variant="outline">
             <Link2 className={`h-4 w-4 mr-2 ${linking ? 'animate-spin' : ''}`} />
