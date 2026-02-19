@@ -451,6 +451,7 @@ export type Database = {
           created_at: string | null
           error_message: string | null
           id: string
+          reminder_type: string | null
           sent_at: string | null
           success: boolean | null
           week_number: number
@@ -461,6 +462,7 @@ export type Database = {
           created_at?: string | null
           error_message?: string | null
           id?: string
+          reminder_type?: string | null
           sent_at?: string | null
           success?: boolean | null
           week_number: number
@@ -471,6 +473,7 @@ export type Database = {
           created_at?: string | null
           error_message?: string | null
           id?: string
+          reminder_type?: string | null
           sent_at?: string | null
           success?: boolean | null
           week_number?: number
