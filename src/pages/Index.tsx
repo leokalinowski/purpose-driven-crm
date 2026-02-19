@@ -8,6 +8,7 @@ import { AgentPerformanceCharts } from '@/components/agent/AgentPerformanceChart
 import { ExportButtons } from '@/components/dashboard/ExportButtons';
 import { DashboardRefreshButton } from '@/components/dashboard/DashboardRefreshButton';
 import { SupportWidget } from '@/components/support/SupportWidget';
+import { EventsWidget } from '@/components/events/EventsWidget';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
@@ -88,9 +89,10 @@ const Index = () => {
           <AgentMetricsCards />
         </div>
 
-        {/* Support & Action Items Widget */}
-        <div>
+        {/* Support & Action Items Widget + Events Widget */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <SupportWidget />
+          <EventsWidget />
         </div>
 
         {/* Today's Focus & Priority Tasks */}

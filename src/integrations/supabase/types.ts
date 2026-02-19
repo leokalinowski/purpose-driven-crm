@@ -356,6 +356,7 @@ export type Database = {
       }
       clickup_tasks: {
         Row: {
+          agent_id: string | null
           clickup_task_id: string
           completed_at: string | null
           created_at: string
@@ -368,6 +369,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          agent_id?: string | null
           clickup_task_id: string
           completed_at?: string | null
           created_at?: string
@@ -380,6 +382,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          agent_id?: string | null
           clickup_task_id?: string
           completed_at?: string | null
           created_at?: string
@@ -392,6 +395,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "clickup_tasks_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "clickup_tasks_event_id_fkey"
             columns: ["event_id"]

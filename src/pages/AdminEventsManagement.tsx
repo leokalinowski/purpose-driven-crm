@@ -37,6 +37,7 @@ import { format, startOfToday } from 'date-fns';
 import { EventForm } from '@/components/events/EventForm';
 import { RSVPManagement } from '@/components/events/RSVPManagement';
 import { EmailManagement } from '@/components/events/email/EmailManagement';
+import { AdminEventTasks } from '@/components/admin/AdminEventTasks';
 
 interface EventWithAgent {
   id: string;
@@ -88,7 +89,7 @@ const AdminEventsManagement = () => {
   const [editingEvent, setEditingEvent] = useState<EventWithAgent | null | undefined>(undefined);
   const [deletingEvent, setDeletingEvent] = useState<EventWithAgent | null>(null);
   const [viewingRSVPs, setViewingRSVPs] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'events' | 'emails'>('events');
+  const [activeTab, setActiveTab] = useState<'events' | 'emails' | 'clickup-tasks'>('events');
   const [stats, setStats] = useState<EventStats>({
     total: 0,
     published: 0,
@@ -340,10 +341,11 @@ const AdminEventsManagement = () => {
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'events' | 'emails')} className="w-full mt-6">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'events' | 'emails' | 'clickup-tasks')} className="w-full mt-6">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
             <TabsTrigger value="events">Events Management</TabsTrigger>
             <TabsTrigger value="emails">Email Management</TabsTrigger>
+            <TabsTrigger value="clickup-tasks">ClickUp Tasks</TabsTrigger>
           </TabsList>
 
             <TabsContent value="events" className="space-y-4 mt-6">
@@ -624,6 +626,13 @@ const AdminEventsManagement = () => {
             <EmailManagement
               eventId={selectedEvent?.id}
               eventTitle={selectedEvent?.title}
+            />
+          </TabsContent>
+
+          <TabsContent value="clickup-tasks" className="space-y-4 mt-6">
+            <AdminEventTasks
+              events={events.map(e => ({ id: e.id, title: e.title, agent_id: e.agent_id }))}
+              agents={agents}
             />
           </TabsContent>
         </Tabs>
