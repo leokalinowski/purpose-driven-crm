@@ -34,6 +34,8 @@ import EventPublicPage from "./pages/EventPublicPage";
 import EditorLanding from "./pages/EditorLanding";
 import Support from "./pages/Support";
 import AdminSponsors from "./pages/AdminSponsors";
+import PipelineSurvey from "./pages/PipelineSurvey";
+import AdminSurveyResults from "./pages/AdminSurveyResults";
 
 const queryClient = new QueryClient();
 
@@ -69,6 +71,8 @@ const AppContent = () => {
         <Route path="/internal/editor" element={<EditorLanding />} />
         <Route path="/support" element={<Support />} />
         <Route path="/admin/sponsors" element={<AdminSponsors />} />
+        <Route path="/admin/survey-results" element={<AdminSurveyResults />} />
+        <Route path="/survey/pipeline" element={<PipelineSurvey />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
