@@ -1,99 +1,102 @@
 
 
-# Add Wednesday Afternoon Coaching Reminder
+# Smart Pipeline Questionnaire - Public Landing Page
 
-## Current State
-- A cron job for **Wednesday at 1:00 PM ET** (job 6) already exists in `pg_cron` but it's blocked by the idempotency logic.
-- A cron job for **Thursday at 8:30 AM ET** (job 13) also exists and works correctly.
-- The edge function checks `coaching_reminder_logs` for an existing row matching `(agent_id, week_number, year)`. Since there's no distinction between Wednesday vs Thursday, whichever runs first blocks the other.
+## Overview
+Build a Google Forms-style public survey page at `/survey/pipeline` where agents can submit their preferences for the upcoming Smart Pipeline feature. Responses are stored in a new `pipeline_survey_responses` Supabase table. An admin view at `/admin/survey-results` will display submitted responses.
 
-## Plan
+## What We're Building
 
-### 1. Add `reminder_type` column to `coaching_reminder_logs`
-Add a nullable text column `reminder_type` (values: `'wednesday'`, `'thursday'`) with a default of `'thursday'` so existing rows remain valid.
+### 1. New Database Table: `pipeline_survey_responses`
+Stores each agent's answers as a single row with structured columns:
 
-### 2. Update the edge function to accept and use `reminder_type`
-- Read `reminder_type` from the request body (default `'thursday'`).
-- Include `reminder_type` in the idempotency check so Wednesday and Thursday reminders are tracked independently.
-- Include `reminder_type` in log inserts.
-- Slightly adjust the Wednesday email copy (e.g., "before Thursday's coaching session" instead of "before tomorrow's").
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | PK |
+| agent_name | text | Required |
+| email | text | Required |
+| created_at | timestamptz | auto |
+| pipeline_stages | text[] | Which stages they want |
+| separate_buyer_seller | text | Yes/No/Maybe |
+| must_have_fields | text[] | Multi-select checkboxes |
+| additional_fields | text | Free text |
+| follow_up_automation | text | Interest level |
+| activity_types | text[] | Which activities to track |
+| integration_priorities | text[] | Which integrations matter most |
+| biggest_pain_point | text | Free text |
+| desired_views | text[] | Kanban/List/Calendar |
+| mobile_importance | text | Rating |
+| additional_comments | text | Free text |
 
-### 3. Update the Wednesday cron job body
-The existing cron job (job 6) needs its body updated to include `"reminder_type": "wednesday"` and `"source": "cron"`, plus the required `X-Cron-Job: true` header (currently missing).
+RLS: Public INSERT (no auth needed), admin-only SELECT/DELETE.
 
-### 4. Fix the Thursday cron job
-Job 13 is also missing the `X-Cron-Job` header and doesn't pass `source: "cron"` properly. We'll fix that too while we're at it.
+### 2. New Page: Survey Landing (`/survey/pipeline`)
+- **Public page** (no auth required), styled like Google Forms with a purple/teal header banner
+- Sections with clear headings matching the 30-question questionnaire from our earlier discussion, condensed into ~12 actionable fields
+- Mix of radio groups, checkbox groups, and free-text fields
+- Progress indicator showing current section
+- Success confirmation screen after submission
+- Mobile-responsive
 
----
+**Sections:**
+1. **Your Info** -- Name, Email
+2. **Pipeline Stages** -- Checkboxes for desired stages, radio for separate buyer/seller pipelines
+3. **Fields & Data** -- Checkboxes for must-have fields, free text for extras
+4. **Automation & Activities** -- Interest in follow-up automation, which activity types to track
+5. **Integrations** -- Which existing features to connect (SphereSync, Events, Coaching, Transactions)
+6. **Views & Usability** -- Preferred views, mobile importance, free-text for pain points and comments
+
+### 3. New Page: Admin Survey Results (`/admin/survey-results`)
+- Protected admin page showing all responses in a table
+- Summary counts for multi-select fields (e.g., "12 agents want Kanban view")
+- Export to CSV option
+- Simple bar charts for the most popular choices using Recharts (already installed)
+
+### 4. Route & Navigation Updates
+- Add `/survey/pipeline` route (public, no layout wrapper)
+- Add `/admin/survey-results` route (protected, inside Layout)
+- Add sidebar link under Admin section
 
 ## Technical Details
 
-### Migration SQL
+### Files to Create
+- `src/pages/PipelineSurvey.tsx` -- Public survey form page
+- `src/pages/AdminSurveyResults.tsx` -- Admin results dashboard
+- Migration SQL for `pipeline_survey_responses` table
+
+### Files to Modify
+- `src/App.tsx` -- Add two new routes
+- `src/components/layout/AppSidebar.tsx` -- Add admin sidebar link
+- `supabase/config.toml` -- No edge function needed (direct Supabase insert)
+
+### Survey Form Implementation
+- Uses `react-hook-form` + `zod` for validation (already installed)
+- Multi-step form with sections, using local state for current step
+- Each section rendered as a Card with the Google Forms purple-top-bar aesthetic
+- On submit: direct `supabase.from('pipeline_survey_responses').insert(...)` call (public insert RLS)
+- Shows a confirmation card with confetti (already installed: `canvas-confetti`)
+
+### RLS Policies
 ```sql
-ALTER TABLE coaching_reminder_logs
-ADD COLUMN reminder_type text DEFAULT 'thursday';
+-- Anyone can submit
+CREATE POLICY "Public can submit survey" ON pipeline_survey_responses
+  FOR INSERT WITH CHECK (true);
+
+-- Only admins can read
+CREATE POLICY "Admins can view survey responses" ON pipeline_survey_responses
+  FOR SELECT USING (get_current_user_role() = 'admin');
+
+-- Only admins can delete
+CREATE POLICY "Admins can delete survey responses" ON pipeline_survey_responses
+  FOR DELETE USING (get_current_user_role() = 'admin');
 ```
 
-### Edge Function Changes (`supabase/functions/coaching-reminder/index.ts`)
-
-**Read reminder_type from body:**
-```ts
-const reminderType = requestBody.reminder_type || 'thursday';
-```
-
-**Idempotency check (lines 51-57) -- add filter:**
-```ts
-.eq('reminder_type', reminderType)
-```
-
-**Log inserts -- include reminder_type:**
-```ts
-{ ..., reminder_type: reminderType }
-```
-
-**Email copy adjustment:**
-- If `reminderType === 'wednesday'`: "...submit your Weekly Success Scoreboard before Thursday's coaching Zoom session."
-- If `reminderType === 'thursday'`: "...submit your Weekly Success Scoreboard before today's coaching Zoom session."
-
-### Cron Job Updates (run via SQL, not migration)
-
-**Drop and recreate Wednesday job (job 6):**
-```sql
-SELECT cron.unschedule(6);
-SELECT cron.schedule(
-  'coaching-reminder-wednesday',
-  '0 18 * * 3',
-  $$
-  SELECT net.http_post(
-    url:='https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/coaching-reminder',
-    headers:='{"Content-Type": "application/json", "Authorization": "Bearer <ANON_KEY>", "X-Cron-Job": "true"}'::jsonb,
-    body:='{"source": "cron", "reminder_type": "wednesday"}'::jsonb
-  ) as request_id;
-  $$
-);
-```
-
-**Drop and recreate Thursday job (job 13):**
-```sql
-SELECT cron.unschedule(13);
-SELECT cron.schedule(
-  'coaching-reminder-thursday',
-  '30 13 * * 4',
-  $$
-  SELECT net.http_post(
-    url:='https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/coaching-reminder',
-    headers:='{"Content-Type": "application/json", "Authorization": "Bearer <ANON_KEY>", "X-Cron-Job": "true"}'::jsonb,
-    body:='{"source": "cron", "reminder_type": "thursday"}'::jsonb
-  ) as request_id;
-  $$
-);
-```
-
-### Summary of Changes
-| What | Action |
-|------|--------|
-| `coaching_reminder_logs` table | Add `reminder_type` column |
-| `coaching-reminder` edge function | Accept `reminder_type`, use in idempotency + logs, adjust email copy |
-| Wednesday cron job (job 6) | Recreate with correct headers and `reminder_type: "wednesday"` |
-| Thursday cron job (job 13) | Recreate with correct headers and `reminder_type: "thursday"` |
+### Admin Results Page
+- Table listing all responses with timestamp and agent name
+- Aggregated bar charts (Recharts) showing:
+  - Most requested pipeline stages
+  - Most wanted fields
+  - Integration priorities
+  - Preferred views
+- CSV export button using `papaparse` (already installed)
 
