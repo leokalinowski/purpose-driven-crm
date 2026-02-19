@@ -119,19 +119,21 @@ serve(async (req) => {
     const logoUrl = agent?.logo_colored_url || event.logo_url || '';
     const headshotUrl = agent?.headshot_url || '';
 
-    const eventDate = new Date(event.event_date);
-    // Format date manually to avoid date-fns dependency issues
-    const formattedDate = eventDate.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-    const formattedTime = eventDate.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true 
-    });
+    // Parse date/time directly from the stored string to avoid timezone shifts
+    const dateTimeParts = event.event_date.split('T');
+    const datePart = dateTimeParts[0]; // "YYYY-MM-DD"
+    const timePart = dateTimeParts[1]?.substring(0, 5) || '00:00'; // "HH:MM"
+
+    const [year, month, day] = datePart.split('-').map(Number);
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const dateObj = new Date(year, month - 1, day);
+    const formattedDate = `${weekdays[dateObj.getDay()]}, ${monthNames[month-1]} ${day}, ${year}`;
+
+    const [h, mi] = timePart.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const hour12 = h % 12 || 12;
+    const formattedTime = `${hour12}:${String(mi).padStart(2, '0')} ${ampm}`;
 
     const isWaitlist = rsvp.status === 'waitlist';
 

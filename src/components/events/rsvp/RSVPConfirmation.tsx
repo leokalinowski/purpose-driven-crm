@@ -1,7 +1,6 @@
 import { CheckCircle2, Calendar, MapPin, Users, Mail } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { format } from 'date-fns';
 
 interface RSVPConfirmationProps {
   eventTitle: string;
@@ -52,7 +51,21 @@ export const RSVPConfirmation = ({
 
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Calendar className="h-4 w-4" />
-              <span>{format(new Date(eventDate), 'EEEE, MMMM d, yyyy')}</span>
+              <span>{(() => {
+                const [datePart, timePart] = eventDate.split('T');
+                const [y, m, d] = datePart.split('-').map(Number);
+                const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                const dateObj = new Date(y, m - 1, d);
+                let result = `${weekdays[dateObj.getDay()]}, ${months[m-1]} ${d}, ${y}`;
+                if (timePart) {
+                  const [h, mi] = timePart.substring(0, 5).split(':').map(Number);
+                  const ampm = h >= 12 ? 'PM' : 'AM';
+                  const hour12 = h % 12 || 12;
+                  result += ` at ${hour12}:${String(mi).padStart(2, '0')} ${ampm}`;
+                }
+                return result;
+              })()}</span>
             </div>
 
             {location && (

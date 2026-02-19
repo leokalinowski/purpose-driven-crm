@@ -75,7 +75,12 @@ export function EventsWidget() {
         <div>
           <h4 className="font-semibold">{nextEvent.title}</h4>
           <p className="text-sm text-muted-foreground">
-            {format(new Date(nextEvent.event_date), 'MMM d, yyyy')} · {daysUntil === 0 ? 'Today!' : `${daysUntil} days away`}
+            {(() => {
+              const [datePart] = nextEvent.event_date.split('T');
+              const [y, m, d] = datePart.split('-').map(Number);
+              const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+              return `${months[m-1]} ${d}, ${y}`;
+            })()} · {daysUntil === 0 ? 'Today!' : `${daysUntil} days away`}
           </p>
         </div>
 
