@@ -681,7 +681,7 @@ const AdminEventsManagement = () => {
                                       </TabsTrigger>
                                       <TabsTrigger value="tasks" className="gap-1.5">
                                         <ListChecks className="h-4 w-4" />
-                                        ClickUp Tasks
+                                        Checklist
                                       </TabsTrigger>
                                       <TabsTrigger value="emails" className="gap-1.5">
                                         <Mail className="h-4 w-4" />
