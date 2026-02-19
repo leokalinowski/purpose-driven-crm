@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { RefreshCw, Users, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Users, CheckCircle2, AlertTriangle, Link2 } from 'lucide-react';
 import { format, isPast } from 'date-fns';
 
 interface ClickUpTaskRow {
@@ -20,6 +20,7 @@ interface ClickUpTaskRow {
   responsible_person: string | null;
   completed_at: string | null;
   agent_id: string | null;
+  phase: string | null;
 }
 
 interface Agent {
@@ -32,11 +33,19 @@ interface AdminEventTasksProps {
   agents: Agent[];
 }
 
+const PHASE_LABELS: Record<string, string> = {
+  pre_event: 'Pre-Event',
+  event_day: 'Event Day',
+  post_event: 'Post-Event',
+};
+
 export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
   const { toast } = useToast();
   const [tasks, setTasks] = useState<ClickUpTaskRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [linkResult, setLinkResult] = useState<any>(null);
   const [eventFilter, setEventFilter] = useState<string>('all');
 
   const fetchTasks = async () => {
@@ -59,6 +68,24 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
   useEffect(() => {
     fetchTasks();
   }, []);
+
+  const handleLinkEvents = async () => {
+    try {
+      setLinking(true);
+      setLinkResult(null);
+      const { data, error } = await supabase.functions.invoke('clickup-link-events');
+      if (error) throw error;
+      setLinkResult(data);
+      toast({
+        title: 'Link Complete',
+        description: data?.message || 'Events linked to ClickUp folders',
+      });
+    } catch (err: any) {
+      toast({ title: 'Link Failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setLinking(false);
+    }
+  };
 
   const handleSync = async () => {
     try {
@@ -109,8 +136,8 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
 
   return (
     <div className="space-y-4">
-      {/* Summary + Sync */}
-      <div className="flex items-center justify-between">
+      {/* Actions Row */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-4">
           <Select value={eventFilter} onValueChange={setEventFilter}>
             <SelectTrigger className="w-[250px]">
@@ -124,11 +151,52 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
             </SelectContent>
           </Select>
         </div>
-        <Button onClick={handleSync} disabled={syncing} variant="outline">
-          <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? 'Syncing...' : 'Sync from ClickUp'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleLinkEvents} disabled={linking} variant="outline">
+            <Link2 className={`h-4 w-4 mr-2 ${linking ? 'animate-spin' : ''}`} />
+            {linking ? 'Linking...' : 'Link Events to ClickUp'}
+          </Button>
+          <Button onClick={handleSync} disabled={syncing} variant="outline">
+            <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing...' : 'Sync Tasks'}
+          </Button>
+        </div>
       </div>
+
+      {/* Link Results */}
+      {linkResult && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Link Results</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {linkResult.linked?.length > 0 && (
+              <div>
+                <p className="font-medium text-green-600">✓ Linked ({linkResult.linked.length}):</p>
+                {linkResult.linked.map((l: any, i: number) => (
+                  <p key={i} className="ml-4 text-muted-foreground">{l.folder} → {l.event}</p>
+                ))}
+              </div>
+            )}
+            {linkResult.alreadyLinked?.length > 0 && (
+              <div>
+                <p className="font-medium text-blue-600">Already Linked ({linkResult.alreadyLinked.length}):</p>
+                {linkResult.alreadyLinked.map((l: any, i: number) => (
+                  <p key={i} className="ml-4 text-muted-foreground">{l.folder} → {l.event}</p>
+                ))}
+              </div>
+            )}
+            {linkResult.unmatched?.length > 0 && (
+              <div>
+                <p className="font-medium text-amber-600">⚠ Unmatched ({linkResult.unmatched.length}):</p>
+                {linkResult.unmatched.map((u: any, i: number) => (
+                  <p key={i} className="ml-4 text-muted-foreground">{u.folder}: {u.reason}</p>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Progress Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -175,7 +243,7 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
           {loading ? (
             <p className="text-center py-8 text-muted-foreground">Loading tasks...</p>
           ) : filteredTasks.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">No tasks found. Click "Sync from ClickUp" to pull tasks.</p>
+            <p className="text-center py-8 text-muted-foreground">No tasks found. Click "Link Events to ClickUp" first, then "Sync Tasks".</p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -183,6 +251,7 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
                   <TableRow>
                     <TableHead>Task</TableHead>
                     <TableHead>Event</TableHead>
+                    <TableHead>Phase</TableHead>
                     <TableHead>Due Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Responsible</TableHead>
@@ -201,6 +270,13 @@ export function AdminEventTasks({ events, agents }: AdminEventTasksProps) {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {getEventTitle(task.event_id)}
+                        </TableCell>
+                        <TableCell>
+                          {task.phase && (
+                            <Badge variant="outline" className="text-xs">
+                              {PHASE_LABELS[task.phase] || task.phase}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell>
                           {task.due_date ? (
