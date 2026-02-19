@@ -101,8 +101,49 @@ serve(async (req) => {
       throw new Error('Failed to fetch RSVPs')
     }
 
-    // Get or create email template
-    let { data: template, error: templateError } = await supabaseClient
+    // Template resolution: event-specific → global → hardcoded default
+    const agentName = event.profiles ?
+      `${event.profiles.first_name || ''} ${event.profiles.last_name || ''}`.trim() || 'Event Organizer' :
+      'Event Organizer'
+
+    const eventDate = new Date(event.event_date)
+    const formattedDate = eventDate.toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    })
+    const formattedTime = eventDate.toLocaleTimeString('en-US', {
+      hour: 'numeric', minute: '2-digit', hour12: true
+    })
+
+    const primaryColor = event.profiles?.primary_color || event.brand_color || '#2563eb'
+    const secondaryColor = event.profiles?.secondary_color || '#1e40af'
+
+    function replaceVars(content: string): string {
+      return content
+        .replace(/{event_title}/g, event.title)
+        .replace(/{event_date}/g, formattedDate)
+        .replace(/{event_time}/g, formattedTime)
+        .replace(/{event_description}/g, event.description || '')
+        .replace(/{event_location}/g, event.location || '')
+        .replace(/{agent_name}/g, agentName)
+        .replace(/{agent_email}/g, event.profiles?.email || '')
+        .replace(/{agent_phone}/g, event.profiles?.phone_number || '')
+        .replace(/{agent_office_number}/g, event.profiles?.office_number || '')
+        .replace(/{agent_office_address}/g, event.profiles?.office_address || '')
+        .replace(/{agent_website}/g, event.profiles?.website || '')
+        .replace(/{agent_brokerage}/g, event.profiles?.brokerage || '')
+        .replace(/{agent_team_name}/g, event.profiles?.team_name || '')
+        .replace(/{primary_color}/g, primaryColor)
+        .replace(/{secondary_color}/g, secondaryColor)
+        .replace(/{headshot_url}/g, event.profiles?.headshot_url || '')
+        .replace(/{logo_colored_url}/g, event.profiles?.logo_colored_url || '')
+        .replace(/{logo_white_url}/g, event.profiles?.logo_white_url || '')
+        .replace(/\{#if ([^}]+)\}([\s\S]*?)\{\/if\}/g, (_, _varName, inner) => inner.trim() ? inner : '')
+    }
+
+    let template: any = null
+
+    // 1. Check event-specific template
+    const { data: eventTemplate } = await supabaseClient
       .from('event_email_templates')
       .select('*')
       .eq('event_id', eventId)
@@ -110,47 +151,28 @@ serve(async (req) => {
       .eq('is_active', true)
       .single()
 
-    if (templateError || !template) {
-      // Create default template
-      const agentName = event.profiles ?
-        `${event.profiles.first_name || ''} ${event.profiles.last_name || ''}`.trim() || 'Event Organizer' :
-        'Event Organizer'
-
-      const eventDate = new Date(event.event_date)
-      const formattedDate = eventDate.toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit'
-      })
-
-      const defaultTemplate = await supabaseClient
-        .rpc('get_default_email_template', {
-          email_type: emailType,
-          agent_name: agentName,
-          event_title: event.title,
-          event_date: formattedDate
-        })
-
-      const { data: newTemplate, error: createError } = await supabaseClient
-        .from('event_email_templates')
-        .insert({
-          event_id: eventId,
-          email_type: emailType,
-          subject: defaultTemplate.subject,
-          html_content: defaultTemplate.html_content,
-          text_content: defaultTemplate.text_content
-        })
-        .select()
+    if (eventTemplate) {
+      template = { subject: replaceVars(eventTemplate.subject), html_content: replaceVars(eventTemplate.html_content), text_content: eventTemplate.text_content ? replaceVars(eventTemplate.text_content) : null }
+    } else {
+      // 2. Check global template
+      const { data: globalTemplate } = await supabaseClient
+        .from('global_email_templates')
+        .select('*')
+        .eq('email_type', emailType)
+        .eq('is_active', true)
         .single()
 
-      if (createError) {
-        throw new Error('Failed to create email template')
+      if (globalTemplate) {
+        template = { subject: replaceVars(globalTemplate.subject), html_content: replaceVars(globalTemplate.html_content), text_content: globalTemplate.text_content ? replaceVars(globalTemplate.text_content) : null }
+      } else {
+        // 3. Hardcoded fallback
+        const typeLabel = emailType === 'reminder_7day' ? '7-Day Reminder' : emailType === 'reminder_1day' ? '1-Day Reminder' : emailType === 'thank_you' ? 'Thank You' : 'Follow Up'
+        template = {
+          subject: `${typeLabel}: ${event.title}`,
+          html_content: `<html><body style="font-family: sans-serif; padding: 20px;"><h1 style="color: ${primaryColor};">${typeLabel}</h1><p>Hi there,</p><p>This is a ${typeLabel.toLowerCase()} for <strong>${event.title}</strong> on ${formattedDate} at ${formattedTime}.</p>${event.location ? `<p><strong>Location:</strong> ${event.location}</p>` : ''}<p>Best regards,<br/>${agentName}</p></body></html>`,
+          text_content: null
+        }
       }
-
-      template = newTemplate
     }
 
     // Send emails to confirmed RSVPs

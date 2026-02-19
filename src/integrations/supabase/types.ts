@@ -933,6 +933,125 @@ export type Database = {
           },
         ]
       }
+      event_email_templates: {
+        Row: {
+          created_at: string
+          email_type: string
+          event_id: string
+          html_content: string
+          id: string
+          is_active: boolean
+          subject: string
+          text_content: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email_type: string
+          event_id: string
+          html_content: string
+          id?: string
+          is_active?: boolean
+          subject: string
+          text_content?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email_type?: string
+          event_id?: string
+          html_content?: string
+          id?: string
+          is_active?: boolean
+          subject?: string
+          text_content?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_email_templates_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_emails: {
+        Row: {
+          bounced_at: string | null
+          clicked_at: string | null
+          created_at: string
+          delivered_at: string | null
+          email_type: string
+          error_message: string | null
+          event_id: string
+          id: string
+          opened_at: string | null
+          recipient_email: string
+          replied_at: string | null
+          resend_id: string | null
+          rsvp_id: string | null
+          sent_at: string | null
+          status: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          bounced_at?: string | null
+          clicked_at?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          email_type: string
+          error_message?: string | null
+          event_id: string
+          id?: string
+          opened_at?: string | null
+          recipient_email: string
+          replied_at?: string | null
+          resend_id?: string | null
+          rsvp_id?: string | null
+          sent_at?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          bounced_at?: string | null
+          clicked_at?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          email_type?: string
+          error_message?: string | null
+          event_id?: string
+          id?: string
+          opened_at?: string | null
+          recipient_email?: string
+          replied_at?: string | null
+          resend_id?: string | null
+          rsvp_id?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_emails_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_emails_rsvp_id_fkey"
+            columns: ["rsvp_id"]
+            isOneToOne: false
+            referencedRelation: "event_rsvps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_rsvps: {
         Row: {
           check_in_status: string | null
@@ -1136,6 +1255,39 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
         ]
+      }
+      global_email_templates: {
+        Row: {
+          created_at: string
+          email_type: string
+          html_content: string
+          id: string
+          is_active: boolean
+          subject: string
+          text_content: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email_type: string
+          html_content: string
+          id?: string
+          is_active?: boolean
+          subject: string
+          text_content?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email_type?: string
+          html_content?: string
+          id?: string
+          is_active?: boolean
+          subject?: string
+          text_content?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       invitations: {
         Row: {

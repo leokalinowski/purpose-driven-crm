@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { EmailTemplateEditor } from './EmailTemplateEditor'
+import { EmailTemplateEditor, EventPreviewData } from './EmailTemplateEditor'
 import { GlobalTemplateEditor } from './GlobalTemplateEditor'
 import { EmailMetricsDashboard } from './EmailMetricsDashboard'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
@@ -65,6 +65,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
   const [selectedEventTitle, setSelectedEventTitle] = useState<string>(initialEventTitle || '')
   const [loadingEvents, setLoadingEvents] = useState(false)
   const [templateMode, setTemplateMode] = useState<'global' | 'event'>('global')
+  const [eventPreviewData, setEventPreviewData] = useState<EventPreviewData>({})
 
   // Use the selected event or the initial event
   const currentEventId = selectedEventId || initialEventId
@@ -79,6 +80,58 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
       loadEvents()
     }
   }, [initialEventId])
+
+  // Load event preview data when a current event is selected
+  useEffect(() => {
+    if (!currentEventId) return
+    const loadPreviewData = async () => {
+      try {
+        const { data: ev } = await supabase
+          .from('events')
+          .select('title, event_date, location, description, agent_id, brand_color')
+          .eq('id', currentEventId)
+          .single()
+        if (!ev) return
+
+        let agentData: EventPreviewData = {}
+        if (ev.agent_id) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('first_name, last_name, email, phone_number, office_number, office_address, website, brokerage, team_name, primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
+            .eq('user_id', ev.agent_id)
+            .single()
+          if (profile) {
+            agentData = {
+              agent_name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || undefined,
+              agent_email: profile.email || undefined,
+              agent_phone: profile.phone_number || undefined,
+              agent_office_number: profile.office_number || undefined,
+              agent_office_address: profile.office_address || undefined,
+              agent_website: profile.website || undefined,
+              agent_brokerage: profile.brokerage || undefined,
+              agent_team_name: profile.team_name || undefined,
+              primary_color: profile.primary_color || ev.brand_color || undefined,
+              secondary_color: profile.secondary_color || undefined,
+              headshot_url: profile.headshot_url || undefined,
+              logo_colored_url: profile.logo_colored_url || undefined,
+              logo_white_url: profile.logo_white_url || undefined,
+            }
+          }
+        }
+
+        setEventPreviewData({
+          title: ev.title,
+          event_date: ev.event_date,
+          location: ev.location || undefined,
+          description: ev.description || undefined,
+          ...agentData,
+        })
+      } catch (err) {
+        console.error('Error loading event preview data:', err)
+      }
+    }
+    loadPreviewData()
+  }, [currentEventId])
 
   const loadEvents = async () => {
     setLoadingEvents(true)
@@ -313,6 +366,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
                       <EmailTemplateEditor
                         eventId={currentEventId}
                         emailType={type.key}
+                        eventData={eventPreviewData}
                       />
                     )}
                   </div>
