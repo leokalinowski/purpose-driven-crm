@@ -1,49 +1,85 @@
 
 
-# Fix: Kate Atkisson Incorrectly Assigned as Agent on Tasks
+# Hub-to-ClickUp: Auto-Create Event Folder from Template on New Event
 
-## Problem
-Kate Atkisson (admin/operations) is assigned to many ClickUp tasks across Samir's, Ashley's, and Timothy's events. The sync function matches her ClickUp email to her Hub profile and sets her as the `agent_id` on 18 tasks -- making those tasks appear under Kate's dashboard instead of the actual agent's.
+## Overview
+When an admin creates a new event in the Hub for a specific agent, the system will automatically:
+1. Create the Hub event + RSVP page (already works)
+2. Create a ClickUp Folder from template in the Events space
+3. Name it following the convention: `AgentFirstName [MM.DD.YY] Event Title`
+4. Retrieve the 3 list IDs (Pre-Event, Event Day, Post-Event) from the newly created folder
+5. Store the folder ID + list IDs back on the Hub event record
 
-The `agent_id` column on `clickup_tasks` should represent **which Hub agent this task belongs to** (i.e., whose event it is), not who is doing the work in ClickUp. The person doing the work is already captured in `responsible_person`.
+The existing manual "Link Events" and "Sync Tasks" buttons stay in place for the current batch of events.
 
-## Current Broken Data
-| Event | Event Agent | Tasks wrongly assigned to Kate |
-|-------|-------------|-------------------------------|
-| The Real Estate Scholarship | Samir Redwan | 9 tasks |
-| Purge and Perk | Ashley Spencer | 4 tasks |
-| Right Sizing | Timothy Raiford | 5 tasks |
+## Step 1: Discover the Folder Template ID
 
-## Solution
+ClickUp has a `GET /team/{team_id}/folder_template` endpoint to list available folder templates. We need to call this once to find the Events template ID. The new edge function will handle this automatically by listing templates and matching by name, or we can hardcode the ID once discovered.
 
-### 1. Fix the sync logic (`clickup-sync-event-tasks`)
-Change `agent_id` resolution: instead of using the first ClickUp assignee's email, **always use the event's `agent_id`**. The ClickUp assignee names already go into `responsible_person`, which is the correct place for that data.
+**Approach**: The new edge function will first call `GET /team/9011620633/folder_template` to find the template. If not found, it falls back to creating a plain folder + 3 empty lists manually.
 
-Before (broken):
-- Look at ClickUp assignees, match email to profiles, use as `agent_id`
-- Falls back to event's `agent_id` only if no email match
+## Step 2: New Edge Function -- `clickup-create-event-folder`
 
-After (fixed):
-- Always set `agent_id` to the event's `agent_id`
-- ClickUp assignee names remain in `responsible_person` (no change)
+This function will be called after a new event is created in the Hub.
 
-### 2. Fix existing bad data
-Run a data fix to update the 18 Kate-assigned tasks to use the correct event agent's ID:
-```sql
-UPDATE clickup_tasks ct
-SET agent_id = e.agent_id
-FROM events e
-WHERE ct.event_id = e.id
-  AND e.agent_id IS NOT NULL;
-```
+**Input**: `{ eventId, agentId, eventTitle, eventDate }`
 
-### 3. Update `clickup-webhook` too
-Apply the same logic change so real-time webhook updates also use the event's `agent_id` instead of the ClickUp assignee.
+**Logic**:
+1. Look up the agent's first name from the `profiles` table
+2. Format the folder name: `AgentFirstName [MM.DD.YY] Event Title`
+3. Try to create from the Events folder template:
+   - `POST /space/90114016189/folder_template/{template_id}` with `{ name: folderName }`
+4. If no template found, fall back to:
+   - Create a plain folder: `POST /space/90114016189/folder` with `{ name: folderName }`
+   - Create 3 lists inside it: Pre-Event, Event Day, Post-Event
+5. Retrieve the lists from the new folder: `GET /folder/{folder_id}/list`
+6. Classify lists (pre/day/post) and update the Hub event record with:
+   - `clickup_folder_id`
+   - `clickup_pre_event_list_id`
+   - `clickup_event_day_list_id`
+   - `clickup_post_event_list_id`
+7. Return success/failure report
+
+## Step 3: Integrate into Event Creation Flow
+
+Update `addEventAsAdmin` in `useEvents.ts` (and optionally `addEvent` for agent self-creation) to call the new edge function right after the event is inserted into the database.
+
+The call will be fire-and-forget style with error handling -- if the ClickUp folder creation fails, the event still exists in the Hub, and the admin gets a toast notification about the ClickUp error so they can retry manually.
+
+## Step 4: Add Config Entry
+
+Add `clickup-create-event-folder` to `supabase/config.toml` with `verify_jwt = false` (function validates internally).
+
+## Files to Create
+- `supabase/functions/clickup-create-event-folder/index.ts` -- New edge function
 
 ## Files to Modify
-- `supabase/functions/clickup-sync-event-tasks/index.ts` -- Simplify agent_id to always use event's agent_id
-- `supabase/functions/clickup-webhook/index.ts` -- Same fix for real-time updates
+- `supabase/config.toml` -- Add function entry
+- `src/hooks/useEvents.ts` -- Call the new edge function after event creation in both `addEvent` and `addEventAsAdmin`
 
-## Data Fix
-- Update all existing `clickup_tasks` rows to set `agent_id` from their parent event's `agent_id`
+## Technical Details
+
+### Folder Name Format
+```
+Samir [03.14.26] The Real Estate Scholarship
+```
+- Agent first name from `profiles.full_name` (split on space, take first)
+- Date formatted as MM.DD.YY from the event date
+- Event title as-is
+
+### ClickUp API Calls (in sequence)
+1. `GET /team/9011620633/folder_template` -- find template ID (cached or hardcoded after first run)
+2. `POST /space/90114016189/folder_template/{id}` -- create folder from template
+3. `GET /folder/{new_folder_id}/list` -- get the 3 lists
+4. Update Hub `events` table with IDs
+
+### Fallback (no template found)
+1. `POST /space/90114016189/folder` -- create empty folder
+2. `POST /folder/{id}/list` x3 -- create Pre-Event, Event Day, Post-Event lists
+3. Same update to Hub events table
+
+### Error Handling
+- ClickUp API failure: event still created in Hub, toast shows error, admin can use "Link Events" button as fallback
+- Template not found: falls back to manual folder+list creation
+- Network timeout: logged, no retry (admin can re-trigger manually)
 
