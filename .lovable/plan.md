@@ -1,63 +1,42 @@
 
+# Fix RSVP Button in Preview and "Send Now" Error
 
-# Remove Hardcoded Email Fallback Templates
+## Issue 1: RSVP Button Missing in Email Preview
 
-## Problem
+**Root cause**: The Visual Email Editor (`VisualEmailEditor.tsx`) generates the email HTML via the `dataToHtml` function. This function outputs header images, heading, body paragraphs, event details card, host info, and footer -- but it never generates an RSVP/CTA button. So the preview shows no button.
 
-All three event email Edge Functions have a 3-tier template resolution chain:
-1. Event-specific template (from `event_email_templates`)
-2. Global template (from `global_email_templates`)
-3. **Hardcoded HTML fallback** -- this is the problem
+The actual sent email works if the saved template was manually edited in HTML mode to include a button, but the visual editor can't produce one.
 
-When tiers 1 and 2 fail silently (e.g., a query returns no rows), the system falls back to old, unstyled hardcoded HTML with wrong headings. This makes event emails unreliable because you never know if your customized template is actually being used.
+**Fix**: Add an RSVP CTA button block to `dataToHtml` in `VisualEmailEditor.tsx`, placed between the body paragraphs and the event details card. The button links to `{rsvp_link}` and uses the primary color. A toggle (`showRsvpButton`) will be added to `VisualEditorData` so it can be turned on/off -- defaulting to ON for `invitation` and `confirmation` types.
 
-## Solution
+### Changes in `src/components/events/email/VisualEmailEditor.tsx`:
+- Add `showRsvpButton: boolean` to the `VisualEditorData` interface
+- Add `rsvpButtonText: string` to the interface (default: "RSVP Now" for invitation, "View Event Details" for others)
+- Default `showRsvpButton` to `true` for invitation/confirmation types
+- Add a toggle + text input in the visual editor UI under the body paragraphs section
+- In `dataToHtml`, generate a styled CTA button linking to `{rsvp_link}` when enabled
+- In `parseHtmlToData`, detect existing `{rsvp_link}` buttons
 
-Remove the hardcoded fallback from all three functions. If no saved template is found (event-specific or global), the function will **skip sending** and return a clear error message explaining that a template is missing. This makes failures visible instead of silent.
+## Issue 2: "Send Now" Returns "Event not found"
 
-## Changes
+**Root cause**: The `send-event-invitation` edge function queries the event with a foreign key join:
+```
+profiles:agent_id (first_name, last_name, ...)
+```
+But there is **no foreign key constraint** between `events.agent_id` and `profiles.user_id`. Without that FK, Supabase cannot resolve the join and the query returns an error. The code treats any error as "Event not found."
 
-### 1. `supabase/functions/send-event-invitation/index.ts`
-- **Remove** the entire hardcoded fallback HTML block (lines 194-254, the `else` clause after global template check)
-- **Add** an error response if no template is found:
-  ```
-  "No invitation template found for this event. Please create one in the Email Templates editor."
-  ```
-- This is ~60 lines of hardcoded HTML removed
+**Fix**: Change the edge function to query events and profiles separately (two queries), matching the pattern already used in `EmailManagement.tsx`. This avoids the FK dependency entirely.
 
-### 2. `supabase/functions/event-email-scheduler/index.ts`
-- **Remove** the hardcoded fallback from the `resolveTemplate` function (lines 123-148)
-- **Return `null`** when no template is found instead of hardcoded HTML
-- **Skip sending** for that email type and log it in the summary as `no_template` instead of silently using wrong content
-
-### 3. `supabase/functions/rsvp-confirmation-email/index.ts`
-- **Remove** the hardcoded fallback HTML block (the large `if (!emailHtml)` section, approximately lines 166-218)
-- **Return an error** if no confirmation template is found:
-  ```
-  "No confirmation template found for this event. Please create one in the Email Templates editor."
-  ```
-
-### What stays
-
-- Event-specific template lookup (tier 1) -- unchanged
-- Global template lookup (tier 2) -- unchanged
-- Variable replacement logic -- unchanged
-- All agent branding, date formatting, sender identity logic -- unchanged
-
-### Behavior after this change
-
-| Scenario | Before | After |
-|---|---|---|
-| Event-specific template exists | Uses it | Uses it (no change) |
-| Only global template exists | Uses it | Uses it (no change) |
-| No template at all | Silently uses ugly hardcoded HTML | Returns error, email not sent |
+### Changes in `supabase/functions/send-event-invitation/index.ts`:
+- Split the single joined query into two separate queries:
+  1. Fetch the event: `supabase.from('events').select('*').eq('id', eventId).single()`
+  2. Fetch the agent profile: `supabase.from('profiles').select('...').eq('user_id', event.agent_id).single()`
+- Attach the profile data to the event object manually (as `event.profiles`)
+- Rest of the function logic remains unchanged
 
 ## Files Modified
 
 | File | Change |
 |---|---|
-| `supabase/functions/send-event-invitation/index.ts` | Remove hardcoded fallback, add error when no template found |
-| `supabase/functions/event-email-scheduler/index.ts` | Remove hardcoded fallback from `resolveTemplate`, skip + log when missing |
-| `supabase/functions/rsvp-confirmation-email/index.ts` | Remove hardcoded fallback, add error when no template found |
-
-All three functions will be redeployed after changes.
+| `src/components/events/email/VisualEmailEditor.tsx` | Add RSVP CTA button to visual editor and generated HTML |
+| `supabase/functions/send-event-invitation/index.ts` | Split joined query into two separate queries to avoid missing FK |
