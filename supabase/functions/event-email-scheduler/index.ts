@@ -104,23 +104,7 @@ async function resolveTemplate(supabase: any, eventId: string, emailType: string
     }
   }
 
-  // 2. Global template
-  const { data: globalTemplate } = await supabase
-    .from('global_email_templates')
-    .select('*')
-    .eq('email_type', emailType)
-    .eq('is_active', true)
-    .single()
-
-  if (globalTemplate) {
-    return {
-      subject: replaceVars(globalTemplate.subject),
-      html_content: replaceVars(globalTemplate.html_content),
-      text_content: globalTemplate.text_content ? replaceVars(globalTemplate.text_content) : null,
-    }
-  }
-
-  // No template found — return null so the scheduler can skip + log
+  // No event-specific template found — return null so the scheduler can skip + log
   return null
 }
 

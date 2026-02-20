@@ -183,27 +183,10 @@ serve(async (req) => {
         text_content: eventTemplate.text_content ? replaceVars(eventTemplate.text_content) : null
       }
     } else {
-      // 2. Global template
-      const { data: globalTemplate } = await supabase
-        .from('global_email_templates')
-        .select('*')
-        .eq('email_type', 'invitation')
-        .eq('is_active', true)
-        .single()
-
-      if (globalTemplate) {
-        template = {
-          subject: replaceVars(globalTemplate.subject),
-          html_content: replaceVars(globalTemplate.html_content),
-          text_content: globalTemplate.text_content ? replaceVars(globalTemplate.text_content) : null
-        }
-      } else {
-        // No template found — fail visibly instead of using hardcoded fallback
-        return new Response(
-          JSON.stringify({ error: 'No invitation template found for this event. Please create one in the Email Templates editor (event-specific or global).' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
+      return new Response(
+        JSON.stringify({ error: 'No invitation template found for this event. Please create one in the Email Templates editor.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     // Send emails with rate limiting
