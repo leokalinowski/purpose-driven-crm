@@ -1,111 +1,77 @@
 
+# Remove Global Template Toggle + Set Up Automated Email Triggers
 
-# Event Invitation Email System
+## Part 1: Remove the Global Template Mode
 
-## What This Builds
+Right now the Email Management page has a "Global / Event-Specific" toggle. You want only Event-Specific templates. Changes:
 
-A new "Invitation" email type that lets agents (and admins) blast their entire contact database to invite people to an upcoming event. This is the missing top-of-funnel piece -- right now the system only emails people who already RSVPed.
+**`src/components/events/email/EmailManagement.tsx`**
+- Remove the `templateMode` state variable and the Global/Event-Specific toggle buttons
+- Always render `<EmailTemplateEditor>` (event-specific), never `<GlobalTemplateEditor>`
+- Remove the `Globe`, `FileText` icon imports
+- Remove the import of `GlobalTemplateEditor`
+- Show the "Send Now" button always (no longer gated by `templateMode === 'event'`)
 
-## How It Works
+The `GlobalTemplateEditor.tsx` file and `useGlobalEmailTemplates.ts` hook stay in the codebase since the edge function still uses global templates as a fallback layer -- we just remove the UI for editing them.
 
-1. **New email type: `invitation`** -- added to the existing 5 types (confirmation, 7-day, 1-day, thank you, no-show), making 6 total.
+## Part 2: Answering Your Automation Question
 
-2. **Recipients**: All contacts in the agent's database where `dnc = false` and `email IS NOT NULL`. For admin-triggered sends, it pulls contacts for the event's `agent_id`.
+**Currently, none of the event emails are automated.** There are no cron jobs set up. Every email type (reminders, thank you, no-show) only fires when someone clicks "Send Now."
 
-3. **RSVP link**: Each invitation email includes a prominent "RSVP Now" button linking to the event's public page (`https://hub.realestateonpurpose.com/event/{slug}`).
+Here is what we need to set up so emails fire automatically:
 
-4. **Template support**: Works with the existing 3-tier template system (event-specific, global, hardcoded fallback). The visual editor gets a 6th tab.
+| Email Type | Trigger | How |
+|---|---|---|
+| Invitation | Manual "Send Now" click | Already works (no change needed) |
+| RSVP Confirmation | Automatic on RSVP submission | Already works via `rsvp-confirmation-email` |
+| 7-Day Reminder | 7 days before event | Needs a daily cron job |
+| 1-Day Reminder | 1 day before event | Same daily cron job |
+| Thank You | Day after event (to attendees) | Same daily cron job |
+| No-Show | Day after event (to no-shows) | Same daily cron job |
 
-5. **Deduplication**: Tracks every invitation sent in `event_emails` so the same contact won't be emailed twice for the same event.
+To automate the 4 scheduled types, we need:
 
-6. **Rate limiting**: Sends with a small delay between emails (200ms) to stay within Resend rate limits, similar to the newsletter system.
+1. **New edge function: `event-email-scheduler`** -- A single function that runs daily, queries all published events, and determines which emails to send based on the event date vs. today. It calls the existing `event-reminder-email` function logic internally.
 
-## Changes
+2. **A pg_cron job** -- Runs the scheduler once daily (e.g., 10:00 AM UTC / 6:00 AM ET). This requires running a SQL statement in the Supabase dashboard.
 
-### 1. Database Migration
+### New Edge Function: `event-email-scheduler`
 
-Add `invitation` as a supported email type across the template and tracking tables. No schema changes needed -- the `email_type` columns are `text` type (not enums), so they already accept any string. We just need to ensure the UI and edge function support it.
+This function will:
+- Query all published events
+- For each event, check the date relative to today:
+  - If event is exactly 7 days away: send `reminder_7day` to all RSVPs who haven't received it
+  - If event is exactly 1 day away: send `reminder_1day` to all RSVPs who haven't received it
+  - If event was yesterday: send `thank_you` to checked-in attendees, `no_show` to others
+- Uses the same template resolution (event-specific, then global fallback, then hardcoded)
+- Logs everything to `event_emails` with deduplication (skips if already sent)
+- Returns a summary of what was sent
 
-### 2. New Edge Function: `send-event-invitation`
+### Cron Job (SQL to run in Supabase dashboard)
 
-**File: `supabase/functions/send-event-invitation/index.ts`**
+After deploying, you'll run this SQL once in the Supabase SQL Editor to schedule the daily run. I'll provide the exact SQL with your project URL and anon key.
 
-This function:
-- Accepts `{ eventId: string }` in the request body
-- Fetches the event details + agent profile (same pattern as reminder email)
-- Fetches all contacts for the agent where `dnc = false` and `email IS NOT NULL`
-- Checks `event_emails` to skip contacts already invited to this event
-- Resolves the email template (event-specific -> global -> hardcoded fallback)
-- Sends via Resend with rate limiting (200ms between emails)
-- Logs each send to both `event_emails` (with `email_type = 'invitation'`) and `email_logs`
-- Returns a summary: `{ sent: N, skipped: N, failed: N }`
+## Technical Details
 
-The hardcoded fallback template includes:
-- Agent-branded header with logo/headshot
-- Event details (title, date, time, location)
-- A prominent "RSVP Now" button linking to the public event page
-- Agent contact info footer
-
-### 3. Frontend: Add "Invitation" Tab to Email Management
-
-**File: `src/components/events/email/EmailManagement.tsx`**
-
-Add a 6th entry to `EMAIL_TYPES`:
-```
-{
-  key: 'invitation',
-  label: 'Event Invitation',
-  icon: Send,
-  description: 'Invite contacts from the agent database to RSVP'
-}
-```
-
-Update the tab grid from `grid-cols-5` to `grid-cols-6`. Add `'invitation'` to the `canSendManually` list. Update the send handler to call `send-event-invitation` when the type is `invitation`.
-
-### 4. Frontend: Update Type Definitions
-
-**Files:**
-- `src/hooks/useEmailTemplates.ts` -- add `'invitation'` to the `email_type` union type, add `sendInvitationEmails()` method
-- `src/hooks/useGlobalEmailTemplates.ts` -- add `'invitation'` to the type union
-- `src/components/events/email/EmailTemplateEditor.tsx` -- add `{rsvp_link}` as a new variable in the Variable Insert Bar
-- `src/components/events/email/VisualEmailEditor.tsx` -- add `{rsvp_link}` variable support
-- `src/components/events/email/VariableInsertBar.tsx` -- add the `{rsvp_link}` variable button
-
-### 5. Agent-Side Access
-
-**File: `src/pages/Events.tsx`**
-
-Add an "Invite Database" button on the agent's My Event tab (next to the existing event dashboard). This button calls `send-event-invitation` for their event. A confirmation dialog warns them how many contacts will be emailed before sending.
-
-### 6. Edge Function Config
-
-**File: `supabase/config.toml`**
-
-Add JWT verification disabled for the new function (we validate auth in code):
-```toml
-[functions.send-event-invitation]
-verify_jwt = false
-```
-
-## Email Setup Summary (answering your questions)
-
-| Question | Answer |
+### Files to modify
+| File | Change |
 |---|---|
-| What email address? | `noreply@realestateonpurpose.com` (via Resend). Reply-to is set to the agent's personal email. |
-| How to "turn on" for an event? | The event must be **published** (has a `public_slug`). Then click "Send Now" on the Invitation tab. |
-| Templates | Use the visual editor to customize the invitation template (global or per-event). |
-| Who can send? | Both admins (from Admin Events Management) and agents (from their Events page). |
+| `src/components/events/email/EmailManagement.tsx` | Remove Global toggle, always show Event-Specific |
+| `supabase/functions/event-email-scheduler/index.ts` | New -- daily scheduler that auto-sends reminders/thank-you/no-show |
+| `supabase/config.toml` | Add config for new function |
 
-## Files to Create/Modify
+### Scheduler Logic (pseudocode)
+```text
+For each published event:
+  daysUntilEvent = eventDate - today
 
-| File | Action |
-|---|---|
-| `supabase/functions/send-event-invitation/index.ts` | Create -- new edge function |
-| `supabase/config.toml` | Modify -- add function config |
-| `src/components/events/email/EmailManagement.tsx` | Modify -- add invitation tab + send logic |
-| `src/hooks/useEmailTemplates.ts` | Modify -- add invitation type + send method |
-| `src/hooks/useGlobalEmailTemplates.ts` | Modify -- add invitation to type union |
-| `src/components/events/email/VariableInsertBar.tsx` | Modify -- add `{rsvp_link}` variable |
-| `src/components/events/email/EmailTemplateEditor.tsx` | Modify -- support invitation type preview |
-| `src/pages/Events.tsx` | Modify -- add "Invite Database" button for agents |
+  if daysUntilEvent == 7:
+    send reminder_7day to all RSVPs not yet emailed
+  if daysUntilEvent == 1:
+    send reminder_1day to all RSVPs not yet emailed
+  if daysUntilEvent == -1:
+    send thank_you to RSVPs with check_in_status = 'checked_in'
+    send no_show to RSVPs with check_in_status = 'not_checked_in'
+```
 
+Each send checks `event_emails` first to avoid duplicates, exactly like the invitation system does.
