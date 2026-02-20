@@ -100,6 +100,7 @@ serve(async (req) => {
       .select('recipient_email')
       .eq('event_id', eventId)
       .eq('email_type', 'invitation')
+      .in('status', ['sent', 'delivered', 'opened', 'clicked'])
 
     const alreadySentEmails = new Set(
       (alreadySent || []).map(e => e.recipient_email.toLowerCase())
@@ -197,6 +198,15 @@ serve(async (req) => {
     for (const contact of eligibleContacts) {
       try {
         const contactName = `${contact.first_name || ''} ${contact.last_name || ''}`.trim()
+
+        // Clean up old failed/bounced rows for this contact before retrying
+        await supabase
+          .from('event_emails')
+          .delete()
+          .eq('event_id', eventId)
+          .eq('email_type', 'invitation')
+          .eq('recipient_email', contact.email!)
+          .in('status', ['failed', 'bounced'])
 
         const { data: resendData, error: resendError } = await resend.emails.send({
           from: `${agentName} - Events <noreply@events.realestateonpurpose.com>`,
