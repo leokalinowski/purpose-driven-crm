@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEvents } from '@/hooks/useEvents';
+import { useContacts } from '@/hooks/useContacts';
 import { Layout } from '@/components/layout/Layout';
 import { EventProgressDashboard } from '@/components/events/EventProgressDashboard';
 import { EventForm } from '@/components/events/EventForm';
@@ -9,22 +10,27 @@ import { RSVPManagement } from '@/components/events/RSVPManagement';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Calendar, ExternalLink, Edit, Trash2 } from 'lucide-react';
+import { Plus, Calendar, ExternalLink, Edit, Trash2, Users, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 const Events = () => {
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [sendingInvites, setSendingInvites] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { 
     events, 
     loading, 
     getNextEvent,
     deleteEvent
   } = useEvents();
+  const { contacts } = useContacts();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -57,6 +63,27 @@ const Events = () => {
   if (!user) return null;
 
   const nextEvent = getNextEvent();
+  const eligibleContactCount = contacts.filter(c => !c.dnc && c.email).length;
+
+  const handleSendInvitations = async (eventId: string) => {
+    const event = events.find(e => e.id === eventId);
+    if (!event?.public_slug) {
+      toast({ title: 'Event not published', description: 'Publish the event first to create a public RSVP page.', variant: 'destructive' });
+      return;
+    }
+    if (!confirm(`Send invitation emails to ${eligibleContactCount} contacts in your database?\n\nContacts on the DNC list or without email will be skipped. Already-invited contacts won't receive duplicates.`)) return;
+
+    setSendingInvites(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-event-invitation', { body: { eventId } });
+      if (error) throw error;
+      toast({ title: 'Invitations sent!', description: data?.message || `Sent ${data?.sent} emails.` });
+    } catch (err: any) {
+      toast({ title: 'Error sending invitations', description: err.message, variant: 'destructive' });
+    } finally {
+      setSendingInvites(false);
+    }
+  };
 
   return (
     <Layout>
@@ -84,7 +111,28 @@ const Events = () => {
           {/* My Event Tab - Progress Dashboard */}
           <TabsContent value="my-event" className="mt-4">
             {nextEvent ? (
-              <EventProgressDashboard event={nextEvent} />
+              <div className="space-y-4">
+                {nextEvent.public_slug && (
+                  <Card>
+                    <CardContent className="flex items-center justify-between py-4">
+                      <div>
+                        <h4 className="font-medium">Invite Your Database</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Send invitation emails to {eligibleContactCount} eligible contacts
+                        </p>
+                      </div>
+                      <Button
+                        onClick={() => handleSendInvitations(nextEvent.id)}
+                        disabled={sendingInvites || eligibleContactCount === 0}
+                      >
+                        {sendingInvites ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Users className="h-4 w-4 mr-2" />}
+                        {sendingInvites ? 'Sending...' : 'Invite Database'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+                <EventProgressDashboard event={nextEvent} />
+              </div>
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">

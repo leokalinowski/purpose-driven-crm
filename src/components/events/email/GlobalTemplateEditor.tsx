@@ -12,7 +12,7 @@ import { getDefaultEmailTemplate } from '@/utils/emailTemplateBuilder'
 import { VisualEmailEditor } from './VisualEmailEditor'
 
 interface GlobalTemplateEditorProps {
-  emailType: 'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show'
+  emailType: 'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show' | 'invitation'
   onSave?: () => void
 }
 

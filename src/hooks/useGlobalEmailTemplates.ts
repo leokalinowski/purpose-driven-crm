@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 
 export interface GlobalEmailTemplate {
   id: string
-  email_type: 'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show'
+  email_type: 'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show' | 'invitation'
   subject: string
   html_content: string
   text_content?: string

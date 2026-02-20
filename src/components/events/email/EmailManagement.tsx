@@ -8,7 +8,7 @@ import { EmailTemplateEditor, EventPreviewData } from './EmailTemplateEditor'
 import { GlobalTemplateEditor } from './GlobalTemplateEditor'
 import { EmailMetricsDashboard } from './EmailMetricsDashboard'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
-import { Send, Mail, Calendar, Heart, UserX, Globe, FileText } from 'lucide-react'
+import { Send, Mail, Calendar, Heart, UserX, Globe, FileText, Users } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/integrations/supabase/client'
 
@@ -25,6 +25,12 @@ interface EventOption {
 }
 
 const EMAIL_TYPES = [
+  {
+    key: 'invitation' as const,
+    label: 'Event Invitation',
+    icon: Users,
+    description: 'Invite contacts from the agent database to RSVP'
+  },
   {
     key: 'confirmation' as const,
     label: 'RSVP Confirmation',
@@ -58,7 +64,7 @@ const EMAIL_TYPES = [
 ]
 
 export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initialEventId, eventTitle: initialEventTitle }) => {
-  const [selectedType, setSelectedType] = useState<'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show'>('confirmation')
+  const [selectedType, setSelectedType] = useState<'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show' | 'invitation'>('invitation')
   const [sending, setSending] = useState(false)
   const [events, setEvents] = useState<EventOption[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>(initialEventId || '')
@@ -71,7 +77,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
   const currentEventId = selectedEventId || initialEventId
   const currentEventTitle = selectedEventTitle || initialEventTitle
 
-  const { sendReminderEmails, sendThankYouEmails, sendNoShowEmails, getTemplateByType } = useEmailTemplates(currentEventId)
+  const { sendReminderEmails, sendThankYouEmails, sendNoShowEmails, sendInvitationEmails, getTemplateByType } = useEmailTemplates(currentEventId)
   const { toast } = useToast()
 
   // Load available events if no eventId provided
@@ -220,6 +226,9 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
     try {
       let result
       switch (selectedType) {
+        case 'invitation':
+          result = await sendInvitationEmails(currentEventId)
+          break
         case 'reminder_7day':
         case 'reminder_1day':
           result = await sendReminderEmails(currentEventId, selectedType)
@@ -250,7 +259,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
     }
   }
 
-  const canSendManually = ['reminder_7day', 'reminder_1day', 'thank_you', 'no_show'].includes(selectedType)
+  const canSendManually = ['invitation', 'reminder_7day', 'reminder_1day', 'thank_you', 'no_show'].includes(selectedType)
 
   if (!currentEventId) {
     return (
@@ -337,7 +346,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
         </CardHeader>
         <CardContent>
           <Tabs value={selectedType} onValueChange={(value) => setSelectedType(value as any)}>
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               {EMAIL_TYPES.map((type) => (
                 <TabsTrigger key={type.key} value={type.key} className="flex items-center gap-2">
                   <type.icon className="h-4 w-4" />
@@ -384,7 +393,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
           <CardTitle>Email Automation Notes</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <h4 className="font-medium text-green-700">Automatic Emails</h4>
               <ul className="text-sm space-y-1 text-gray-600">
@@ -398,10 +407,20 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
             <div className="space-y-2">
               <h4 className="font-medium text-blue-700">Manual Sending</h4>
               <ul className="text-sm space-y-1 text-gray-600">
+                <li>• Event Invitation: Blast to agent's contact database</li>
                 <li>• 7-Day & 1-Day Reminders: Can send manually anytime</li>
                 <li>• Thank You & No-Show: Can send manually after event</li>
                 <li>• All emails respect template settings</li>
                 <li>• Duplicate prevention built-in</li>
+              </ul>
+            </div>
+            <div className="space-y-2">
+              <h4 className="font-medium text-purple-700">Invitation Emails</h4>
+              <ul className="text-sm space-y-1 text-gray-600">
+                <li>• Sends to all contacts (DNC excluded)</li>
+                <li>• Event must be published first</li>
+                <li>• Includes RSVP link to public page</li>
+                <li>• Deduplication prevents double-sends</li>
               </ul>
             </div>
           </div>

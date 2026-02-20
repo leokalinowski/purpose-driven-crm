@@ -34,17 +34,18 @@ export interface EventPreviewData {
 
 interface EmailTemplateEditorProps {
   eventId: string
-  emailType: 'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show'
+  emailType: 'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show' | 'invitation'
   onSave?: () => void
   eventData?: EventPreviewData
 }
 
-const EMAIL_TYPE_LABELS = {
+const EMAIL_TYPE_LABELS: Record<string, string> = {
   confirmation: 'RSVP Confirmation',
   reminder_7day: '7-Day Reminder',
   reminder_1day: '1-Day Reminder',
   thank_you: 'Thank You (Post-Event)',
-  no_show: 'No-Show Follow-up'
+  no_show: 'No-Show Follow-up',
+  invitation: 'Event Invitation'
 }
 
 export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
@@ -176,6 +177,7 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
       .replace(/{headshot_url}/g, d?.headshot_url || 'https://via.placeholder.com/100')
       .replace(/{logo_colored_url}/g, d?.logo_colored_url || 'https://via.placeholder.com/200x60')
       .replace(/{logo_white_url}/g, d?.logo_white_url || 'https://via.placeholder.com/200x60/ffffff/000000')
+      .replace(/{rsvp_link}/g, 'https://hub.realestateonpurpose.com/event/sample-event')
 
     // Handle conditional blocks - show all for preview
     previewContent = previewContent.replace(/\{#if ([^}]+)\}([\s\S]*?)\{\/if\}/g, '$2')

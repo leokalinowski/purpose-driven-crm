@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth'
 export interface EmailTemplate {
   id: string
   event_id: string
-  email_type: 'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show'
+  email_type: 'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show' | 'invitation'
   subject: string
   html_content: string
   text_content?: string
@@ -132,6 +132,14 @@ export const useEmailTemplates = (eventId?: string) => {
     return data
   }
 
+  const sendInvitationEmails = async (eventId: string) => {
+    const { data, error } = await supabase.functions.invoke('send-event-invitation', {
+      body: { eventId }
+    })
+    if (error) throw error
+    return data
+  }
+
   useEffect(() => {
     if (eventId) {
       fetchTemplates()
@@ -148,7 +156,8 @@ export const useEmailTemplates = (eventId?: string) => {
     getTemplateByType,
     sendReminderEmails,
     sendThankYouEmails,
-    sendNoShowEmails
+    sendNoShowEmails,
+    sendInvitationEmails
   }
 }
 
