@@ -18,7 +18,9 @@ interface SendEmailRequest {
   text?: string;
   cc?: Array<string | EmailRecipient>;
   bcc?: Array<string | EmailRecipient>;
-  reply_to?: EmailRecipient;
+  reply_to?: EmailRecipient | string;
+  from_name?: string;
+  from_email?: string;
   categories?: string[];
   metadata?: {
     email_type?: string;
@@ -128,8 +130,10 @@ serve(async (req) => {
   const bccEmails = payload.bcc ? normalizeRecipients(payload.bcc).map(r => r.email) : undefined;
 
   try {
+    const senderName = payload.from_name || FROM_NAME;
+    const senderEmail = payload.from_email || FROM_EMAIL;
     const emailData: any = {
-      from: FROM_NAME ? `${FROM_NAME} <${FROM_EMAIL}>` : FROM_EMAIL,
+      from: senderName ? `${senderName} <${senderEmail}>` : senderEmail,
       to: toEmails,
       subject: payload.subject,
       html: bodyHtml,
@@ -148,7 +152,7 @@ serve(async (req) => {
     }
 
     if (payload.reply_to) {
-      emailData.reply_to = payload.reply_to.email;
+      emailData.reply_to = typeof payload.reply_to === 'string' ? payload.reply_to : payload.reply_to.email;
     }
 
     console.log("Sending email via Resend:", { 
