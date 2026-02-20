@@ -27,6 +27,7 @@ export interface VisualEditorData {
 
 const DEFAULT_HEADINGS: Record<string, string> = {
   confirmation: 'RSVP Confirmed! 🎉',
+  invitation: "You're Invited! ✉️",
   reminder_7day: 'Event Reminder 📅',
   reminder_1day: 'Event Tomorrow! ⏰',
   thank_you: 'Thank You for Attending! 🙏',
@@ -38,6 +39,11 @@ const DEFAULT_PARAGRAPHS: Record<string, string[]> = {
     'Hi there,',
     "You're all set for {event_title}!",
     "We're excited to see you there! If you have any questions or need to make changes to your RSVP, just reply to this email.",
+  ],
+  invitation: [
+    'Hi there,',
+    '{agent_name} would love for you to join us for {event_title}!',
+    'Click the link below to RSVP and reserve your spot.',
   ],
   reminder_7day: [
     'Hi there,',
@@ -315,6 +321,24 @@ function parseHtmlToData(html: string): Partial<VisualEditorData> {
   result.showOfficeNumber = html.includes('{agent_office_number}')
   result.showOfficeAddress = html.includes('{agent_office_address}')
   result.showWebsite = html.includes('{agent_website}')
+
+  // Extract heading from <h1> tag
+  const headingMatch = html.match(/<h1[^>]*>(.*?)<\/h1>/s)
+  if (headingMatch) {
+    result.heading = headingMatch[1].replace(/<[^>]*>/g, '').trim()
+  }
+
+  // Extract body paragraphs from main content area
+  // These are <p> tags after the <h1> and before Event Details card, Host Info, or Footer
+  const mainContentMatch = html.match(/<\/h1>([\s\S]*?)(?:<!-- Event Details|Hosted by|<\/td>\s*<\/tr>\s*<!-- Footer)/i)
+  if (mainContentMatch) {
+    const paragraphs = [...mainContentMatch[1].matchAll(/<p[^>]*>(.*?)<\/p>/gs)]
+      .map(m => m[1].replace(/<[^>]*>/g, '').trim())
+      .filter(p => p.length > 0)
+    if (paragraphs.length > 0) {
+      result.paragraphs = paragraphs
+    }
+  }
 
   // Extract colors from inline styles
   const gradientMatch = html.match(/linear-gradient\(135deg,\s*(#[0-9a-fA-F]{6})/)
