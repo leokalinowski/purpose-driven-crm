@@ -125,3 +125,9 @@ verify_jwt = false
 
 [functions.event-email-scheduler]
 verify_jwt = false
+
+[functions.event-reminder-email]
+verify_jwt = false
+
+[functions.resend-webhook]
+verify_jwt = false
