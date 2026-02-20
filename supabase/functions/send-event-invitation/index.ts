@@ -284,8 +284,8 @@ serve(async (req) => {
         failed++
       }
 
-      // Rate limiting: 200ms between emails
-      await delay(200)
+      // Rate limiting: 600ms between emails (Resend allows 2 req/sec)
+      await delay(600)
     }
 
     // Update event invited_count
