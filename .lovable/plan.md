@@ -1,77 +1,41 @@
 
-# Remove Global Template Toggle + Set Up Automated Email Triggers
+# Add "Show Event Details" Toggle for Post-Event Emails
 
-## Part 1: Remove the Global Template Mode
+## Cron Job Status
+The cron job is correctly configured:
+- **Schedule**: `0 14 * * *` (2:00 PM UTC / 10:00 AM ET daily)
+- **Target**: `event-email-scheduler` edge function
+- **Headers**: Includes `X-Cron-Job: true` and proper auth -- all good.
 
-Right now the Email Management page has a "Global / Event-Specific" toggle. You want only Event-Specific templates. Changes:
+## The Event Details Toggle
 
-**`src/components/events/email/EmailManagement.tsx`**
-- Remove the `templateMode` state variable and the Global/Event-Specific toggle buttons
-- Always render `<EmailTemplateEditor>` (event-specific), never `<GlobalTemplateEditor>`
-- Remove the `Globe`, `FileText` icon imports
-- Remove the import of `GlobalTemplateEditor`
-- Show the "Send Now" button always (no longer gated by `templateMode === 'event'`)
+Right now, the Visual Email Editor always includes the "Event Details Card" (date, time, location, description) in every email type. For post-event emails (Thank You and No-Show), this feels unnecessary since the event already happened.
 
-The `GlobalTemplateEditor.tsx` file and `useGlobalEmailTemplates.ts` hook stay in the codebase since the edge function still uses global templates as a fallback layer -- we just remove the UI for editing them.
+### What Changes
 
-## Part 2: Answering Your Automation Question
+**`src/components/events/email/VisualEmailEditor.tsx`**
 
-**Currently, none of the event emails are automated.** There are no cron jobs set up. Every email type (reminders, thank you, no-show) only fires when someone clicks "Send Now."
+1. Add a new toggle to `VisualEditorData`: `showEventDetails: boolean`
+2. Default it based on email type:
+   - `thank_you` and `no_show` default to **off**
+   - All other types (confirmation, reminder_7day, reminder_1day, invitation) default to **on**
+3. Replace the static "always included" info box (lines 217-222) with a toggleable switch
+4. In `dataToHtml()`, wrap the Event Details Card HTML in a conditional so it's only included when `showEventDetails` is true
 
-Here is what we need to set up so emails fire automatically:
+### Visual Change in the Editor
 
-| Email Type | Trigger | How |
-|---|---|---|
-| Invitation | Manual "Send Now" click | Already works (no change needed) |
-| RSVP Confirmation | Automatic on RSVP submission | Already works via `rsvp-confirmation-email` |
-| 7-Day Reminder | 7 days before event | Needs a daily cron job |
-| 1-Day Reminder | 1 day before event | Same daily cron job |
-| Thank You | Day after event (to attendees) | Same daily cron job |
-| No-Show | Day after event (to no-shows) | Same daily cron job |
+Currently shows:
+> "Event Details Card -- Automatically shows date, time, location, and description using event data. Always included."
 
-To automate the 4 scheduled types, we need:
+Will become a toggle:
+> [Toggle] **Show Event Details** -- Include date, time, location, and description card
 
-1. **New edge function: `event-email-scheduler`** -- A single function that runs daily, queries all published events, and determines which emails to send based on the event date vs. today. It calls the existing `event-reminder-email` function logic internally.
-
-2. **A pg_cron job** -- Runs the scheduler once daily (e.g., 10:00 AM UTC / 6:00 AM ET). This requires running a SQL statement in the Supabase dashboard.
-
-### New Edge Function: `event-email-scheduler`
-
-This function will:
-- Query all published events
-- For each event, check the date relative to today:
-  - If event is exactly 7 days away: send `reminder_7day` to all RSVPs who haven't received it
-  - If event is exactly 1 day away: send `reminder_1day` to all RSVPs who haven't received it
-  - If event was yesterday: send `thank_you` to checked-in attendees, `no_show` to others
-- Uses the same template resolution (event-specific, then global fallback, then hardcoded)
-- Logs everything to `event_emails` with deduplication (skips if already sent)
-- Returns a summary of what was sent
-
-### Cron Job (SQL to run in Supabase dashboard)
-
-After deploying, you'll run this SQL once in the Supabase SQL Editor to schedule the daily run. I'll provide the exact SQL with your project URL and anon key.
+When toggled off for Thank You / No-Show emails, the generated HTML simply omits the entire event details section, resulting in a cleaner post-event message.
 
 ## Technical Details
 
-### Files to modify
 | File | Change |
 |---|---|
-| `src/components/events/email/EmailManagement.tsx` | Remove Global toggle, always show Event-Specific |
-| `supabase/functions/event-email-scheduler/index.ts` | New -- daily scheduler that auto-sends reminders/thank-you/no-show |
-| `supabase/config.toml` | Add config for new function |
+| `src/components/events/email/VisualEmailEditor.tsx` | Add `showEventDetails` to data interface, toggle UI, conditional in `dataToHtml()` |
 
-### Scheduler Logic (pseudocode)
-```text
-For each published event:
-  daysUntilEvent = eventDate - today
-
-  if daysUntilEvent == 7:
-    send reminder_7day to all RSVPs not yet emailed
-  if daysUntilEvent == 1:
-    send reminder_1day to all RSVPs not yet emailed
-  if daysUntilEvent == -1:
-    send thank_you to RSVPs with check_in_status = 'checked_in'
-    send no_show to RSVPs with check_in_status = 'not_checked_in'
-```
-
-Each send checks `event_emails` first to avoid duplicates, exactly like the invitation system does.
+The edge function fallback templates (`event-email-scheduler`) already have simple hardcoded templates for thank_you and no_show that include event details. Since those are only used when no event-specific template exists, and the visual editor is the primary way templates are created, this toggle gives full control. The fallback templates are intentionally kept simple and left as-is.
