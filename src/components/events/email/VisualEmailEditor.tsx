@@ -73,22 +73,41 @@ export const VisualEmailEditor: React.FC<VisualEmailEditorProps> = ({
   onHtmlChange,
 }) => {
   const [mode, setMode] = useState<'visual' | 'html'>('visual')
-  const [data, setData] = useState<VisualEditorData>(() => getDefaultData(emailType))
+  const [data, setData] = useState<VisualEditorData>(() => {
+    if (htmlContent && htmlContent.trim().length > 0) {
+      const defaults = getDefaultData(emailType)
+      const parsed = parseHtmlToData(htmlContent)
+      return { ...defaults, ...parsed }
+    }
+    return getDefaultData(emailType)
+  })
   const [initializedType, setInitializedType] = useState(emailType)
+  const isInitialMount = useRef(true)
   const paragraphRefs = useRef<(HTMLTextAreaElement | null)[]>([])
   const htmlRef = useRef<HTMLTextAreaElement>(null)
 
   // Reset when emailType changes
   useEffect(() => {
     if (emailType !== initializedType) {
-      setData(getDefaultData(emailType))
+      if (htmlContent && htmlContent.trim().length > 0) {
+        const defaults = getDefaultData(emailType)
+        const parsed = parseHtmlToData(htmlContent)
+        setData({ ...defaults, ...parsed })
+      } else {
+        setData(getDefaultData(emailType))
+      }
       setInitializedType(emailType)
+      isInitialMount.current = true
     }
-  }, [emailType, initializedType])
+  }, [emailType, initializedType, htmlContent])
 
-  // Generate HTML whenever data changes in visual mode
+  // Generate HTML whenever data changes in visual mode — skip initial mount
   useEffect(() => {
     if (mode === 'visual') {
+      if (isInitialMount.current) {
+        isInitialMount.current = false
+        return
+      }
       onHtmlChange(dataToHtml(data))
     }
   }, [data, mode])
@@ -280,6 +299,30 @@ export const VisualEmailEditor: React.FC<VisualEmailEditorProps> = ({
       </div>
     </div>
   )
+}
+
+function parseHtmlToData(html: string): Partial<VisualEditorData> {
+  const result: Partial<VisualEditorData> = {}
+
+  result.showEventDetails = html.includes('Event Details') && html.includes('{event_date}')
+  result.showHeadshot = html.includes('{headshot_url}')
+  result.showLogo = html.includes('{logo_colored_url}')
+  result.showAgentName = html.includes('{agent_name}') && html.includes('Hosted by')
+  result.showTeamName = html.includes('{agent_team_name}')
+  result.showBrokerage = html.includes('{agent_brokerage}')
+  result.showPhone = html.includes('{agent_phone}')
+  result.showEmail = html.includes('{agent_email}')
+  result.showOfficeNumber = html.includes('{agent_office_number}')
+  result.showOfficeAddress = html.includes('{agent_office_address}')
+  result.showWebsite = html.includes('{agent_website}')
+
+  // Extract colors from inline styles
+  const gradientMatch = html.match(/linear-gradient\(135deg,\s*(#[0-9a-fA-F]{6})/)
+  if (gradientMatch) result.primaryColor = gradientMatch[1]
+  const secondaryMatch = html.match(/linear-gradient\(135deg,\s*#[0-9a-fA-F]{6}\s+0%,\s*(#[0-9a-fA-F]{6})/)
+  if (secondaryMatch) result.secondaryColor = secondaryMatch[1]
+
+  return result
 }
 
 function getDefaultData(emailType: string): VisualEditorData {
