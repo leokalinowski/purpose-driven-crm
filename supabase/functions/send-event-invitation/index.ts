@@ -192,65 +192,11 @@ serve(async (req) => {
           text_content: globalTemplate.text_content ? replaceVars(globalTemplate.text_content) : null
         }
       } else {
-        // 3. Hardcoded fallback
-        const logoHtml = event.profiles?.logo_colored_url
-          ? `<img src="${event.profiles.logo_colored_url}" alt="Logo" style="max-height: 60px; margin-bottom: 16px;" /><br/>`
-          : ''
-        const headshotHtml = event.profiles?.headshot_url
-          ? `<img src="${event.profiles.headshot_url}" alt="${agentName}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 12px;" /><br/>`
-          : ''
-
-        template = {
-          subject: `You're Invited: ${event.title}`,
-          html_content: `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;font-family:'Helvetica Neue',Arial,sans-serif;background-color:#f4f4f5;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:40px 20px;">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
-        <!-- Header -->
-        <tr><td style="background-color:${primaryColor};padding:32px 40px;text-align:center;">
-          ${logoHtml}
-          <h1 style="color:#ffffff;margin:0;font-size:28px;font-weight:700;">You're Invited!</h1>
-        </td></tr>
-        <!-- Body -->
-        <tr><td style="padding:40px;">
-          ${headshotHtml}
-          <h2 style="color:#1a1a2e;margin:0 0 8px;font-size:22px;">${event.title}</h2>
-          <p style="color:#555;font-size:16px;line-height:1.6;margin:0 0 24px;">
-            ${agentName} invites you to an upcoming event!
-          </p>
-          <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f9fa;border-radius:8px;padding:20px;margin-bottom:24px;">
-            <tr><td>
-              <p style="margin:0 0 8px;"><strong>📅 Date:</strong> ${formattedDate}</p>
-              <p style="margin:0 0 8px;"><strong>🕐 Time:</strong> ${formattedTime}</p>
-              ${event.location ? `<p style="margin:0;"><strong>📍 Location:</strong> ${event.location}</p>` : ''}
-            </td></tr>
-          </table>
-          ${event.description ? `<p style="color:#555;font-size:15px;line-height:1.6;margin:0 0 24px;">${event.description}</p>` : ''}
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td align="center" style="padding:8px 0 24px;">
-              <a href="${rsvpLink}" style="display:inline-block;background-color:${primaryColor};color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:8px;font-size:18px;font-weight:600;">
-                RSVP Now
-              </a>
-            </td></tr>
-          </table>
-        </td></tr>
-        <!-- Footer -->
-        <tr><td style="background-color:#f8f9fa;padding:24px 40px;text-align:center;border-top:1px solid #e5e7eb;">
-          <p style="color:#666;font-size:14px;margin:0 0 4px;">${agentName}</p>
-          ${event.profiles?.email ? `<p style="color:#888;font-size:13px;margin:0 0 4px;">${event.profiles.email}</p>` : ''}
-          ${event.profiles?.phone_number ? `<p style="color:#888;font-size:13px;margin:0 0 4px;">${event.profiles.phone_number}</p>` : ''}
-          ${event.profiles?.brokerage ? `<p style="color:#888;font-size:13px;margin:0;">${event.profiles.brokerage}</p>` : ''}
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`,
-          text_content: `You're Invited: ${event.title}\n\n${agentName} invites you to an upcoming event!\n\nDate: ${formattedDate}\nTime: ${formattedTime}\n${event.location ? `Location: ${event.location}\n` : ''}\n${event.description || ''}\n\nRSVP here: ${rsvpLink}\n\nBest regards,\n${agentName}`
-        }
+        // No template found — fail visibly instead of using hardcoded fallback
+        return new Response(
+          JSON.stringify({ error: 'No invitation template found for this event. Please create one in the Email Templates editor (event-specific or global).' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
     }
 
