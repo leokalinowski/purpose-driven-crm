@@ -264,7 +264,7 @@ serve(async (req) => {
         const contactName = `${contact.first_name || ''} ${contact.last_name || ''}`.trim()
 
         const { data: resendData, error: resendError } = await resend.emails.send({
-          from: `${Deno.env.get('RESEND_FROM_NAME') || 'Real Estate on Purpose'} <${Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@realestateonpurpose.com'}>`,
+          from: `${agentName} - Events <noreply@events.realestateonpurpose.com>`,
           to: [contact.email!],
           subject: template.subject,
           html: template.html_content,
