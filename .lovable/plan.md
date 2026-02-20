@@ -1,96 +1,111 @@
 
 
-# Fix: Event Times Showing Wrong in Emails (Timezone Bug)
+# Event Invitation Email System
 
-## The Problem
-When you create an event at 11:00 AM, the email says 7:00 AM. That's a 4-hour difference -- exactly the Eastern Daylight Time offset from UTC.
+## What This Builds
 
-## Root Cause
-In `EventForm.tsx` (line 263), when saving an event, the code appends `Z` to the time:
+A new "Invitation" email type that lets agents (and admins) blast their entire contact database to invite people to an upcoming event. This is the missing top-of-funnel piece -- right now the system only emails people who already RSVPed.
+
+## How It Works
+
+1. **New email type: `invitation`** -- added to the existing 5 types (confirmation, 7-day, 1-day, thank you, no-show), making 6 total.
+
+2. **Recipients**: All contacts in the agent's database where `dnc = false` and `email IS NOT NULL`. For admin-triggered sends, it pulls contacts for the event's `agent_id`.
+
+3. **RSVP link**: Each invitation email includes a prominent "RSVP Now" button linking to the event's public page (`https://hub.realestateonpurpose.com/event/{slug}`).
+
+4. **Template support**: Works with the existing 3-tier template system (event-specific, global, hardcoded fallback). The visual editor gets a 6th tab.
+
+5. **Deduplication**: Tracks every invitation sent in `event_emails` so the same contact won't be emailed twice for the same event.
+
+6. **Rate limiting**: Sends with a small delay between emails (200ms) to stay within Resend rate limits, similar to the newsletter system.
+
+## Changes
+
+### 1. Database Migration
+
+Add `invitation` as a supported email type across the template and tracking tables. No schema changes needed -- the `email_type` columns are `text` type (not enums), so they already accept any string. We just need to ensure the UI and edge function support it.
+
+### 2. New Edge Function: `send-event-invitation`
+
+**File: `supabase/functions/send-event-invitation/index.ts`**
+
+This function:
+- Accepts `{ eventId: string }` in the request body
+- Fetches the event details + agent profile (same pattern as reminder email)
+- Fetches all contacts for the agent where `dnc = false` and `email IS NOT NULL`
+- Checks `event_emails` to skip contacts already invited to this event
+- Resolves the email template (event-specific -> global -> hardcoded fallback)
+- Sends via Resend with rate limiting (200ms between emails)
+- Logs each send to both `event_emails` (with `email_type = 'invitation'`) and `email_logs`
+- Returns a summary: `{ sent: N, skipped: N, failed: N }`
+
+The hardcoded fallback template includes:
+- Agent-branded header with logo/headshot
+- Event details (title, date, time, location)
+- A prominent "RSVP Now" button linking to the public event page
+- Agent contact info footer
+
+### 3. Frontend: Add "Invitation" Tab to Email Management
+
+**File: `src/components/events/email/EmailManagement.tsx`**
+
+Add a 6th entry to `EMAIL_TYPES`:
 ```
-"2026-03-14T11:00:00.000Z"
-```
-The `Z` means "this is UTC time." But the user meant 11:00 AM **local time**, not 11:00 AM in London. So the database stores the wrong absolute time.
-
-Then in the email edge functions (`event-reminder-email`, `rsvp-confirmation-email`), the code does:
-```
-new Date(event.event_date).toLocaleTimeString(...)
-```
-This interprets the stored UTC time in whatever timezone the server uses, producing "7:00 AM" (Eastern) instead of 11:00 AM.
-
-## The Fix
-
-The simplest and most reliable approach: **treat event times as "wall clock" times** -- the time the user typed is the time that should display everywhere. No timezone conversion at all.
-
-### 1. Frontend: Stop marking the time as UTC (EventForm.tsx)
-
-Change the save line from:
-```
-const eventDateTime = `${eventDate}T${hours}:${minutes}:00.000Z`;
-```
-to:
-```
-const eventDateTime = `${eventDate}T${hours}:${minutes}:00`;
-```
-
-Remove the `Z` suffix. This stores the time as a **local/unqualified timestamp**, so "11:00" stays "11:00" regardless of timezone.
-
-### 2. Edge Functions: Parse time from the string, not from Date object
-
-In all three email edge functions, replace the `new Date()` + `toLocaleTimeString()` pattern with direct string parsing:
-
-**Before (broken):**
-```typescript
-const eventDate = new Date(event.event_date);
-const formattedDate = eventDate.toLocaleDateString('en-US', { ... });
-const formattedTime = eventDate.toLocaleTimeString('en-US', { ... });
-```
-
-**After (reliable):**
-```typescript
-const dateTimeParts = event.event_date.split('T');
-const datePart = dateTimeParts[0]; // "2026-03-14"
-const timePart = dateTimeParts[1]?.substring(0, 5) || '00:00'; // "11:00"
-
-// Parse date components to avoid timezone shift
-const [year, month, day] = datePart.split('-').map(Number);
-const months = ['January','February','March','April','May','June',
-                'July','August','September','October','November','December'];
-const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-const dateObj = new Date(year, month - 1, day);
-const formattedDate = `${weekdays[dateObj.getDay()]}, ${months[month-1]} ${day}, ${year}`;
-
-// Parse time directly from the string
-const [h, m] = timePart.split(':').map(Number);
-const ampm = h >= 12 ? 'PM' : 'AM';
-const hour12 = h % 12 || 12;
-const formattedTime = `${hour12}:${String(m).padStart(2, '0')} ${ampm}`;
+{
+  key: 'invitation',
+  label: 'Event Invitation',
+  icon: Send,
+  description: 'Invite contacts from the agent database to RSVP'
+}
 ```
 
-This ensures "11:00" in the database always becomes "11:00 AM" in every email, on every server, in every timezone.
+Update the tab grid from `grid-cols-5` to `grid-cols-6`. Add `'invitation'` to the `canSendManually` list. Update the send handler to call `send-event-invitation` when the type is `invitation`.
 
-### 3. Frontend displays: Apply same string-based parsing
+### 4. Frontend: Update Type Definitions
 
-Update these files to use string parsing instead of `new Date()`:
-- `EventCard.tsx` -- date display
-- `EventsWidget.tsx` -- date display
-- `EmailTemplateEditor.tsx` -- preview rendering
-- `RSVPConfirmation.tsx` -- confirmation display
+**Files:**
+- `src/hooks/useEmailTemplates.ts` -- add `'invitation'` to the `email_type` union type, add `sendInvitationEmails()` method
+- `src/hooks/useGlobalEmailTemplates.ts` -- add `'invitation'` to the type union
+- `src/components/events/email/EmailTemplateEditor.tsx` -- add `{rsvp_link}` as a new variable in the Variable Insert Bar
+- `src/components/events/email/VisualEmailEditor.tsx` -- add `{rsvp_link}` variable support
+- `src/components/events/email/VariableInsertBar.tsx` -- add the `{rsvp_link}` variable button
 
-The `EventPublicHeader.tsx` already does string-based parsing correctly, so it needs no change.
+### 5. Agent-Side Access
 
-## Files to Modify
+**File: `src/pages/Events.tsx`**
 
-| File | Change |
+Add an "Invite Database" button on the agent's My Event tab (next to the existing event dashboard). This button calls `send-event-invitation` for their event. A confirmation dialog warns them how many contacts will be emailed before sending.
+
+### 6. Edge Function Config
+
+**File: `supabase/config.toml`**
+
+Add JWT verification disabled for the new function (we validate auth in code):
+```toml
+[functions.send-event-invitation]
+verify_jwt = false
+```
+
+## Email Setup Summary (answering your questions)
+
+| Question | Answer |
 |---|---|
-| `src/components/events/EventForm.tsx` | Remove `Z` from datetime string |
-| `supabase/functions/event-reminder-email/index.ts` | String-based date/time parsing |
-| `supabase/functions/rsvp-confirmation-email/index.ts` | String-based date/time parsing |
-| `src/components/events/EventCard.tsx` | String-based date display |
-| `src/components/events/EventsWidget.tsx` | String-based date display |
-| `src/components/events/email/EmailTemplateEditor.tsx` | String-based preview time |
-| `src/components/events/rsvp/RSVPConfirmation.tsx` | String-based confirmation time |
+| What email address? | `noreply@realestateonpurpose.com` (via Resend). Reply-to is set to the agent's personal email. |
+| How to "turn on" for an event? | The event must be **published** (has a `public_slug`). Then click "Send Now" on the Invitation tab. |
+| Templates | Use the visual editor to customize the invitation template (global or per-event). |
+| Who can send? | Both admins (from Admin Events Management) and agents (from their Events page). |
 
-## Existing Data Fix
-The event already in the database (`2026-03-14 11:00:00+00`) is stored as UTC. Since the user intended 11:00 AM local, the stored value happens to have the right digits. Once we stop treating it as UTC and start parsing the string directly, it will display correctly without needing a data migration.
+## Files to Create/Modify
+
+| File | Action |
+|---|---|
+| `supabase/functions/send-event-invitation/index.ts` | Create -- new edge function |
+| `supabase/config.toml` | Modify -- add function config |
+| `src/components/events/email/EmailManagement.tsx` | Modify -- add invitation tab + send logic |
+| `src/hooks/useEmailTemplates.ts` | Modify -- add invitation type + send method |
+| `src/hooks/useGlobalEmailTemplates.ts` | Modify -- add invitation to type union |
+| `src/components/events/email/VariableInsertBar.tsx` | Modify -- add `{rsvp_link}` variable |
+| `src/components/events/email/EmailTemplateEditor.tsx` | Modify -- support invitation type preview |
+| `src/pages/Events.tsx` | Modify -- add "Invite Database" button for agents |
 
