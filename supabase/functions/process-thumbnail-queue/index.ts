@@ -7,7 +7,8 @@ const corsHeaders = {
 };
 
 const DELAY_BETWEEN_ITEMS_MS = 5000;
-const PLACID_TEMPLATE_UUID = "nlhaoglryb9fg";
+const PLACID_TEMPLATE_16x9 = "nlhaoglryb9fg";
+const PLACID_TEMPLATE_9x16 = "nlhaoglryb9fg"; // TODO: Update when 9:16 Placid template is created
 const CLICKUP_THUMBNAIL_FIELD_ID = "d1d4739b-5009-4cac-b8ec-a1e16de2be05";
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -66,62 +67,148 @@ async function logStep(
   }
 }
 
+// ── Brand context type ──────────────────────────────────────────────
+
+interface AgentBrandContext {
+  user_id: string;
+  thumbnail_guidelines: string | null;
+  headshot_url: string | null;
+  primary_color: string | null;
+  secondary_color: string | null;
+  tone_guidelines: string | null;
+  brand_guidelines: string | null;
+  target_audience: string | null;
+  what_not_to_say: string | null;
+  logo_colored_url: string | null;
+}
+
 // ── Image generation via Lovable AI gateway ─────────────────────────
 
 async function generateBaseImage(
-  referenceImageUrl: string,
+  referenceImageUrl: string | null,
   backgroundPrompt: string,
-  thumbnailGuidelines: string | null,
+  brandContext: AgentBrandContext,
   aspectRatio: "9:16" | "16:9",
   LOVABLE_API_KEY: string,
 ): Promise<string> {
-  const orientationInstruction = aspectRatio === "9:16"
-    ? "Portrait orientation (9:16 aspect ratio). The subject should be positioned prominently."
-    : "Landscape orientation (16:9 aspect ratio). The subject should be positioned prominently, leaving space for text.";
+  const { thumbnail_guidelines, primary_color, secondary_color, target_audience } = brandContext;
 
-  const prompt = `You are a professional thumbnail image generator. Using the reference photo provided, create a new image that:
-1. PRESERVES the subject's facial identity and likeness exactly — same face, same features, same skin tone
-2. Places the subject in a new background: ${backgroundPrompt}
-3. The background must contain NO other people, NO text, NO logos, NO watermarks
-4. ${orientationInstruction}
-5. Extreme detail, sharp focus, professional lighting, cinematic quality
-6. The subject should look confident and approachable
-${thumbnailGuidelines ? `7. Additional guidelines: ${thumbnailGuidelines}` : ""}
+  // Build brand color instruction
+  const colorInstruction = (primary_color || secondary_color)
+    ? `The overall color palette should subtly incorporate brand colors: ${[primary_color, secondary_color].filter(Boolean).join(" and ")}. Use them in lighting tones, background accents, or atmospheric hues — not as flat fills.`
+    : "";
 
-CRITICAL: The person's face must be clearly recognizable as the same person from the reference photo.`;
+  // Build composition instruction based on aspect ratio
+  const compositionInstruction = aspectRatio === "9:16"
+    ? "COMPOSITION: Portrait 9:16 ratio. Place the subject in the lower 60% of the frame. The upper 40% MUST be visually clear (no face, no hands, no busy detail) — this is reserved for text overlay."
+    : "COMPOSITION: Landscape 16:9 ratio. Place the subject on the left or right third of the frame. The opposite side MUST be visually clear with soft or blurred background — this is reserved for text overlay.";
 
-  const resp = await fetchWithRetry("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-image",
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: referenceImageUrl } },
-          ],
-        },
-      ],
-      modalities: ["image", "text"],
-    }),
-  });
+  // Build audience instruction
+  const audienceInstruction = target_audience
+    ? `AUDIENCE CONTEXT: This thumbnail targets ${target_audience}. The overall feel should resonate with this demographic.`
+    : "";
 
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(`AI image generation failed [${resp.status}]: ${errText.slice(0, 500)}`);
+  // Build style instruction
+  const styleInstruction = thumbnail_guidelines
+    ? `STYLE GUIDELINES: ${thumbnail_guidelines}`
+    : "STYLE: Professional, high-end real estate aesthetic. Clean, modern, aspirational.";
+
+  if (referenceImageUrl) {
+    // ── Person + background prompt ──────────────────────────────────
+    const prompt = `You are a professional thumbnail image generator. Create a stunning thumbnail image.
+
+SUBJECT: Using the reference photo, recreate this EXACT person — same face, same features, same skin tone, same bone structure. The likeness must be unmistakable.
+- The subject should look confident, approachable, and professional
+- Natural expression, slight smile
+- Sharp focus on the face
+
+BACKGROUND: ${backgroundPrompt}
+- The background must contain NO other people, NO text, NO logos, NO watermarks
+- Cinematic depth of field with the subject in sharp focus
+
+${compositionInstruction}
+
+${colorInstruction}
+
+${styleInstruction}
+
+${audienceInstruction}
+
+QUALITY: Ultra high resolution, extreme detail, professional studio lighting, cinematic color grading.
+
+CRITICAL: The person's face MUST be clearly recognizable as the same person from the reference photo. Do NOT alter their appearance.`;
+
+    const resp = await fetchWithRetry("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-pro-image-preview",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              { type: "image_url", image_url: { url: referenceImageUrl } },
+            ],
+          },
+        ],
+        modalities: ["image", "text"],
+      }),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`AI image generation failed [${resp.status}]: ${errText.slice(0, 500)}`);
+    }
+
+    const data = await resp.json();
+    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    if (!imageUrl) throw new Error("AI returned no image data");
+    return imageUrl;
+  } else {
+    // ── Text-only / background-only thumbnail (no person) ───────────
+    const prompt = `You are a professional thumbnail background generator. Create a stunning background image for a video thumbnail.
+
+SCENE: ${backgroundPrompt}
+- NO people, NO text, NO logos, NO watermarks
+- Cinematic quality, professional lighting
+
+${compositionInstruction.replace("Place the subject", "Leave space")}
+
+${colorInstruction}
+
+${styleInstruction}
+
+${audienceInstruction}
+
+QUALITY: Ultra high resolution, extreme detail, cinematic color grading, dramatic lighting.`;
+
+    const resp = await fetchWithRetry("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-pro-image-preview",
+        messages: [{ role: "user", content: prompt }],
+        modalities: ["image", "text"],
+      }),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`AI background generation failed [${resp.status}]: ${errText.slice(0, 500)}`);
+    }
+
+    const data = await resp.json();
+    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    if (!imageUrl) throw new Error("AI returned no image data");
+    return imageUrl;
   }
-
-  const data = await resp.json();
-  const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  if (!imageUrl) {
-    throw new Error("AI returned no image data");
-  }
-  return imageUrl; // data:image/png;base64,...
 }
 
 // ── Title generation via Lovable AI gateway ─────────────────────────
@@ -129,16 +216,22 @@ CRITICAL: The person's face must be clearly recognizable as the same person from
 async function generateTitle(
   transcript: string | null,
   prompt: string | null,
-  thumbnailGuidelines: string | null,
+  brandContext: AgentBrandContext,
   taskName: string,
   LOVABLE_API_KEY: string,
 ): Promise<string> {
+  const { thumbnail_guidelines, tone_guidelines, brand_guidelines, target_audience, what_not_to_say } = brandContext;
+
   const systemPrompt = `You generate short, compelling thumbnail titles for YouTube videos. Rules:
 - 3 to 8 words ONLY
 - No clickbait, no hype, no ALL CAPS
 - Confident, calm, authoritative tone
 - Must feel natural and conversational
-- Output ONLY the title text, nothing else — no quotes, no commentary, no explanation`;
+- Output ONLY the title text, nothing else — no quotes, no commentary, no explanation
+${tone_guidelines ? `\nTONE: ${tone_guidelines}` : ""}
+${brand_guidelines ? `\nBRAND VOICE: ${brand_guidelines}` : ""}
+${target_audience ? `\nAUDIENCE: Write for ${target_audience}` : ""}
+${what_not_to_say ? `\nNEVER USE these words/phrases: ${what_not_to_say}` : ""}`;
 
   let userPrompt = "Generate a thumbnail title";
   if (transcript) {
@@ -147,8 +240,8 @@ async function generateTitle(
   if (prompt) {
     userPrompt += `\n\nVideo topic/prompt: ${prompt}`;
   }
-  if (thumbnailGuidelines) {
-    userPrompt += `\n\nBrand guidelines: ${thumbnailGuidelines}`;
+  if (thumbnail_guidelines) {
+    userPrompt += `\n\nThumbnail-specific guidelines: ${thumbnail_guidelines}`;
   }
   if (!transcript && !prompt) {
     userPrompt += `\n\nVideo title for context: ${taskName}`;
@@ -177,21 +270,17 @@ async function generateTitle(
   const data = await resp.json();
   const title = data.choices?.[0]?.message?.content?.trim();
   if (!title) {
-    // Fallback to task name
     return taskName.slice(0, 40);
   }
-  // Clean up any quotes the model might add
   return title.replace(/^["']|["']$/g, "").trim();
 }
 
 // ── Placid compositing ──────────────────────────────────────────────
 
 async function uploadToPlacid(imageBase64DataUrl: string, PLACID_API_TOKEN: string): Promise<string> {
-  // Extract the base64 data from the data URL
   const base64Data = imageBase64DataUrl.replace(/^data:image\/\w+;base64,/, "");
   const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
 
-  // Create a Blob for upload
   const blob = new Blob([binaryData], { type: "image/png" });
   const formData = new FormData();
   formData.append("file", blob, "thumbnail_base.png");
@@ -216,9 +305,12 @@ async function uploadToPlacid(imageBase64DataUrl: string, PLACID_API_TOKEN: stri
 async function placidComposite(
   placidMediaUrl: string,
   title: string,
+  aspectRatio: "9:16" | "16:9",
   PLACID_API_TOKEN: string,
 ): Promise<string> {
-  const resp = await fetchWithRetry(`https://api.placid.app/api/rest/${PLACID_TEMPLATE_UUID}`, {
+  const templateId = aspectRatio === "9:16" ? PLACID_TEMPLATE_9x16 : PLACID_TEMPLATE_16x9;
+
+  const resp = await fetchWithRetry(`https://api.placid.app/api/rest/${templateId}`, {
     method: "POST",
     headers: {
       Authorization: PLACID_API_TOKEN,
@@ -253,7 +345,6 @@ async function uploadToStorage(
   imageUrl: string,
   storagePath: string,
 ): Promise<string> {
-  // Download the image
   const resp = await fetch(imageUrl);
   if (!resp.ok) {
     throw new Error(`Failed to download image for storage [${resp.status}]`);
@@ -322,47 +413,86 @@ async function processRun(
       fieldCount: customFields.length,
     });
 
-    // ── Step 2: Resolve agent settings ──────────────────────────────
+    // ── Step 2: Resolve agent settings (full brand context) ─────────
     await logStep(supabase, runId, "resolve_agent_settings", "running", { listId });
 
     if (!listId) throw new Error("Task has no list.id — cannot resolve agent");
 
     const { data: settings, error: settingsErr } = await supabase
       .from("agent_marketing_settings")
-      .select("user_id, thumbnail_guidelines, headshot_url")
+      .select("user_id, thumbnail_guidelines, headshot_url, primary_color, secondary_color, tone_guidelines, brand_guidelines, target_audience, what_not_to_say, logo_colored_url")
       .eq("clickup_video_deliverables_list_id", listId)
       .maybeSingle();
 
     if (settingsErr) throw new Error(`Settings query failed: ${settingsErr.message}`);
     if (!settings) throw new Error(`No agent_marketing_settings found for list id ${listId}`);
 
-    const userId = settings.user_id;
-    const thumbnailGuidelines = settings.thumbnail_guidelines;
+    const brandContext: AgentBrandContext = {
+      user_id: settings.user_id,
+      thumbnail_guidelines: settings.thumbnail_guidelines,
+      headshot_url: settings.headshot_url,
+      primary_color: settings.primary_color,
+      secondary_color: settings.secondary_color,
+      tone_guidelines: settings.tone_guidelines,
+      brand_guidelines: settings.brand_guidelines,
+      target_audience: settings.target_audience,
+      what_not_to_say: settings.what_not_to_say,
+      logo_colored_url: settings.logo_colored_url,
+    };
+
+    const userId = brandContext.user_id;
 
     await logStep(supabase, runId, "resolve_agent_settings", "success", null, {
       userId,
-      hasThumbnailGuidelines: !!thumbnailGuidelines,
+      hasThumbnailGuidelines: !!brandContext.thumbnail_guidelines,
+      hasBrandColors: !!(brandContext.primary_color || brandContext.secondary_color),
+      hasToneGuidelines: !!brandContext.tone_guidelines,
+      hasTargetAudience: !!brandContext.target_audience,
     });
 
-    // ── Step 3: Select reference image + background ─────────────────
+    // ── Step 3: Select reference image + background (with fallbacks) ─
     await logStep(supabase, runId, "select_assets", "running", { userId });
 
-    // Reference image
+    // Reference image — cascading fallback
+    let referenceImageUrl: string | null = null;
+    let imageSource = "none";
+
+    // 1. Check agent_images table
     const { data: agentImages } = await supabase
       .from("agent_images")
       .select("image_url")
       .eq("user_id", userId);
 
-    let referenceImageUrl: string | null = null;
     if (agentImages && agentImages.length > 0) {
       const randomIdx = Math.floor(Math.random() * agentImages.length);
       referenceImageUrl = agentImages[randomIdx].image_url;
-    } else if (settings.headshot_url) {
-      referenceImageUrl = settings.headshot_url;
+      imageSource = "agent_images";
     }
 
+    // 2. Fallback to headshot_url from marketing settings
+    if (!referenceImageUrl && brandContext.headshot_url) {
+      referenceImageUrl = brandContext.headshot_url;
+      imageSource = "headshot_url";
+    }
+
+    // 3. Fallback to profile avatar
     if (!referenceImageUrl) {
-      throw new Error("No reference images found for agent and no headshot_url configured");
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (profile?.avatar_url) {
+        referenceImageUrl = profile.avatar_url;
+        imageSource = "profile_avatar";
+      }
+    }
+
+    // 4. If truly nothing — we'll generate a text-only thumbnail (referenceImageUrl stays null)
+    if (!referenceImageUrl) {
+      imageSource = "text_only_fallback";
+      console.warn(`No reference images found for agent ${userId} — generating text-only thumbnail`);
     }
 
     // Background
@@ -387,7 +517,8 @@ async function processRun(
     }
 
     await logStep(supabase, runId, "select_assets", "success", null, {
-      referenceImageUrl: referenceImageUrl.slice(0, 100) + "...",
+      referenceImageUrl: referenceImageUrl ? referenceImageUrl.slice(0, 100) + "..." : "none (text-only)",
+      imageSource,
       backgroundPrompt: backgroundPrompt.slice(0, 100),
       totalImages: agentImages?.length || 0,
       totalBackgrounds: bgLinks?.length || 0,
@@ -406,7 +537,7 @@ async function processRun(
     const title = await generateTitle(
       transcript,
       videoPrompt,
-      thumbnailGuidelines,
+      brandContext,
       taskName,
       LOVABLE_API_KEY,
     );
@@ -420,7 +551,7 @@ async function processRun(
     const base9x16 = await generateBaseImage(
       referenceImageUrl,
       backgroundPrompt,
-      thumbnailGuidelines,
+      brandContext,
       "9:16",
       LOVABLE_API_KEY,
     );
@@ -433,7 +564,7 @@ async function processRun(
     await logStep(supabase, runId, "placid_composite_9x16", "running");
 
     const placidMedia9x16 = await uploadToPlacid(base9x16, PLACID_API_TOKEN);
-    const composited9x16Url = await placidComposite(placidMedia9x16, title, PLACID_API_TOKEN);
+    const composited9x16Url = await placidComposite(placidMedia9x16, title, "9:16", PLACID_API_TOKEN);
 
     await logStep(supabase, runId, "placid_composite_9x16", "success", null, {
       placidMediaUrl: placidMedia9x16,
@@ -446,7 +577,7 @@ async function processRun(
     const base16x9 = await generateBaseImage(
       referenceImageUrl,
       backgroundPrompt,
-      thumbnailGuidelines,
+      brandContext,
       "16:9",
       LOVABLE_API_KEY,
     );
@@ -459,7 +590,7 @@ async function processRun(
     await logStep(supabase, runId, "placid_composite_16x9", "running");
 
     const placidMedia16x9 = await uploadToPlacid(base16x9, PLACID_API_TOKEN);
-    const composited16x9Url = await placidComposite(placidMedia16x9, title, PLACID_API_TOKEN);
+    const composited16x9Url = await placidComposite(placidMedia16x9, title, "16:9", PLACID_API_TOKEN);
 
     await logStep(supabase, runId, "placid_composite_16x9", "success", null, {
       placidMediaUrl: placidMedia16x9,
@@ -540,6 +671,7 @@ async function processRun(
           thumb_16x9_url: publicUrl16x9,
           clickup_updates: clickupResults,
           task_name: taskName,
+          image_source: imageSource,
         },
       })
       .eq("id", runId);

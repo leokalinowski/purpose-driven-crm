@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Palette, FileText, Link2, Image as ImageIcon, Wallpaper } from 'lucide-react';
 import { AgentImagesGallery } from './AgentImagesGallery';
+import { ThumbnailGenerator } from './ThumbnailGenerator';
 import { AgentBackgroundsSelector } from './AgentBackgroundsSelector';
 import { useAgentMarketingSettings, AgentMarketingSettings, AgentMarketingSettingsInput } from '@/hooks/useAgentMarketingSettings';
 
@@ -449,6 +450,7 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: Agent
         </TabsContent>
 
         <TabsContent value="images" className="space-y-4 mt-4">
+          <ThumbnailGenerator userId={userId} agentName={agentName} />
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Agent Images Gallery</CardTitle>
