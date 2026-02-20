@@ -35,24 +35,30 @@ serve(async (req) => {
       )
     }
 
-    // Fetch event with agent profile
+    // Fetch event
     const { data: event, error: eventError } = await supabase
       .from('events')
-      .select(`
-        *,
-        profiles:agent_id (
-          first_name, last_name, email, phone_number,
-          office_number, office_address, website,
-          primary_color, secondary_color, headshot_url,
-          logo_colored_url, logo_white_url, team_name, brokerage
-        )
-      `)
+      .select('*')
       .eq('id', eventId)
       .single()
 
     if (eventError || !event) {
+      console.error('Event fetch error:', eventError)
       throw new Error('Event not found')
     }
+
+    // Fetch agent profile separately (no FK required)
+    let agentProfile: any = null
+    if (event.agent_id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('first_name, last_name, email, phone_number, office_number, office_address, website, primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url, team_name, brokerage')
+        .eq('user_id', event.agent_id)
+        .single()
+      agentProfile = profile
+    }
+    // Attach as event.profiles for downstream compatibility
+    ;(event as any).profiles = agentProfile
 
     if (!event.is_published || !event.public_slug) {
       return new Response(
