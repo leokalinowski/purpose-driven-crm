@@ -69,6 +69,10 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
   const existingTemplate = getTemplateByType(emailType)
   const globalTemplate = getGlobalTemplate(emailType)
 
+  // Use stable IDs as dependencies to prevent re-runs from new object references
+  const existingTemplateId = existingTemplate?.id
+  const globalTemplateId = globalTemplate?.id
+
   useEffect(() => {
     if (existingTemplate) {
       // Use event-specific template
@@ -82,15 +86,15 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
       setHtmlContent(globalTemplate.html_content)
       setTextContent(globalTemplate.text_content || '')
       setIsActive(true)
-    } else {
-      // Use built-in default template
+    } else if (!templatesLoading && !globalLoading) {
+      // Use built-in default template only after loading is complete
       const defaultTemplate = getDefaultEmailTemplate(emailType)
       setSubject(`You're confirmed for {event_title}`)
       setHtmlContent(defaultTemplate)
       setTextContent('')
       setIsActive(true)
     }
-  }, [existingTemplate, globalTemplate, emailType])
+  }, [existingTemplateId, globalTemplateId, emailType, templatesLoading, globalLoading])
 
   const handleSave = async () => {
     if (!subject.trim() || !htmlContent.trim()) {
