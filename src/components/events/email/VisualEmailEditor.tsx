@@ -21,6 +21,8 @@ export interface VisualEditorData {
   showOfficeAddress: boolean
   showWebsite: boolean
   showEventDetails: boolean
+  showRsvpButton: boolean
+  rsvpButtonText: string
   primaryColor: string
   secondaryColor: string
 }
@@ -239,6 +241,25 @@ export const VisualEmailEditor: React.FC<VisualEmailEditorProps> = ({
         ))}
       </div>
 
+      {/* RSVP Button */}
+      <div className="border rounded-lg p-4 space-y-3">
+        <h3 className="font-medium text-sm">RSVP Button</h3>
+        <div className="flex items-center gap-2">
+          <Switch checked={data.showRsvpButton} onCheckedChange={(v) => updateField('showRsvpButton', v)} id="show-rsvp-btn" />
+          <Label htmlFor="show-rsvp-btn" className="text-sm">Show RSVP Button</Label>
+        </div>
+        {data.showRsvpButton && (
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Button Text</Label>
+            <Input
+              value={data.rsvpButtonText}
+              onChange={(e) => updateField('rsvpButtonText', e.target.value)}
+              placeholder="RSVP Now"
+            />
+          </div>
+        )}
+      </div>
+
       {/* Event Details Card toggle */}
       <div className="border rounded-lg p-4 space-y-3">
         <h3 className="font-medium text-sm">Event Details Card</h3>
@@ -321,6 +342,13 @@ function parseHtmlToData(html: string): Partial<VisualEditorData> {
   result.showOfficeNumber = html.includes('{agent_office_number}')
   result.showOfficeAddress = html.includes('{agent_office_address}')
   result.showWebsite = html.includes('{agent_website}')
+  result.showRsvpButton = html.includes('{rsvp_link}')
+
+  // Extract RSVP button text
+  const rsvpBtnMatch = html.match(/href="\{rsvp_link\}"[^>]*>([^<]+)<\/a>/s)
+  if (rsvpBtnMatch) {
+    result.rsvpButtonText = rsvpBtnMatch[1].trim()
+  }
 
   // Extract heading from <h1> tag
   const headingMatch = html.match(/<h1[^>]*>(.*?)<\/h1>/s)
@@ -350,6 +378,7 @@ function parseHtmlToData(html: string): Partial<VisualEditorData> {
 }
 
 function getDefaultData(emailType: string): VisualEditorData {
+  const showRsvp = emailType === 'invitation' || emailType === 'confirmation'
   return {
     heading: DEFAULT_HEADINGS[emailType] || 'Your Event',
     paragraphs: DEFAULT_PARAGRAPHS[emailType] || ['Hi there,', 'Thank you for your interest in {event_title}.'],
@@ -364,6 +393,8 @@ function getDefaultData(emailType: string): VisualEditorData {
     showOfficeAddress: true,
     showWebsite: true,
     showEventDetails: emailType !== 'thank_you' && emailType !== 'no_show',
+    showRsvpButton: showRsvp,
+    rsvpButtonText: emailType === 'invitation' ? 'RSVP Now' : 'View Event Details',
     primaryColor: '#2563eb',
     secondaryColor: '#1e40af',
   }
@@ -430,6 +461,15 @@ function dataToHtml(data: VisualEditorData): string {
               <h1 style="color: ${pc}; margin: 0 0 20px 0; font-size: 28px; font-weight: 700;">${data.heading}</h1>
               
               ${paragraphsHtml}
+              
+              ${data.showRsvpButton ? `<!-- CTA Button -->
+              <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 30px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="{rsvp_link}" style="display: inline-block; background-color: ${pc}; color: #ffffff; font-size: 18px; font-weight: 700; text-decoration: none; padding: 16px 40px; border-radius: 8px;">${data.rsvpButtonText}</a>
+                  </td>
+                </tr>
+              </table>` : ''}
               
               ${data.showEventDetails ? `<!-- Event Details Card -->
               <table role="presentation" style="width: 100%; background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 25px 0; border-left: 4px solid ${pc};">
