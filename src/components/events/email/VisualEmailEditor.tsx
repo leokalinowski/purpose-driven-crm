@@ -20,6 +20,7 @@ export interface VisualEditorData {
   showOfficeNumber: boolean
   showOfficeAddress: boolean
   showWebsite: boolean
+  showEventDetails: boolean
   primaryColor: string
   secondaryColor: string
 }
@@ -213,12 +214,14 @@ export const VisualEmailEditor: React.FC<VisualEmailEditorProps> = ({
         ))}
       </div>
 
-      {/* Event Details Card — always included */}
-      <div className="border rounded-lg p-4 bg-muted/50">
-        <p className="text-sm font-medium mb-1">📋 Event Details Card</p>
-        <p className="text-xs text-muted-foreground">
-          Automatically shows date, time, location, and description using event data. Always included.
-        </p>
+      {/* Event Details Card toggle */}
+      <div className="border rounded-lg p-4 space-y-3">
+        <h3 className="font-medium text-sm">Event Details Card</h3>
+        <div className="flex items-center gap-2">
+          <Switch checked={data.showEventDetails} onCheckedChange={(v) => updateField('showEventDetails', v)} id="show-event-details" />
+          <Label htmlFor="show-event-details" className="text-sm">Show Event Details</Label>
+          <span className="text-xs text-muted-foreground ml-2">Include date, time, location, and description card</span>
+        </div>
       </div>
 
       {/* Host Info */}
@@ -293,6 +296,7 @@ function getDefaultData(emailType: string): VisualEditorData {
     showOfficeNumber: true,
     showOfficeAddress: true,
     showWebsite: true,
+    showEventDetails: emailType !== 'thank_you' && emailType !== 'no_show',
     primaryColor: '#2563eb',
     secondaryColor: '#1e40af',
   }
@@ -360,7 +364,7 @@ function dataToHtml(data: VisualEditorData): string {
               
               ${paragraphsHtml}
               
-              <!-- Event Details Card -->
+              ${data.showEventDetails ? `<!-- Event Details Card -->
               <table role="presentation" style="width: 100%; background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 25px 0; border-left: 4px solid ${pc};">
                 <tr>
                   <td>
@@ -375,7 +379,7 @@ function dataToHtml(data: VisualEditorData): string {
                     {/if}
                   </td>
                 </tr>
-              </table>
+              </table>` : ''}
               
               ${hostHtml}
             </td>
