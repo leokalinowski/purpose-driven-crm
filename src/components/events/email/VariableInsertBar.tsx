@@ -25,6 +25,12 @@ const VARIABLE_GROUPS = [
       { name: 'agent_team_name', label: 'Team' },
     ],
   },
+  {
+    label: 'Links',
+    variables: [
+      { name: 'rsvp_link', label: 'RSVP Link' },
+    ],
+  },
 ]
 
 interface VariableInsertBarProps {
