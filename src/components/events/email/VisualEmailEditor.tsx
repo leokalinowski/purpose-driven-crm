@@ -380,7 +380,7 @@ function parseHtmlToData(html: string): Partial<VisualEditorData> {
 function getDefaultData(emailType: string): VisualEditorData {
   const showRsvp = emailType === 'invitation' || emailType === 'confirmation'
   return {
-    heading: DEFAULT_HEADINGS[emailType] || 'Your Event',
+    heading: DEFAULT_HEADINGS[emailType] || "You're Invited! ✉️",
     paragraphs: DEFAULT_PARAGRAPHS[emailType] || ['Hi there,', 'Thank you for your interest in {event_title}.'],
     showHeadshot: true,
     showLogo: true,
