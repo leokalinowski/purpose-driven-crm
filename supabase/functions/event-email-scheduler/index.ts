@@ -155,6 +155,7 @@ async function sendEmailWithDedup(
   recipientEmail: string,
   recipientName: string,
   agentId: string | null,
+  agentName: string,
   template: { subject: string; html_content: string; text_content: string | null },
   replyTo: string,
   eventTitle: string
@@ -180,7 +181,7 @@ async function sendEmailWithDedup(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: `${Deno.env.get('RESEND_FROM_NAME') || 'Real Estate on Purpose'} <${Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@realestateonpurpose.com'}>`,
+        from: `${agentName} - Events <noreply@events.realestateonpurpose.com>`,
         to: [recipientEmail],
         subject: template.subject,
         html: template.html_content,
@@ -334,7 +335,7 @@ Deno.serve(async (req) => {
         for (const rsvp of recipients) {
           const result = await sendEmailWithDedup(
             supabase, event.id, rsvp.id, emailType,
-            rsvp.email, rsvp.name, event.agent_id,
+            rsvp.email, rsvp.name, event.agent_id, agentName,
             template, replyTo, event.title
           )
           if (result === 'sent') sent++

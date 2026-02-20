@@ -270,7 +270,7 @@ serve(async (req) => {
     const resend = new Resend(RESEND_API_KEY);
 
     const { data, error: emailError } = await resend.emails.send({
-      from: `${FROM_NAME} <${FROM_EMAIL}>`,
+      from: `${agentName} - Events <noreply@events.realestateonpurpose.com>`,
       to: rsvp.email,
       subject: emailSubject,
       html: emailHtml,
