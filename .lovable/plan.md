@@ -1,102 +1,39 @@
 
 
-# Fix: Unreliable "Show Event Details" Toggle
+# Fix: Remove Fallbacks That Override the Event Details Toggle
 
-## Root Cause
+## The Problem
 
-The `VisualEmailEditor` component has a one-way data flow problem. It generates HTML from its internal state but never parses incoming HTML to restore that state. Every time it mounts, it resets all toggles to defaults via `getDefaultData(emailType)`, then immediately overwrites the parent's saved HTML.
+There are two issues causing the toggle to be unreliable:
 
-This means:
-- Toggle off event details, save -- works in the moment
-- Reload or switch email types -- toggle resets to default, saved HTML gets overwritten
+1. **Race condition in `EmailTemplateEditor.tsx`**: The editor renders immediately with a fallback template (from `getDefaultEmailTemplate()`) before the saved template finishes loading from the database. The VisualEmailEditor initializes its toggle states from this fallback HTML. When the real template loads moments later, the parent updates `htmlContent`, but the VisualEmailEditor ignores it because its internal state is already set.
 
-## Fix
+2. **Edge function hardcoded fallback**: The `event-email-scheduler` always includes event details in its last-resort fallback, even for thank_you and no_show emails.
 
-Modify `src/components/events/email/VisualEmailEditor.tsx` to parse the incoming `htmlContent` on initialization and detect which features are present. This way, when a saved template is loaded, the toggle states match what was actually saved.
+## Changes
 
-### Changes to `VisualEmailEditor.tsx`
+### 1. `src/components/events/email/EmailTemplateEditor.tsx`
 
-**1. Add an HTML parsing function** that detects key features from saved HTML:
+- Add a loading guard: don't render the VisualEmailEditor until both `useEmailTemplates` and `useGlobalEmailTemplates` hooks have finished fetching. Show a simple loading spinner instead.
+- Add a `key` prop to the VisualEmailEditor so React fully remounts it whenever the template source changes (e.g., switching email types). This guarantees the editor always initializes from the correct saved HTML.
 
-```
-function parseHtmlToData(html: string, emailType: string): Partial<VisualEditorData> {
-  return {
-    showEventDetails: html.includes('Event Details') && html.includes('{event_date}'),
-    showHeadshot: html.includes('{headshot_url}'),
-    showLogo: html.includes('{logo_colored_url}'),
-    showAgentName: html.includes('{agent_name}') && html.includes('Hosted by'),
-    showPhone: html.includes('{agent_phone}'),
-    showEmail: html.includes('{agent_email}'),
-    // ... etc for each toggle
-  }
-}
-```
+### 2. `supabase/functions/event-email-scheduler/index.ts`
 
-**2. Update initialization** to merge parsed state from `htmlContent` (when it exists and is non-empty) with defaults:
+- Update the hardcoded fallback (lines 123-142) to skip event date/time/location for `thank_you` and `no_show` email types. These are post-event emails where including "this is a reminder for your event on [date]" doesn't make sense.
 
-- On first mount, if `htmlContent` is non-empty (meaning a saved template was loaded), parse it and use those toggle states instead of defaults
-- If `htmlContent` is empty (new template), use `getDefaultData()` as before
+### 3. `src/utils/emailTemplateBuilder.ts`
 
-**3. Fix the race condition** in the useEffect that calls `onHtmlChange`:
+- No changes needed. The `thank_you` and `no_show` default templates here already omit the Event Details card. The `confirmation` and `reminder_*` templates correctly include it.
 
-- Skip the initial `onHtmlChange` call when the component mounts with existing HTML content (the parent already has valid HTML from the database)
-- Only call `onHtmlChange` when the user actually changes something in the editor
+## What This Fixes
 
-This ensures the saved template HTML is never silently overwritten on mount.
+- Toggle off "Show Event Details" on any email type, save, reload -- it stays off, guaranteed
+- The edge function scheduler won't send post-event emails with date/time/location details as a last resort
+- Switching between email types in the editor always shows the correct toggle states from the saved template
 
-### Technical Details
-
-The component interface gains awareness of saved content:
-
-```
-interface VisualEmailEditorProps {
-  emailType: string
-  htmlContent: string
-  onHtmlChange: (html: string) => void
-}
-```
-
-No interface change needed -- `htmlContent` is already passed in. We just need to actually use it during initialization instead of ignoring it.
-
-The initialization logic becomes:
-
-```
-const [data, setData] = useState<VisualEditorData>(() => {
-  if (htmlContent && htmlContent.trim().length > 0) {
-    const defaults = getDefaultData(emailType)
-    const parsed = parseHtmlToData(htmlContent, emailType)
-    return { ...defaults, ...parsed }
-  }
-  return getDefaultData(emailType)
-})
-```
-
-And a ref to skip the first useEffect fire:
-
-```
-const isInitialMount = useRef(true)
-
-useEffect(() => {
-  if (mode === 'visual') {
-    if (isInitialMount.current) {
-      isInitialMount.current = false
-      return  // Don't overwrite saved HTML on mount
-    }
-    onHtmlChange(dataToHtml(data))
-  }
-}, [data, mode])
-```
-
-### File Modified
+## Files Modified
 
 | File | Change |
 |---|---|
-| `src/components/events/email/VisualEmailEditor.tsx` | Add `parseHtmlToData()` function, update initialization to parse saved HTML, add mount guard to prevent overwriting saved content |
-
-### What This Fixes
-
-- Toggle off "Show Event Details" on a Thank You email, save, reload -- stays off
-- Toggle on "Show Event Details" on a No-Show email, save, reload -- stays on
-- All other toggles (headshot, logo, phone, etc.) also persist correctly across reloads
-- No database schema changes needed -- everything is derived from the saved HTML
-
+| `src/components/events/email/EmailTemplateEditor.tsx` | Add loading guard before rendering editor; add `key` prop to force remount on template change |
+| `supabase/functions/event-email-scheduler/index.ts` | Remove event details from hardcoded fallback for thank_you and no_show types |
