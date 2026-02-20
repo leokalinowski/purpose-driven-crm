@@ -180,19 +180,6 @@ serve(async (req) => {
     if (eventTemplate) {
       emailSubject = replaceVariables(eventTemplate.subject)
       emailHtml = replaceVariables(eventTemplate.html_content)
-    } else {
-      // 2. Check global template
-      const { data: globalTemplate } = await supabase
-        .from('global_email_templates')
-        .select('*')
-        .eq('email_type', 'confirmation')
-        .eq('is_active', true)
-        .single()
-
-      if (globalTemplate) {
-        emailSubject = replaceVariables(globalTemplate.subject)
-        emailHtml = replaceVariables(globalTemplate.html_content)
-      }
     }
 
     // If no template found, fail visibly instead of using hardcoded fallback

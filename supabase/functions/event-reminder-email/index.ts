@@ -162,25 +162,14 @@ serve(async (req) => {
     if (eventTemplate) {
       template = { subject: replaceVars(eventTemplate.subject), html_content: replaceVars(eventTemplate.html_content), text_content: eventTemplate.text_content ? replaceVars(eventTemplate.text_content) : null }
     } else {
-      // 2. Check global template
-      const { data: globalTemplate } = await supabaseClient
-        .from('global_email_templates')
-        .select('*')
-        .eq('email_type', emailType)
-        .eq('is_active', true)
-        .single()
-
-      if (globalTemplate) {
-        template = { subject: replaceVars(globalTemplate.subject), html_content: replaceVars(globalTemplate.html_content), text_content: globalTemplate.text_content ? replaceVars(globalTemplate.text_content) : null }
-      } else {
-        // 3. Hardcoded fallback
-        const typeLabel = emailType === 'reminder_7day' ? '7-Day Reminder' : emailType === 'reminder_1day' ? '1-Day Reminder' : emailType === 'thank_you' ? 'Thank You' : 'Follow Up'
-        template = {
-          subject: `${typeLabel}: ${event.title}`,
-          html_content: `<html><body style="font-family: sans-serif; padding: 20px;"><h1 style="color: ${primaryColor};">${typeLabel}</h1><p>Hi there,</p><p>This is a ${typeLabel.toLowerCase()} for <strong>${event.title}</strong> on ${formattedDate} at ${formattedTime}.</p>${event.location ? `<p><strong>Location:</strong> ${event.location}</p>` : ''}<p>Best regards,<br/>${agentName}</p></body></html>`,
-          text_content: null
-        }
-      }
+      // No event-specific template found — return error
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `No ${emailType} template found for this event. Please create one in the Email Templates editor.`
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     // Send emails to confirmed RSVPs
