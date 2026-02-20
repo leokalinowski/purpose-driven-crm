@@ -1,81 +1,63 @@
 
 
-# Update Event Email Sender Address and Display Name
+# Remove Hardcoded Email Fallback Templates
 
-## What's Changing
+## Problem
 
-All event-related emails currently send from `report@market.realestateonpurpose.com` with the name "Real Estate on Purpose - Market Report". We're switching them to:
+All three event email Edge Functions have a 3-tier template resolution chain:
+1. Event-specific template (from `event_email_templates`)
+2. Global template (from `global_email_templates`)
+3. **Hardcoded HTML fallback** -- this is the problem
 
-- **From address**: `noreply@events.realestateonpurpose.com`
-- **Display name**: `{Agent's Full Name} - Events` (e.g., "Samir Kamara - Events")
+When tiers 1 and 2 fail silently (e.g., a query returns no rows), the system falls back to old, unstyled hardcoded HTML with wrong headings. This makes event emails unreliable because you never know if your customized template is actually being used.
 
-The newsletter/market report emails will continue using `report@market.realestateonpurpose.com` -- this change only affects event emails.
+## Solution
 
-## Pre-requisite: Verify the subdomain in Resend
+Remove the hardcoded fallback from all three functions. If no saved template is found (event-specific or global), the function will **skip sending** and return a clear error message explaining that a template is missing. This makes failures visible instead of silent.
 
-Before any code changes take effect, the `events.realestateonpurpose.com` subdomain must be added and verified in Resend:
-
-1. Go to [Resend Domains](https://resend.com/domains)
-2. Add `events.realestateonpurpose.com`
-3. Add the DNS records Resend provides (MX, SPF, DKIM)
-4. Wait for verification to complete
-
-If the existing Resend API key is scoped to all domains, it will work automatically. If it's scoped to a specific domain, a new key or updated scope will be needed.
-
-## Code Changes
+## Changes
 
 ### 1. `supabase/functions/send-event-invitation/index.ts`
-
-Currently (line 267):
-```
-from: `${Deno.env.get('RESEND_FROM_NAME') || 'Real Estate on Purpose'} <${Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@realestateonpurpose.com'}>`
-```
-
-Change to use the agent's name and the events subdomain:
-```
-from: `${agentName} - Events <noreply@events.realestateonpurpose.com>`
-```
-
-The `agentName` variable already exists in this function (built from `event.profiles.first_name` and `last_name`).
+- **Remove** the entire hardcoded fallback HTML block (lines 194-254, the `else` clause after global template check)
+- **Add** an error response if no template is found:
+  ```
+  "No invitation template found for this event. Please create one in the Email Templates editor."
+  ```
+- This is ~60 lines of hardcoded HTML removed
 
 ### 2. `supabase/functions/event-email-scheduler/index.ts`
-
-Currently (line 183):
-```
-from: `${Deno.env.get('RESEND_FROM_NAME') || 'Real Estate on Purpose'} <${Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@realestateonpurpose.com'}>`
-```
-
-Change to use the agent's name from the event's profile data:
-```
-from: `${agentName} - Events <noreply@events.realestateonpurpose.com>`
-```
-
-The agent name is already available in this function from the event's joined profile data.
+- **Remove** the hardcoded fallback from the `resolveTemplate` function (lines 123-148)
+- **Return `null`** when no template is found instead of hardcoded HTML
+- **Skip sending** for that email type and log it in the summary as `no_template` instead of silently using wrong content
 
 ### 3. `supabase/functions/rsvp-confirmation-email/index.ts`
+- **Remove** the hardcoded fallback HTML block (the large `if (!emailHtml)` section, approximately lines 166-218)
+- **Return an error** if no confirmation template is found:
+  ```
+  "No confirmation template found for this event. Please create one in the Email Templates editor."
+  ```
 
-Currently uses `FROM_EMAIL` and `FROM_NAME` from the shared secrets. Change the `from` field in the Resend send call to:
-```
-from: `${agentName} - Events <noreply@events.realestateonpurpose.com>`
-```
+### What stays
 
-The agent profile is already fetched in this function via the event's `agent_id`.
+- Event-specific template lookup (tier 1) -- unchanged
+- Global template lookup (tier 2) -- unchanged
+- Variable replacement logic -- unchanged
+- All agent branding, date formatting, sender identity logic -- unchanged
 
-### 4. `supabase/functions/send-email/index.ts` (no change)
+### Behavior after this change
 
-This is the generic email function. It should keep using the shared `RESEND_FROM_EMAIL` / `RESEND_FROM_NAME` secrets since it handles all email types (newsletters, system emails, etc.). Event-specific functions above will bypass it with their own sender.
-
-## What Stays the Same
-
-- Newsletter emails continue from `report@market.realestateonpurpose.com`
-- System invitation emails (account signup) continue from `invitations@realestateonpurpose.com`
-- No new secrets needed -- the events subdomain is hardcoded in the event functions since it's specific to this use case
-- No database changes needed
+| Scenario | Before | After |
+|---|---|---|
+| Event-specific template exists | Uses it | Uses it (no change) |
+| Only global template exists | Uses it | Uses it (no change) |
+| No template at all | Silently uses ugly hardcoded HTML | Returns error, email not sent |
 
 ## Files Modified
 
 | File | Change |
 |---|---|
-| `supabase/functions/send-event-invitation/index.ts` | Hardcode `noreply@events.realestateonpurpose.com` and use agent name |
-| `supabase/functions/event-email-scheduler/index.ts` | Hardcode `noreply@events.realestateonpurpose.com` and use agent name |
-| `supabase/functions/rsvp-confirmation-email/index.ts` | Hardcode `noreply@events.realestateonpurpose.com` and use agent name |
+| `supabase/functions/send-event-invitation/index.ts` | Remove hardcoded fallback, add error when no template found |
+| `supabase/functions/event-email-scheduler/index.ts` | Remove hardcoded fallback from `resolveTemplate`, skip + log when missing |
+| `supabase/functions/rsvp-confirmation-email/index.ts` | Remove hardcoded fallback, add error when no template found |
+
+All three functions will be redeployed after changes.
