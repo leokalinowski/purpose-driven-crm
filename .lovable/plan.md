@@ -1,28 +1,33 @@
 
 
-# Remove Global Template Fallback — Event-Specific Templates Only
+# Fix: Rate-Limited Emails in Send Invitations
 
-## What's Changing
+## Problem
 
-All four email edge functions still query `global_email_templates` as a fallback when no event-specific template is found. This is being removed so the system uses **only** event-specific templates from `event_email_templates`. If one doesn't exist, the function returns an error instead of silently using something else.
+All 86 "failed" emails share the same error: **Resend rate limit exceeded (2 requests/second)**. The `send-event-invitation` function sends emails in a tight loop with zero delay, so it blows past the limit after the first batch gets through.
 
-## Files Modified
+None of these are actual bounces -- the emails never even left Resend. The 86 contacts just need to be retried.
 
-### 1. `supabase/functions/send-event-invitation/index.ts` (lines 185-206)
-- Remove the global template lookup block
-- Keep the error response when no template is found, update message to: `"No invitation template found for this event. Please create one in the Email Templates editor."`
+## Fix
 
-### 2. `supabase/functions/rsvp-confirmation-email/index.ts` (lines 183-196)
-- Remove the global template lookup block
-- The existing error response at line 198 already handles the "no template" case
+### 1. Add rate-limiting delay in `supabase/functions/send-event-invitation/index.ts`
 
-### 3. `supabase/functions/event-email-scheduler/index.ts` (lines 107-121)
-- Remove the global template lookup from the `resolveTemplate` function
-- If no event-specific template exists, return `null` immediately (the scheduler already skips and logs `no_template`)
+Add a 600ms delay between each email send (well within the 2 req/sec limit). This matches the pattern already used by the newsletter sender.
 
-### 4. `supabase/functions/event-reminder-email/index.ts` (lines 164-183)
-- Remove both the global template lookup AND the hardcoded fallback that still exists here
-- If no event-specific template is found, skip sending and return a clear error
+Insert a simple `await new Promise(resolve => setTimeout(resolve, 600))` after each Resend API call inside the contact loop.
 
-All four functions will be redeployed after changes.
+### 2. Retry the 86 failed contacts
+
+After deploying the fix, the "Send Now" button already has deduplication logic -- it skips contacts who already received an invitation successfully. So clicking "Send Now" again will automatically pick up only the 86 that failed and send them with proper pacing.
+
+No data cleanup needed -- the existing dedup check (lines 98-110) queries `event_emails` for `status = 'sent'` only, so failed records won't block a retry.
+
+## Technical Details
+
+| Item | Detail |
+|---|---|
+| File modified | `supabase/functions/send-event-invitation/index.ts` |
+| Change | Add `await new Promise(r => setTimeout(r, 600))` after each send |
+| Redeploy | Yes, function will be redeployed |
+| Retry method | Click "Send Now" again after deploy -- dedup logic handles it automatically |
 
