@@ -122,3 +122,6 @@ verify_jwt = false
 
 [functions.send-event-invitation]
 verify_jwt = false
+
+[functions.event-email-scheduler]
+verify_jwt = false

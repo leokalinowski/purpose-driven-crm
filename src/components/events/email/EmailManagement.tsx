@@ -5,10 +5,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { EmailTemplateEditor, EventPreviewData } from './EmailTemplateEditor'
-import { GlobalTemplateEditor } from './GlobalTemplateEditor'
 import { EmailMetricsDashboard } from './EmailMetricsDashboard'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
-import { Send, Mail, Calendar, Heart, UserX, Globe, FileText, Users } from 'lucide-react'
+import { Send, Mail, Calendar, Heart, UserX, Users } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/integrations/supabase/client'
 
@@ -70,7 +69,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
   const [selectedEventId, setSelectedEventId] = useState<string>(initialEventId || '')
   const [selectedEventTitle, setSelectedEventTitle] = useState<string>(initialEventTitle || '')
   const [loadingEvents, setLoadingEvents] = useState(false)
-  const [templateMode, setTemplateMode] = useState<'global' | 'event'>('global')
+  // templateMode removed - always event-specific
   const [eventPreviewData, setEventPreviewData] = useState<EventPreviewData>({})
 
   // Use the selected event or the initial event
@@ -307,31 +306,9 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between flex-wrap gap-4">
-            <span>
-              {templateMode === 'global' ? 'Global Email Templates' : `Email Templates - ${currentEventTitle}`}
-            </span>
+            <span>Email Templates - {currentEventTitle}</span>
             <div className="flex items-center gap-2">
-              {currentEventId && (
-                <div className="flex items-center gap-2 border rounded-lg p-1">
-                  <Button
-                    variant={templateMode === 'global' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setTemplateMode('global')}
-                  >
-                    <Globe className="h-4 w-4 mr-2" />
-                    Global
-                  </Button>
-                  <Button
-                    variant={templateMode === 'event' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setTemplateMode('event')}
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    Event-Specific
-                  </Button>
-                </div>
-              )}
-              {canSendManually && templateMode === 'event' && (
+              {canSendManually && (
                 <Button
                   onClick={handleSendTestEmails}
                   disabled={sending}
@@ -367,17 +344,11 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
                       </div>
                     </div>
 
-                    {templateMode === 'global' ? (
-                      <GlobalTemplateEditor
-                        emailType={type.key}
-                      />
-                    ) : (
-                      <EmailTemplateEditor
-                        eventId={currentEventId}
-                        emailType={type.key}
-                        eventData={eventPreviewData}
-                      />
-                    )}
+                    <EmailTemplateEditor
+                      eventId={currentEventId}
+                      emailType={type.key}
+                      eventData={eventPreviewData}
+                    />
                   </div>
                 </TabsContent>
               ))}
