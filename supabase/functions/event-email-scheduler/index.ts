@@ -128,14 +128,19 @@ async function resolveTemplate(supabase: any, eventId: string, emailType: string
     no_show: 'Follow Up',
   }
   const typeLabel = labels[emailType] || emailType
+  const isPostEvent = emailType === 'thank_you' || emailType === 'no_show'
+
+  const eventDetailsBlock = isPostEvent
+    ? `<p>Thank you for your interest in <strong>${event.title}</strong>.</p>`
+    : `<p>This is a ${typeLabel.toLowerCase()} for <strong>${event.title}</strong> on ${formattedDate} at ${formattedTime}.</p>
+      ${event.location ? `<p><strong>Location:</strong> ${event.location}</p>` : ''}`
 
   return {
     subject: `${typeLabel}: ${event.title}`,
     html_content: `<html><body style="font-family: sans-serif; padding: 20px;">
       <h1 style="color: ${primaryColor};">${typeLabel}</h1>
       <p>Hi there,</p>
-      <p>This is a ${typeLabel.toLowerCase()} for <strong>${event.title}</strong> on ${formattedDate} at ${formattedTime}.</p>
-      ${event.location ? `<p><strong>Location:</strong> ${event.location}</p>` : ''}
+      ${eventDetailsBlock}
       <p>Best regards,<br/>${agentName}</p>
     </body></html>`,
     text_content: null,

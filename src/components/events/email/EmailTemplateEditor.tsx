@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { useEmailTemplates, EmailTemplate } from '@/hooks/useEmailTemplates'
 import { Loader2, Save, Eye } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import { getDefaultEmailTemplate } from '@/utils/emailTemplateBuilder'
 import { useGlobalEmailTemplates } from '@/hooks/useGlobalEmailTemplates'
@@ -54,8 +55,8 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
   onSave,
   eventData
 }) => {
-  const { templates, createTemplate, updateTemplate, getTemplateByType } = useEmailTemplates(eventId)
-  const { getTemplateByType: getGlobalTemplate } = useGlobalEmailTemplates()
+  const { templates, loading: templatesLoading, createTemplate, updateTemplate, getTemplateByType } = useEmailTemplates(eventId)
+  const { loading: globalLoading, getTemplateByType: getGlobalTemplate } = useGlobalEmailTemplates()
   const { toast } = useToast()
 
   const [subject, setSubject] = useState('')
@@ -242,11 +243,20 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
 
             <div>
               <Label>Email Content</Label>
+              {(templatesLoading || globalLoading) ? (
+                <div className="space-y-2 p-4">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-3/4" />
+                  <Skeleton className="h-64 w-full" />
+                </div>
+              ) : (
               <VisualEmailEditor
+                key={existingTemplate?.id || globalTemplate?.id || `default-${emailType}`}
                 emailType={emailType}
                 htmlContent={htmlContent}
                 onHtmlChange={setHtmlContent}
               />
+              )}
             </div>
 
             <div>
