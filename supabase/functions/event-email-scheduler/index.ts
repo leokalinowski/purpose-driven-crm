@@ -86,7 +86,7 @@ function makeReplaceVars(event: any, agentName: string, primaryColor: string, se
   }
 }
 
-async function resolveTemplate(supabase: any, eventId: string, emailType: string, replaceVars: (s: string) => string, event: any, agentName: string, primaryColor: string, formattedDate: string, formattedTime: string) {
+async function resolveTemplate(supabase: any, eventId: string, emailType: string, replaceVars: (s: string) => string, event: any, agentName: string, primaryColor: string, formattedDate: string, formattedTime: string): Promise<{ subject: string; html_content: string; text_content: string | null } | null> {
   // 1. Event-specific template
   const { data: eventTemplate } = await supabase
     .from('event_email_templates')
@@ -120,31 +120,8 @@ async function resolveTemplate(supabase: any, eventId: string, emailType: string
     }
   }
 
-  // 3. Hardcoded fallback
-  const labels: Record<string, string> = {
-    reminder_7day: '7-Day Reminder',
-    reminder_1day: '1-Day Reminder',
-    thank_you: 'Thank You',
-    no_show: 'Follow Up',
-  }
-  const typeLabel = labels[emailType] || emailType
-  const isPostEvent = emailType === 'thank_you' || emailType === 'no_show'
-
-  const eventDetailsBlock = isPostEvent
-    ? `<p>Thank you for your interest in <strong>${event.title}</strong>.</p>`
-    : `<p>This is a ${typeLabel.toLowerCase()} for <strong>${event.title}</strong> on ${formattedDate} at ${formattedTime}.</p>
-      ${event.location ? `<p><strong>Location:</strong> ${event.location}</p>` : ''}`
-
-  return {
-    subject: `${typeLabel}: ${event.title}`,
-    html_content: `<html><body style="font-family: sans-serif; padding: 20px;">
-      <h1 style="color: ${primaryColor};">${typeLabel}</h1>
-      <p>Hi there,</p>
-      ${eventDetailsBlock}
-      <p>Best regards,<br/>${agentName}</p>
-    </body></html>`,
-    text_content: null,
-  }
+  // No template found — return null so the scheduler can skip + log
+  return null
 }
 
 async function sendEmailWithDedup(
@@ -329,6 +306,12 @@ Deno.serve(async (req) => {
         if (recipients.length === 0) continue
 
         const template = await resolveTemplate(supabase, event.id, emailType, replaceVars, event, agentName, primaryColor, formattedDate, formattedTime)
+
+        if (!template) {
+          console.warn(`[${event.title}] ${emailType}: NO TEMPLATE FOUND — skipping all recipients`)
+          summary.push({ event: event.title, emailType, sent: 0, skipped: 0, failed: 0, no_template: true })
+          continue
+        }
 
         let sent = 0, skipped = 0, failed = 0
 
