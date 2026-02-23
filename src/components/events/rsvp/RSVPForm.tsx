@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useRSVP, RSVPFormData } from '@/hooks/useRSVP';
+import { useRSVPQuestions, RSVPQuestion } from '@/hooks/useRSVPQuestions';
 import { Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -15,6 +19,7 @@ interface RSVPFormProps {
 
 export const RSVPForm = ({ eventId, maxCapacity, currentCount, onSuccess }: RSVPFormProps) => {
   const { submitRSVP, loading, error } = useRSVP();
+  const { getEventQuestions, submitAnswers } = useRSVPQuestions();
   const [formData, setFormData] = useState<RSVPFormData>({
     name: '',
     email: '',
@@ -22,8 +27,24 @@ export const RSVPForm = ({ eventId, maxCapacity, currentCount, onSuccess }: RSVP
     guest_count: 1,
   });
   const [formError, setFormError] = useState<string | null>(null);
+  const [customQuestions, setCustomQuestions] = useState<RSVPQuestion[]>([]);
+  const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
+  const [checkboxAnswers, setCheckboxAnswers] = useState<Record<string, string[]>>({});
 
   const isAtCapacity = maxCapacity !== undefined && maxCapacity !== null && currentCount !== undefined && currentCount >= maxCapacity;
+
+  // Load custom questions
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const questions = await getEventQuestions(eventId);
+        setCustomQuestions(questions);
+      } catch (err) {
+        console.error('Failed to load custom questions:', err);
+      }
+    };
+    load();
+  }, [eventId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,11 +66,119 @@ export const RSVPForm = ({ eventId, maxCapacity, currentCount, onSuccess }: RSVP
       return;
     }
 
+    // Validate required custom questions
+    for (const q of customQuestions) {
+      if (q.is_required) {
+        if (q.question_type === 'checkbox') {
+          const selected = checkboxAnswers[q.id] || [];
+          if (selected.length === 0) {
+            setFormError(`Please answer: ${q.question_text}`);
+            return;
+          }
+        } else {
+          const answer = customAnswers[q.id];
+          if (!answer || !answer.trim()) {
+            setFormError(`Please answer: ${q.question_text}`);
+            return;
+          }
+        }
+      }
+    }
+
     try {
-      await submitRSVP(eventId, formData);
+      const rsvp = await submitRSVP(eventId, formData);
+
+      // Submit custom answers if any
+      const answersToSubmit: { question_id: string; answer_text: string }[] = [];
+      for (const q of customQuestions) {
+        if (q.question_type === 'checkbox') {
+          const selected = checkboxAnswers[q.id] || [];
+          if (selected.length > 0) {
+            answersToSubmit.push({ question_id: q.id, answer_text: selected.join(', ') });
+          }
+        } else {
+          const answer = customAnswers[q.id];
+          if (answer && answer.trim()) {
+            answersToSubmit.push({ question_id: q.id, answer_text: answer.trim() });
+          }
+        }
+      }
+
+      if (answersToSubmit.length > 0) {
+        try {
+          await submitAnswers(rsvp.id, answersToSubmit);
+        } catch (err) {
+          console.error('Failed to submit custom answers:', err);
+          // Don't fail the RSVP if answers fail
+        }
+      }
+
       onSuccess();
     } catch (err: any) {
       setFormError(err.message || 'Failed to submit RSVP. Please try again.');
+    }
+  };
+
+  const renderCustomQuestion = (q: RSVPQuestion) => {
+    switch (q.question_type) {
+      case 'text':
+        return (
+          <Input
+            value={customAnswers[q.id] || ''}
+            onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
+            disabled={loading}
+          />
+        );
+      case 'textarea':
+        return (
+          <Textarea
+            value={customAnswers[q.id] || ''}
+            onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
+            rows={3}
+            disabled={loading}
+          />
+        );
+      case 'select':
+        return (
+          <Select
+            value={customAnswers[q.id] || ''}
+            onValueChange={(val) => setCustomAnswers({ ...customAnswers, [q.id]: val })}
+            disabled={loading}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select an option" />
+            </SelectTrigger>
+            <SelectContent>
+              {(q.options as string[] || []).map((opt, i) => (
+                <SelectItem key={i} value={opt}>{opt}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      case 'checkbox':
+        const selected = checkboxAnswers[q.id] || [];
+        return (
+          <div className="space-y-2">
+            {(q.options as string[] || []).map((opt, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Checkbox
+                  id={`${q.id}-${i}`}
+                  checked={selected.includes(opt)}
+                  onCheckedChange={(checked) => {
+                    const updated = checked
+                      ? [...selected, opt]
+                      : selected.filter(s => s !== opt);
+                    setCheckboxAnswers({ ...checkboxAnswers, [q.id]: updated });
+                  }}
+                  disabled={loading}
+                />
+                <Label htmlFor={`${q.id}-${i}`} className="text-sm font-normal">{opt}</Label>
+              </div>
+            ))}
+          </div>
+        );
+      default:
+        return null;
     }
   };
 
@@ -123,6 +252,17 @@ export const RSVPForm = ({ eventId, maxCapacity, currentCount, onSuccess }: RSVP
         </p>
       </div>
 
+      {/* Custom Questions */}
+      {customQuestions.map((q) => (
+        <div key={q.id} className="space-y-2">
+          <Label>
+            {q.question_text}
+            {q.is_required && <span className="text-destructive ml-1">*</span>}
+          </Label>
+          {renderCustomQuestion(q)}
+        </div>
+      ))}
+
       <Button
         type="submit"
         className="w-full"
@@ -146,4 +286,3 @@ export const RSVPForm = ({ eventId, maxCapacity, currentCount, onSuccess }: RSVP
     </form>
   );
 };
-

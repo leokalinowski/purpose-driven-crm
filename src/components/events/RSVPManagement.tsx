@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useRSVP, RSVP } from '@/hooks/useRSVP';
-import { CheckCircle2, Clock, XCircle, Search, Download, ExternalLink, Mail } from 'lucide-react';
+import { useRSVPQuestions, RSVPAnswer, RSVPQuestion } from '@/hooks/useRSVPQuestions';
+import { CheckCircle2, Search, Download, ExternalLink, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { RSVPStats } from './rsvp/RSVPStats';
@@ -17,21 +19,32 @@ interface RSVPManagementProps {
 
 export const RSVPManagement = ({ eventId, publicSlug }: RSVPManagementProps) => {
   const { getEventRSVPs, getRSVPStats, checkInRSVP } = useRSVP();
+  const { getEventAnswers, getEventQuestions } = useRSVPQuestions();
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTab, setSelectedTab] = useState('all');
+  const [answers, setAnswers] = useState<RSVPAnswer[]>([]);
+  const [questions, setQuestions] = useState<RSVPQuestion[]>([]);
+  const [expandedRsvps, setExpandedRsvps] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    loadRSVPs();
-    loadStats();
+    loadAll();
   }, [eventId]);
 
-  const loadRSVPs = async () => {
+  const loadAll = async () => {
     try {
-      const data = await getEventRSVPs(eventId);
-      setRsvps(data);
+      const [rsvpData, statsData, answerData, questionData] = await Promise.all([
+        getEventRSVPs(eventId),
+        getRSVPStats(eventId),
+        getEventAnswers(eventId).catch(() => []),
+        getEventQuestions(eventId).catch(() => []),
+      ]);
+      setRsvps(rsvpData);
+      setStats(statsData);
+      setAnswers(answerData);
+      setQuestions(questionData);
     } catch (error: any) {
       toast.error('Failed to load RSVPs: ' + error.message);
     } finally {
@@ -39,37 +52,49 @@ export const RSVPManagement = ({ eventId, publicSlug }: RSVPManagementProps) => 
     }
   };
 
-  const loadStats = async () => {
-    try {
-      const data = await getRSVPStats(eventId);
-      setStats(data);
-    } catch (error: any) {
-      console.error('Failed to load stats:', error);
-    }
-  };
-
   const handleCheckIn = async (rsvpId: string) => {
     try {
       await checkInRSVP(rsvpId);
       toast.success('RSVP checked in successfully');
-      loadRSVPs();
-      loadStats();
+      loadAll();
     } catch (error: any) {
       toast.error('Failed to check in: ' + error.message);
     }
   };
 
+  const getAnswersForRsvp = (rsvpId: string) => {
+    return answers.filter(a => a.rsvp_id === rsvpId).sort((a, b) => a.sort_order - b.sort_order);
+  };
+
+  const toggleExpanded = (rsvpId: string) => {
+    setExpandedRsvps(prev => {
+      const next = new Set(prev);
+      if (next.has(rsvpId)) next.delete(rsvpId);
+      else next.add(rsvpId);
+      return next;
+    });
+  };
+
   const exportToCSV = () => {
-    const headers = ['Name', 'Email', 'Phone', 'Guest Count', 'Status', 'RSVP Date', 'Check-In Status'];
-    const rows = filteredRSVPs.map(rsvp => [
-      rsvp.name,
-      rsvp.email,
-      rsvp.phone || '',
-      rsvp.guest_count.toString(),
-      rsvp.status,
-      format(new Date(rsvp.rsvp_date), 'MM/dd/yyyy HH:mm'),
-      rsvp.check_in_status,
-    ]);
+    // Build unique question columns
+    const questionColumns = questions.map(q => q.question_text);
+
+    const headers = ['Name', 'Email', 'Phone', 'Guest Count', 'Status', 'RSVP Date', 'Check-In Status', ...questionColumns];
+    const rows = filteredRSVPs.map(rsvp => {
+      const rsvpAnswers = getAnswersForRsvp(rsvp.id);
+      const answerMap = new Map(rsvpAnswers.map(a => [a.question_id, a.answer_text]));
+
+      return [
+        rsvp.name,
+        rsvp.email,
+        rsvp.phone || '',
+        rsvp.guest_count.toString(),
+        rsvp.status,
+        format(new Date(rsvp.rsvp_date), 'MM/dd/yyyy HH:mm'),
+        rsvp.check_in_status,
+        ...questions.map(q => answerMap.get(q.id) || ''),
+      ];
+    });
 
     const csvContent = [
       headers.join(','),
@@ -91,7 +116,7 @@ export const RSVPManagement = ({ eventId, publicSlug }: RSVPManagementProps) => 
   };
 
   const filteredRSVPs = rsvps.filter(rsvp => {
-    const matchesSearch = 
+    const matchesSearch =
       rsvp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       rsvp.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (rsvp.phone && rsvp.phone.includes(searchQuery));
@@ -137,17 +162,11 @@ export const RSVPManagement = ({ eventId, publicSlug }: RSVPManagementProps) => 
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>RSVP Management</CardTitle>
-            <CardDescription>
-              Manage RSVPs for this event
-            </CardDescription>
+            <CardDescription>Manage RSVPs for this event</CardDescription>
           </div>
           <div className="flex gap-2">
             {publicSlug && getPublicPageUrl() && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.open(getPublicPageUrl(), '_blank')}
-              >
+              <Button variant="outline" size="sm" onClick={() => window.open(getPublicPageUrl(), '_blank')}>
                 <ExternalLink className="h-4 w-4 mr-2" />
                 View Public Page
               </Button>
@@ -160,7 +179,6 @@ export const RSVPManagement = ({ eventId, publicSlug }: RSVPManagementProps) => 
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Stats */}
         {stats && (
           <RSVPStats
             total={stats.total}
@@ -171,7 +189,6 @@ export const RSVPManagement = ({ eventId, publicSlug }: RSVPManagementProps) => 
           />
         )}
 
-        {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -182,7 +199,6 @@ export const RSVPManagement = ({ eventId, publicSlug }: RSVPManagementProps) => 
           />
         </div>
 
-        {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab}>
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="all">All ({rsvps.length})</TabsTrigger>
@@ -195,48 +211,74 @@ export const RSVPManagement = ({ eventId, publicSlug }: RSVPManagementProps) => 
           <TabsContent value={selectedTab} className="mt-4">
             <div className="space-y-2">
               {filteredRSVPs.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  No RSVPs found
-                </p>
+                <p className="text-center text-muted-foreground py-8">No RSVPs found</p>
               ) : (
-                filteredRSVPs.map((rsvp) => (
-                  <div
-                    key={rsvp.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-medium">{rsvp.name}</h4>
-                        {getStatusBadge(rsvp)}
+                filteredRSVPs.map((rsvp) => {
+                  const rsvpAnswers = getAnswersForRsvp(rsvp.id);
+                  const hasAnswers = rsvpAnswers.length > 0;
+
+                  return (
+                    <div key={rsvp.id} className="border rounded-lg hover:bg-muted/50">
+                      <div className="flex items-center justify-between p-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-medium">{rsvp.name}</h4>
+                            {getStatusBadge(rsvp)}
+                            {hasAnswers && (
+                              <Badge variant="outline" className="text-xs">
+                                +{rsvpAnswers.length} answers
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground space-y-1">
+                            <p>{rsvp.email}</p>
+                            {rsvp.phone && <p>{rsvp.phone}</p>}
+                            <p>
+                              {rsvp.guest_count} {rsvp.guest_count === 1 ? 'guest' : 'guests'} • RSVP'd{' '}
+                              {format(new Date(rsvp.rsvp_date), 'MMM d, yyyy')}
+                            </p>
+                            {rsvp.checked_in_at && (
+                              <p className="text-green-600">
+                                Checked in: {format(new Date(rsvp.checked_in_at), 'MMM d, yyyy h:mm a')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {hasAnswers && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => toggleExpanded(rsvp.id)}
+                            >
+                              <ChevronDown className={`h-4 w-4 transition-transform ${expandedRsvps.has(rsvp.id) ? 'rotate-180' : ''}`} />
+                            </Button>
+                          )}
+                          {rsvp.check_in_status === 'not_checked_in' && rsvp.status === 'confirmed' && (
+                            <Button size="sm" variant="outline" onClick={() => handleCheckIn(rsvp.id)}>
+                              <CheckCircle2 className="h-4 w-4 mr-2" />
+                              Check In
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-sm text-muted-foreground space-y-1">
-                        <p>{rsvp.email}</p>
-                        {rsvp.phone && <p>{rsvp.phone}</p>}
-                        <p>
-                          {rsvp.guest_count} {rsvp.guest_count === 1 ? 'guest' : 'guests'} • RSVP'd{' '}
-                          {format(new Date(rsvp.rsvp_date), 'MMM d, yyyy')}
-                        </p>
-                        {rsvp.checked_in_at && (
-                          <p className="text-green-600">
-                            Checked in: {format(new Date(rsvp.checked_in_at), 'MMM d, yyyy h:mm a')}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {rsvp.check_in_status === 'not_checked_in' && rsvp.status === 'confirmed' && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleCheckIn(rsvp.id)}
-                        >
-                          <CheckCircle2 className="h-4 w-4 mr-2" />
-                          Check In
-                        </Button>
+
+                      {/* Expandable custom answers */}
+                      {hasAnswers && expandedRsvps.has(rsvp.id) && (
+                        <div className="px-4 pb-4 pt-0 border-t">
+                          <div className="grid gap-2 mt-3">
+                            {rsvpAnswers.map((a, i) => (
+                              <div key={i} className="text-sm">
+                                <span className="font-medium text-muted-foreground">{a.question_text}:</span>{' '}
+                                <span>{a.answer_text}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </TabsContent>
@@ -245,4 +287,3 @@ export const RSVPManagement = ({ eventId, publicSlug }: RSVPManagementProps) => 
     </Card>
   );
 };
-

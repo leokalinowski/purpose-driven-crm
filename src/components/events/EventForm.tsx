@@ -6,11 +6,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useEvents, Event } from '@/hooks/useEvents';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useAgents } from '@/hooks/useAgents';
 import { supabase } from '@/integrations/supabase/client';
+import { RSVPQuestionBuilder } from './rsvp/RSVPQuestionBuilder';
+import { ChevronDown } from 'lucide-react';
 
 interface EventFormProps {
   event?: Event;
@@ -562,6 +565,21 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
               onCheckedChange={setIsPublished}
             />
           </div>
+
+          {/* Custom RSVP Questions - only show when editing an existing event */}
+          {isEditing && event && (
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button type="button" variant="outline" className="w-full justify-between">
+                  Custom RSVP Questions
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-3">
+                <RSVPQuestionBuilder eventId={event.id} />
+              </CollapsibleContent>
+            </Collapsible>
+          )}
 
           <div className="flex justify-end space-x-2 pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
