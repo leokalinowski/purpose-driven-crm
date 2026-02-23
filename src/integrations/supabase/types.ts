@@ -1065,6 +1065,89 @@ export type Database = {
           },
         ]
       }
+      event_rsvp_answers: {
+        Row: {
+          answer_text: string | null
+          created_at: string | null
+          id: string
+          question_id: string
+          rsvp_id: string
+        }
+        Insert: {
+          answer_text?: string | null
+          created_at?: string | null
+          id?: string
+          question_id: string
+          rsvp_id: string
+        }
+        Update: {
+          answer_text?: string | null
+          created_at?: string | null
+          id?: string
+          question_id?: string
+          rsvp_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_rsvp_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "event_rsvp_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_rsvp_answers_rsvp_id_fkey"
+            columns: ["rsvp_id"]
+            isOneToOne: false
+            referencedRelation: "event_rsvps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_rsvp_questions: {
+        Row: {
+          created_at: string | null
+          event_id: string
+          id: string
+          is_required: boolean | null
+          options: Json | null
+          question_text: string
+          question_type: string
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_id: string
+          id?: string
+          is_required?: boolean | null
+          options?: Json | null
+          question_text: string
+          question_type?: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_id?: string
+          id?: string
+          is_required?: boolean | null
+          options?: Json | null
+          question_text?: string
+          question_type?: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_rsvp_questions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_rsvps: {
         Row: {
           check_in_status: string | null
@@ -3142,6 +3225,17 @@ export type Database = {
           status: string
         }[]
       }
+      get_rsvp_answers: {
+        Args: { p_event_id: string }
+        Returns: {
+          answer_text: string
+          question_id: string
+          question_text: string
+          question_type: string
+          rsvp_id: string
+          sort_order: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -3189,6 +3283,10 @@ export type Database = {
       mask_phone: { Args: { phone_number: string }; Returns: string }
       mask_phone_field: { Args: { phone_value: string }; Returns: string }
       normalize_phone: { Args: { phone_input: string }; Returns: string }
+      submit_rsvp_answers: {
+        Args: { p_answers: Json; p_rsvp_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "agent" | "editor"
