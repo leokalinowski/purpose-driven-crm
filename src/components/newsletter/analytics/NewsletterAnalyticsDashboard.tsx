@@ -4,15 +4,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useNewsletterAnalytics, DateRange } from "@/hooks/useNewsletterAnalytics";
+import { useNewsletterAnalytics, DateRange, CampaignBreakdown } from "@/hooks/useNewsletterAnalytics";
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
 import {
-  Send, MailOpen, MousePointerClick, AlertTriangle, Ban, TrendingUp, TrendingDown, ChevronDown,
-  RefreshCw,
+  Send, MailOpen, MousePointerClick, AlertTriangle, Ban,
+  RefreshCw, ChevronDown, ChevronRight, Download,
 } from "lucide-react";
 
 function formatPercent(v: number | null | undefined) {
@@ -41,9 +40,30 @@ const ranges: { value: DateRange; label: string }[] = [
   { value: "all", label: "All time" },
 ];
 
+function exportCampaignsToCSV(campaigns: any[]) {
+  const headers = ["Campaign", "Send Date", "Recipients", "Open Rate", "Click Rate", "Status", "Agent"];
+  const rows = campaigns.map(c => [
+    c.campaign_name,
+    c.send_date ? new Date(c.send_date).toLocaleDateString() : "",
+    c.recipient_count ?? 0,
+    c.open_rate != null ? `${c.open_rate}%` : "",
+    c.click_through_rate != null ? `${c.click_through_rate}%` : "",
+    c.status ?? "",
+    c.agent_name ?? "",
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `newsletter-campaigns-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function NewsletterAnalyticsDashboard() {
   const [dateRange, setDateRange] = useState<DateRange>("all");
-  const { campaigns, emailStats, metrics, monthlySeries, isLoading, error, refetch } = useNewsletterAnalytics(dateRange);
+  const { campaigns, emailStats, metrics, monthlySeries, campaignBreakdowns, isLoading, error, refetch } = useNewsletterAnalytics(dateRange);
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
 
   return (
@@ -147,8 +167,9 @@ export function NewsletterAnalyticsDashboard() {
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip labelFormatter={formatMonth} />
                     <Legend />
-                    <Bar dataKey="delivered" name="Delivered" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="opened" name="Opened" stackId="a" fill="hsl(142 76% 36%)" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="delivered_only" name="Delivered" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="opened_only" name="Opened" stackId="a" fill="hsl(142 76% 36%)" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="clicked" name="Clicked" stackId="a" fill="hsl(221 83% 53%)" radius={[0, 0, 0, 0]} />
                     <Bar dataKey="bounced" name="Bounced" stackId="a" fill="hsl(0 84% 60%)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -160,7 +181,15 @@ export function NewsletterAnalyticsDashboard() {
 
       {/* Campaign Table */}
       <Card>
-        <CardHeader><CardTitle className="text-sm font-medium">Campaign Performance</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-medium">Campaign Performance</CardTitle>
+          {campaigns.length > 0 && (
+            <Button variant="outline" size="sm" onClick={() => exportCampaignsToCSV(campaigns)}>
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              Export CSV
+            </Button>
+          )}
+        </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
@@ -171,7 +200,9 @@ export function NewsletterAnalyticsDashboard() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8"></TableHead>
                     <TableHead>Campaign</TableHead>
+                    <TableHead>Agent</TableHead>
                     <TableHead>Send Date</TableHead>
                     <TableHead className="text-right">Recipients</TableHead>
                     <TableHead className="text-right">Open Rate</TableHead>
@@ -180,26 +211,71 @@ export function NewsletterAnalyticsDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {campaigns.map((c) => (
-                    <TableRow key={c.id} className="group">
-                      <TableCell className="font-medium max-w-[240px] truncate">{c.campaign_name}</TableCell>
-                      <TableCell className="text-sm">{c.send_date ? new Date(c.send_date).toLocaleDateString() : "—"}</TableCell>
-                      <TableCell className="text-right">{(c.recipient_count ?? 0).toLocaleString()}</TableCell>
-                      <TableCell className="text-right">{formatPercent(c.open_rate)}</TableCell>
-                      <TableCell className="text-right">{formatPercent(c.click_through_rate)}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className={`text-xs ${statusColors[c.status ?? ""] ?? ""}`}>
-                          {c.status ?? "—"}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {campaigns.map((c) => {
+                    const isExpanded = expandedCampaign === c.id;
+                    const breakdown = campaignBreakdowns.get(c.id);
+                    return (
+                      <React.Fragment key={c.id}>
+                        <TableRow
+                          className="group cursor-pointer hover:bg-muted/50"
+                          onClick={() => setExpandedCampaign(isExpanded ? null : c.id)}
+                        >
+                          <TableCell className="w-8 px-2">
+                            {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                          </TableCell>
+                          <TableCell className="font-medium max-w-[200px] truncate">{c.campaign_name}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{c.agent_name || "—"}</TableCell>
+                          <TableCell className="text-sm">{c.send_date ? new Date(c.send_date).toLocaleDateString() : "—"}</TableCell>
+                          <TableCell className="text-right">{(c.recipient_count ?? 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-right">{formatPercent(c.open_rate)}</TableCell>
+                          <TableCell className="text-right">{formatPercent(c.click_through_rate)}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className={`text-xs ${statusColors[c.status ?? ""] ?? ""}`}>
+                              {c.status ?? "—"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded && (
+                          <TableRow className="bg-muted/30">
+                            <TableCell colSpan={8} className="py-3 px-6">
+                              {breakdown ? (
+                                <CampaignDrillDown breakdown={breakdown} />
+                              ) : (
+                                <p className="text-xs text-muted-foreground">No email-level tracking data available for this campaign yet.</p>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function CampaignDrillDown({ breakdown }: { breakdown: CampaignBreakdown }) {
+  const items = [
+    { label: "Total Sent", value: breakdown.total, color: "text-foreground" },
+    { label: "Delivered", value: breakdown.delivered, color: "text-primary" },
+    { label: "Opened", value: breakdown.opened, color: "text-green-600" },
+    { label: "Clicked", value: breakdown.clicked, color: "text-blue-600" },
+    { label: "Bounced", value: breakdown.bounced, color: "text-destructive" },
+    { label: "Failed", value: breakdown.failed, color: "text-destructive" },
+  ];
+  return (
+    <div className="flex flex-wrap gap-6">
+      {items.map(it => (
+        <div key={it.label} className="text-center">
+          <p className={`text-lg font-semibold ${it.color}`}>{it.value}</p>
+          <p className="text-xs text-muted-foreground">{it.label}</p>
+        </div>
+      ))}
     </div>
   );
 }

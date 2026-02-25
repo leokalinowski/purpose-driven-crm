@@ -901,7 +901,6 @@ async function processAgent(
           {
             reportMonth: reportMonth,
             zipCode: zip,
-            campaignId: undefined // Could be added if campaign tracking is needed
           }
         );
         if (res.error) {
