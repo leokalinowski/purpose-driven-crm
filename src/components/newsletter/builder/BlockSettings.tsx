@@ -7,8 +7,8 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Upload, Loader2, Plus, X } from 'lucide-react';
-import { NewsletterBlock, GlobalStyles } from './types';
+import { Upload, Loader2, Plus, X, Link, Trash2 } from 'lucide-react';
+import { NewsletterBlock, GlobalStyles, ListingItem } from './types';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -260,26 +260,7 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
       );
     }
     case 'listings':
-      return (
-        <div className="space-y-4">
-          <SettingGroup label="Number of Listings">
-            <div className="flex items-center gap-3">
-              <Slider value={[p.count]} min={1} max={6} step={1} onValueChange={([v]) => onUpdate({ count: v })} className="flex-1" />
-              <span className="text-xs w-8 text-right">{p.count}</span>
-            </div>
-          </SettingGroup>
-          <SettingGroup label="Style">
-            <Select value={p.style} onValueChange={(v) => onUpdate({ style: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="grid">Grid</SelectItem>
-                <SelectItem value="list">List</SelectItem>
-              </SelectContent>
-            </Select>
-          </SettingGroup>
-          <p className="text-xs text-muted-foreground">Listings are pulled from your pipeline at send time.</p>
-        </div>
-      );
+      return <ListingsSettings props={p} onUpdate={onUpdate} />;
     case 'html_raw':
       return (
         <div className="space-y-4">
@@ -289,6 +270,109 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
     default:
       return <p className="text-sm text-muted-foreground">No settings for this block type.</p>;
   }
+}
+
+function ListingsSettings({ props: p, onUpdate }: { props: Record<string, any>; onUpdate: (p: Record<string, any>) => void }) {
+  const [url, setUrl] = useState('');
+  const [scraping, setScraping] = useState(false);
+  const { toast } = useToast();
+  const listings: ListingItem[] = p.listings || [];
+
+  const handleAddListing = async () => {
+    if (!url.trim()) return;
+    if (listings.length >= 6) {
+      toast({ title: 'Maximum 6 listings', variant: 'destructive' });
+      return;
+    }
+
+    setScraping(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('scrape-listing', {
+        body: { url: url.trim() },
+      });
+
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || 'Failed to scrape listing');
+
+      const newListing: ListingItem = {
+        id: crypto.randomUUID(),
+        url: url.trim(),
+        image_url: data.listing.image_url || '',
+        price: data.listing.price,
+        address: data.listing.address,
+        city: data.listing.city || '',
+        beds: data.listing.beds || 0,
+        baths: data.listing.baths || 0,
+        sqft: data.listing.sqft || 'N/A',
+        status: 'loaded',
+      };
+
+      onUpdate({ listings: [...listings, newListing] });
+      setUrl('');
+      toast({ title: 'Listing added!' });
+    } catch (err: any) {
+      toast({ title: 'Failed to scrape listing', description: err.message, variant: 'destructive' });
+    } finally {
+      setScraping(false);
+    }
+  };
+
+  const removeListing = (id: string) => {
+    onUpdate({ listings: listings.filter(l => l.id !== id) });
+  };
+
+  return (
+    <div className="space-y-4">
+      <SettingGroup label="Style">
+        <Select value={p.style || 'grid'} onValueChange={(v) => onUpdate({ style: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="grid">Grid</SelectItem>
+            <SelectItem value="list">List</SelectItem>
+          </SelectContent>
+        </Select>
+      </SettingGroup>
+
+      <SettingGroup label="Add Listing URL">
+        <div className="flex gap-1.5">
+          <Input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://zillow.com/homedetails/..."
+            className="flex-1 text-xs"
+            onKeyDown={(e) => e.key === 'Enter' && handleAddListing()}
+            disabled={scraping}
+          />
+          <Button size="sm" onClick={handleAddListing} disabled={scraping || !url.trim()}>
+            {scraping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link className="h-3.5 w-3.5" />}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">Paste a Zillow, Homes.com, Realtor.com, or Redfin URL</p>
+      </SettingGroup>
+
+      {listings.length > 0 && (
+        <SettingGroup label={`Listings (${listings.length}/6)`}>
+          <div className="space-y-2">
+            {listings.map((listing) => (
+              <div key={listing.id} className="flex items-start gap-2 p-2 border rounded-md bg-muted/50">
+                {listing.image_url && (
+                  <img src={listing.image_url} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold truncate">{listing.price}</p>
+                  <p className="text-xs text-muted-foreground truncate">{listing.address}</p>
+                  <p className="text-xs text-muted-foreground">{listing.beds}bd · {listing.baths}ba · {listing.sqft} sqft</p>
+                </div>
+                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => removeListing(listing.id)}>
+                  <Trash2 className="h-3 w-3 text-destructive" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </SettingGroup>
+      )}
+    </div>
+  );
 }
 
 function ImageUploadSetting({ src, onUpdate }: { src: string; onUpdate: (p: Record<string, any>) => void }) {
