@@ -1,85 +1,76 @@
 
 
-# Rebuild the Newsletter Analytics Sub-page
+# Newsletter Analytics -- Full Audit and Improvement Plan
 
-## Current State
+## Issues Found
 
-The Analytics tab today is minimal:
-- 4 KPI cards (total campaigns, total recipients, avg open rate, avg click-through rate)
-- One area chart showing open rate and click rate over time
-- A flat campaigns table with name, date, recipients, open rate, click rate, status
-- A "Preview Newsletter" button that opens the old market-report preview dialog
+### Critical: campaign_id column never populated
 
-Key problems:
-- **Open/click rates are still fake** in the `newsletter-monthly` edge function (random numbers). The `newsletter-send` function was fixed to `0`, but the monthly one still generates fake data. The Resend webhook updates `event_emails` and `email_logs` but **never updates `newsletter_campaigns`** — so campaign-level open/click rates are never populated from real tracking data.
-- The chart only shows two metrics and has no interactivity.
-- No per-campaign drill-down, no bounce/complaint visibility, no agent-level breakdown, no date filtering.
-- The "Preview Newsletter" button is for the old market-report system, not the template builder.
+The migration added a `campaign_id` column to `email_logs`, and the webhook correctly reads it to recalculate campaign stats. However, **none of the three sending functions actually write to this column**:
 
-## Data Sources Available
+- **newsletter-send**: stores `campaign_id` inside `metadata` JSONB, not the actual `campaign_id` column
+- **newsletter-template-send**: doesn't reference `campaign_id` at all -- no campaign record is even created for template sends
+- **newsletter-monthly**: doesn't log individual emails to `email_logs` with campaign_id
 
-| Table | Useful Columns | Notes |
-|-------|---------------|-------|
-| `newsletter_campaigns` | campaign_name, send_date, recipient_count, open_rate, click_through_rate, status, created_by | Campaign-level aggregates (currently fake rates) |
-| `email_logs` | recipient_email, status, resend_email_id, email_type, agent_id, sent_at, error_message | Per-email tracking, updated by Resend webhook |
-| `newsletter_schedules` | template_id, agent_id, status, send_at | Scheduled sends |
-| `newsletter_templates` | name, blocks_json, agent_id | Templates |
-| `monthly_runs` | agent_id, emails_sent, contacts_processed, run_date, status | Legacy run records |
+This means the webhook's campaign recalculation logic will never fire. Open/click rates on campaigns will stay at 0 forever despite real Resend events coming in.
+
+### Bug: Stacked bar chart double-counts
+
+The "Email Volume by Month" bar chart stacks `delivered`, `opened`, and `bounced`. But in the hook, emails with status `opened` or `clicked` are counted in **both** `delivered` and `opened` buckets. So the stacked total overstates the actual volume.
+
+### Unused code: expandedCampaign state
+
+The `expandedCampaign` state variable is declared and the `Collapsible` component is imported, but the expandable per-campaign drill-down was never built.
+
+### Missing: Agent names on campaigns
+
+The plan called for agent name resolution via `created_by`, but the query just selects raw `created_by` UUIDs with no join.
+
+### Missing: newsletter-template-send doesn't create campaign records
+
+When sending from the template builder, no `newsletter_campaigns` row is created, so those sends are invisible in the campaign table.
+
+---
 
 ## Plan
 
-### 1. Fix the data pipeline (Resend webhook → campaign stats)
+### 1. Fix campaign_id population in all sending functions
 
-Update `resend-webhook/index.ts` to also recalculate `newsletter_campaigns` open/click rates when an `email.opened` or `email.clicked` event comes in. The webhook already has the `resend_email_id` — we need to correlate it back to a campaign (via `email_logs.metadata` or a new `campaign_id` column on `email_logs`).
+| Function | Change |
+|----------|--------|
+| `newsletter-send/index.ts` | Add `campaign_id: campaignRecord?.id` as a top-level column in both email_logs insert calls (success + failure), alongside the existing metadata |
+| `newsletter-template-send/index.ts` | Create a `newsletter_campaigns` record before sending, then pass its id as `campaign_id` in all email_logs inserts |
+| `newsletter-monthly/index.ts` | Same pattern -- capture the campaign record id and pass it when logging to email_logs (if it logs there; otherwise add logging) |
 
-**Approach**: Add a `campaign_id` column to `email_logs` (nullable UUID). When the newsletter-send and newsletter-template-send functions log emails, they include the campaign_id. The webhook then aggregates counts and updates the campaign record.
+### 2. Fix the stacked bar chart double-counting
 
-Also fix `newsletter-monthly/index.ts` lines 1132-1133 to use `0` instead of random values (same fix already applied to `newsletter-send`).
+In `useNewsletterAnalytics.ts`, change the monthly series logic so `delivered` counts only emails that were delivered but NOT opened/clicked. This makes the stacked bars sum to the true total:
+- `delivered_only` = delivered + sent (not opened/clicked)
+- `opened_only` = opened (not clicked)
+- `clicked` = clicked
+- `bounced` = bounced
 
-### 2. Redesign the Analytics tab UI
+Update chart dataKeys accordingly.
 
-Replace the current flat layout with a richer dashboard:
+### 3. Build the per-campaign expandable drill-down
 
-**a) Date range filter bar** — "Last 7 days / 30 days / 90 days / All time" toggle at the top, filtering all cards and charts.
+Wire up the existing `expandedCampaign` state. When a campaign row is clicked, expand it to show a mini breakdown: delivered / opened / clicked / bounced counts from `email_logs` filtered by `campaign_id`. Add a new query in the hook that fetches per-campaign stats.
 
-**b) Enhanced KPI cards (6 cards, 3x2 grid)**:
-- Total Campaigns Sent
-- Total Emails Delivered (from `email_logs` where status = delivered/opened/clicked)
-- Avg Open Rate (with trend arrow vs previous period)
-- Avg Click Rate (with trend arrow)
-- Bounce Rate
-- Unsubscribe count
+### 4. Add agent name resolution
 
-**c) Two charts side by side**:
-- **Left**: Open Rate vs Click Rate over time (line chart, already exists but improved with proper axis labels, formatted month names, and tooltips showing recipient count)
-- **Right**: Email Volume bar chart (emails sent per month, stacked by status: delivered/opened/bounced)
+Update the campaigns query to join profiles: select `created_by` and resolve first_name/last_name. Display an "Agent" column in the campaign table.
 
-**d) Campaign Performance Table** — enhanced with:
-- Sortable columns
-- Status badge with color coding
-- Expandable row showing per-email breakdown (delivered / opened / clicked / bounced counts)
-- Agent name column (joined from profiles via `created_by`)
+### 5. Add CSV export button
 
-**e) Remove the old "Preview Newsletter" button** — it opens the legacy market-report generator and doesn't belong on this page.
+Add a "Download CSV" button to the campaign table that exports all visible campaign rows with their metrics.
 
-### 3. Files to create/modify
+### 6. Summary of files to change
 
-| File | Action | Description |
-|------|--------|-------------|
-| `src/pages/Newsletter.tsx` | Modify | Replace Analytics tab content with new `NewsletterAnalyticsDashboard` component; remove old Preview button and import |
-| `src/components/newsletter/analytics/NewsletterAnalyticsDashboard.tsx` | Create | Main analytics dashboard with date filter, KPI cards, charts, and campaign table |
-| `src/hooks/useNewsletterAnalytics.ts` | Modify | Add `email_logs` query for real delivery stats; add date range parameter; compute bounce rate and delivery metrics; add per-campaign email breakdown |
-| `supabase/functions/resend-webhook/index.ts` | Modify | After updating `email_logs`, recalculate and update the parent `newsletter_campaigns` open/click rates |
-| `supabase/functions/newsletter-monthly/index.ts` | Modify | Replace fake random open/click rates with `0` (2-line fix) |
-| Migration SQL | Create | Add `campaign_id` column to `email_logs` table |
-
-### 4. Technical details
-
-**Date filtering**: The hook will accept a `dateRange` parameter (`7d | 30d | 90d | all`). Queries filter `newsletter_campaigns.send_date` and `email_logs.sent_at` accordingly.
-
-**Real-time stats from email_logs**: Instead of relying solely on the (currently fake) campaign-level rates, query `email_logs` grouped by status to compute real delivered/opened/clicked/bounced counts. These become the source of truth for the KPI cards.
-
-**Webhook campaign update logic**: When the webhook receives an open/click event, it looks up the `email_logs` row by `resend_email_id`, gets the `campaign_id`, then runs an aggregate query: `SELECT COUNT(*) FILTER (WHERE status = 'opened') as opens, COUNT(*) as total FROM email_logs WHERE campaign_id = X`. Updates the campaign's `open_rate` and `click_through_rate`.
-
-**Campaign table agent join**: Use `.select('*, profiles!newsletter_campaigns_created_by_fkey(first_name, last_name)')` to get agent names inline.
+| File | Changes |
+|------|---------|
+| `supabase/functions/newsletter-send/index.ts` | Add `campaign_id` column to both email_logs inserts |
+| `supabase/functions/newsletter-template-send/index.ts` | Create campaign record; add `campaign_id` to email_logs inserts |
+| `supabase/functions/newsletter-monthly/index.ts` | Pass campaign_id to email_logs if applicable |
+| `src/hooks/useNewsletterAnalytics.ts` | Fix bar chart double-counting; add per-campaign breakdown query; add agent name join on campaigns |
+| `src/components/newsletter/analytics/NewsletterAnalyticsDashboard.tsx` | Build expandable campaign rows; add Agent column; add CSV export; fix chart dataKeys |
 
