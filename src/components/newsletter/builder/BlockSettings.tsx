@@ -81,7 +81,6 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
           </SettingGroup>
           <AlignSetting value={p.align} onChange={(v) => onUpdate({ align: v })} />
           <ColorSetting label="Color" value={p.color} onChange={(v) => onUpdate({ color: v })} brandColors={brandColors} />
-          <SettingGroup label="Font Family"><FontFamilySelect value={p.fontFamily} onChange={(v) => onUpdate({ fontFamily: v })} /></SettingGroup>
         </div>
       );
     case 'text':
@@ -90,7 +89,6 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
           <SettingGroup label="Content"><Textarea value={p.html} onChange={(e) => onUpdate({ html: e.target.value })} rows={6} /></SettingGroup>
           <AlignSetting value={p.align} onChange={(v) => onUpdate({ align: v })} />
           <ColorSetting label="Color" value={p.color} onChange={(v) => onUpdate({ color: v })} brandColors={brandColors} />
-          <SettingGroup label="Font Family"><FontFamilySelect value={p.fontFamily || 'Georgia, serif'} onChange={(v) => onUpdate({ fontFamily: v })} /></SettingGroup>
           <SettingGroup label="Font Size">
             <div className="flex items-center gap-3">
               <Slider value={[p.fontSize]} min={12} max={24} step={1} onValueChange={([v]) => onUpdate({ fontSize: v })} className="flex-1" />
