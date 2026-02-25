@@ -197,7 +197,7 @@ function BlockPreview({
       return (
         <Tag
           className={`${sizes[block.props.level || 2]} font-bold`}
-          style={{ textAlign: block.props.align, color: block.props.color, fontFamily: block.props.fontFamily }}
+          style={{ textAlign: block.props.align, color: block.props.color }}
         >
           {block.props.text}
         </Tag>
@@ -207,7 +207,7 @@ function BlockPreview({
       return (
         <div
           className="prose prose-sm max-w-none"
-          style={{ textAlign: block.props.align, color: block.props.color, fontSize: block.props.fontSize, fontFamily: block.props.fontFamily }}
+          style={{ textAlign: block.props.align, color: block.props.color, fontSize: block.props.fontSize }}
           dangerouslySetInnerHTML={{ __html: convertNewlines(block.props.html || '') }}
         />
       );
@@ -251,14 +251,14 @@ function BlockPreview({
       if (listings.length === 0) {
         return (
           <div className="border border-border rounded-lg p-6 text-center">
-            <p className="font-semibold text-foreground text-sm" style={{ fontFamily: 'Georgia, serif' }}>Featured Listings</p>
+            <p className="font-semibold text-foreground text-sm">Featured Listings</p>
             <p className="text-xs text-muted-foreground mt-1">Paste listing URLs in settings to add properties →</p>
           </div>
         );
       }
       return (
         <div className="p-1">
-          <p className="font-semibold text-foreground text-sm mb-3" style={{ fontFamily: 'Georgia, serif' }}>Featured Listings</p>
+          <p className="font-semibold text-foreground text-sm mb-3">Featured Listings</p>
           <div className={isGrid ? 'grid grid-cols-2 gap-3' : 'space-y-3'}>
             {listings.map((l: any) => (
               <div key={l.id} className={`bg-card rounded-lg border border-border overflow-hidden ${isGrid ? '' : 'flex items-center gap-3'}`}>
@@ -270,7 +270,7 @@ function BlockPreview({
                   </div>
                 )}
                 <div className="p-3 min-w-0">
-                  <p className="font-bold text-sm text-foreground truncate" style={{ fontFamily: 'Georgia, serif' }}>{l.price}</p>
+                  <p className="font-bold text-sm text-foreground truncate">{l.price}</p>
                   <p className="text-xs text-muted-foreground truncate mt-1">{l.address}</p>
                   {l.city && <p className="text-xs text-muted-foreground truncate">{l.city}</p>}
                   <p className="text-xs text-muted-foreground/70 mt-1">{l.beds} bed · {l.baths} bath · {l.sqft} sqft</p>
