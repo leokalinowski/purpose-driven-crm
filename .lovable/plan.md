@@ -1,287 +1,92 @@
 
 
-# E-Newsletter Rebuild: Full Visual Builder
+# Newsletter Builder Improvements Plan
 
-## Summary
+## Audit Findings
 
-Replace the current AI-only, per-ZIP newsletter system with a Mailchimp-style drag-and-drop email builder. Agents and admins design newsletter templates visually using content blocks. One newsletter layout per agent per month, with a special "Market Data" block that dynamically populates per-contact ZIP code at send time. The existing AI generation (`market-data-grok`) is preserved as the engine behind that dynamic block.
+After reviewing every file in the builder system, here are all issues found:
 
-## Architecture Overview
+### Issues to Fix
 
-```text
-┌──────────────────────────────────────────────────────┐
-│                  Newsletter Builder UI                │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌────────────┐ │
-│  │ Heading │ │  Text   │ │  Image  │ │   Button   │ │
-│  ├─────────┤ ├─────────┤ ├─────────┤ ├────────────┤ │
-│  │ Divider │ │ Spacer  │ │ Columns │ │Social Icons│ │
-│  ├─────────┤ ├─────────┤ ├─────────┤ ├────────────┤ │
-│  │ Market  │ │Listings │ │Agent Bio│ │  HTML Raw  │ │
-│  │  Data   │ │Showcase │ │/Branding│ │            │ │
-│  └─────────┘ └─────────┘ └─────────┘ └────────────┘ │
-│                                                      │
-│  Canvas: Drag blocks, reorder, configure each block  │
-│  Live Preview: Desktop / Mobile toggle               │
-└──────────────────────────────────────────────────────┘
-           │
-           ▼ Save as JSON (block tree)
-┌──────────────────────────────────────────────────────┐
-│           newsletter_templates table                  │
-│  id, agent_id, name, blocks_json, global_styles,     │
-│  is_default, created_by, created_at, updated_at      │
-└──────────────────────────────────────────────────────┘
-           │
-           ▼ At send time
-┌──────────────────────────────────────────────────────┐
-│         newsletter-send edge function                 │
-│  1. Load template blocks_json for agent               │
-│  2. For each contact:                                 │
-│     a. Replace {{first_name}}, {{last_name}}, etc.    │
-│     b. For "market_data" blocks: call market-data-grok│
-│        with contact's ZIP (cached per ZIP per month)  │
-│     c. Render blocks_json → final HTML email          │
-│  3. Send via Resend with rate limiting                │
-└──────────────────────────────────────────────────────┘
-```
+1. **Image block: no file upload** -- The image block only accepts a URL typed into the settings panel. There is no file picker or upload capability. Users must paste a URL manually.
 
-## Database Changes
+2. **Newsletter Builder is a standalone route, not inside the Newsletter tab** -- It lives at `/newsletter-builder` as a full-screen standalone page (no Layout wrapper, no sidebar). The user wants it embedded within the `/newsletter` page as a tab.
 
-### New table: `newsletter_templates`
+3. **Sidebar has a separate "Newsletter Builder" link** -- Needs to be removed since it will be merged into the Newsletter tab.
 
-Stores the visual template as a JSON block tree.
+4. **Columns block is a placeholder** -- Renders "2-column layout (coming in Phase 2)" with no actual functionality. Cannot add child blocks into columns.
 
-```sql
-CREATE TABLE public.newsletter_templates (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  agent_id UUID NOT NULL REFERENCES auth.users(id),
-  name TEXT NOT NULL DEFAULT 'Monthly Newsletter',
-  blocks_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-  global_styles JSONB DEFAULT '{}'::jsonb,
-  thumbnail_url TEXT,
-  is_active BOOLEAN DEFAULT true,
-  created_by UUID REFERENCES auth.users(id),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-```
+5. **Text block editing is fragile** -- Uses `contentEditable` with `dangerouslySetInnerHTML` and captures content on blur. This can lose cursor position, strip formatting, and conflict between the canvas inline editing and the settings panel textarea (both edit the same `html` prop).
 
-RLS: Agents can CRUD their own templates; admins can CRUD all templates.
+6. **No global styles editor** -- `globalStyles` state exists but there is no UI to change background color, content width, font family, or body color.
 
-### `blocks_json` Schema (stored in JSONB)
+7. **Template list/management missing** -- No way to see saved templates, switch between them, create new, or delete old ones from the UI. The builder only works if you navigate directly with a template ID.
 
-Each block is an object:
+8. **Back button uses `navigate(-1)`** -- Unreliable; if the user landed directly on the builder, it navigates out of the app.
 
-```json
-[
-  {
-    "id": "uuid",
-    "type": "heading",
-    "props": { "text": "Monthly Market Update", "level": 2, "align": "center", "color": "#1a1a1a" }
-  },
-  {
-    "id": "uuid",
-    "type": "columns",
-    "props": { "columns": 2, "gap": 16 },
-    "children": [
-      [{ "id": "uuid", "type": "image", "props": { "src": "...", "alt": "..." } }],
-      [{ "id": "uuid", "type": "text", "props": { "html": "<p>Hello {{first_name}}...</p>" } }]
-    ]
-  },
-  {
-    "id": "uuid",
-    "type": "market_data",
-    "props": { "style": "cards", "metrics": ["median_sale_price", "active_listings", "days_on_market", "price_per_sqft"] }
-  },
-  {
-    "id": "uuid",
-    "type": "agent_bio",
-    "props": { "layout": "horizontal", "showHeadshot": true, "showLogo": true }
-  },
-  {
-    "id": "uuid",
-    "type": "button",
-    "props": { "text": "Schedule a Call", "url": "https://...", "color": "#2563eb", "align": "center" }
-  }
-]
-```
+9. **Listings block missing from palette** -- The `listings` type exists in types but is not in the `BlockPalette` PALETTE_ITEMS array.
 
-### Block Types
+10. **Social Icons block missing from palette** -- Same issue -- defined in types but not in the palette.
 
-| Type | Description | Dynamic? |
-|---|---|---|
-| `heading` | H1-H4 with font, color, alignment | Static |
-| `text` | Rich text paragraph (supports `{{variables}}`) | Static + variables |
-| `image` | Single image with alt text, link, sizing | Static |
-| `button` | CTA button with text, URL, color | Static |
-| `divider` | Horizontal rule with color/thickness | Static |
-| `spacer` | Vertical spacing (configurable height) | Static |
-| `columns` | 2 or 3 column layout, each column holds child blocks | Container |
-| `social_icons` | Row of social media icons with links | Static |
-| `market_data` | **Dynamic**: auto-filled with AI market analysis per contact ZIP | Dynamic per contact |
-| `listings` | Property listings showcase (manual or from pipeline) | Semi-dynamic |
-| `agent_bio` | Auto-populated from agent profile + marketing settings | Dynamic per agent |
-| `html_raw` | Raw HTML block for advanced users | Static |
+## Implementation Plan
 
-### Supported Variables (replaced at send time)
+### 1. Move Builder into Newsletter Page as a Tab
 
-`{{first_name}}`, `{{last_name}}`, `{{email}}`, `{{address}}`, `{{city}}`, `{{state}}`, `{{zip_code}}`, `{{agent_name}}`, `{{agent_email}}`, `{{agent_phone}}`, `{{unsubscribe_url}}`
+- Modify `src/pages/Newsletter.tsx` to add a "Builder" tab alongside the existing analytics view
+- The builder tab will show a template list (manage templates) and open the builder inline
+- Remove `Newsletter Builder` from `AppSidebar.tsx` navigation
+- Keep the `/newsletter-builder/:templateId?` route as a standalone full-screen editing route (linked from the tab), but the entry point moves to the Newsletter page
+- Update back button to navigate to `/newsletter`
 
-## Frontend: Newsletter Builder
+### 2. Add Image Upload via Supabase Storage
 
-### Technology Choice
+- Create a `newsletter-assets` storage bucket (public, so images can be used in emails)
+- RLS: Authenticated users can upload to their own folder (`{user_id}/`)
+- In `BlockSettings.tsx` for the image block, add an "Upload Image" button alongside the URL input
+- Upload to `newsletter-assets/{user_id}/{filename}`, get the public URL, set it as `src`
+- Show a small preview thumbnail after upload
 
-Build a custom block editor using `react-dnd` (already installed) for drag-and-drop. This avoids adding heavy third-party email builder dependencies while giving full control over the block types and rendering.
+### 3. Template List & Management UI
 
-### New Files
+- Create `src/components/newsletter/builder/TemplateList.tsx`
+- Shows saved templates as cards with name, last updated, and thumbnail
+- Actions: Edit (opens builder), Duplicate, Delete
+- "Create New Template" button
+- This component renders inside the Newsletter page "Builder" tab
+
+### 4. Global Styles Editor
+
+- Add a "Global Styles" section in the right settings panel when no block is selected
+- Controls for: background color, content width (500-700px slider), font family (dropdown), body text color
+- Pass `globalStyles` and `setGlobalStyles` down to the settings panel
+
+### 5. Add Missing Blocks to Palette
+
+- Add `listings` and `social_icons` to the `PALETTE_ITEMS` array in `BlockPalette.tsx`
+- They already have types, defaults, settings, and renderers
+
+### 6. Fix Text Block Editing
+
+- Remove `contentEditable` from the canvas text block -- keep it display-only on the canvas
+- All text editing happens in the settings panel textarea (single source of truth)
+- This eliminates the conflict between inline editing and panel editing
+
+## Files to Create
 
 | File | Purpose |
 |---|---|
-| `src/components/newsletter/builder/NewsletterBuilder.tsx` | Main builder component: sidebar palette + canvas + preview |
-| `src/components/newsletter/builder/BlockPalette.tsx` | Draggable block type list (sidebar) |
-| `src/components/newsletter/builder/BuilderCanvas.tsx` | Drop zone, renders block list, handles reorder |
-| `src/components/newsletter/builder/BlockRenderer.tsx` | Renders a single block in edit mode (with controls) |
-| `src/components/newsletter/builder/BlockSettings.tsx` | Right-panel settings for selected block (text, colors, etc.) |
-| `src/components/newsletter/builder/blocks/HeadingBlock.tsx` | Heading block editor |
-| `src/components/newsletter/builder/blocks/TextBlock.tsx` | Rich text block editor |
-| `src/components/newsletter/builder/blocks/ImageBlock.tsx` | Image upload/URL block |
-| `src/components/newsletter/builder/blocks/ButtonBlock.tsx` | CTA button block |
-| `src/components/newsletter/builder/blocks/DividerBlock.tsx` | Divider block |
-| `src/components/newsletter/builder/blocks/SpacerBlock.tsx` | Spacer block |
-| `src/components/newsletter/builder/blocks/ColumnsBlock.tsx` | Multi-column layout block |
-| `src/components/newsletter/builder/blocks/MarketDataBlock.tsx` | Market data placeholder (shows sample data in editor) |
-| `src/components/newsletter/builder/blocks/ListingsBlock.tsx` | Property listings block |
-| `src/components/newsletter/builder/blocks/AgentBioBlock.tsx` | Agent bio/branding block |
-| `src/components/newsletter/builder/blocks/SocialIconsBlock.tsx` | Social media icons block |
-| `src/components/newsletter/builder/blocks/HtmlRawBlock.tsx` | Raw HTML block |
-| `src/components/newsletter/builder/PreviewPanel.tsx` | Desktop/mobile preview toggle, renders final HTML |
-| `src/components/newsletter/builder/AIAssistant.tsx` | AI writing assistant sidebar (suggest copy, rewrite, etc.) |
-| `src/components/newsletter/builder/TemplateGallery.tsx` | Starter templates gallery |
-| `src/components/newsletter/builder/renderBlocksToHtml.ts` | Converts blocks_json to email-safe HTML (inline styles, table layout) |
-| `src/hooks/useNewsletterTemplates.ts` | CRUD hook for newsletter_templates |
-| `src/pages/NewsletterBuilder.tsx` | Page wrapper with route |
+| `src/components/newsletter/builder/TemplateList.tsx` | Template management grid |
+| SQL migration | Create `newsletter-assets` storage bucket + RLS |
 
-### Builder Layout
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  Toolbar: [Save] [Preview] [Send Test] [AI Assistant] [←]  │
-├──────────┬────────────────────────────┬─────────────────────┤
-│          │                            │                     │
-│  Block   │       Canvas               │   Block Settings    │
-│  Palette │  (drag to reorder)         │   (selected block)  │
-│          │                            │                     │
-│  ┌────┐  │  ┌──────────────────────┐  │  Font: [dropdown]   │
-│  │ H  │  │  │  Monthly Update      │  │  Size: [slider]     │
-│  ├────┤  │  ├──────────────────────┤  │  Color: [picker]    │
-│  │ T  │  │  │  Dear {{first_name}} │  │  Align: [L C R]     │
-│  ├────┤  │  ├──────────────────────┤  │  Padding: [input]   │
-│  │ Img│  │  │  [Market Data Block] │  │                     │
-│  ├────┤  │  ├──────────────────────┤  │                     │
-│  │ Btn│  │  │  [Agent Bio Block]   │  │                     │
-│  ├────┤  │  └──────────────────────┘  │                     │
-│  │ ···│  │                            │                     │
-│  └────┘  │                            │                     │
-├──────────┴────────────────────────────┴─────────────────────┤
-│  Status: Last saved 2 min ago | Template: "March 2026"      │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### AI Assistant
-
-A slide-out panel that can:
-- Generate a full newsletter draft based on the agent's database info (contacts, transactions, events, coaching data)
-- Rewrite selected text blocks (tone, length adjustments)
-- Suggest subject lines
-- Auto-populate a market data section with sample content
-
-Uses the existing `market-data-grok` edge function for market content, and a new lightweight edge function for copy assistance.
-
-### Template Gallery
-
-Pre-built starter templates (stored as seed data in `newsletter_templates` with `agent_id = NULL` as system templates):
-- "Classic Market Report" - clean, data-focused
-- "Modern Minimal" - white space heavy, elegant
-- "Bold & Colorful" - vibrant colors, large CTAs
-- "Personal Touch" - photo-heavy, casual tone
-
-## Backend: HTML Rendering Engine
-
-### `renderBlocksToHtml.ts` (shared between frontend preview and edge function)
-
-Converts the `blocks_json` array into email-safe HTML:
-- Uses `<table>` layout for email client compatibility
-- All styles inlined (no `<style>` tags)
-- Responsive via `max-width` on outer table + `width: 100%` on inner elements
-- Images use absolute URLs
-- Column blocks render as `<td>` elements in a `<tr>`
-
-This same renderer runs:
-1. In the browser for live preview
-2. In the edge function at send time (copy the renderer logic into the edge function or import as shared code)
-
-### Updated `newsletter-send` Edge Function
-
-Modified flow:
-1. Load the agent's active `newsletter_template` (blocks_json)
-2. If no template exists, fall back to the current AI-only generation (backward compatible)
-3. For each contact:
-   - Replace all `{{variables}}` in text/heading blocks
-   - For `market_data` blocks: call `market-data-grok` (cached per ZIP per month to avoid redundant API calls)
-   - For `agent_bio` blocks: pull from `profiles` + `agent_marketing_settings`
-   - For `listings` blocks: pull from `transaction_coordination` or manually configured listings
-   - Render final HTML via the block-to-HTML renderer
-   - Send via Resend
-
-### New Edge Function: `newsletter-ai-assist`
-
-A lightweight function for the AI writing assistant:
-- Accepts a prompt + context (agent profile, recent transactions, contact stats)
-- Returns suggested copy
-- Uses Grok API (same as market-data-grok)
-
-## Modified Files
+## Files to Modify
 
 | File | Change |
 |---|---|
-| `src/App.tsx` | Add route for `/newsletter-builder/:templateId?` |
-| `src/components/layout/AppSidebar.tsx` | Add "Newsletter Builder" nav item |
-| `src/pages/AdminNewsletter.tsx` | Add "Templates" tab linking to builder, keep existing tabs |
-| `src/pages/Newsletter.tsx` | Add link to builder for agents |
-| `supabase/functions/newsletter-send/index.ts` | Load template, render blocks to HTML, fallback to current behavior |
-| `src/integrations/supabase/types.ts` | Auto-updated with new table types |
-
-## Migration Path
-
-- The current system continues to work as-is for agents without a custom template
-- When an agent (or admin for that agent) creates a template, future sends use the visual template
-- The "AI-only" mode becomes a special case: a template with a single full-width `market_data` block + `agent_bio` block
-
-## Implementation Phases
-
-**Phase 1 - Foundation** (this session):
-- Database table + RLS
-- Block renderer (blocks_json to HTML)
-- Builder UI with core blocks: heading, text, image, button, divider, spacer
-- Save/load templates
-- Live preview (desktop/mobile toggle)
-
-**Phase 2 - Advanced Blocks**:
-- Column layouts
-- Market data dynamic block
-- Agent bio block
-- Listings showcase block
-- Social icons block
-
-**Phase 3 - AI + Send Integration**:
-- AI assistant panel
-- Template gallery with starter templates
-- Update `newsletter-send` to use templates
-- Test email sending from builder
-
-**Phase 4 - Polish**:
-- Undo/redo
-- Template duplication
-- Admin: manage templates per agent
-- Raw HTML block
-- Analytics integration (track which template performed best)
+| `src/pages/Newsletter.tsx` | Add "Builder" tab with template list |
+| `src/components/layout/AppSidebar.tsx` | Remove "Newsletter Builder" from nav |
+| `src/components/newsletter/builder/BlockSettings.tsx` | Add image upload button, add global styles when no block selected |
+| `src/components/newsletter/builder/BlockPalette.tsx` | Add listings + social_icons to palette |
+| `src/components/newsletter/builder/BlockRenderer.tsx` | Remove contentEditable from text/heading, add listings + social_icons previews |
+| `src/components/newsletter/builder/NewsletterBuilder.tsx` | Pass globalStyles to settings panel, fix back button to `/newsletter` |
+| `src/components/newsletter/builder/renderBlocksToHtml.ts` | Add social_icons + listings HTML renderers |
 
