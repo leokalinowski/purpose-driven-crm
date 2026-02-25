@@ -85,7 +85,6 @@ const menuItems = [
   { title: 'Database', url: '/database', icon: Users },
   { title: 'Events', url: '/events', icon: Calendar },
   { title: 'E-Newsletter', url: '/newsletter', icon: Mail },
-  { title: 'Newsletter Builder', url: '/newsletter-builder', icon: PenTool },
   { title: 'Social Media', url: '/social-scheduler', icon: Share },
   { title: 'Success Scoreboard', url: '/coaching', icon: TrendingUp },
   { title: 'Support Hub', url: '/support', icon: LifeBuoy },

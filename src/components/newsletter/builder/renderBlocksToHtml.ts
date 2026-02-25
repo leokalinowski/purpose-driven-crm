@@ -37,7 +37,6 @@ function renderSpacer(props: Record<string, any>): string {
 }
 
 function renderMarketData(props: Record<string, any>): string {
-  // Placeholder that gets replaced at send time
   return `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:20px;">
     <h3 style="margin:0 0 12px;color:#0369a1;font-family:Georgia,serif;font-size:20px;">${escapeHtml(props.headerText || 'Market Update')}</h3>
     <p style="color:#64748b;font-size:14px;margin:0;">Dynamic market data will appear here based on recipient ZIP code.</p>
@@ -47,6 +46,23 @@ function renderMarketData(props: Record<string, any>): string {
 function renderAgentBio(props: Record<string, any>): string {
   return `<div style="background:#f8fafc;border-radius:8px;padding:20px;text-align:center;">
     <p style="color:#64748b;font-size:14px;margin:0;">Agent bio & branding auto-populated at send time.</p>
+  </div>`;
+}
+
+function renderListings(props: Record<string, any>): string {
+  const count = props.count || 3;
+  const style = props.style || 'grid';
+  return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;">
+    <h3 style="margin:0 0 12px;color:#166534;font-family:Georgia,serif;font-size:18px;">🏠 Featured Listings</h3>
+    <p style="color:#64748b;font-size:14px;margin:0;">${count} listing${count !== 1 ? 's' : ''} in ${style} layout — populated from your pipeline at send time.</p>
+  </div>`;
+}
+
+function renderSocialIcons(props: Record<string, any>): string {
+  const align = props.align || 'center';
+  const size = props.iconSize || 32;
+  return `<div style="text-align:${align};padding:8px 0;">
+    <p style="color:#64748b;font-size:14px;margin:0;">Social media icons (${size}px) auto-populated from profile.</p>
   </div>`;
 }
 
@@ -61,6 +77,8 @@ function renderBlock(block: NewsletterBlock, globalStyles: GlobalStyles): string
     case 'spacer': content = renderSpacer(block.props); break;
     case 'market_data': content = renderMarketData(block.props); break;
     case 'agent_bio': content = renderAgentBio(block.props); break;
+    case 'listings': content = renderListings(block.props); break;
+    case 'social_icons': content = renderSocialIcons(block.props); break;
     case 'columns': {
       const cols = block.children || [];
       const colCount = cols.length || 2;
@@ -75,6 +93,9 @@ function renderBlock(block: NewsletterBlock, globalStyles: GlobalStyles): string
       content += `</tr></table>`;
       break;
     }
+    case 'html_raw':
+      content = block.props.html || '';
+      break;
     default: content = `<div style="color:#999;font-size:14px;padding:12px;">[${block.type} block]</div>`;
   }
   return `<div style="padding:8px 0;">${content}</div>`;

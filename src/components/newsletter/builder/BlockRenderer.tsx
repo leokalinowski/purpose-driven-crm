@@ -64,24 +64,21 @@ export function BlockRenderer({ block, index, isSelected, onSelect, onDelete, on
 
       {/* Block preview */}
       <div className="p-4">
-        <BlockPreview block={block} onUpdate={onUpdate} isSelected={isSelected} />
+        <BlockPreview block={block} />
       </div>
     </div>
   );
 }
 
-function BlockPreview({ block, onUpdate, isSelected }: { block: NewsletterBlock; onUpdate: (p: Record<string, any>) => void; isSelected: boolean }) {
+function BlockPreview({ block }: { block: NewsletterBlock }) {
   switch (block.type) {
     case 'heading': {
       const Tag = `h${block.props.level || 2}` as keyof JSX.IntrinsicElements;
       const sizes: Record<number, string> = { 1: 'text-3xl', 2: 'text-2xl', 3: 'text-xl', 4: 'text-lg' };
       return (
         <Tag
-          className={`${sizes[block.props.level || 2]} font-bold outline-none`}
+          className={`${sizes[block.props.level || 2]} font-bold`}
           style={{ textAlign: block.props.align, color: block.props.color, fontFamily: block.props.fontFamily }}
-          contentEditable={isSelected}
-          suppressContentEditableWarning
-          onBlur={(e) => onUpdate({ text: (e.target as HTMLElement).textContent || '' })}
         >
           {block.props.text}
         </Tag>
@@ -90,11 +87,8 @@ function BlockPreview({ block, onUpdate, isSelected }: { block: NewsletterBlock;
     case 'text':
       return (
         <div
-          className="prose prose-sm max-w-none outline-none"
+          className="prose prose-sm max-w-none"
           style={{ textAlign: block.props.align, color: block.props.color, fontSize: block.props.fontSize }}
-          contentEditable={isSelected}
-          suppressContentEditableWarning
-          onBlur={(e) => onUpdate({ html: (e.target as HTMLElement).innerHTML })}
           dangerouslySetInnerHTML={{ __html: block.props.html }}
         />
       );
@@ -105,7 +99,7 @@ function BlockPreview({ block, onUpdate, isSelected }: { block: NewsletterBlock;
         </div>
       ) : (
         <div className="flex items-center justify-center h-32 bg-muted rounded-lg border-2 border-dashed">
-          <p className="text-sm text-muted-foreground">Add an image URL in settings →</p>
+          <p className="text-sm text-muted-foreground">Add an image in settings →</p>
         </div>
       );
     case 'button':
@@ -138,6 +132,15 @@ function BlockPreview({ block, onUpdate, isSelected }: { block: NewsletterBlock;
           <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">Dynamic ZIP code market stats will appear here at send time.</p>
         </div>
       );
+    case 'listings':
+      return (
+        <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
+          <p className="font-semibold text-green-800 dark:text-green-200 text-sm">🏠 Listings Block</p>
+          <p className="text-xs text-green-600 dark:text-green-300 mt-1">
+            {block.props.count} property listing{block.props.count !== 1 ? 's' : ''} ({block.props.style} layout) — populated from pipeline at send time.
+          </p>
+        </div>
+      );
     case 'agent_bio':
       return (
         <div className="bg-muted rounded-lg p-4 text-center">
@@ -145,10 +148,17 @@ function BlockPreview({ block, onUpdate, isSelected }: { block: NewsletterBlock;
           <p className="text-xs text-muted-foreground mt-1">Auto-populated from your profile at send time.</p>
         </div>
       );
+    case 'social_icons':
+      return (
+        <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-4" style={{ textAlign: block.props.align }}>
+          <p className="font-semibold text-purple-800 dark:text-purple-200 text-sm">🔗 Social Icons</p>
+          <p className="text-xs text-purple-600 dark:text-purple-300 mt-1">Social media links auto-populated from your profile.</p>
+        </div>
+      );
     case 'columns':
       return (
         <div className="bg-muted/50 rounded-lg p-4 border border-dashed">
-          <p className="text-xs text-muted-foreground text-center">{block.props.columns || 2}-column layout (coming in Phase 2)</p>
+          <p className="text-xs text-muted-foreground text-center">{block.props.columns || 2}-column layout (coming soon)</p>
         </div>
       );
     case 'html_raw':
