@@ -27,8 +27,6 @@ function escapeHtml(text: string): string {
 }
 
 // ─── Server-side template renderer ───────────────────────────────────────────
-// This is a server-side port of renderBlocksToHtml from the client.
-// It renders blocks_json + global_styles into final HTML, replacing agent placeholders.
 
 interface AgentProfile {
   user_id: string;
@@ -260,14 +258,12 @@ function replaceAgentPlaceholders(html: string, agent: AgentProfile, marketing: 
     '{{agent_website}}': agent.website || undefined,
   };
 
-  // Headshot
   if (marketing?.headshot_url) {
     html = html.replace('{{agent_headshot}}', `<img src="${marketing.headshot_url}" alt="Agent headshot" style="width:80px;height:80px;border-radius:50%;object-fit:cover;display:inline-block;margin-bottom:8px;" />`);
   } else {
     html = html.replace(/<div class="agent-headshot">[^<]*\{\{agent_headshot\}\}[^<]*<\/div>/g, '');
   }
 
-  // Logo
   if (marketing?.logo_colored_url) {
     html = html.replace('{{agent_logo}}', `<img src="${marketing.logo_colored_url}" alt="Logo" style="max-width:160px;height:auto;display:inline-block;margin-bottom:8px;" />`);
   } else {
@@ -277,9 +273,7 @@ function replaceAgentPlaceholders(html: string, agent: AgentProfile, marketing: 
   for (const [placeholder, value] of Object.entries(replacements)) {
     const escaped = placeholder.replace(/[{}]/g, '\\$&');
     if (value) {
-      // Replace href values without HTML-escaping
       html = html.replace(new RegExp(`href="${escaped}"`, 'g'), `href="${value}"`);
-      // Replace remaining with HTML-escaped value
       html = html.replace(new RegExp(escaped, 'g'), escapeHtml(value));
     } else {
       html = html.replace(new RegExp(`<p[^>]*>[^<]*${escaped}[^<]*</p>`, 'g'), '');
@@ -329,6 +323,25 @@ serve(async (req) => {
   }
 
   try {
+    // ── Auth: validate caller's JWT and role ──
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    const supabaseAuth = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const callerId = claimsData.claims.sub as string;
+
     const body = await req.json();
     const { template_id, agent_id, subject, sender_name, recipient_filter, test_mode, test_email } = body;
 
@@ -336,10 +349,29 @@ serve(async (req) => {
       throw new Error('template_id and agent_id are required');
     }
 
+    // Verify caller is either the agent themselves or an admin
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+
+    if (callerId !== agent_id) {
+      // Check if caller is admin
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', callerId)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      if (!roleData) {
+        return new Response(JSON.stringify({ error: 'Forbidden: only the agent or an admin can send newsletters' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
 
     // 1. Fetch template
@@ -379,14 +411,14 @@ serve(async (req) => {
     const fromName = sender_name || agentName;
     const emailSubject = subject || template.name;
 
-    // ── Test mode: send only to the agent ──
+    // ── Test mode: send only to the caller ──
     if (test_mode) {
       const to = test_email || agent.email;
       if (!to) throw new Error('No test email address available');
 
-      const token = await generateUnsubscribeToken(to, agent_id);
+      const tokenVal = await generateUnsubscribeToken(to, agent_id);
       const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-      const unsubUrl = `${supabaseUrl}/functions/v1/newsletter-unsubscribe?email=${encodeURIComponent(to)}&agent_id=${agent_id}&token=${token}`;
+      const unsubUrl = `${supabaseUrl}/functions/v1/newsletter-unsubscribe?email=${encodeURIComponent(to)}&agent_id=${agent_id}&token=${tokenVal}`;
       const finalHtml = emailHtml.replace('</body>', generateUnsubscribeFooter(unsubUrl, agentName, companyAddress) + '</body>');
 
       const { error: sendErr } = await resend.emails.send({
@@ -465,9 +497,9 @@ serve(async (req) => {
       const contactEmail = contact.email!.toLowerCase().trim();
 
       try {
-        const token = await generateUnsubscribeToken(contactEmail, agent_id);
+        const tokenVal = await generateUnsubscribeToken(contactEmail, agent_id);
         const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-        const unsubUrl = `${supabaseUrl}/functions/v1/newsletter-unsubscribe?email=${encodeURIComponent(contactEmail)}&agent_id=${agent_id}&token=${token}`;
+        const unsubUrl = `${supabaseUrl}/functions/v1/newsletter-unsubscribe?email=${encodeURIComponent(contactEmail)}&agent_id=${agent_id}&token=${tokenVal}`;
         const finalHtml = emailHtml.replace('</body>', generateUnsubscribeFooter(unsubUrl, agentName, companyAddress) + '</body>');
 
         const result = await resend.emails.send({

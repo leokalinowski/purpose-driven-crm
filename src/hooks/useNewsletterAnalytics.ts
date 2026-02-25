@@ -63,11 +63,11 @@ function toMonthKey(d: string | null): string | null {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export function useNewsletterAnalytics(dateRange: DateRange = "all") {
+export function useNewsletterAnalytics(dateRange: DateRange = "all", agentId?: string) {
   const cutoff = getDateCutoff(dateRange);
 
   const campaignsQuery = useQuery({
-    queryKey: ["newsletter-campaigns", dateRange],
+    queryKey: ["newsletter-campaigns", dateRange, agentId],
     queryFn: async () => {
       let q = supabase
         .from("newsletter_campaigns")
@@ -75,6 +75,7 @@ export function useNewsletterAnalytics(dateRange: DateRange = "all") {
         .order("send_date", { ascending: false });
 
       if (cutoff) q = q.gte("send_date", cutoff);
+      if (agentId) q = q.eq("created_by", agentId);
 
       const { data, error } = await q;
       if (error) throw error;
@@ -100,7 +101,7 @@ export function useNewsletterAnalytics(dateRange: DateRange = "all") {
   });
 
   const emailLogsQuery = useQuery({
-    queryKey: ["newsletter-email-logs", dateRange],
+    queryKey: ["newsletter-email-logs", dateRange, agentId],
     queryFn: async () => {
       let q = supabase
         .from("email_logs")
@@ -108,6 +109,7 @@ export function useNewsletterAnalytics(dateRange: DateRange = "all") {
         .eq("email_type", "newsletter");
 
       if (cutoff) q = q.gte("sent_at", cutoff);
+      if (agentId) q = q.eq("agent_id", agentId);
 
       const { data, error } = await q;
       if (error) throw error;
