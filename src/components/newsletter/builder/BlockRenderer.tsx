@@ -206,7 +206,7 @@ function BlockPreview({
     case 'text':
       return (
         <div
-          className="prose prose-sm max-w-none"
+          className="max-w-none"
           style={{ textAlign: block.props.align, color: block.props.color, fontSize: block.props.fontSize }}
           dangerouslySetInnerHTML={{ __html: convertNewlines(block.props.html || '') }}
         />
