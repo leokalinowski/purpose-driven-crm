@@ -1826,6 +1826,60 @@ export type Database = {
         }
         Relationships: []
       }
+      newsletter_templates: {
+        Row: {
+          agent_id: string
+          blocks_json: Json
+          created_at: string | null
+          created_by: string | null
+          global_styles: Json | null
+          id: string
+          is_active: boolean | null
+          name: string
+          thumbnail_url: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_id: string
+          blocks_json?: Json
+          created_at?: string | null
+          created_by?: string | null
+          global_styles?: Json | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          thumbnail_url?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_id?: string
+          blocks_json?: Json
+          created_at?: string | null
+          created_by?: string | null
+          global_styles?: Json | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          thumbnail_url?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_templates_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "newsletter_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       newsletter_unsubscribes: {
         Row: {
           agent_id: string | null
