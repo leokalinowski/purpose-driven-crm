@@ -50,12 +50,55 @@ function renderAgentBio(props: Record<string, any>): string {
 }
 
 function renderListings(props: Record<string, any>): string {
-  const count = props.count || 3;
+  const listings = props.listings || [];
   const style = props.style || 'grid';
-  return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;">
-    <h3 style="margin:0 0 12px;color:#166534;font-family:Georgia,serif;font-size:18px;">🏠 Featured Listings</h3>
-    <p style="color:#64748b;font-size:14px;margin:0;">${count} listing${count !== 1 ? 's' : ''} in ${style} layout — populated from your pipeline at send time.</p>
-  </div>`;
+
+  if (listings.length === 0) {
+    return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;text-align:center;">
+      <p style="color:#166534;font-size:16px;margin:0;">🏠 No listings added</p>
+    </div>`;
+  }
+
+  const isGrid = style === 'grid';
+  let html = `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;">
+    <h3 style="margin:0 0 12px;color:#166534;font-family:Georgia,serif;font-size:18px;">🏠 Featured Listings</h3>`;
+
+  if (isGrid) {
+    html += `<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`;
+    listings.forEach((l: any, i: number) => {
+      if (i > 0 && i % 2 === 0) html += `</tr><tr>`;
+      html += `<td style="width:50%;vertical-align:top;padding:4px;">
+        <div style="border:1px solid #bbf7d0;border-radius:6px;overflow:hidden;background:#ffffff;">
+          ${l.image_url ? `<img src="${l.image_url}" alt="${escapeHtml(l.address)}" style="width:100%;height:120px;object-fit:cover;display:block;" />` : `<div style="height:120px;background:#dcfce7;display:flex;align-items:center;justify-content:center;text-align:center;font-size:32px;">🏡</div>`}
+          <div style="padding:8px;">
+            <p style="margin:0;font-weight:bold;font-size:14px;color:#166534;">${escapeHtml(l.price)}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:#374151;">${escapeHtml(l.address)}</p>
+            ${l.city ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${escapeHtml(l.city)}</p>` : ''}
+            <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">${l.beds}bd · ${l.baths}ba · ${escapeHtml(l.sqft)} sqft</p>
+          </div>
+        </div>
+      </td>`;
+    });
+    if (listings.length % 2 !== 0) html += `<td style="width:50%;"></td>`;
+    html += `</tr></table>`;
+  } else {
+    listings.forEach((l: any) => {
+      html += `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px;border:1px solid #bbf7d0;border-radius:6px;overflow:hidden;background:#ffffff;">
+        <tr>
+          ${l.image_url ? `<td style="width:100px;"><img src="${l.image_url}" alt="${escapeHtml(l.address)}" style="width:100px;height:80px;object-fit:cover;display:block;" /></td>` : `<td style="width:100px;background:#dcfce7;text-align:center;font-size:32px;vertical-align:middle;">🏡</td>`}
+          <td style="padding:8px;vertical-align:top;">
+            <p style="margin:0;font-weight:bold;font-size:14px;color:#166534;">${escapeHtml(l.price)}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:#374151;">${escapeHtml(l.address)}</p>
+            ${l.city ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${escapeHtml(l.city)}</p>` : ''}
+            <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">${l.beds}bd · ${l.baths}ba · ${escapeHtml(l.sqft)} sqft</p>
+          </td>
+        </tr>
+      </table>`;
+    });
+  }
+
+  html += `</div>`;
+  return html;
 }
 
 function renderSocialIcons(props: Record<string, any>): string {

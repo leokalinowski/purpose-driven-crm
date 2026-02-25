@@ -68,9 +68,22 @@ export interface MarketDataProps {
   headerText: string;
 }
 
+export interface ListingItem {
+  id: string;
+  url: string;
+  image_url: string;
+  price: string;
+  address: string;
+  city: string;
+  beds: number;
+  baths: number;
+  sqft: string;
+  status: 'pending' | 'loaded' | 'error';
+}
+
 export interface ListingsProps {
-  count: number;
   style: 'grid' | 'list';
+  listings: ListingItem[];
 }
 
 export interface AgentBioProps {
@@ -135,7 +148,7 @@ export const BLOCK_DEFAULTS: Record<BlockType, Record<string, any>> = {
   spacer: { height: 24 },
   columns: { columns: 2, gap: 16 },
   market_data: { style: 'cards', metrics: ['median_sale_price', 'active_listings', 'days_on_market', 'price_per_sqft'], headerText: 'Market Update for {{zip_code}}' },
-  listings: { count: 3, style: 'grid' },
+  listings: { style: 'grid', listings: [] },
   agent_bio: { layout: 'horizontal', showHeadshot: true, showLogo: true, showPhone: true, showEmail: true },
   social_icons: { align: 'center', iconSize: 32, links: [] },
   html_raw: { html: '' },
