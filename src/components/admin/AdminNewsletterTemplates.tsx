@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,13 +8,39 @@ import { Eye, Send, FileText, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import type { AdminTemplate, AgentProfile } from '@/hooks/useAdminNewsletter';
 import { SendSchedulePanel } from '@/components/newsletter/builder/SendSchedulePanel';
+import { renderBlocksToHtml } from '@/components/newsletter/builder/renderBlocksToHtml';
 
 interface Props {
   templates: AdminTemplate[];
   agents: AgentProfile[];
 }
 
+function TemplateThumbnail({ blocks, globalStyles }: { blocks: any[]; globalStyles: any }) {
+  const html = useMemo(() => renderBlocksToHtml(blocks || [], globalStyles), [blocks, globalStyles]);
+  return (
+    <div className="relative w-full h-40 overflow-hidden bg-muted flex items-center justify-center">
+      <iframe
+        srcDoc={html}
+        title="Preview"
+        className="border-0 pointer-events-none absolute"
+        style={{
+          width: '640px',
+          height: '900px',
+          transform: 'scale(0.3)',
+          transformOrigin: 'top center',
+          left: '50%',
+          marginLeft: '-320px',
+          top: 0,
+        }}
+        sandbox="allow-same-origin"
+        tabIndex={-1}
+      />
+    </div>
+  );
+}
+
 export function AdminNewsletterTemplates({ templates, agents }: Props) {
+  const navigate = useNavigate();
   const [filterAgentId, setFilterAgentId] = useState<string>('all');
   const [sendTemplate, setSendTemplate] = useState<AdminTemplate | null>(null);
 
@@ -54,14 +81,8 @@ export function AdminNewsletterTemplates({ templates, agents }: Props) {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filtered.map(t => (
-                <Card key={t.id} className="overflow-hidden">
-                  <div className="h-32 bg-muted flex items-center justify-center text-muted-foreground text-sm">
-                    {t.thumbnail_url ? (
-                      <img src={t.thumbnail_url} alt={t.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <FileText className="h-10 w-10 opacity-30" />
-                    )}
-                  </div>
+                <Card key={t.id} className="overflow-hidden group hover:shadow-md transition-shadow">
+                  <TemplateThumbnail blocks={t.blocks_json} globalStyles={t.global_styles} />
                   <CardContent className="p-4 space-y-2">
                     <div className="font-medium truncate">{t.name}</div>
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -81,7 +102,7 @@ export function AdminNewsletterTemplates({ templates, agents }: Props) {
                         variant="outline"
                         size="sm"
                         className="flex-1"
-                        onClick={() => window.open(`/newsletter?template=${t.id}`, '_blank')}
+                        onClick={() => navigate(`/newsletter-builder/${t.id}`)}
                       >
                         <Eye className="h-3.5 w-3.5 mr-1" />
                         Edit

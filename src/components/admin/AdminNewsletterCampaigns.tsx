@@ -16,7 +16,6 @@ const statusVariants: Record<string, 'default' | 'secondary' | 'destructive' | '
   sending: 'secondary',
   draft: 'outline',
   pending: 'outline',
-  running: 'secondary',
   failed: 'destructive',
 };
 
@@ -24,7 +23,7 @@ export function AdminNewsletterCampaigns({ campaigns }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const downloadCSV = () => {
-    const headers = ['Campaign', 'Agent', 'Status', 'Recipients', 'Open Rate', 'Click Rate', 'Date', 'Source'];
+    const headers = ['Campaign', 'Agent', 'Status', 'Recipients', 'Open Rate', 'Click Rate', 'Date'];
     const rows = campaigns.map(c => [
       c.campaign_name,
       c.agent_name || '',
@@ -33,7 +32,6 @@ export function AdminNewsletterCampaigns({ campaigns }: Props) {
       c.open_rate != null ? `${c.open_rate}%` : '',
       c.click_through_rate != null ? `${c.click_through_rate}%` : '',
       c.send_date || c.created_at,
-      c.source,
     ]);
     const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -51,7 +49,7 @@ export function AdminNewsletterCampaigns({ campaigns }: Props) {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Campaign History</CardTitle>
-            <CardDescription>All newsletter campaigns across template sends and legacy runs</CardDescription>
+            <CardDescription>All newsletter campaigns sent via template builder</CardDescription>
           </div>
           <Button variant="outline" size="sm" onClick={downloadCSV} disabled={campaigns.length === 0}>
             <Download className="h-4 w-4 mr-1" />
@@ -80,9 +78,6 @@ export function AdminNewsletterCampaigns({ campaigns }: Props) {
                           <Badge variant={statusVariants[c.status || ''] || 'outline'} className="text-xs">
                             {c.status || 'unknown'}
                           </Badge>
-                          {c.source === 'legacy' && (
-                            <Badge variant="outline" className="text-xs">Legacy</Badge>
-                          )}
                         </div>
                         <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                           {c.agent_name && (
@@ -106,7 +101,7 @@ export function AdminNewsletterCampaigns({ campaigns }: Props) {
                   </button>
                   {isExpanded && (
                     <div className="px-4 pb-4 pt-0 border-t">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-3">
                         <div>
                           <div className="text-xs text-muted-foreground">Recipients</div>
                           <div className="text-lg font-semibold">{c.recipient_count ?? 0}</div>
@@ -118,10 +113,6 @@ export function AdminNewsletterCampaigns({ campaigns }: Props) {
                         <div>
                           <div className="text-xs text-muted-foreground">Click Rate</div>
                           <div className="text-lg font-semibold">{c.click_through_rate != null ? `${c.click_through_rate.toFixed(1)}%` : '—'}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-muted-foreground">Source</div>
-                          <div className="text-lg font-semibold capitalize">{c.source}</div>
                         </div>
                       </div>
                     </div>
