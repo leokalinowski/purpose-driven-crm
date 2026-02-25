@@ -170,7 +170,7 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName }: S
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Sender Name</Label>
             <Input value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="Your Name" />
-            <p className="text-xs text-muted-foreground">Sent from market.realestateonpurpose.com</p>
+            <p className="text-xs text-muted-foreground">Sent from news.realestateonpurpose.com</p>
           </div>
 
           {/* Recipients */}
