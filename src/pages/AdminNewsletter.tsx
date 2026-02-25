@@ -19,6 +19,8 @@ export default function AdminNewsletter() {
     isLoading,
     updateSettings,
     isUpdating,
+    deleteTemplate,
+    duplicateTemplate,
   } = useAdminNewsletter();
 
   const getAgentEnabled = (agentId: string) => {
@@ -67,7 +69,7 @@ export default function AdminNewsletter() {
           </TabsList>
 
           <TabsContent value="templates">
-            <AdminNewsletterTemplates templates={templates} agents={agents} />
+            <AdminNewsletterTemplates templates={templates} agents={agents} onDelete={deleteTemplate} onDuplicate={duplicateTemplate} />
           </TabsContent>
 
           <TabsContent value="campaigns">
