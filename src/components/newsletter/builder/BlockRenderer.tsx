@@ -1,5 +1,5 @@
 import { useDrag, useDrop } from 'react-dnd';
-import { Trash2, Copy, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
+import { Trash2, Copy, GripVertical, ChevronUp, ChevronDown, Facebook, Instagram, Linkedin, Twitter, Youtube, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NewsletterBlock, BlockType, BLOCK_DEFAULTS } from './types';
 import { ChildPath } from './NewsletterBuilder';
@@ -166,8 +166,13 @@ function ColumnDropZone({
 }
 
 
-const SOCIAL_PLATFORMS: Record<string, string> = {
-  facebook: '📘', instagram: '📷', linkedin: '💼', twitter: '🐦', youtube: '▶️', tiktok: '🎵',
+const SOCIAL_PLATFORM_ICONS: Record<string, { icon: typeof Facebook; color: string }> = {
+  facebook: { icon: Facebook, color: '#1877F2' },
+  instagram: { icon: Instagram, color: '#E4405F' },
+  linkedin: { icon: Linkedin, color: '#0A66C2' },
+  twitter: { icon: Twitter, color: '#000000' },
+  youtube: { icon: Youtube, color: '#FF0000' },
+  tiktok: { icon: Globe, color: '#000000' },
 };
 
 function convertNewlines(html: string): string {
@@ -313,12 +318,17 @@ function BlockPreview({
         <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-4" style={{ textAlign: block.props.align }}>
           {links.length > 0 ? (
             <div className="flex gap-3 justify-center flex-wrap">
-              {links.map((link, i) => (
-                <div key={i} className="flex items-center gap-1 bg-white dark:bg-purple-900/40 rounded-full px-3 py-1 border border-purple-100 dark:border-purple-700">
-                  <span>{SOCIAL_PLATFORMS[link.platform] || '🔗'}</span>
-                  <span className="text-xs font-medium capitalize">{link.platform}</span>
-                </div>
-              ))}
+              {links.map((link, i) => {
+                const platform = SOCIAL_PLATFORM_ICONS[link.platform];
+                const IconComp = platform?.icon || Globe;
+                const iconColor = platform?.color || '#6b7280';
+                return (
+                  <div key={i} className="flex items-center gap-1.5 bg-white dark:bg-purple-900/40 rounded-full px-3 py-1.5 border border-purple-100 dark:border-purple-700">
+                    <IconComp size={16} color={iconColor} />
+                    <span className="text-xs font-medium capitalize">{link.platform}</span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <>

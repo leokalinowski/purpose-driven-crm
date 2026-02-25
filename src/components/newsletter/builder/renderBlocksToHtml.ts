@@ -36,7 +36,7 @@ function renderText(props: Record<string, any>): string {
 
 function renderImage(props: Record<string, any>): string {
   const alignMap: Record<string, string> = { left: 'left', center: 'center', right: 'right' };
-  const img = `<img src="${props.src || ''}" alt="${escapeHtml(props.alt || '')}" style="max-width:100%;width:${props.width || '100%'};height:auto;display:block;border-radius:${props.borderRadius || 0}px;" />`;
+  const img = `<img src="${props.src || ''}" alt="${escapeHtml(props.alt || '')}" style="max-width:100%;width:${props.width || '100%'};height:auto;display:inline-block;border-radius:${props.borderRadius || 0}px;" />`;
   const wrapped = props.linkUrl ? `<a href="${props.linkUrl}" target="_blank">${img}</a>` : img;
   return `<div style="text-align:${alignMap[props.align] || 'center'};">${wrapped}</div>`;
 }
@@ -128,9 +128,26 @@ function renderListings(props: Record<string, any>): string {
 
 function renderSocialIcons(props: Record<string, any>): string {
   const align = props.align || 'center';
-  const size = props.iconSize || 32;
+  const links: { platform: string; url: string }[] = props.links || [];
+  const platformColors: Record<string, string> = {
+    facebook: '#1877F2', instagram: '#E4405F', linkedin: '#0A66C2',
+    twitter: '#000000', youtube: '#FF0000', tiktok: '#000000',
+  };
+
+  if (links.length === 0) {
+    return `<div style="text-align:${align};padding:8px 0;">
+      <p style="font-size:14px;margin:0;opacity:0.6;">Add social links in settings.</p>
+    </div>`;
+  }
+
+  const icons = links.map(link => {
+    const color = platformColors[link.platform] || '#6b7280';
+    const name = link.platform.charAt(0).toUpperCase() + link.platform.slice(1);
+    return `<a href="${link.url}" target="_blank" style="display:inline-block;background-color:${color};color:#ffffff;padding:6px 14px;border-radius:20px;text-decoration:none;font-size:13px;font-weight:600;margin:0 4px;">${name}</a>`;
+  }).join('\n    ');
+
   return `<div style="text-align:${align};padding:8px 0;">
-    <p style="font-size:14px;margin:0;opacity:0.6;">Social media icons (${size}px) auto-populated from profile.</p>
+    ${icons}
   </div>`;
 }
 
