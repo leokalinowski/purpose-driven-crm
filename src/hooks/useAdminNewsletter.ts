@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -46,7 +45,6 @@ export interface AdminCampaign {
   created_at: string;
   created_by: string | null;
   agent_name?: string;
-  source: 'template' | 'legacy';
 }
 
 export function useAdminNewsletter() {
@@ -116,7 +114,7 @@ export function useAdminNewsletter() {
     },
   });
 
-  // Fetch newsletter_campaigns with agent name resolution
+  // Fetch newsletter_campaigns
   const { data: campaigns = [], isLoading: campaignsLoading } = useQuery({
     queryKey: ['admin-newsletter-campaigns'],
     queryFn: async () => {
@@ -128,7 +126,6 @@ export function useAdminNewsletter() {
       if (error) throw error;
 
       const rows = (data || []) as AdminCampaign[];
-      rows.forEach(r => r.source = 'template');
 
       // Resolve agent names
       const creatorIds = [...new Set(rows.map(c => c.created_by).filter(Boolean))] as string[];
@@ -143,20 +140,6 @@ export function useAdminNewsletter() {
         }
       }
       return rows;
-    },
-  });
-
-  // Fetch legacy monthly_runs
-  const { data: legacyRuns = [], isLoading: runsLoading } = useQuery({
-    queryKey: ['monthly-runs'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('monthly_runs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
-      if (error) throw error;
-      return data || [];
     },
   });
 
@@ -180,35 +163,12 @@ export function useAdminNewsletter() {
     template_count: templateCounts[agent.user_id] || 0,
   }));
 
-  // Unified campaigns: merge newsletter_campaigns + monthly_runs
-  const unifiedCampaigns: AdminCampaign[] = [
-    ...campaigns,
-    ...legacyRuns.map((run: any) => {
-      const agent = agents.find(a => a.user_id === run.agent_id);
-      return {
-        id: run.id,
-        campaign_name: `Legacy Run – ${run.run_date}`,
-        send_date: run.created_at,
-        recipient_count: run.contacts_processed || 0,
-        open_rate: null,
-        click_through_rate: null,
-        status: run.status,
-        created_at: run.created_at,
-        created_by: run.agent_id,
-        agent_name: agent ? `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || agent.email || 'Unknown' : 'Unknown',
-        source: 'legacy' as const,
-      };
-    }),
-  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
   // Update newsletter settings mutation
   const updateSettingsMutation = useMutation({
-    mutationFn: async ({ agentId, enabled, scheduleDay, scheduleHour }: {
-      agentId: string; enabled: boolean; scheduleDay?: number; scheduleHour?: number;
-    }) => {
+    mutationFn: async ({ agentId, enabled }: { agentId: string; enabled: boolean }) => {
       const { data, error } = await supabase
         .from('newsletter_settings')
-        .upsert({ agent_id: agentId, enabled, schedule_day: scheduleDay, schedule_hour: scheduleHour }, { onConflict: 'agent_id' })
+        .upsert({ agent_id: agentId, enabled }, { onConflict: 'agent_id' })
         .select().single();
       if (error) throw error;
       return data;
@@ -226,8 +186,8 @@ export function useAdminNewsletter() {
     agents: agentsWithCounts,
     settings,
     templates: templatesWithAgents,
-    campaigns: unifiedCampaigns,
-    isLoading: agentsLoading || settingsLoading || templatesLoading || campaignsLoading || runsLoading,
+    campaigns,
+    isLoading: agentsLoading || settingsLoading || templatesLoading || campaignsLoading,
     updateSettings: updateSettingsMutation.mutate,
     isUpdating: updateSettingsMutation.isPending,
   };
