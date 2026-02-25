@@ -1,8 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Eye, EyeOff, Send } from 'lucide-react';
+import { ArrowLeft, Save, Eye, EyeOff, Send, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -28,17 +28,29 @@ export function NewsletterBuilder() {
   const [showPreview, setShowPreview] = useState(false);
   const [showSendPanel, setShowSendPanel] = useState(false);
   const [currentId, setCurrentId] = useState<string | undefined>(templateId);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const hasLoadedRef = useRef(false);
+  const isInitialLoadRef = useRef(true);
 
   // Load existing template
   useEffect(() => {
     if (templateId && templates.length > 0) {
       const t = templates.find(t => t.id === templateId);
       if (t) {
+        isInitialLoadRef.current = true;
         setBlocks(t.blocks_json);
         setGlobalStyles(t.global_styles);
         setTemplateName(t.name);
         setCurrentId(t.id);
+        hasLoadedRef.current = true;
+        // Allow a tick for state to settle before enabling autosave
+        setTimeout(() => { isInitialLoadRef.current = false; }, 500);
       }
+    } else if (!templateId) {
+      // New template — enable autosave after initial render
+      setTimeout(() => { isInitialLoadRef.current = false; }, 500);
     }
   }, [templateId, templates]);
 
@@ -53,8 +65,9 @@ export function NewsletterBuilder() {
     setGlobalStyles(prev => ({ ...prev, ...partial }));
   }, []);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!user) return;
+    setSaveStatus('saving');
     const result = await saveTemplate({
       id: currentId,
       agent_id: user.id,
@@ -66,7 +79,25 @@ export function NewsletterBuilder() {
       setCurrentId(result.id);
       window.history.replaceState(null, '', `/newsletter-builder/${result.id}`);
     }
-  };
+    setSaveStatus('saved');
+    setTimeout(() => setSaveStatus('idle'), 2000);
+  }, [user, currentId, templateName, blocks, globalStyles, saveTemplate]);
+
+  // Debounced autosave
+  useEffect(() => {
+    if (isInitialLoadRef.current) return;
+    if (!user) return;
+
+    setSaveStatus('idle');
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      handleSave();
+    }, 2000);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [blocks, globalStyles, templateName]);
 
   return (
     <DndProvider backend={HTML5Backend}>
@@ -81,6 +112,10 @@ export function NewsletterBuilder() {
             onChange={(e) => setTemplateName(e.target.value)}
             className="max-w-[260px] h-8 text-sm font-medium"
           />
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {saveStatus === 'saving' && <><Loader2 className="h-3 w-3 animate-spin" /> Saving...</>}
+            {saveStatus === 'saved' && <><Check className="h-3 w-3 text-green-500" /> Saved</>}
+          </div>
           <div className="flex-1" />
           <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)}>
             {showPreview ? <EyeOff className="h-4 w-4 mr-1.5" /> : <Eye className="h-4 w-4 mr-1.5" />}

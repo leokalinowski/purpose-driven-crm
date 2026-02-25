@@ -11,7 +11,7 @@ function renderHeading(props: Record<string, any>): string {
 }
 
 function renderText(props: Record<string, any>): string {
-  return `<div style="text-align:${props.align || 'left'};color:${props.color || '#374151'};font-size:${props.fontSize || 16}px;line-height:1.6;">${props.html || ''}</div>`;
+  return `<div style="text-align:${props.align || 'left'};color:${props.color || '#374151'};font-size:${props.fontSize || 16}px;line-height:1.6;font-family:${props.fontFamily || 'Georgia, serif'};">${props.html || ''}</div>`;
 }
 
 function renderImage(props: Record<string, any>): string {

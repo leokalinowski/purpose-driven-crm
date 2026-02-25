@@ -127,7 +127,7 @@ function BlockPreview({ block, onUpdateChildren }: { block: NewsletterBlock; onU
       return (
         <div
           className="prose prose-sm max-w-none"
-          style={{ textAlign: block.props.align, color: block.props.color, fontSize: block.props.fontSize }}
+          style={{ textAlign: block.props.align, color: block.props.color, fontSize: block.props.fontSize, fontFamily: block.props.fontFamily }}
           dangerouslySetInnerHTML={{ __html: block.props.html }}
         />
       );
