@@ -4,11 +4,14 @@ import { NewsletterBlock, BlockType, BLOCK_DEFAULTS } from './types';
 import { BlockRenderer } from './BlockRenderer';
 import { Plus } from 'lucide-react';
 import { BrandColors } from './BlockSettings';
+import { ChildPath } from './NewsletterBuilder';
 
 interface BuilderCanvasProps {
   blocks: NewsletterBlock[];
   selectedBlockId: string | null;
+  selectedChildPath: ChildPath | null;
   onSelectBlock: (id: string | null) => void;
+  onSelectChild: (path: ChildPath | null) => void;
   onUpdateBlocks: (blocks: NewsletterBlock[]) => void;
   brandColors?: BrandColors;
 }
@@ -17,10 +20,9 @@ function generateId() {
   return crypto.randomUUID();
 }
 
-export function BuilderCanvas({ blocks, selectedBlockId, onSelectBlock, onUpdateBlocks, brandColors }: BuilderCanvasProps) {
+export function BuilderCanvas({ blocks, selectedBlockId, selectedChildPath, onSelectBlock, onSelectChild, onUpdateBlocks, brandColors }: BuilderCanvasProps) {
   const createBlock = useCallback((type: BlockType, index?: number): void => {
     const defaults = { ...BLOCK_DEFAULTS[type] };
-    // Apply brand colors to new blocks
     if (brandColors?.primary) {
       if (type === 'button') defaults.backgroundColor = brandColors.primary;
       if (type === 'heading') defaults.color = brandColors.primary;
@@ -81,6 +83,35 @@ export function BuilderCanvas({ blocks, selectedBlockId, onSelectBlock, onUpdate
     onUpdateBlocks(blocks.map(b => b.id === id ? { ...b, children } : b));
   }, [blocks, onUpdateBlocks]);
 
+  // Child block operations
+  const deleteChildBlock = useCallback((parentId: string, colIndex: number, childId: string) => {
+    onUpdateBlocks(blocks.map(b => {
+      if (b.id !== parentId) return b;
+      const newChildren = (b.children || []).map((col, i) =>
+        i !== colIndex ? col : col.filter(c => c.id !== childId)
+      );
+      return { ...b, children: newChildren };
+    }));
+    if (selectedChildPath?.childId === childId) onSelectChild(null);
+  }, [blocks, onUpdateBlocks, selectedChildPath, onSelectChild]);
+
+  const duplicateChildBlock = useCallback((parentId: string, colIndex: number, childId: string) => {
+    onUpdateBlocks(blocks.map(b => {
+      if (b.id !== parentId) return b;
+      const newChildren = (b.children || []).map((col, i) => {
+        if (i !== colIndex) return col;
+        const idx = col.findIndex(c => c.id === childId);
+        if (idx === -1) return col;
+        const cloned: NewsletterBlock = JSON.parse(JSON.stringify(col[idx]));
+        cloned.id = generateId();
+        const newCol = [...col];
+        newCol.splice(idx + 1, 0, cloned);
+        return newCol;
+      });
+      return { ...b, children: newChildren };
+    }));
+  }, [blocks, onUpdateBlocks]);
+
   return (
     <div
       ref={drop}
@@ -100,12 +131,16 @@ export function BuilderCanvas({ blocks, selectedBlockId, onSelectBlock, onUpdate
               block={block}
               index={index}
               isSelected={selectedBlockId === block.id}
+              selectedChildPath={selectedChildPath}
               onSelect={() => onSelectBlock(block.id)}
+              onSelectChild={onSelectChild}
               onDelete={() => deleteBlock(block.id)}
               onDuplicate={() => duplicateBlock(block.id)}
               onMove={moveBlock}
               onUpdate={(props) => updateBlock(block.id, props)}
               onUpdateChildren={(children) => updateBlockChildren(block.id, children)}
+              onDeleteChild={deleteChildBlock}
+              onDuplicateChild={duplicateChildBlock}
               totalBlocks={blocks.length}
             />
           ))}

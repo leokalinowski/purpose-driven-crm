@@ -241,8 +241,8 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
                   <Select value={link.platform} onValueChange={(v) => updateLink(i, 'platform', v)}>
                     <SelectTrigger className="w-[110px] h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {SOCIAL_PLATFORM_OPTIONS.map(p => (
-                        <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>
+                      {SOCIAL_PLATFORM_OPTIONS.map(platform => (
+                        <SelectItem key={platform} value={platform} className="capitalize">{platform}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

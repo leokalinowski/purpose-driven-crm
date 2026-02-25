@@ -16,6 +16,12 @@ import { useNewsletterTemplates } from '@/hooks/useNewsletterTemplates';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
+export interface ChildPath {
+  parentId: string;
+  colIndex: number;
+  childId: string;
+}
+
 export function NewsletterBuilder() {
   const navigate = useNavigate();
   const { templateId } = useParams();
@@ -25,6 +31,7 @@ export function NewsletterBuilder() {
   const [blocks, setBlocks] = useState<NewsletterBlock[]>([]);
   const [globalStyles, setGlobalStyles] = useState<GlobalStyles>(DEFAULT_GLOBAL_STYLES);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [selectedChildPath, setSelectedChildPath] = useState<ChildPath | null>(null);
   const [templateName, setTemplateName] = useState('Monthly Newsletter');
   const [showPreview, setShowPreview] = useState(false);
   const [showSendPanel, setShowSendPanel] = useState(false);
@@ -56,24 +63,57 @@ export function NewsletterBuilder() {
         setTemplateName(t.name);
         setCurrentId(t.id);
         hasLoadedRef.current = true;
-        // Allow a tick for state to settle before enabling autosave
         setTimeout(() => { isInitialLoadRef.current = false; }, 500);
       }
     } else if (!templateId) {
-      // New template — enable autosave after initial render
       setTimeout(() => { isInitialLoadRef.current = false; }, 500);
     }
   }, [templateId, templates]);
 
-  const selectedBlock = blocks.find(b => b.id === selectedBlockId) || null;
+  // Derive selected block - either top-level or nested child
+  const selectedBlock = (() => {
+    if (selectedChildPath) {
+      const parent = blocks.find(b => b.id === selectedChildPath.parentId);
+      const child = parent?.children?.[selectedChildPath.colIndex]?.find(c => c.id === selectedChildPath.childId);
+      return child || null;
+    }
+    return blocks.find(b => b.id === selectedBlockId) || null;
+  })();
+
+  const handleSelectBlock = useCallback((id: string | null) => {
+    setSelectedBlockId(id);
+    setSelectedChildPath(null);
+  }, []);
+
+  const handleSelectChild = useCallback((path: ChildPath | null) => {
+    setSelectedChildPath(path);
+    setSelectedBlockId(null);
+  }, []);
 
   const handleUpdateBlockProps = useCallback((props: Record<string, any>) => {
-    if (!selectedBlockId) return;
-    setBlocks(prev => prev.map(b => b.id === selectedBlockId ? { ...b, props: { ...b.props, ...props } } : b));
-  }, [selectedBlockId]);
+    if (selectedChildPath) {
+      // Update a nested child block
+      setBlocks(prev => prev.map(b => {
+        if (b.id !== selectedChildPath.parentId) return b;
+        const newChildren = (b.children || []).map((col, i) =>
+          i !== selectedChildPath.colIndex ? col : col.map(c =>
+            c.id !== selectedChildPath.childId ? c : { ...c, props: { ...c.props, ...props } }
+          )
+        );
+        return { ...b, children: newChildren };
+      }));
+    } else if (selectedBlockId) {
+      setBlocks(prev => prev.map(b => b.id === selectedBlockId ? { ...b, props: { ...b.props, ...props } } : b));
+    }
+  }, [selectedBlockId, selectedChildPath]);
 
   const handleUpdateGlobalStyles = useCallback((partial: Partial<GlobalStyles>) => {
     setGlobalStyles(prev => ({ ...prev, ...partial }));
+  }, []);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedBlockId(null);
+    setSelectedChildPath(null);
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -156,12 +196,14 @@ export function NewsletterBuilder() {
 
             {/* Center: Canvas */}
             <ScrollArea className="flex-1 p-6">
-              <div className="max-w-[640px] mx-auto" onClick={() => setSelectedBlockId(null)}>
+              <div className="max-w-[640px] mx-auto" onClick={handleClearSelection}>
                 <div className="bg-card rounded-xl shadow-sm border p-6 min-h-[600px]">
                   <BuilderCanvas
                     blocks={blocks}
                     selectedBlockId={selectedBlockId}
-                    onSelectBlock={setSelectedBlockId}
+                    selectedChildPath={selectedChildPath}
+                    onSelectBlock={handleSelectBlock}
+                    onSelectChild={handleSelectChild}
                     onUpdateBlocks={setBlocks}
                     brandColors={brandColors}
                   />
