@@ -1,17 +1,29 @@
+import { useState, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { NewsletterBlock } from './types';
+import { Button } from '@/components/ui/button';
+import { Upload, Loader2 } from 'lucide-react';
+import { NewsletterBlock, GlobalStyles } from './types';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 
 interface BlockSettingsProps {
-  block: NewsletterBlock;
+  block: NewsletterBlock | null;
   onUpdate: (props: Record<string, any>) => void;
+  globalStyles?: GlobalStyles;
+  onUpdateGlobalStyles?: (styles: Partial<GlobalStyles>) => void;
 }
 
-export function BlockSettings({ block, onUpdate }: BlockSettingsProps) {
+export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalStyles }: BlockSettingsProps) {
+  if (!block) {
+    return <GlobalStylesEditor styles={globalStyles} onUpdate={onUpdateGlobalStyles} />;
+  }
+
   const p = block.props;
 
   switch (block.type) {
@@ -33,7 +45,7 @@ export function BlockSettings({ block, onUpdate }: BlockSettingsProps) {
     case 'text':
       return (
         <div className="space-y-4">
-          <SettingGroup label="Content"><Textarea value={p.html} onChange={(e) => onUpdate({ html: e.target.value })} rows={4} /></SettingGroup>
+          <SettingGroup label="Content"><Textarea value={p.html} onChange={(e) => onUpdate({ html: e.target.value })} rows={6} /></SettingGroup>
           <AlignSetting value={p.align} onChange={(v) => onUpdate({ align: v })} />
           <ColorSetting label="Color" value={p.color} onChange={(v) => onUpdate({ color: v })} />
           <SettingGroup label="Font Size">
@@ -47,7 +59,7 @@ export function BlockSettings({ block, onUpdate }: BlockSettingsProps) {
     case 'image':
       return (
         <div className="space-y-4">
-          <SettingGroup label="Image URL"><Input value={p.src} onChange={(e) => onUpdate({ src: e.target.value })} placeholder="https://..." /></SettingGroup>
+          <ImageUploadSetting src={p.src} onUpdate={onUpdate} />
           <SettingGroup label="Alt Text"><Input value={p.alt} onChange={(e) => onUpdate({ alt: e.target.value })} /></SettingGroup>
           <SettingGroup label="Width"><Input value={p.width} onChange={(e) => onUpdate({ width: e.target.value })} placeholder="100% or 300px" /></SettingGroup>
           <AlignSetting value={p.align} onChange={(v) => onUpdate({ align: v })} />
@@ -141,6 +153,40 @@ export function BlockSettings({ block, onUpdate }: BlockSettingsProps) {
           ))}
         </div>
       );
+    case 'social_icons':
+      return (
+        <div className="space-y-4">
+          <AlignSetting value={p.align} onChange={(v) => onUpdate({ align: v })} />
+          <SettingGroup label="Icon Size">
+            <div className="flex items-center gap-3">
+              <Slider value={[p.iconSize]} min={20} max={48} step={2} onValueChange={([v]) => onUpdate({ iconSize: v })} className="flex-1" />
+              <span className="text-xs w-8 text-right">{p.iconSize}px</span>
+            </div>
+          </SettingGroup>
+          <p className="text-xs text-muted-foreground">Social links are auto-populated from your profile at send time.</p>
+        </div>
+      );
+    case 'listings':
+      return (
+        <div className="space-y-4">
+          <SettingGroup label="Number of Listings">
+            <div className="flex items-center gap-3">
+              <Slider value={[p.count]} min={1} max={6} step={1} onValueChange={([v]) => onUpdate({ count: v })} className="flex-1" />
+              <span className="text-xs w-8 text-right">{p.count}</span>
+            </div>
+          </SettingGroup>
+          <SettingGroup label="Style">
+            <Select value={p.style} onValueChange={(v) => onUpdate({ style: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="grid">Grid</SelectItem>
+                <SelectItem value="list">List</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingGroup>
+          <p className="text-xs text-muted-foreground">Listings are pulled from your pipeline at send time.</p>
+        </div>
+      );
     case 'html_raw':
       return (
         <div className="space-y-4">
@@ -150,6 +196,89 @@ export function BlockSettings({ block, onUpdate }: BlockSettingsProps) {
     default:
       return <p className="text-sm text-muted-foreground">No settings for this block type.</p>;
   }
+}
+
+function ImageUploadSetting({ src, onUpdate }: { src: string; onUpdate: (p: Record<string, any>) => void }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${user.id}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('newsletter-assets').upload(path, file);
+      if (error) throw error;
+
+      const { data } = supabase.storage.from('newsletter-assets').getPublicUrl(path);
+      onUpdate({ src: data.publicUrl });
+      toast({ title: 'Image uploaded' });
+    } catch (err: any) {
+      toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  return (
+    <SettingGroup label="Image">
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <Input value={src} onChange={(e) => onUpdate({ src: e.target.value })} placeholder="https://..." className="flex-1" />
+          <Button variant="outline" size="icon" onClick={() => fileRef.current?.click()} disabled={uploading}>
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+          </Button>
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+        {src && (
+          <img src={src} alt="Preview" className="w-full max-h-32 object-contain rounded border bg-muted" />
+        )}
+      </div>
+    </SettingGroup>
+  );
+}
+
+function GlobalStylesEditor({ styles, onUpdate }: { styles?: GlobalStyles; onUpdate?: (s: Partial<GlobalStyles>) => void }) {
+  if (!styles || !onUpdate) {
+    return (
+      <div className="text-center text-muted-foreground mt-8">
+        <p className="text-sm font-medium">No block selected</p>
+        <p className="text-xs mt-1">Click a block to edit its settings</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Global Styles</h3>
+      <ColorSetting label="Background Color" value={styles.backgroundColor} onChange={(v) => onUpdate({ backgroundColor: v })} />
+      <SettingGroup label="Content Width">
+        <div className="flex items-center gap-3">
+          <Slider value={[styles.contentWidth]} min={500} max={700} step={10} onValueChange={([v]) => onUpdate({ contentWidth: v })} className="flex-1" />
+          <span className="text-xs w-12 text-right">{styles.contentWidth}px</span>
+        </div>
+      </SettingGroup>
+      <SettingGroup label="Font Family">
+        <Select value={styles.fontFamily} onValueChange={(v) => onUpdate({ fontFamily: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Georgia, serif">Georgia</SelectItem>
+            <SelectItem value="Arial, sans-serif">Arial</SelectItem>
+            <SelectItem value="Helvetica, sans-serif">Helvetica</SelectItem>
+            <SelectItem value="'Times New Roman', serif">Times New Roman</SelectItem>
+            <SelectItem value="Verdana, sans-serif">Verdana</SelectItem>
+          </SelectContent>
+        </Select>
+      </SettingGroup>
+      <ColorSetting label="Body Text Color" value={styles.bodyColor} onChange={(v) => onUpdate({ bodyColor: v })} />
+    </div>
+  );
 }
 
 function SettingGroup({ label, children }: { label: string; children: React.ReactNode }) {

@@ -1,5 +1,5 @@
 import { useDrag } from 'react-dnd';
-import { Heading, Type, ImageIcon, MousePointerClick, Minus, MoveVertical, Columns2, BarChart3, Home, UserCircle, Code } from 'lucide-react';
+import { Heading, Type, ImageIcon, MousePointerClick, Minus, MoveVertical, Columns2, BarChart3, Home, UserCircle, Code, Share2, Building } from 'lucide-react';
 import { BlockType } from './types';
 
 const PALETTE_ITEMS: { type: BlockType; label: string; icon: React.ElementType; description: string }[] = [
@@ -11,7 +11,9 @@ const PALETTE_ITEMS: { type: BlockType; label: string; icon: React.ElementType; 
   { type: 'spacer', label: 'Spacer', icon: MoveVertical, description: 'Vertical space' },
   { type: 'columns', label: 'Columns', icon: Columns2, description: '2 or 3 columns' },
   { type: 'market_data', label: 'Market Data', icon: BarChart3, description: 'Dynamic ZIP stats' },
+  { type: 'listings', label: 'Listings', icon: Building, description: 'Property showcase' },
   { type: 'agent_bio', label: 'Agent Bio', icon: UserCircle, description: 'Auto-filled profile' },
+  { type: 'social_icons', label: 'Social Icons', icon: Share2, description: 'Social media links' },
   { type: 'html_raw', label: 'HTML', icon: Code, description: 'Custom HTML' },
 ];
 

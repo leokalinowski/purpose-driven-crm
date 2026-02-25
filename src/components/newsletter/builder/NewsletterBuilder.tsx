@@ -47,6 +47,10 @@ export function NewsletterBuilder() {
     setBlocks(prev => prev.map(b => b.id === selectedBlockId ? { ...b, props: { ...b.props, ...props } } : b));
   }, [selectedBlockId]);
 
+  const handleUpdateGlobalStyles = useCallback((partial: Partial<GlobalStyles>) => {
+    setGlobalStyles(prev => ({ ...prev, ...partial }));
+  }, []);
+
   const handleSave = async () => {
     if (!user) return;
     const result = await saveTemplate({
@@ -67,7 +71,7 @@ export function NewsletterBuilder() {
       <div className="h-screen flex flex-col bg-background">
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-card shadow-sm">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/newsletter')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <Input
@@ -122,10 +126,12 @@ export function NewsletterBuilder() {
                   <BlockSettings block={selectedBlock} onUpdate={handleUpdateBlockProps} />
                 </div>
               ) : (
-                <div className="text-center text-muted-foreground mt-8">
-                  <p className="text-sm font-medium">No block selected</p>
-                  <p className="text-xs mt-1">Click a block to edit its settings</p>
-                </div>
+                <BlockSettings
+                  block={null}
+                  onUpdate={() => {}}
+                  globalStyles={globalStyles}
+                  onUpdateGlobalStyles={handleUpdateGlobalStyles}
+                />
               )}
             </ScrollArea>
           </div>
