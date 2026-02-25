@@ -141,6 +141,7 @@ function renderListings(props: Record<string, any>): string {
 
 function renderSocialIcons(props: Record<string, any>): string {
   const align = props.align || 'center';
+  const iconSize = props.iconSize || 24;
   const links: { platform: string; url: string }[] = props.links || [];
   const platformColors: Record<string, string> = {
     facebook: '#1877F2', instagram: '#E4405F', linkedin: '#0A66C2',
@@ -153,10 +154,13 @@ function renderSocialIcons(props: Record<string, any>): string {
     </div>`;
   }
 
+  const fontSize = Math.max(11, Math.round(iconSize * 0.55));
+  const padding = `${Math.round(iconSize * 0.25)}px ${Math.round(iconSize * 0.58)}px`;
+
   const icons = links.map(link => {
     const color = platformColors[link.platform] || '#6b7280';
     const name = link.platform.charAt(0).toUpperCase() + link.platform.slice(1);
-    return `<a href="${link.url}" target="_blank" style="display:inline-block;background-color:${color};color:#ffffff;padding:6px 14px;border-radius:20px;text-decoration:none;font-size:13px;font-weight:600;margin:0 4px;">${name}</a>`;
+    return `<a href="${link.url}" target="_blank" style="display:inline-block;background-color:${color};color:#ffffff;padding:${padding};border-radius:20px;text-decoration:none;font-size:${fontSize}px;font-weight:600;margin:0 4px;">${name}</a>`;
   }).join('\n    ');
 
   return `<div style="text-align:${align};padding:8px 0;">
@@ -224,21 +228,20 @@ function replaceAgentPlaceholders(html: string, agent: AgentData): string {
     html = html.replace(/<div class="agent-logo">[^<]*\{\{agent_logo\}\}[^<]*<\/div>/g, '');
   }
 
-  // Replace text placeholders
+  // Replace text placeholders — skip escaping for values inside href attributes
   for (const [placeholder, { value }] of Object.entries(replacements)) {
     if (value) {
-      html = html.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), escapeHtml(value));
+      const escaped = placeholder.replace(/[{}]/g, '\\$&');
+      // First, replace href attribute values without HTML-escaping (URLs need raw &)
+      html = html.replace(new RegExp(`href="${escaped}"`, 'g'), `href="${value}"`);
+      // Then replace remaining occurrences with HTML-escaped value
+      html = html.replace(new RegExp(escaped, 'g'), escapeHtml(value));
     } else {
       // Remove the entire <p> or <a> element containing this placeholder
       const escaped = placeholder.replace(/[{}]/g, '\\$&');
       html = html.replace(new RegExp(`<p[^>]*>[^<]*${escaped}[^<]*</p>`, 'g'), '');
       html = html.replace(new RegExp(`<a[^>]*>[^<]*${escaped}[^<]*</a>`, 'g'), '');
     }
-  }
-
-  // Fix website link href if we replaced the value
-  if (agent.website) {
-    html = html.replace(`href="${escapeHtml(agent.website)}"`, `href="${agent.website}"`);
   }
 
   return html;

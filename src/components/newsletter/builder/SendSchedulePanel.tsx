@@ -72,7 +72,7 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName }: S
     }
     setSendingTest(true);
     try {
-      const { error } = await supabase.functions.invoke('newsletter-send', {
+      const { error } = await supabase.functions.invoke('newsletter-template-send', {
         body: {
           template_id: templateId,
           agent_id: user.id,
@@ -128,7 +128,7 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName }: S
 
       if (sendMode === 'now') {
         // Trigger the send edge function
-        await supabase.functions.invoke('newsletter-send', {
+        await supabase.functions.invoke('newsletter-template-send', {
           body: {
             template_id: templateId,
             agent_id: user.id,

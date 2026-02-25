@@ -344,15 +344,16 @@ function BlockPreview({
       return (
         <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-4" style={{ textAlign: block.props.align }}>
           {links.length > 0 ? (
-            <div className="flex gap-3 justify-center flex-wrap">
+            <div className={`flex gap-3 flex-wrap ${block.props.align === 'left' ? 'justify-start' : block.props.align === 'right' ? 'justify-end' : 'justify-center'}`}>
               {links.map((link, i) => {
                 const platform = SOCIAL_PLATFORM_ICONS[link.platform];
                 const IconComp = platform?.icon || Globe;
                 const iconColor = platform?.color || '#6b7280';
+                const iconSize = block.props.iconSize || 24;
                 return (
-                  <div key={i} className="flex items-center gap-1.5 bg-white dark:bg-purple-900/40 rounded-full px-3 py-1.5 border border-purple-100 dark:border-purple-700">
-                    <IconComp size={16} color={iconColor} />
-                    <span className="text-xs font-medium capitalize">{link.platform}</span>
+                  <div key={`${link.platform}-${link.url}`} className="flex items-center gap-1.5 bg-white dark:bg-purple-900/40 rounded-full px-3 py-1.5 border border-purple-100 dark:border-purple-700">
+                    <IconComp size={iconSize} color={iconColor} />
+                    <span className="font-medium capitalize" style={{ fontSize: Math.max(11, iconSize * 0.55) }}>{link.platform}</span>
                   </div>
                 );
               })}

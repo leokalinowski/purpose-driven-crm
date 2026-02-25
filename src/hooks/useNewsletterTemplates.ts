@@ -41,7 +41,7 @@ export function useNewsletterTemplates(agentId?: string) {
   });
 
   const saveMutation = useMutation({
-    mutationFn: async (template: Partial<NewsletterTemplate> & { id?: string; agent_id: string }) => {
+    mutationFn: async (template: Partial<NewsletterTemplate> & { id?: string; agent_id: string; _silent?: boolean }) => {
       const payload = {
         agent_id: template.agent_id,
         name: template.name || 'Untitled Template',
@@ -54,16 +54,18 @@ export function useNewsletterTemplates(agentId?: string) {
       if (template.id) {
         const { data, error } = await supabase.from('newsletter_templates').update(payload).eq('id', template.id).select().single();
         if (error) throw error;
-        return data;
+        return { ...data, _silent: template._silent };
       } else {
         const { data, error } = await supabase.from('newsletter_templates').insert(payload).select().single();
         if (error) throw error;
-        return data;
+        return { ...data, _silent: template._silent };
       }
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['newsletter-templates'] });
-      toast({ title: 'Template saved' });
+      if (!data?._silent) {
+        toast({ title: 'Template saved' });
+      }
     },
     onError: (e: any) => {
       toast({ title: 'Save failed', description: e.message, variant: 'destructive' });

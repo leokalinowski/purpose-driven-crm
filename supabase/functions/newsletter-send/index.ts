@@ -703,8 +703,8 @@ serve(async (req) => {
 
       // Update campaign record with results
       if (campaignRecord) {
-        const openRate = totalEmailsSent > 0 ? Math.random() * 30 + 15 : 0; // Placeholder until real tracking
-        const clickRate = totalEmailsSent > 0 ? Math.random() * 8 + 2 : 0; // Placeholder until real tracking
+        const openRate = 0; // Will be updated by Resend webhook tracking
+        const clickRate = 0; // Will be updated by Resend webhook tracking
         
         await supabase
           .from('newsletter_campaigns')

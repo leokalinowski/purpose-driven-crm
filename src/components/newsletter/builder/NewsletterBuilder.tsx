@@ -131,7 +131,22 @@ export function NewsletterBuilder() {
         return { ...b, children: newChildren };
       }));
     } else if (selectedBlockId) {
-      setBlocks(prev => prev.map(b => b.id === selectedBlockId ? { ...b, props: { ...b.props, ...props } } : b));
+      setBlocks(prev => prev.map(b => {
+        if (b.id !== selectedBlockId) return b;
+        const updated = { ...b, props: { ...b.props, ...props } };
+        // Sync children array when column count changes
+        if (b.type === 'columns' && props._syncChildren) {
+          const newCount = props.columns || 2;
+          const currentChildren = b.children || [];
+          if (newCount > currentChildren.length) {
+            updated.children = [...currentChildren, ...Array.from({ length: newCount - currentChildren.length }, () => [])];
+          } else {
+            updated.children = currentChildren.slice(0, newCount);
+          }
+          delete updated.props._syncChildren;
+        }
+        return updated;
+      }));
     }
   }, [selectedBlockId, selectedChildPath]);
 
@@ -144,7 +159,7 @@ export function NewsletterBuilder() {
     setSelectedChildPath(null);
   }, []);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (silent = false) => {
     if (!user) return;
     setSaveStatus('saving');
     const result = await saveTemplate({
@@ -153,6 +168,7 @@ export function NewsletterBuilder() {
       name: templateName,
       blocks_json: blocks,
       global_styles: globalStyles,
+      _silent: silent,
     });
     if (result?.id && !currentId) {
       setCurrentId(result.id);
@@ -170,7 +186,7 @@ export function NewsletterBuilder() {
     setSaveStatus('idle');
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      handleSave();
+      handleSave(true); // silent autosave
     }, 2000);
 
     return () => {
@@ -204,7 +220,7 @@ export function NewsletterBuilder() {
             <Send className="h-4 w-4 mr-1.5" />
             Send
           </Button>
-          <Button size="sm" onClick={handleSave} disabled={isSaving}>
+          <Button size="sm" onClick={() => handleSave(false)} disabled={isSaving}>
             <Save className="h-4 w-4 mr-1.5" />
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
