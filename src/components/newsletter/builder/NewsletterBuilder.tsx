@@ -40,6 +40,7 @@ export function NewsletterBuilder() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [brandColors, setBrandColors] = useState<BrandColors>({ primary: null, secondary: null });
   const [agentData, setAgentData] = useState<AgentData>({});
+  const [templateAgentId, setTemplateAgentId] = useState<string | undefined>();
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const hasLoadedRef = useRef(false);
@@ -90,6 +91,7 @@ export function NewsletterBuilder() {
         setGlobalStyles(t.global_styles);
         setTemplateName(t.name);
         setCurrentId(t.id);
+        setTemplateAgentId(t.agent_id);
         hasLoadedRef.current = true;
         setTimeout(() => { isInitialLoadRef.current = false; }, 500);
       }
@@ -164,7 +166,7 @@ export function NewsletterBuilder() {
     setSaveStatus('saving');
     const result = await saveTemplate({
       id: currentId,
-      agent_id: user.id,
+      agent_id: templateAgentId || user.id,
       name: templateName,
       blocks_json: blocks,
       global_styles: globalStyles,
@@ -176,7 +178,7 @@ export function NewsletterBuilder() {
     }
     setSaveStatus('saved');
     setTimeout(() => setSaveStatus('idle'), 2000);
-  }, [user, currentId, templateName, blocks, globalStyles, saveTemplate]);
+  }, [user, currentId, templateName, blocks, globalStyles, saveTemplate, templateAgentId]);
 
   // Debounced autosave
   useEffect(() => {

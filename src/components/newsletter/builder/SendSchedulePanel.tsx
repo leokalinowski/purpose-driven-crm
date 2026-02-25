@@ -17,9 +17,10 @@ interface SendSchedulePanelProps {
   onClose: () => void;
   templateId?: string;
   templateName: string;
+  agentId?: string; // When set, sends on behalf of this agent
 }
 
-export function SendSchedulePanel({ open, onClose, templateId, templateName }: SendSchedulePanelProps) {
+export function SendSchedulePanel({ open, onClose, templateId, templateName, agentId }: SendSchedulePanelProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [subject, setSubject] = useState('');
@@ -33,29 +34,32 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName }: S
   const [sendingTest, setSendingTest] = useState(false);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
 
+  // The effective agent: use agentId prop if provided, otherwise logged-in user
+  const effectiveAgentId = agentId || user?.id;
+
   // Load agent profile for sender name
   useEffect(() => {
-    if (!user) return;
+    if (!effectiveAgentId) return;
     (async () => {
       const { data } = await supabase
         .from('profiles')
         .select('first_name, last_name')
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveAgentId)
         .single();
       if (data) {
         setSenderName(`${data.first_name || ''} ${data.last_name || ''}`.trim());
       }
     })();
-  }, [user]);
+  }, [effectiveAgentId]);
 
-  // Load available tags from contacts
+  // Load available tags from agent's contacts
   useEffect(() => {
-    if (!user) return;
+    if (!effectiveAgentId) return;
     (async () => {
       const { data } = await supabase
         .from('contacts')
         .select('tags')
-        .eq('agent_id', user.id)
+        .eq('agent_id', effectiveAgentId)
         .not('tags', 'is', null);
       if (data) {
         const allTags = new Set<string>();
@@ -63,10 +67,10 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName }: S
         setAvailableTags(Array.from(allTags).sort());
       }
     })();
-  }, [user]);
+  }, [effectiveAgentId]);
 
   const handleSendTest = async () => {
-    if (!user || !templateId) {
+    if (!user || !templateId || !effectiveAgentId) {
       toast({ title: 'Please save the template first', variant: 'destructive' });
       return;
     }
@@ -75,11 +79,11 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName }: S
       const { error } = await supabase.functions.invoke('newsletter-template-send', {
         body: {
           template_id: templateId,
-          agent_id: user.id,
+          agent_id: effectiveAgentId,
           subject: subject || templateName,
           sender_name: senderName,
           test_mode: true,
-          test_email: user.email,
+          test_email: user.email, // Test goes to the logged-in admin/agent
         },
       });
       if (error) throw error;
@@ -92,7 +96,7 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName }: S
   };
 
   const handleSchedule = async () => {
-    if (!user || !templateId) {
+    if (!user || !templateId || !effectiveAgentId) {
       toast({ title: 'Please save the template first', variant: 'destructive' });
       return;
     }
@@ -117,7 +121,7 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName }: S
 
       const { error } = await supabase.from('newsletter_schedules').insert({
         template_id: templateId,
-        agent_id: user.id,
+        agent_id: effectiveAgentId,
         subject,
         sender_name: senderName,
         recipient_filter: filter,
@@ -127,11 +131,10 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName }: S
       if (error) throw error;
 
       if (sendMode === 'now') {
-        // Trigger the send edge function
         await supabase.functions.invoke('newsletter-template-send', {
           body: {
             template_id: templateId,
-            agent_id: user.id,
+            agent_id: effectiveAgentId,
             subject,
             sender_name: senderName,
             recipient_filter: filter,
@@ -179,7 +182,7 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName }: S
             <Select value={recipientFilter} onValueChange={(v: 'all' | 'tag') => setRecipientFilter(v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All my contacts (with email)</SelectItem>
+                <SelectItem value="all">All contacts (with email)</SelectItem>
                 <SelectItem value="tag">Filter by tag</SelectItem>
               </SelectContent>
             </Select>

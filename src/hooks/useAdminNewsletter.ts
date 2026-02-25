@@ -85,11 +85,15 @@ export function useAdminNewsletter() {
     },
   });
 
-  // Fetch contact counts per agent
+  // Fetch contact counts per agent — only contacts WITH email (sendable)
   const { data: contactCounts = {} } = useQuery({
-    queryKey: ['agent-contact-counts'],
+    queryKey: ['agent-contact-counts-email'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('contacts').select('agent_id');
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('agent_id')
+        .not('email', 'is', null)
+        .neq('email', '');
       if (error) throw error;
       const counts: Record<string, number> = {};
       data?.forEach((c) => { counts[c.agent_id] = (counts[c.agent_id] || 0) + 1; });
@@ -127,7 +131,6 @@ export function useAdminNewsletter() {
 
       const rows = (data || []) as AdminCampaign[];
 
-      // Resolve agent names
       const creatorIds = [...new Set(rows.map(c => c.created_by).filter(Boolean))] as string[];
       if (creatorIds.length > 0) {
         const { data: profiles } = await supabase
@@ -182,6 +185,44 @@ export function useAdminNewsletter() {
     },
   });
 
+  // Delete template mutation
+  const deleteTemplateMutation = useMutation({
+    mutationFn: async (templateId: string) => {
+      const { error } = await supabase.from('newsletter_templates').delete().eq('id', templateId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-all-templates'] });
+      toast({ title: "Template deleted" });
+    },
+    onError: (error) => {
+      toast({ title: "Error deleting template", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Duplicate template to another agent
+  const duplicateTemplateMutation = useMutation({
+    mutationFn: async ({ templateId, targetAgentId }: { templateId: string; targetAgentId: string }) => {
+      const source = allTemplates.find(t => t.id === templateId);
+      if (!source) throw new Error('Template not found');
+      const { error } = await supabase.from('newsletter_templates').insert({
+        agent_id: targetAgentId,
+        name: `${source.name} (Copy)`,
+        blocks_json: source.blocks_json as any,
+        global_styles: source.global_styles as any,
+        is_active: true,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-all-templates'] });
+      toast({ title: "Template copied" });
+    },
+    onError: (error) => {
+      toast({ title: "Error copying template", description: error.message, variant: "destructive" });
+    },
+  });
+
   return {
     agents: agentsWithCounts,
     settings,
@@ -190,5 +231,7 @@ export function useAdminNewsletter() {
     isLoading: agentsLoading || settingsLoading || templatesLoading || campaignsLoading,
     updateSettings: updateSettingsMutation.mutate,
     isUpdating: updateSettingsMutation.isPending,
+    deleteTemplate: deleteTemplateMutation.mutate,
+    duplicateTemplate: duplicateTemplateMutation.mutate,
   };
 }
