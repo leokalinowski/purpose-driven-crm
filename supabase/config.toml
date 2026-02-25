@@ -137,3 +137,6 @@ verify_jwt = false
 
 [functions.newsletter-template-send]
 verify_jwt = false
+
+[functions.generate-ai-newsletter]
+verify_jwt = false
