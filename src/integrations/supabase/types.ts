@@ -890,6 +890,7 @@ export type Database = {
       email_logs: {
         Row: {
           agent_id: string | null
+          campaign_id: string | null
           created_at: string
           email_type: string
           error_message: string | null
@@ -906,6 +907,7 @@ export type Database = {
         }
         Insert: {
           agent_id?: string | null
+          campaign_id?: string | null
           created_at?: string
           email_type: string
           error_message?: string | null
@@ -922,6 +924,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string | null
+          campaign_id?: string | null
           created_at?: string
           email_type?: string
           error_message?: string | null
@@ -943,6 +946,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "email_logs_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "newsletter_campaigns"
+            referencedColumns: ["id"]
           },
         ]
       }
