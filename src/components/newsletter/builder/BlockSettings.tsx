@@ -25,6 +25,36 @@ const SOCIAL_PLATFORM_OPTIONS = [
   'facebook', 'instagram', 'linkedin', 'twitter', 'youtube', 'tiktok',
 ];
 
+const FONT_OPTIONS = [
+  { value: 'Georgia, serif', label: 'Georgia' },
+  { value: 'Arial, sans-serif', label: 'Arial' },
+  { value: 'Helvetica, sans-serif', label: 'Helvetica' },
+  { value: "'Times New Roman', serif", label: 'Times New Roman' },
+  { value: 'Verdana, sans-serif', label: 'Verdana' },
+  { value: "'Trebuchet MS', sans-serif", label: 'Trebuchet MS' },
+  { value: "'Courier New', monospace", label: 'Courier New' },
+  { value: "'Palatino Linotype', serif", label: 'Palatino' },
+  { value: 'Garamond, serif', label: 'Garamond' },
+  { value: 'Tahoma, sans-serif', label: 'Tahoma' },
+  { value: "'Lucida Sans', sans-serif", label: 'Lucida Sans' },
+  { value: "'Book Antiqua', serif", label: 'Book Antiqua' },
+];
+
+function FontFamilySelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {FONT_OPTIONS.map((f) => (
+          <SelectItem key={f.value} value={f.value}>
+            <span style={{ fontFamily: f.value }}>{f.label}</span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalStyles }: BlockSettingsProps) {
   if (!block) {
     return <GlobalStylesEditor styles={globalStyles} onUpdate={onUpdateGlobalStyles} />;
@@ -45,7 +75,7 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
           </SettingGroup>
           <AlignSetting value={p.align} onChange={(v) => onUpdate({ align: v })} />
           <ColorSetting label="Color" value={p.color} onChange={(v) => onUpdate({ color: v })} />
-          <SettingGroup label="Font Family"><Input value={p.fontFamily} onChange={(e) => onUpdate({ fontFamily: e.target.value })} /></SettingGroup>
+          <SettingGroup label="Font Family"><FontFamilySelect value={p.fontFamily} onChange={(v) => onUpdate({ fontFamily: v })} /></SettingGroup>
         </div>
       );
     case 'text':
@@ -54,6 +84,7 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
           <SettingGroup label="Content"><Textarea value={p.html} onChange={(e) => onUpdate({ html: e.target.value })} rows={6} /></SettingGroup>
           <AlignSetting value={p.align} onChange={(v) => onUpdate({ align: v })} />
           <ColorSetting label="Color" value={p.color} onChange={(v) => onUpdate({ color: v })} />
+          <SettingGroup label="Font Family"><FontFamilySelect value={p.fontFamily || 'Georgia, serif'} onChange={(v) => onUpdate({ fontFamily: v })} /></SettingGroup>
           <SettingGroup label="Font Size">
             <div className="flex items-center gap-3">
               <Slider value={[p.fontSize]} min={12} max={24} step={1} onValueChange={([v]) => onUpdate({ fontSize: v })} className="flex-1" />
@@ -396,16 +427,7 @@ function GlobalStylesEditor({ styles, onUpdate }: { styles?: GlobalStyles; onUpd
         </div>
       </SettingGroup>
       <SettingGroup label="Font Family">
-        <Select value={styles.fontFamily} onValueChange={(v) => onUpdate({ fontFamily: v })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Georgia, serif">Georgia</SelectItem>
-            <SelectItem value="Arial, sans-serif">Arial</SelectItem>
-            <SelectItem value="Helvetica, sans-serif">Helvetica</SelectItem>
-            <SelectItem value="'Times New Roman', serif">Times New Roman</SelectItem>
-            <SelectItem value="Verdana, sans-serif">Verdana</SelectItem>
-          </SelectContent>
-        </Select>
+        <FontFamilySelect value={styles.fontFamily} onChange={(v) => onUpdate({ fontFamily: v })} />
       </SettingGroup>
       <ColorSetting label="Body Text Color" value={styles.bodyColor} onChange={(v) => onUpdate({ bodyColor: v })} />
     </div>
