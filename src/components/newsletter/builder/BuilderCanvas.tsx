@@ -69,6 +69,10 @@ export function BuilderCanvas({ blocks, selectedBlockId, onSelectBlock, onUpdate
     onUpdateBlocks(blocks.map(b => b.id === id ? { ...b, props: { ...b.props, ...props } } : b));
   }, [blocks, onUpdateBlocks]);
 
+  const updateBlockChildren = useCallback((id: string, children: NewsletterBlock[][]) => {
+    onUpdateBlocks(blocks.map(b => b.id === id ? { ...b, children } : b));
+  }, [blocks, onUpdateBlocks]);
+
   return (
     <div
       ref={drop}
@@ -93,6 +97,7 @@ export function BuilderCanvas({ blocks, selectedBlockId, onSelectBlock, onUpdate
               onDuplicate={() => duplicateBlock(block.id)}
               onMove={moveBlock}
               onUpdate={(props) => updateBlock(block.id, props)}
+              onUpdateChildren={(children) => updateBlockChildren(block.id, children)}
               totalBlocks={blocks.length}
             />
           ))}

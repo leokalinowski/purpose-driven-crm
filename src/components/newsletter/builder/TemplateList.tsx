@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useNewsletterTemplates } from '@/hooks/useNewsletterTemplates';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import {
   AlertDialog,
@@ -20,30 +21,49 @@ import {
 export function TemplateList() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
   const { templates, isLoading, saveTemplate, deleteTemplate, isSaving } = useNewsletterTemplates();
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const handleCreate = async () => {
-    if (!user) return;
-    const result = await saveTemplate({
-      agent_id: user.id,
-      name: 'Untitled Template',
-      blocks_json: [],
-      global_styles: {} as any,
-    });
-    if (result?.id) {
-      navigate(`/newsletter-builder/${result.id}`);
+    if (!user) {
+      toast({ title: 'Please log in', description: 'You need to be signed in to create templates.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const result = await saveTemplate({
+        agent_id: user.id,
+        name: 'Untitled Template',
+        blocks_json: [],
+        global_styles: {} as any,
+      });
+      if (result?.id) {
+        navigate(`/newsletter-builder/${result.id}`);
+      }
+    } catch (err: any) {
+      // saveTemplate already shows error toast via mutation
+      // Fallback: open builder without saved template
+      navigate('/newsletter-builder');
     }
   };
 
   const handleDuplicate = async (template: typeof templates[0]) => {
-    if (!user) return;
+    if (!user) {
+      toast({ title: 'Please log in', description: 'You need to be signed in to duplicate templates.', variant: 'destructive' });
+      return;
+    }
     await saveTemplate({
       agent_id: user.id,
       name: `${template.name} (Copy)`,
       blocks_json: template.blocks_json,
       global_styles: template.global_styles,
     });
+  };
+
+  const handleDelete = (id: string) => {
+    deleteTemplate(id);
+    setDeleteId(null);
+    toast({ title: 'Template deleted' });
   };
 
   if (isLoading) {
@@ -123,7 +143,7 @@ export function TemplateList() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { if (deleteId) { deleteTemplate(deleteId); setDeleteId(null); } }}>
+            <AlertDialogAction onClick={() => { if (deleteId) handleDelete(deleteId); }}>
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
