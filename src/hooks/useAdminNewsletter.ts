@@ -10,6 +10,7 @@ export interface AgentProfile {
   last_name: string | null;
   email: string | null;
   contact_count?: number;
+  email_contact_count?: number;
   template_count?: number;
   last_campaign?: {
     campaign_name: string;
@@ -74,24 +75,33 @@ export function useAdminNewsletter() {
     },
   });
 
-  // Fetch accurate contact counts per agent using server-side count (no rows downloaded)
+  // Fetch total + email contact counts per agent
   const { data: contactCounts = {} } = useQuery({
-    queryKey: ['agent-contact-counts-email', agents.map(a => a.user_id)],
+    queryKey: ['agent-contact-counts-all', agents.map(a => a.user_id)],
     queryFn: async () => {
-      const counts: Record<string, number> = {};
+      const counts: Record<string, { total: number; withEmail: number }> = {};
       const results = await Promise.all(
         agents.map(async (agent) => {
-          const { count, error } = await supabase
-            .from('contacts')
-            .select('id', { count: 'exact', head: true })
-            .eq('agent_id', agent.user_id)
-            .not('email', 'is', null)
-            .neq('email', '');
-          if (error) return { agentId: agent.user_id, count: 0 };
-          return { agentId: agent.user_id, count: count || 0 };
+          const [totalRes, emailRes] = await Promise.all([
+            supabase
+              .from('contacts')
+              .select('id', { count: 'exact', head: true })
+              .eq('agent_id', agent.user_id),
+            supabase
+              .from('contacts')
+              .select('id', { count: 'exact', head: true })
+              .eq('agent_id', agent.user_id)
+              .not('email', 'is', null)
+              .neq('email', ''),
+          ]);
+          return {
+            agentId: agent.user_id,
+            total: totalRes.count || 0,
+            withEmail: emailRes.count || 0,
+          };
         })
       );
-      results.forEach(r => { counts[r.agentId] = r.count; });
+      results.forEach(r => { counts[r.agentId] = { total: r.total, withEmail: r.withEmail }; });
       return counts;
     },
     enabled: agents.length > 0,
@@ -187,7 +197,8 @@ export function useAdminNewsletter() {
   // Merge contact counts + template counts + last campaign with agents
   const agentsWithCounts: AgentProfile[] = agents.map(agent => ({
     ...agent,
-    contact_count: contactCounts[agent.user_id] || 0,
+    contact_count: contactCounts[agent.user_id]?.total || 0,
+    email_contact_count: contactCounts[agent.user_id]?.withEmail || 0,
     template_count: templateCounts[agent.user_id] || 0,
     last_campaign: lastCampaigns[agent.user_id] || null,
   }));
