@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNewsletterAnalytics, DateRange, CampaignBreakdown } from "@/hooks/useNewsletterAnalytics";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -62,8 +64,12 @@ function exportCampaignsToCSV(campaigns: any[]) {
 }
 
 export function NewsletterAnalyticsDashboard() {
+  const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const [dateRange, setDateRange] = useState<DateRange>("all");
-  const { campaigns, emailStats, metrics, monthlySeries, campaignBreakdowns, isLoading, error, refetch } = useNewsletterAnalytics(dateRange);
+  // Non-admin users only see their own campaigns; admins see all
+  const agentScope = isAdmin ? undefined : user?.id;
+  const { campaigns, emailStats, metrics, monthlySeries, campaignBreakdowns, isLoading, error, refetch } = useNewsletterAnalytics(dateRange, agentScope);
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
 
   return (

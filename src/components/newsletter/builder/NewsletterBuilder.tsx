@@ -209,7 +209,7 @@ export function NewsletterBuilder() {
       <div className="h-screen flex flex-col bg-background">
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-card shadow-sm">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/newsletter')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <Input
@@ -295,6 +295,7 @@ export function NewsletterBuilder() {
         onClose={() => setShowSendPanel(false)}
         templateId={currentId}
         templateName={templateName}
+        agentId={templateAgentId}
       />
     </DndProvider>
   );
