@@ -1,76 +1,67 @@
 
 
-# Plan: Admin Newsletter Management Page Cleanup and Agent Page Template Layout
+# Plan: Admin Newsletter Template Management and Agent-Aware Sending
 
-## Summary of Changes
+## Problems Identified
 
-There are 5 distinct tasks:
+### 1. Admins cannot create templates for agents
+The "New Template" action does not exist on the admin page. The `TemplateList` and `NewsletterBuilder` both hardcode `user.id` as `agent_id`, so any template an admin creates or edits gets assigned to the admin's own account, not the intended agent.
 
-1. **Apply the card-gallery template layout to the Agent Newsletter page** (the `/newsletter` Builder tab)
-2. **Fix the Edit button** in `AdminNewsletterTemplates` to navigate within the app instead of opening a new tab
-3. **Delete all legacy `monthly_runs` data** and remove legacy run merging from the hook
-4. **Review and fix Agent Settings**
-5. **Delete the Market Data tab**
+### 2. Admins cannot copy/duplicate/delete templates
+`AdminNewsletterTemplates` only has Edit and Send buttons. No duplicate-to-agent or delete actions exist.
 
----
+### 3. SendSchedulePanel sends as the logged-in user, not the template's agent
+`SendSchedulePanel` hardcodes `user.id` for `agent_id` in all send calls (lines 57, 78-79, 119, 131-132). It also loads contacts and profile for `user.id`. When an admin clicks "Send" on an agent's template, it sends from the admin's account with the admin's contacts (likely 0).
 
-## 1. Agent Newsletter Page -- Match Admin Template Card Layout
+### 4. NewsletterBuilder overwrites agent_id on save
+`NewsletterBuilder` line 168 saves with `agent_id: user.id`. When an admin edits an agent's template via `/newsletter-builder/{id}`, it reassigns the template to the admin on save.
 
-The agent's `/newsletter` Builder tab currently uses `TemplateList` which renders an inline `<iframe>` thumbnail. The admin Templates tab uses a simpler card with a static `thumbnail_url` image or a `FileText` icon fallback (the screenshot the user shared and likes).
-
-**Approach**: Update `AdminNewsletterTemplates.tsx` to use the same `TemplateThumbnail` iframe-based preview that `TemplateList` uses (rendering actual block content), so both pages show real template previews. This gives both pages a consistent, rich card layout. The admin version already has the agent name badge and filter -- that stays.
-
-Specifically:
-- Import `renderBlocksToHtml` and create the `TemplateThumbnail` component (same as in `TemplateList`) inside `AdminNewsletterTemplates`
-- Replace the current `thumbnail_url` / `FileText` fallback with the iframe thumbnail rendering from `blocks_json` + `global_styles`
-- Both pages now show the same live-rendered email preview thumbnails
-
-## 2. Fix Edit Button -- Navigate Within App
-
-In `AdminNewsletterTemplates.tsx` line 84, the Edit button does `window.open('/newsletter?template=...')` which opens a new browser tab. This should use React Router navigation instead.
-
-**Fix**: Import `useNavigate` from `react-router-dom`, and change the onClick to `navigate(`/newsletter-builder/${t.id}`)` -- same pattern used in the agent's `TemplateList`.
-
-## 3. Clean Up Campaign History -- Delete Legacy Runs
-
-There are 16 rows in `monthly_runs` and 1 real campaign in `newsletter_campaigns`. The user wants to start fresh.
-
-**Actions**:
-- Run SQL: `DELETE FROM monthly_runs;` to clear all legacy data
-- Run SQL: `DELETE FROM newsletter_campaigns;` to clear the single old campaign
-- In `useAdminNewsletter.ts`: Remove the `monthly_runs` query entirely (lines 150-161), remove the legacy run merging logic (lines 184-202), remove the `runsLoading` from the loading state
-- In `AdminNewsletterCampaigns.tsx`: Remove the `Legacy` badge logic and `source` column since everything is now template-based
-- Update the `AdminCampaign` interface to drop the `source` field
-
-## 4. Fix Agent Settings
-
-The Agent Settings tab currently works but has UX issues:
-- The `newsletter_settings` table only has 2 rows, so agents without a pre-existing row get defaults from the `getAgentSettings` fallback, but the **upsert works correctly** (it creates on first save). This is actually fine functionally.
-- However, the settings concept is tied to the **old** `newsletter-send` monthly pipeline which auto-generates emails from market data CSVs. Since we've moved to the template builder, these schedule settings (day of month, hour) are no longer meaningful in the same way.
-
-**Fix**: Reframe the Agent Settings tab to be useful for the new system:
-- Keep the Enable/Disable toggle per agent (useful for admin to control who can send newsletters)
-- Remove the "Day of Month" and "Hour (24h)" schedule fields since they were for the old auto-send pipeline. The new system uses the `SendSchedulePanel` for per-send scheduling.
-- Show agent info: name, email, contact count, template count (already there)
-- Add a "Last Sent" indicator by querying the most recent `newsletter_campaigns` entry per agent
-
-## 5. Delete Market Data Tab
-
-Remove the Market Data tab entirely from `AdminNewsletter.tsx`:
-- Remove the tab trigger and content for `market-data`
-- Remove imports for `CSVUploadManager` and `AdminNewsletterPreview`
-- Change the tabs grid from `grid-cols-4` to `grid-cols-3`
-- Remove `Database` icon import
+### 5. Agent Settings contact count may be correct but needs verification
+The hook fetches all contacts and counts by `agent_id`. This appears correct. The "enabled" toggle works via upsert. The issue the user sees may be that the contact count shows 0 for agents who have contacts -- need to verify the query isn't filtered by RLS (admin role should see all contacts).
 
 ---
 
-## Files to Modify
+## Plan
+
+### A. Add "Create Template for Agent" to AdminNewsletterTemplates
+
+Add a "New Template" button with an agent selector dropdown. When admin picks an agent and clicks create, it calls `saveTemplate` with `agent_id` set to the chosen agent's ID, then navigates to `/newsletter-builder/{newId}`.
+
+### B. Add Copy-to-Agent and Delete actions to template cards
+
+Each template card gets:
+- **Copy to Agent** button: opens a small dialog with agent selector, duplicates the template with the target agent's `agent_id`
+- **Delete** button with confirmation dialog
+
+Add delete and duplicate mutations to `useAdminNewsletter.ts`.
+
+### C. Make SendSchedulePanel accept an `agentId` prop
+
+| Current | New |
+|---------|-----|
+| `agent_id: user.id` everywhere | `agent_id: props.agentId \|\| user.id` |
+| Loads contacts for `user.id` | Loads contacts for effective agent ID |
+| Loads profile for `user.id` | Loads profile for effective agent ID |
+
+The `AdminNewsletterTemplates` component already knows `sendTemplate.agent_id` -- pass it through as a prop.
+
+### D. Make NewsletterBuilder preserve the template's agent_id
+
+When loading an existing template, store its `agent_id` in state. On save, use the stored `agent_id` instead of `user.id`. For new templates (no templateId), continue using `user.id`.
+
+### E. Fix contact count query to use explicit count
+
+The current approach fetches ALL contact rows just to count them. Replace with a more targeted approach: query `contacts` grouped by agent_id using `.select('agent_id')` (already doing this). The RLS policy allows admins to see all contacts, so this should work. Add explicit `email` not-null filter since newsletters only go to contacts with email addresses -- this gives the admin an accurate "sendable contacts" count.
+
+---
+
+## Files to Change
 
 | File | Changes |
 |------|---------|
-| `src/components/admin/AdminNewsletterTemplates.tsx` | Add iframe thumbnail rendering from `renderBlocksToHtml`; fix Edit button to use `navigate()` instead of `window.open()` |
-| `src/pages/AdminNewsletter.tsx` | Remove Market Data tab and its imports; change tabs to 3-col; simplify Agent Settings to remove schedule fields |
-| `src/hooks/useAdminNewsletter.ts` | Remove `monthly_runs` query and legacy merging; drop `source` from `AdminCampaign` |
-| `src/components/admin/AdminNewsletterCampaigns.tsx` | Remove `source`/`Legacy` badge references |
-| Database | `DELETE FROM monthly_runs;` and `DELETE FROM newsletter_campaigns;` |
+| `src/components/admin/AdminNewsletterTemplates.tsx` | Add "New Template" button with agent picker; add Copy-to-Agent and Delete actions on each card; add confirmation dialogs |
+| `src/components/newsletter/builder/SendSchedulePanel.tsx` | Add optional `agentId` prop; use it for contact loading, profile loading, and send calls |
+| `src/components/newsletter/builder/NewsletterBuilder.tsx` | Store loaded template's `agent_id`; use it on save instead of `user.id` |
+| `src/hooks/useAdminNewsletter.ts` | Add delete template mutation; add duplicate template mutation; filter contact counts to only contacts with email |
+| `src/pages/AdminNewsletter.tsx` | Pass delete/duplicate handlers to AdminNewsletterTemplates |
 
