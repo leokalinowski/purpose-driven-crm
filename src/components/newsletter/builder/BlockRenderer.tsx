@@ -102,15 +102,8 @@ function ColumnDropZone({ children, columnIndex, onAddBlock }: { children: Newsl
   );
 }
 
-const SAMPLE_METRICS = [
-  { key: 'median_sale_price', label: 'Median Sale Price', value: '$425,000' },
-  { key: 'active_listings', label: 'Active Listings', value: '142' },
-  { key: 'days_on_market', label: 'Days on Market', value: '28' },
-  { key: 'price_per_sqft', label: 'Price / Sq Ft', value: '$215' },
-  { key: 'inventory', label: 'Inventory', value: '3.2 mo' },
-  { key: 'new_listings', label: 'New Listings', value: '67' },
-  { key: 'sold_listings', label: 'Sold Listings', value: '54' },
-];
+
+
 
 const SOCIAL_PLATFORMS: Record<string, string> = {
   facebook: '📘', instagram: '📷', linkedin: '💼', twitter: '🐦', youtube: '▶️', tiktok: '🎵',
@@ -171,37 +164,8 @@ function BlockPreview({ block, onUpdateChildren }: { block: NewsletterBlock; onU
       return <div className="flex items-center justify-center" style={{ height: block.props.height }}>
         <span className="text-xs text-muted-foreground">{block.props.height}px</span>
       </div>;
-    case 'market_data': {
-      const selectedMetrics = block.props.metrics || ['median_sale_price', 'active_listings', 'days_on_market', 'price_per_sqft'];
-      const filtered = SAMPLE_METRICS.filter(m => selectedMetrics.includes(m.key));
-      return (
-        <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-          <p className="font-semibold text-blue-800 dark:text-blue-200 text-sm mb-3">📊 {block.props.headerText || 'Market Update'}</p>
-          {block.props.style === 'table' ? (
-            <table className="w-full text-xs">
-              <tbody>
-                {filtered.map(m => (
-                  <tr key={m.key} className="border-b border-blue-100 dark:border-blue-900">
-                    <td className="py-1 text-blue-700 dark:text-blue-300">{m.label}</td>
-                    <td className="py-1 text-right font-semibold text-blue-900 dark:text-blue-100">{m.value}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className={`grid ${block.props.style === 'minimal' ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'} gap-2`}>
-              {filtered.map(m => (
-                <div key={m.key} className={`${block.props.style === 'minimal' ? 'text-center py-1' : 'bg-white dark:bg-blue-900/40 rounded p-2 text-center'}`}>
-                  <p className="text-xs text-blue-600 dark:text-blue-300">{m.label}</p>
-                  <p className="font-bold text-sm text-blue-900 dark:text-blue-100">{m.value}</p>
-                </div>
-              ))}
-            </div>
-          )}
-          <p className="text-xs text-blue-500 dark:text-blue-400 mt-2 italic">Sample data — real stats populated per ZIP at send time</p>
-        </div>
-      );
-    }
+
+
     case 'listings': {
       const listings = block.props.listings || [];
       const isGrid = block.props.style === 'grid';

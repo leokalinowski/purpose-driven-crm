@@ -6,7 +6,7 @@ export type BlockType =
   | 'divider'
   | 'spacer'
   | 'columns'
-  | 'market_data'
+  
   | 'listings'
   | 'agent_bio'
   | 'social_icons'
@@ -62,11 +62,8 @@ export interface ColumnsProps {
   gap: number;
 }
 
-export interface MarketDataProps {
-  style: 'cards' | 'table' | 'minimal';
-  metrics: string[];
-  headerText: string;
-}
+
+
 
 export interface ListingItem {
   id: string;
@@ -112,7 +109,7 @@ export type BlockProps =
   | DividerProps
   | SpacerProps
   | ColumnsProps
-  | MarketDataProps
+  
   | ListingsProps
   | AgentBioProps
   | SocialIconsProps
@@ -147,7 +144,7 @@ export const BLOCK_DEFAULTS: Record<BlockType, Record<string, any>> = {
   divider: { color: '#e5e7eb', thickness: 1, style: 'solid', width: '100%' },
   spacer: { height: 24 },
   columns: { columns: 2, gap: 16 },
-  market_data: { style: 'cards', metrics: ['median_sale_price', 'active_listings', 'days_on_market', 'price_per_sqft'], headerText: 'Market Update for {{zip_code}}' },
+  
   listings: { style: 'grid', listings: [] },
   agent_bio: { layout: 'horizontal', showHeadshot: true, showLogo: true, showPhone: true, showEmail: true },
   social_icons: { align: 'center', iconSize: 32, links: [] },

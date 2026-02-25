@@ -36,12 +36,8 @@ function renderSpacer(props: Record<string, any>): string {
   return `<div style="height:${props.height || 24}px;line-height:${props.height || 24}px;font-size:1px;">&nbsp;</div>`;
 }
 
-function renderMarketData(props: Record<string, any>): string {
-  return `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:20px;">
-    <h3 style="margin:0 0 12px;color:#0369a1;font-family:Georgia,serif;font-size:20px;">${escapeHtml(props.headerText || 'Market Update')}</h3>
-    <p style="color:#64748b;font-size:14px;margin:0;">Dynamic market data will appear here based on recipient ZIP code.</p>
-  </div>`;
-}
+
+
 
 function renderAgentBio(props: Record<string, any>): string {
   return `<div style="background:#f8fafc;border-radius:8px;padding:20px;text-align:center;">
@@ -118,7 +114,7 @@ function renderBlock(block: NewsletterBlock, globalStyles: GlobalStyles): string
     case 'button': content = renderButton(block.props); break;
     case 'divider': content = renderDivider(block.props); break;
     case 'spacer': content = renderSpacer(block.props); break;
-    case 'market_data': content = renderMarketData(block.props); break;
+    
     case 'agent_bio': content = renderAgentBio(block.props); break;
     case 'listings': content = renderListings(block.props); break;
     case 'social_icons': content = renderSocialIcons(block.props); break;
