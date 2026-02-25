@@ -22,16 +22,19 @@ import {
 function TemplateThumbnail({ blocks, globalStyles }: { blocks: any[]; globalStyles: any }) {
   const html = useMemo(() => renderBlocksToHtml(blocks || [], globalStyles), [blocks, globalStyles]);
   return (
-    <div className="relative w-full h-36 overflow-hidden rounded border bg-muted mb-3">
+    <div className="relative w-full h-48 overflow-hidden bg-muted flex items-center justify-center">
       <iframe
         srcDoc={html}
         title="Preview"
-        className="absolute top-0 left-0 border-0 pointer-events-none"
+        className="border-0 pointer-events-none absolute"
         style={{
           width: '640px',
           height: '900px',
-          transform: 'scale(0.28)',
-          transformOrigin: 'top left',
+          transform: 'scale(0.35)',
+          transformOrigin: 'top center',
+          left: '50%',
+          marginLeft: '-320px',
+          top: 0,
         }}
         sandbox="allow-same-origin"
         tabIndex={-1}
@@ -99,7 +102,7 @@ export function TemplateList() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Email Templates</h2>
@@ -123,31 +126,27 @@ export function TemplateList() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {templates.map(t => (
-            <Card key={t.id} className="group hover:shadow-md transition-shadow">
-              <CardContent className="pt-6">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-medium truncate">{t.name}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Updated {format(new Date(t.updated_at), 'MMM d, yyyy')}
-                    </p>
-                  </div>
-                </div>
-                <TemplateThumbnail blocks={t.blocks_json} globalStyles={t.global_styles} />
-                <div className="flex items-center gap-1">
-                  <Button size="sm" variant="default" className="flex-1" onClick={() => navigate(`/newsletter-builder/${t.id}`)}>
-                    <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleDuplicate(t)} disabled={isSaving}>
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(t.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </CardContent>
+            <Card key={t.id} className="group hover:shadow-md transition-shadow overflow-hidden">
+              <TemplateThumbnail blocks={t.blocks_json} globalStyles={t.global_styles} />
+              <div className="px-4 py-3">
+                <h3 className="font-medium truncate">{t.name}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Updated {format(new Date(t.updated_at), 'MMM d, yyyy')}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 px-4 py-3 border-t border-border">
+                <Button size="sm" variant="default" className="flex-1" onClick={() => navigate(`/newsletter-builder/${t.id}`)}>
+                  <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => handleDuplicate(t)} disabled={isSaving}>
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(t.id)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </Card>
           ))}
         </div>
