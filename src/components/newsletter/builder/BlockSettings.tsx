@@ -13,11 +13,17 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 
+export interface BrandColors {
+  primary: string | null;
+  secondary: string | null;
+}
+
 interface BlockSettingsProps {
   block: NewsletterBlock | null;
   onUpdate: (props: Record<string, any>) => void;
   globalStyles?: GlobalStyles;
   onUpdateGlobalStyles?: (styles: Partial<GlobalStyles>) => void;
+  brandColors?: BrandColors;
 }
 
 
@@ -55,7 +61,7 @@ function FontFamilySelect({ value, onChange }: { value: string; onChange: (v: st
   );
 }
 
-export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalStyles }: BlockSettingsProps) {
+export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalStyles, brandColors }: BlockSettingsProps) {
   if (!block) {
     return <GlobalStylesEditor styles={globalStyles} onUpdate={onUpdateGlobalStyles} />;
   }
@@ -74,7 +80,7 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
             </Select>
           </SettingGroup>
           <AlignSetting value={p.align} onChange={(v) => onUpdate({ align: v })} />
-          <ColorSetting label="Color" value={p.color} onChange={(v) => onUpdate({ color: v })} />
+          <ColorSetting label="Color" value={p.color} onChange={(v) => onUpdate({ color: v })} brandColors={brandColors} />
           <SettingGroup label="Font Family"><FontFamilySelect value={p.fontFamily} onChange={(v) => onUpdate({ fontFamily: v })} /></SettingGroup>
         </div>
       );
@@ -83,7 +89,7 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
         <div className="space-y-4">
           <SettingGroup label="Content"><Textarea value={p.html} onChange={(e) => onUpdate({ html: e.target.value })} rows={6} /></SettingGroup>
           <AlignSetting value={p.align} onChange={(v) => onUpdate({ align: v })} />
-          <ColorSetting label="Color" value={p.color} onChange={(v) => onUpdate({ color: v })} />
+          <ColorSetting label="Color" value={p.color} onChange={(v) => onUpdate({ color: v })} brandColors={brandColors} />
           <SettingGroup label="Font Family"><FontFamilySelect value={p.fontFamily || 'Georgia, serif'} onChange={(v) => onUpdate({ fontFamily: v })} /></SettingGroup>
           <SettingGroup label="Font Size">
             <div className="flex items-center gap-3">
@@ -111,8 +117,8 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
         <div className="space-y-4">
           <SettingGroup label="Text"><Input value={p.text} onChange={(e) => onUpdate({ text: e.target.value })} /></SettingGroup>
           <SettingGroup label="URL"><Input value={p.url} onChange={(e) => onUpdate({ url: e.target.value })} /></SettingGroup>
-          <ColorSetting label="Background" value={p.backgroundColor} onChange={(v) => onUpdate({ backgroundColor: v })} />
-          <ColorSetting label="Text Color" value={p.textColor} onChange={(v) => onUpdate({ textColor: v })} />
+          <ColorSetting label="Background" value={p.backgroundColor} onChange={(v) => onUpdate({ backgroundColor: v })} brandColors={brandColors} />
+          <ColorSetting label="Text Color" value={p.textColor} onChange={(v) => onUpdate({ textColor: v })} brandColors={brandColors} />
           <AlignSetting value={p.align} onChange={(v) => onUpdate({ align: v })} />
           <SettingGroup label="Border Radius">
             <Slider value={[p.borderRadius]} min={0} max={24} step={1} onValueChange={([v]) => onUpdate({ borderRadius: v })} />
@@ -188,10 +194,25 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
               </SelectContent>
             </Select>
           </SettingGroup>
-          {[['showHeadshot', 'Show Headshot'], ['showLogo', 'Show Logo'], ['showPhone', 'Show Phone'], ['showEmail', 'Show Email']].map(([key, label]) => (
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Profile</p>
+          {[['showHeadshot', 'Headshot'], ['showLogo', 'Brokerage Logo'], ['showPhone', 'Phone'], ['showEmail', 'Email']].map(([key, label]) => (
             <div key={key} className="flex items-center justify-between">
               <Label className="text-xs">{label}</Label>
-              <Switch checked={p[key]} onCheckedChange={(v) => onUpdate({ [key]: v })} />
+              <Switch checked={p[key] !== false} onCheckedChange={(v) => onUpdate({ [key]: v })} />
+            </div>
+          ))}
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-2">Compliance</p>
+          {[
+            ['showLicense', 'License Number'],
+            ['showBrokerage', 'Brokerage Name'],
+            ['showOfficeAddress', 'Office Address'],
+            ['showOfficePhone', 'Office Phone'],
+            ['showWebsite', 'Website'],
+            ['showEqualHousing', 'Equal Housing Opportunity'],
+          ].map(([key, label]) => (
+            <div key={key} className="flex items-center justify-between">
+              <Label className="text-xs">{label}</Label>
+              <Switch checked={p[key] !== false} onCheckedChange={(v) => onUpdate({ [key]: v })} />
             </div>
           ))}
         </div>
@@ -456,13 +477,29 @@ function AlignSetting({ value, onChange }: { value: string; onChange: (v: string
   );
 }
 
-function ColorSetting({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function ColorSetting({ label, value, onChange, brandColors }: { label: string; value: string; onChange: (v: string) => void; brandColors?: BrandColors }) {
   return (
     <SettingGroup label={label}>
       <div className="flex items-center gap-2">
         <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="w-8 h-8 rounded border cursor-pointer" />
         <Input value={value} onChange={(e) => onChange(e.target.value)} className="flex-1" />
       </div>
+      {brandColors && (brandColors.primary || brandColors.secondary) && (
+        <div className="flex gap-1.5 mt-1">
+          {brandColors.primary && (
+            <button onClick={() => onChange(brandColors.primary!)} className="flex items-center gap-1 text-xs border rounded-full px-2 py-0.5 hover:bg-accent transition-colors">
+              <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: brandColors.primary }} />
+              Primary
+            </button>
+          )}
+          {brandColors.secondary && (
+            <button onClick={() => onChange(brandColors.secondary!)} className="flex items-center gap-1 text-xs border rounded-full px-2 py-0.5 hover:bg-accent transition-colors">
+              <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: brandColors.secondary }} />
+              Secondary
+            </button>
+          )}
+        </div>
+      )}
     </SettingGroup>
   );
 }

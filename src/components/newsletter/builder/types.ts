@@ -90,6 +90,12 @@ export interface AgentBioProps {
   showLogo: boolean;
   showPhone: boolean;
   showEmail: boolean;
+  showLicense: boolean;
+  showBrokerage: boolean;
+  showOfficeAddress: boolean;
+  showOfficePhone: boolean;
+  showWebsite: boolean;
+  showEqualHousing: boolean;
 }
 
 export interface SocialIconsProps {
@@ -147,7 +153,7 @@ export const BLOCK_DEFAULTS: Record<BlockType, Record<string, any>> = {
   columns: { columns: 2, gap: 16 },
   
   listings: { style: 'grid', listings: [] },
-  agent_bio: { layout: 'horizontal', showHeadshot: true, showLogo: true, showPhone: true, showEmail: true },
+  agent_bio: { layout: 'horizontal', showHeadshot: true, showLogo: true, showPhone: true, showEmail: true, showLicense: true, showBrokerage: true, showOfficeAddress: true, showOfficePhone: true, showWebsite: true, showEqualHousing: true },
   social_icons: { align: 'center', iconSize: 32, links: [] },
   html_raw: { html: '' },
 };
