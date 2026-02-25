@@ -1,98 +1,36 @@
 
 
-# Fix Preview Placeholders, Listings Design, and Mobile Column Stacking
+# Global Font + Preview Rendering Fixes
 
-## Three Issues
+## Issue 1: Global Font
 
-### 1. Agent Bio Shows Raw Placeholders Instead of Real Data
+Currently every block hardcodes its own `font-family` inline (`Georgia, serif`). The global `fontFamily` is set on `<body>` but gets overridden by every block's inline style. This means changing the global font has no effect.
 
-**Problem**: `renderBlocksToHtml` outputs `{{agent_name}}`, `{{agent_license}}`, etc. as literal text. The `PreviewPanel` calls this same function, so the preview shows raw placeholders instead of the agent's actual data.
+**Fix**: Remove per-block `font-family` from inline styles in `renderBlocksToHtml.ts`. Instead, pass `globalStyles.fontFamily` into each render function and only apply it if the block has explicitly overridden it (different from global). Since the `<body>` already sets `font-family` from global styles, child elements will inherit it automatically. Also remove the `fontFamily` field from `HeadingProps`, `TextProps`, and the block defaults in `types.ts`, and remove the font family selector from `BlockSettings.tsx` for heading/text blocks.
 
-**Fix**: 
-- In `NewsletterBuilder.tsx`, fetch the agent's full profile from the `profiles` table (name, email, phone, office, license, brokerage, website) and `agent_marketing_settings` (headshot_url, logo_colored_url). Store as `agentProfile` state.
-- Pass `agentProfile` down to `PreviewPanel`.
-- Update `renderBlocksToHtml` to accept an optional `agentData` parameter. When provided, replace all `{{agent_*}}` placeholders with real values. If a field is empty/null, remove the entire line containing that placeholder (so empty fields don't show blank rows).
-- The `headshot` and `logo` placeholders become actual `<img>` tags when data is available.
+**Files**:
+- `renderBlocksToHtml.ts` — Remove hardcoded `font-family` from `renderHeading`, `renderText`, `renderButton`, `renderAgentBio`, `renderListings`. Let them inherit from body.
+- `types.ts` — Remove `fontFamily` from `HeadingProps`, `TextProps`, and from `BLOCK_DEFAULTS` for heading and text.
+- `BlockSettings.tsx` — Remove the font family input/select for heading and text blocks.
 
-**Data available from `profiles` table**: `first_name`, `last_name`, `email`, `phone_number`, `office_number`, `office_address`, `brokerage`, `license_number`, `state_licenses`, `website`, `team_name`.
+## Issue 2: Preview Doesn't Match Editor
 
-**Data from `agent_marketing_settings`**: `headshot_url`, `logo_colored_url`.
+Looking at the screenshots: the editor (image-64) shows the agent bio as a separate block below the 2-column layout. But the preview (images 65-66) shows agent bio content (name, email, equal housing) appearing inside the right column mixed with the listings block.
 
-### 2. Featured Listings Design Looks Unprofessional
+The root cause is likely that the `renderAgentBio` function outputs loose `{{agent_headshot}}` and `{{agent_logo}}` placeholders as raw text (not wrapped in tags). When `replaceAgentPlaceholders` runs, the regex `<p[^>]*>[^<]*{{agent_...}}[^<]*</p>` fails to match these because the headshot/logo placeholders aren't inside `<p>` tags — they're bare text inside a `<div>`. When they have no value, the fallback regex `[^\n]*\{\{agent_headshot\}\}[^\n]*` grabs everything on that line, which can accidentally eat adjacent HTML and break the structure.
 
-**Problem**: The listings block uses a bright green color scheme (`#f0fdf4` background, `#bbf7d0` borders, `#166534` text) with house emojis (🏠, 🏡). This looks playful rather than professional for a real estate newsletter.
+**Fix**: Wrap the headshot and logo placeholders in their own `<div>` tags so the removal regex works cleanly. Also ensure each placeholder line is self-contained.
 
-**Fix**: Redesign the listings block in `renderBlocksToHtml.ts` with a clean, professional style:
-- Remove emojis from the heading -- use plain text "Featured Listings"
-- Use neutral colors: white background, light gray borders (`#e5e7eb`), dark text (`#1a1a1a`)
-- Clean card design with subtle shadow effect via border
-- Price in a professional dark color, not green
-- Heading uses serif font (Georgia) for elegance
-- Apply the same visual update to the `BlockRenderer.tsx` canvas preview
+Additionally, the listings block heading "Featured Listings" should not appear when placed inside a column — it should only show the listing cards. The heading is redundant when the block is nested.
 
-### 3. Mobile Preview: Columns Don't Stack, Images Disappear
+**Files**:
+- `renderBlocksToHtml.ts` — Wrap `{{agent_headshot}}` and `{{agent_logo}}` in `<div>` tags. Update removal regex to target these `<div>` wrappers. Ensure the `replaceAgentPlaceholders` function cleanly removes empty placeholders without eating adjacent HTML.
 
-**Problem**: The `columns` block renders as `<table><tr><td>...</td><td>...</td></tr></table>` with fixed percentage widths. At 375px mobile width, the columns get squished -- images become tiny or invisible because they're constrained to ~45% of 375px minus padding.
-
-**Fix**: Add a `<style>` block with a `@media` query inside the email HTML output. At `max-width: 600px`, force each `<td>` in columns to `display: block; width: 100% !important;` so they stack vertically. This is standard email responsive design. The media query goes in the `<head>` of the HTML wrapper in `renderBlocksToHtml`.
-
-Add a CSS class to column `<td>` elements (e.g., `class="nl-col"`) and target it:
-```css
-@media only screen and (max-width: 600px) {
-  .nl-col { display: block !important; width: 100% !important; padding-right: 0 !important; }
-}
-```
-
-## Files to Modify
+## Summary of Changes
 
 | File | Changes |
 |---|---|
-| `renderBlocksToHtml.ts` | Add `agentData` param to replace placeholders with real values; redesign listings with neutral/professional colors; add responsive `<style>` in `<head>` for column stacking; add `class="nl-col"` to column `<td>` elements |
-| `NewsletterBuilder.tsx` | Fetch full agent profile from `profiles` + `agent_marketing_settings`; pass `agentProfile` to `PreviewPanel` |
-| `PreviewPanel.tsx` | Accept `agentData` prop; pass to `renderBlocksToHtml` |
-| `BlockRenderer.tsx` | Update listings canvas preview to match new professional design (remove emojis, neutral colors) |
-
-## Technical Details
-
-### Agent Data Interface
-
-```typescript
-interface AgentData {
-  name?: string;
-  email?: string;
-  phone?: string;
-  office_phone?: string;
-  office_address?: string;
-  brokerage?: string;
-  license?: string;
-  website?: string;
-  headshot_url?: string;
-  logo_url?: string;
-}
-```
-
-### Placeholder Replacement Logic
-
-After generating the full HTML, do a single pass replacing placeholders. For each placeholder, if the value is empty, remove the entire `<p>` element containing it:
-
-```typescript
-function replaceAgentPlaceholders(html: string, agent: AgentData): string {
-  const replacements: Record<string, string | undefined> = {
-    '{{agent_name}}': agent.name,
-    '{{agent_email}}': agent.email,
-    // ... etc
-  };
-  // For each placeholder: if value exists, replace. If not, remove the parent <p> tag.
-}
-```
-
-### Listings Redesign (Color Palette)
-
-- Background: `#ffffff` (white)
-- Border: `1px solid #e5e7eb`
-- Heading: `#1a1a1a`, Georgia serif, no emoji
-- Price: `#1a1a1a`, bold
-- Address text: `#4b5563`
-- Details (beds/baths): `#6b7280`
-- Card hover: subtle border `#d1d5db`
+| `renderBlocksToHtml.ts` | Remove per-block `font-family` inline styles (inherit from body). Fix agent bio placeholder wrapping so removal doesn't break HTML structure. |
+| `types.ts` | Remove `fontFamily` from `HeadingProps`, `TextProps`, and their defaults in `BLOCK_DEFAULTS`. |
+| `BlockSettings.tsx` | Remove font family selector from heading and text block settings. |
 
