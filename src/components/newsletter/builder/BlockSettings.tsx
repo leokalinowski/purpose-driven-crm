@@ -6,7 +6,7 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+
 import { Upload, Loader2, Plus, X, Link, Trash2 } from 'lucide-react';
 import { NewsletterBlock, GlobalStyles, ListingItem } from './types';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,15 +20,6 @@ interface BlockSettingsProps {
   onUpdateGlobalStyles?: (styles: Partial<GlobalStyles>) => void;
 }
 
-const AVAILABLE_METRICS = [
-  { key: 'median_sale_price', label: 'Median Sale Price' },
-  { key: 'active_listings', label: 'Active Listings' },
-  { key: 'days_on_market', label: 'Days on Market' },
-  { key: 'price_per_sqft', label: 'Price per Sq Ft' },
-  { key: 'inventory', label: 'Inventory (months)' },
-  { key: 'new_listings', label: 'New Listings' },
-  { key: 'sold_listings', label: 'Sold Listings' },
-];
 
 const SOCIAL_PLATFORM_OPTIONS = [
   'facebook', 'instagram', 'linkedin', 'twitter', 'youtube', 'tiktok',
@@ -152,45 +143,8 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
           <p className="text-xs text-muted-foreground">Drag content blocks into each column on the canvas.</p>
         </div>
       );
-    case 'market_data': {
-      const selectedMetrics: string[] = p.metrics || [];
-      const toggleMetric = (key: string) => {
-        const updated = selectedMetrics.includes(key)
-          ? selectedMetrics.filter((m: string) => m !== key)
-          : [...selectedMetrics, key];
-        onUpdate({ metrics: updated });
-      };
-      return (
-        <div className="space-y-4">
-          <SettingGroup label="Header Text"><Input value={p.headerText} onChange={(e) => onUpdate({ headerText: e.target.value })} /></SettingGroup>
-          <SettingGroup label="Style">
-            <Select value={p.style} onValueChange={(v) => onUpdate({ style: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cards">Cards</SelectItem>
-                <SelectItem value="table">Table</SelectItem>
-                <SelectItem value="minimal">Minimal</SelectItem>
-              </SelectContent>
-            </Select>
-          </SettingGroup>
-          <SettingGroup label="Metrics to Display">
-            <div className="space-y-2">
-              {AVAILABLE_METRICS.map(m => (
-                <div key={m.key} className="flex items-center gap-2">
-                  <Checkbox
-                    id={`metric-${m.key}`}
-                    checked={selectedMetrics.includes(m.key)}
-                    onCheckedChange={() => toggleMetric(m.key)}
-                  />
-                  <label htmlFor={`metric-${m.key}`} className="text-xs cursor-pointer">{m.label}</label>
-                </div>
-              ))}
-            </div>
-          </SettingGroup>
-          <p className="text-xs text-muted-foreground">Real data auto-populated per contact ZIP code at send time.</p>
-        </div>
-      );
-    }
+
+
     case 'agent_bio':
       return (
         <div className="space-y-4">
