@@ -1129,8 +1129,8 @@ serve(async (req: Request) => {
         }, dryRun, res.errors.length > 0 ? "error" : "success");
         
         // Update campaign record with final results
-        const openRate = res.emailsSent > 0 ? Math.random() * 30 + 15 : 0; // Placeholder until real tracking
-        const clickRate = res.emailsSent > 0 ? Math.random() * 8 + 2 : 0; // Placeholder until real tracking
+        const openRate = 0; // Real rates populated by Resend webhook
+        const clickRate = 0; // Real rates populated by Resend webhook
         
         await admin
           .from('newsletter_campaigns')

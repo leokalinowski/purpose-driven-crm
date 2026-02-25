@@ -14,7 +14,6 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const webhookSecret = Deno.env.get('RESEND_WEBHOOK_SECRET')
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
@@ -90,12 +89,60 @@ serve(async (req) => {
       .from('email_logs')
       .update({ status: newStatus })
       .eq('resend_email_id', resendEmailId)
-      .select('id')
+      .select('id, campaign_id')
 
     if (emailLogError) {
       console.error('Error updating email_logs:', emailLogError)
     } else {
       console.log(`Updated ${updatedEmailLogs?.length || 0} email_logs rows for resend_email_id ${resendEmailId}`)
+    }
+
+    // Recalculate newsletter_campaigns stats if we have a campaign_id
+    if (updatedEmailLogs && updatedEmailLogs.length > 0) {
+      const campaignIds = [...new Set(
+        updatedEmailLogs
+          .map((row: any) => row.campaign_id)
+          .filter((id: any) => id != null)
+      )]
+
+      for (const campaignId of campaignIds) {
+        try {
+          // Get all email_logs for this campaign
+          const { data: campaignEmails, error: ceErr } = await supabase
+            .from('email_logs')
+            .select('status')
+            .eq('campaign_id', campaignId)
+
+          if (ceErr || !campaignEmails) {
+            console.error('Error fetching campaign emails:', ceErr)
+            continue
+          }
+
+          const total = campaignEmails.length
+          if (total === 0) continue
+
+          const opened = campaignEmails.filter((e: any) => e.status === 'opened' || e.status === 'clicked').length
+          const clicked = campaignEmails.filter((e: any) => e.status === 'clicked').length
+          const openRate = Number(((opened / total) * 100).toFixed(2))
+          const clickRate = Number(((clicked / total) * 100).toFixed(2))
+
+          const { error: updateErr } = await supabase
+            .from('newsletter_campaigns')
+            .update({
+              open_rate: openRate,
+              click_through_rate: clickRate,
+            })
+            .eq('id', campaignId)
+
+          if (updateErr) {
+            console.error('Error updating campaign stats:', updateErr)
+          } else {
+            console.log(`Updated campaign ${campaignId}: open=${openRate}%, click=${clickRate}%`)
+          }
+        } catch (e) {
+          console.error('Error recalculating campaign stats:', e)
+        }
+      }
     }
 
     return new Response(

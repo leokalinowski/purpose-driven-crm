@@ -2,147 +2,158 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+export type DateRange = "7d" | "30d" | "90d" | "all";
+
 export type NewsletterCampaign = {
   id: string;
   campaign_name: string;
-  send_date: string | null; // ISO date string
+  send_date: string | null;
   recipient_count: number | null;
-  open_rate: number | null; // 0-100 or 0-1? Assuming 0-100 percentages
-  click_through_rate: number | null; // assuming 0-100 percentages
+  open_rate: number | null;
+  click_through_rate: number | null;
   status: string | null;
   created_at: string;
-  updated_at?: string;
+  created_by: string | null;
+  agent_name?: string;
 };
 
-export type NewsletterMetrics = {
-  totalCampaigns: number;
-  totalRecipients: number;
-  avgOpenRate: number | null;
-  avgClickRate: number | null;
+export type EmailLogStats = {
+  total: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  complained: number;
+  failed: number;
 };
 
 export type MonthlySeriesPoint = {
-  month: string; // YYYY-MM
+  month: string;
   open_rate: number | null;
   click_rate: number | null;
   recipients: number;
+  delivered: number;
+  opened: number;
+  bounced: number;
 };
+
+function getDateCutoff(range: DateRange): string | null {
+  if (range === "all") return null;
+  const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString();
+}
 
 function toMonthKey(d: string | null): string | null {
   if (!d) return null;
   const date = new Date(d);
   if (isNaN(date.getTime())) return null;
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export function useNewsletterAnalytics() {
-  const query = useQuery({
-    queryKey: ["newsletter-campaigns"],
+export function useNewsletterAnalytics(dateRange: DateRange = "all") {
+  const cutoff = getDateCutoff(dateRange);
+
+  const campaignsQuery = useQuery({
+    queryKey: ["newsletter-campaigns", dateRange],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("newsletter_campaigns")
-        .select(
-          "id,campaign_name,send_date,recipient_count,open_rate,click_through_rate,status,created_at,updated_at"
-        )
+        .select("id,campaign_name,send_date,recipient_count,open_rate,click_through_rate,status,created_at,created_by")
         .order("send_date", { ascending: false });
 
+      if (cutoff) q = q.gte("send_date", cutoff);
+
+      const { data, error } = await q;
       if (error) throw error;
       return (data || []) as NewsletterCampaign[];
     },
   });
 
-  // Also fetch monthly runs as fallback data
-  const runsQuery = useQuery({
-    queryKey: ["monthly-runs-analytics"],
+  const emailLogsQuery = useQuery({
+    queryKey: ["newsletter-email-logs", dateRange],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("monthly_runs")
-        .select("id,agent_id,emails_sent,contacts_processed,run_date,status,created_at")
-        .order("created_at", { ascending: false });
+      let q = supabase
+        .from("email_logs")
+        .select("id,status,sent_at,agent_id,email_type")
+        .eq("email_type", "newsletter");
 
+      if (cutoff) q = q.gte("sent_at", cutoff);
+
+      const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
   });
 
-  const campaigns = query.data ?? [];
-  const runs = runsQuery.data ?? [];
+  const campaigns = campaignsQuery.data ?? [];
+  const emailLogs = emailLogsQuery.data ?? [];
 
-  const metrics: NewsletterMetrics = useMemo(() => {
-    if (campaigns.length === 0 && runs.length === 0) {
-      return { totalCampaigns: 0, totalRecipients: 0, avgOpenRate: null, avgClickRate: null };
+  const emailStats: EmailLogStats = useMemo(() => {
+    const stats: EmailLogStats = { total: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0, failed: 0 };
+    for (const log of emailLogs) {
+      stats.total++;
+      const s = log.status;
+      if (s === "delivered") stats.delivered++;
+      else if (s === "opened") { stats.opened++; stats.delivered++; }
+      else if (s === "clicked") { stats.clicked++; stats.opened++; stats.delivered++; }
+      else if (s === "bounced") stats.bounced++;
+      else if (s === "complained") stats.complained++;
+      else if (s === "failed") stats.failed++;
+      else if (s === "sent") stats.delivered++; // sent but not yet tracked = assume delivered
     }
+    return stats;
+  }, [emailLogs]);
 
-    // Prioritize campaign data, fallback to runs data
-    if (campaigns.length > 0) {
-      const totalCampaigns = campaigns.length;
-      const totalRecipients = campaigns.reduce((sum, c) => sum + (c.recipient_count ?? 0), 0);
+  const metrics = useMemo(() => {
+    const totalCampaigns = campaigns.length;
+    const totalDelivered = emailStats.delivered;
+    const avgOpenRate = emailStats.total > 0 ? Number(((emailStats.opened / emailStats.total) * 100).toFixed(1)) : null;
+    const avgClickRate = emailStats.total > 0 ? Number(((emailStats.clicked / emailStats.total) * 100).toFixed(1)) : null;
+    const bounceRate = emailStats.total > 0 ? Number(((emailStats.bounced / emailStats.total) * 100).toFixed(1)) : null;
+    const unsubscribes = emailStats.complained;
 
-      const openRates = campaigns.map((c) => c.open_rate).filter((v): v is number => typeof v === "number");
-      const clickRates = campaigns
-        .map((c) => c.click_through_rate)
-        .filter((v): v is number => typeof v === "number");
-
-      const avgOpenRate = openRates.length ? openRates.reduce((a, b) => a + b, 0) / openRates.length : null;
-      const avgClickRate = clickRates.length ? clickRates.reduce((a, b) => a + b, 0) / clickRates.length : null;
-
-      return { totalCampaigns, totalRecipients, avgOpenRate, avgClickRate };
-    } else {
-      // Fallback to runs data
-      const completedRuns = runs.filter(r => r.status === 'completed' || r.status === 'success');
-      const totalCampaigns = completedRuns.length;
-      const totalRecipients = completedRuns.reduce((sum, r) => sum + (r.emails_sent ?? 0), 0);
-      
-      return { totalCampaigns, totalRecipients, avgOpenRate: null, avgClickRate: null };
-    }
-  }, [campaigns, runs]);
+    return { totalCampaigns, totalDelivered, avgOpenRate, avgClickRate, bounceRate, unsubscribes };
+  }, [campaigns, emailStats]);
 
   const monthlySeries: MonthlySeriesPoint[] = useMemo(() => {
-    if (campaigns.length === 0 && runs.length === 0) return [];
+    const grouped = new Map<string, { sent: number; delivered: number; opened: number; clicked: number; bounced: number }>();
 
-    const grouped = new Map<string, { open: number[]; click: number[]; recipients: number }>();
-
-    // Process campaigns first
-    if (campaigns.length > 0) {
-      for (const c of campaigns) {
-        const key = toMonthKey(c.send_date);
-        if (!key) continue;
-        if (!grouped.has(key)) grouped.set(key, { open: [], click: [], recipients: 0 });
-        const g = grouped.get(key)!;
-        if (typeof c.open_rate === "number") g.open.push(c.open_rate);
-        if (typeof c.click_through_rate === "number") g.click.push(c.click_through_rate);
-        g.recipients += c.recipient_count ?? 0;
-      }
-    } else {
-      // Fallback to runs data
-      for (const r of runs) {
-        const key = toMonthKey(r.run_date);
-        if (!key) continue;
-        if (!grouped.has(key)) grouped.set(key, { open: [], click: [], recipients: 0 });
-        const g = grouped.get(key)!;
-        g.recipients += r.emails_sent ?? 0;
-      }
+    for (const log of emailLogs) {
+      const key = toMonthKey(log.sent_at);
+      if (!key) continue;
+      if (!grouped.has(key)) grouped.set(key, { sent: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0 });
+      const g = grouped.get(key)!;
+      g.sent++;
+      const s = log.status;
+      if (s === "delivered" || s === "sent") g.delivered++;
+      if (s === "opened" || s === "clicked") { g.opened++; g.delivered++; }
+      if (s === "clicked") g.clicked++;
+      if (s === "bounced") g.bounced++;
     }
 
     const points = Array.from(grouped.entries()).map(([month, g]) => ({
       month,
-      open_rate: g.open.length ? g.open.reduce((a, b) => a + b, 0) / g.open.length : null,
-      click_rate: g.click.length ? g.click.reduce((a, b) => a + b, 0) / g.click.length : null,
-      recipients: g.recipients,
+      open_rate: g.sent > 0 ? Number(((g.opened / g.sent) * 100).toFixed(1)) : null,
+      click_rate: g.sent > 0 ? Number(((g.clicked / g.sent) * 100).toFixed(1)) : null,
+      recipients: g.sent,
+      delivered: g.delivered,
+      opened: g.opened,
+      bounced: g.bounced,
     }));
 
-    points.sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0));
+    points.sort((a, b) => a.month.localeCompare(b.month));
     return points;
-  }, [campaigns, runs]);
+  }, [emailLogs]);
 
   return {
-    ...query,
     campaigns,
+    emailStats,
     metrics,
     monthlySeries,
-    isLoading: query.isLoading || runsQuery.isLoading,
-    error: query.error || runsQuery.error,
+    isLoading: campaignsQuery.isLoading || emailLogsQuery.isLoading,
+    error: campaignsQuery.error || emailLogsQuery.error,
+    refetch: () => { campaignsQuery.refetch(); emailLogsQuery.refetch(); },
   };
 }
