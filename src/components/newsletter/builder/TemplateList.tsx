@@ -1,13 +1,15 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Copy, Trash2, FileText } from 'lucide-react';
+import { Plus, Pencil, Copy, Trash2, FileText, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { useNewsletterTemplates } from '@/hooks/useNewsletterTemplates';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { renderBlocksToHtml } from './renderBlocksToHtml';
+import { SendSchedulePanel } from './SendSchedulePanel';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,7 +24,7 @@ import {
 function TemplateThumbnail({ blocks, globalStyles }: { blocks: any[]; globalStyles: any }) {
   const html = useMemo(() => renderBlocksToHtml(blocks || [], globalStyles), [blocks, globalStyles]);
   return (
-    <div className="relative w-full h-48 overflow-hidden bg-muted flex items-center justify-center">
+    <div className="relative w-full h-40 overflow-hidden bg-muted flex items-center justify-center">
       <iframe
         srcDoc={html}
         title="Preview"
@@ -49,6 +51,7 @@ export function TemplateList() {
   const { toast } = useToast();
   const { templates, isLoading, saveTemplate, deleteTemplate, isSaving } = useNewsletterTemplates();
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [sendTemplate, setSendTemplate] = useState<{ id: string; name: string } | null>(null);
 
   const handleCreate = async () => {
     if (!user) {
@@ -90,66 +93,80 @@ export function TemplateList() {
 
   if (isLoading) {
     return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {[1, 2, 3].map(i => (
-          <Card key={i} className="animate-pulse">
-            <CardContent className="pt-6 h-40" />
-          </Card>
-        ))}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Email Templates</CardTitle>
+          <CardDescription>Create and manage your newsletter templates</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map(i => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="pt-6 h-40" />
+              </Card>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="space-y-4 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between">
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <div>
-          <h2 className="text-lg font-semibold">Email Templates</h2>
-          <p className="text-sm text-muted-foreground">Create and manage your newsletter templates</p>
+          <CardTitle>Email Templates</CardTitle>
+          <CardDescription>Create and manage your newsletter templates</CardDescription>
         </div>
         <Button onClick={handleCreate} disabled={isSaving}>
           <Plus className="h-4 w-4 mr-2" />
           New Template
         </Button>
-      </div>
+      </CardHeader>
 
-      {templates.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+      <CardContent>
+        {templates.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
             <FileText className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="font-medium mb-1">No templates yet</h3>
             <p className="text-sm text-muted-foreground mb-4">Create your first newsletter template to get started.</p>
             <Button onClick={handleCreate} disabled={isSaving}>
               <Plus className="h-4 w-4 mr-2" /> Create Template
             </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {templates.map(t => (
-            <Card key={t.id} className="group hover:shadow-md transition-shadow overflow-hidden">
-              <TemplateThumbnail blocks={t.blocks_json} globalStyles={t.global_styles} />
-              <div className="px-4 py-3">
-                <h3 className="font-medium truncate">{t.name}</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Updated {format(new Date(t.updated_at), 'MMM d, yyyy')}
-                </p>
-              </div>
-              <div className="flex items-center gap-1 px-4 py-3 border-t border-border">
-                <Button size="sm" variant="default" className="flex-1" onClick={() => navigate(`/newsletter-builder/${t.id}`)}>
-                  <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => handleDuplicate(t)} disabled={isSaving}>
-                  <Copy className="h-3.5 w-3.5" />
-                </Button>
-                <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(t.id)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+          </div>
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {templates.map(t => (
+              <Card key={t.id} className="group hover:shadow-md transition-shadow overflow-hidden">
+                <TemplateThumbnail blocks={t.blocks_json} globalStyles={t.global_styles} />
+                <div className="px-4 py-3 flex items-start justify-between">
+                  <div>
+                    <h3 className="font-medium truncate">{t.name}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Updated {formatDistanceToNow(new Date(t.updated_at), { addSuffix: true })}
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="text-[10px] ml-2 shrink-0">Active</Badge>
+                </div>
+                <div className="flex items-center gap-1 px-4 py-3 border-t border-border">
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/newsletter-builder/${t.id}`)}>
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                  </Button>
+                  <Button size="sm" variant="default" className="flex-1" onClick={() => setSendTemplate({ id: t.id, name: t.name })}>
+                    <Send className="h-3.5 w-3.5 mr-1.5" /> Send
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleDuplicate(t)} disabled={isSaving}>
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(t.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </CardContent>
 
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
@@ -165,6 +182,15 @@ export function TemplateList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+
+      {sendTemplate && (
+        <SendSchedulePanel
+          open={!!sendTemplate}
+          onClose={() => setSendTemplate(null)}
+          templateId={sendTemplate.id}
+          templateName={sendTemplate.name}
+        />
+      )}
+    </Card>
   );
 }
