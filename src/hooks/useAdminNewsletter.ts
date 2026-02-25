@@ -11,14 +11,13 @@ export interface AgentProfile {
   email: string | null;
   contact_count?: number;
   template_count?: number;
-}
-
-export interface NewsletterSettings {
-  id: string;
-  agent_id: string;
-  enabled: boolean;
-  schedule_day: number | null;
-  schedule_hour: number | null;
+  last_campaign?: {
+    campaign_name: string;
+    send_date: string | null;
+    recipient_count: number | null;
+    open_rate: number | null;
+    status: string | null;
+  } | null;
 }
 
 export interface AdminTemplate {
@@ -75,30 +74,56 @@ export function useAdminNewsletter() {
     },
   });
 
-  // Fetch newsletter settings
-  const { data: settings = [], isLoading: settingsLoading } = useQuery({
-    queryKey: ['newsletter-settings'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('newsletter_settings').select('*');
-      if (error) throw error;
-      return data as NewsletterSettings[];
-    },
-  });
-
-  // Fetch contact counts per agent — only contacts WITH email (sendable)
+  // Fetch accurate contact counts per agent using server-side count (no rows downloaded)
   const { data: contactCounts = {} } = useQuery({
-    queryKey: ['agent-contact-counts-email'],
+    queryKey: ['agent-contact-counts-email', agents.map(a => a.user_id)],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('contacts')
-        .select('agent_id')
-        .not('email', 'is', null)
-        .neq('email', '');
-      if (error) throw error;
       const counts: Record<string, number> = {};
-      data?.forEach((c) => { counts[c.agent_id] = (counts[c.agent_id] || 0) + 1; });
+      const results = await Promise.all(
+        agents.map(async (agent) => {
+          const { count, error } = await supabase
+            .from('contacts')
+            .select('id', { count: 'exact', head: true })
+            .eq('agent_id', agent.user_id)
+            .not('email', 'is', null)
+            .neq('email', '');
+          if (error) return { agentId: agent.user_id, count: 0 };
+          return { agentId: agent.user_id, count: count || 0 };
+        })
+      );
+      results.forEach(r => { counts[r.agentId] = r.count; });
       return counts;
     },
+    enabled: agents.length > 0,
+  });
+
+  // Fetch last campaign per agent
+  const { data: lastCampaigns = {} } = useQuery({
+    queryKey: ['agent-last-campaigns', agents.map(a => a.user_id)],
+    queryFn: async () => {
+      const map: Record<string, AgentProfile['last_campaign']> = {};
+      // Fetch recent campaigns, grouped by created_by
+      const { data, error } = await supabase
+        .from('newsletter_campaigns')
+        .select('campaign_name,send_date,recipient_count,open_rate,status,created_by')
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      // Pick the first (most recent) campaign per created_by
+      for (const row of data || []) {
+        if (row.created_by && !map[row.created_by]) {
+          map[row.created_by] = {
+            campaign_name: row.campaign_name,
+            send_date: row.send_date,
+            recipient_count: row.recipient_count,
+            open_rate: row.open_rate,
+            status: row.status,
+          };
+        }
+      }
+      return map;
+    },
+    enabled: agents.length > 0,
   });
 
   // Fetch ALL templates across agents (admin view)
@@ -159,31 +184,13 @@ export function useAdminNewsletter() {
   const templateCounts: Record<string, number> = {};
   allTemplates.forEach(t => { templateCounts[t.agent_id] = (templateCounts[t.agent_id] || 0) + 1; });
 
-  // Merge contact counts + template counts with agents
+  // Merge contact counts + template counts + last campaign with agents
   const agentsWithCounts: AgentProfile[] = agents.map(agent => ({
     ...agent,
     contact_count: contactCounts[agent.user_id] || 0,
     template_count: templateCounts[agent.user_id] || 0,
+    last_campaign: lastCampaigns[agent.user_id] || null,
   }));
-
-  // Update newsletter settings mutation
-  const updateSettingsMutation = useMutation({
-    mutationFn: async ({ agentId, enabled }: { agentId: string; enabled: boolean }) => {
-      const { data, error } = await supabase
-        .from('newsletter_settings')
-        .upsert({ agent_id: agentId, enabled }, { onConflict: 'agent_id' })
-        .select().single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['newsletter-settings'] });
-      toast({ title: "Settings updated" });
-    },
-    onError: (error) => {
-      toast({ title: "Error updating settings", description: error.message, variant: "destructive" });
-    },
-  });
 
   // Delete template mutation
   const deleteTemplateMutation = useMutation({
@@ -225,12 +232,9 @@ export function useAdminNewsletter() {
 
   return {
     agents: agentsWithCounts,
-    settings,
     templates: templatesWithAgents,
     campaigns,
-    isLoading: agentsLoading || settingsLoading || templatesLoading || campaignsLoading,
-    updateSettings: updateSettingsMutation.mutate,
-    isUpdating: updateSettingsMutation.isPending,
+    isLoading: agentsLoading || templatesLoading || campaignsLoading,
     deleteTemplate: deleteTemplateMutation.mutate,
     duplicateTemplate: duplicateTemplateMutation.mutate,
   };
