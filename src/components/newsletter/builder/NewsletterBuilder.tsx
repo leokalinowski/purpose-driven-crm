@@ -15,6 +15,7 @@ import { NewsletterBlock, GlobalStyles, DEFAULT_GLOBAL_STYLES } from './types';
 import { useNewsletterTemplates } from '@/hooks/useNewsletterTemplates';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { AgentData } from './renderBlocksToHtml';
 
 export interface ChildPath {
   parentId: string;
@@ -38,17 +39,44 @@ export function NewsletterBuilder() {
   const [currentId, setCurrentId] = useState<string | undefined>(templateId);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [brandColors, setBrandColors] = useState<BrandColors>({ primary: null, secondary: null });
+  const [agentData, setAgentData] = useState<AgentData>({});
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const hasLoadedRef = useRef(false);
   const isInitialLoadRef = useRef(true);
 
-  // Fetch brand colors
+  // Fetch brand colors and agent profile
   useEffect(() => {
     if (!user) return;
-    supabase.from('agent_marketing_settings').select('primary_color, secondary_color').eq('user_id', user.id).single()
+    // Fetch marketing settings
+    supabase.from('agent_marketing_settings').select('primary_color, secondary_color, headshot_url, logo_colored_url').eq('user_id', user.id).single()
       .then(({ data }) => {
-        if (data) setBrandColors({ primary: data.primary_color, secondary: data.secondary_color });
+        if (data) {
+          setBrandColors({ primary: data.primary_color, secondary: data.secondary_color });
+          setAgentData(prev => ({
+            ...prev,
+            headshot_url: data.headshot_url || undefined,
+            logo_url: data.logo_colored_url || undefined,
+          }));
+        }
+      });
+    // Fetch profile
+    supabase.from('profiles').select('first_name, last_name, full_name, email, phone_number, office_number, office_address, brokerage, license_number, website').eq('user_id', user.id).single()
+      .then(({ data }) => {
+        if (data) {
+          const name = data.full_name || [data.first_name, data.last_name].filter(Boolean).join(' ');
+          setAgentData(prev => ({
+            ...prev,
+            name: name || undefined,
+            email: data.email || undefined,
+            phone: data.phone_number || undefined,
+            office_phone: data.office_number || undefined,
+            office_address: data.office_address || undefined,
+            brokerage: data.brokerage || undefined,
+            license: data.license_number || undefined,
+            website: data.website || undefined,
+          }));
+        }
       });
   }, [user]);
 
@@ -185,7 +213,7 @@ export function NewsletterBuilder() {
         {/* Main content */}
         {showPreview ? (
           <div className="flex-1 overflow-hidden">
-            <PreviewPanel blocks={blocks} globalStyles={globalStyles} />
+            <PreviewPanel blocks={blocks} globalStyles={globalStyles} agentData={agentData} />
           </div>
         ) : (
           <div className="flex-1 flex overflow-hidden">

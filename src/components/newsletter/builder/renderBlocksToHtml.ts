@@ -1,5 +1,18 @@
 import { NewsletterBlock, GlobalStyles, DEFAULT_GLOBAL_STYLES } from './types';
 
+export interface AgentData {
+  name?: string;
+  email?: string;
+  phone?: string;
+  office_phone?: string;
+  office_address?: string;
+  brokerage?: string;
+  license?: string;
+  website?: string;
+  headshot_url?: string;
+  logo_url?: string;
+}
+
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -41,9 +54,6 @@ function renderSpacer(props: Record<string, any>): string {
   return `<div style="height:${props.height || 24}px;line-height:${props.height || 24}px;font-size:1px;">&nbsp;</div>`;
 }
 
-
-
-
 function renderAgentBio(props: Record<string, any>): string {
   const sections: string[] = [];
   if (props.showHeadshot !== false) sections.push('{{agent_headshot}}');
@@ -67,27 +77,27 @@ function renderListings(props: Record<string, any>): string {
   const style = props.style || 'grid';
 
   if (listings.length === 0) {
-    return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;text-align:center;">
-      <p style="color:#166534;font-size:16px;margin:0;">🏠 No listings added</p>
+    return `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:20px;text-align:center;">
+      <p style="color:#6b7280;font-size:14px;margin:0;">No listings added</p>
     </div>`;
   }
 
   const isGrid = style === 'grid';
-  let html = `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;">
-    <h3 style="margin:0 0 12px;color:#166534;font-family:Georgia,serif;font-size:18px;">🏠 Featured Listings</h3>`;
+  let html = `<div style="padding:4px 0;">
+    <h3 style="margin:0 0 16px;color:#1a1a1a;font-family:Georgia,serif;font-size:20px;font-weight:600;">Featured Listings</h3>`;
 
   if (isGrid) {
     html += `<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`;
     listings.forEach((l: any, i: number) => {
       if (i > 0 && i % 2 === 0) html += `</tr><tr>`;
-      html += `<td style="width:50%;vertical-align:top;padding:4px;">
-        <div style="border:1px solid #bbf7d0;border-radius:6px;overflow:hidden;background:#ffffff;">
-          ${l.image_url ? `<img src="${l.image_url}" alt="${escapeHtml(l.address)}" style="width:100%;height:120px;object-fit:cover;display:block;" />` : `<div style="height:120px;background:#dcfce7;display:flex;align-items:center;justify-content:center;text-align:center;font-size:32px;">🏡</div>`}
-          <div style="padding:8px;">
-            <p style="margin:0;font-weight:bold;font-size:14px;color:#166534;">${escapeHtml(l.price)}</p>
-            <p style="margin:2px 0 0;font-size:12px;color:#374151;">${escapeHtml(l.address)}</p>
+      html += `<td style="width:50%;vertical-align:top;padding:6px;">
+        <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#ffffff;">
+          ${l.image_url ? `<img src="${l.image_url}" alt="${escapeHtml(l.address)}" style="width:100%;height:140px;object-fit:cover;display:block;" />` : `<div style="height:140px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;text-align:center;color:#9ca3af;font-size:14px;">No Image</div>`}
+          <div style="padding:12px;">
+            <p style="margin:0;font-weight:700;font-size:16px;color:#1a1a1a;font-family:Georgia,serif;">${escapeHtml(l.price)}</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#4b5563;">${escapeHtml(l.address)}</p>
             ${l.city ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${escapeHtml(l.city)}</p>` : ''}
-            <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">${l.beds}bd · ${l.baths}ba · ${escapeHtml(l.sqft)} sqft</p>
+            <p style="margin:6px 0 0;font-size:12px;color:#9ca3af;">${l.beds} bed · ${l.baths} bath · ${escapeHtml(l.sqft)} sqft</p>
           </div>
         </div>
       </td>`;
@@ -96,14 +106,14 @@ function renderListings(props: Record<string, any>): string {
     html += `</tr></table>`;
   } else {
     listings.forEach((l: any) => {
-      html += `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px;border:1px solid #bbf7d0;border-radius:6px;overflow:hidden;background:#ffffff;">
+      html += `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:12px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#ffffff;">
         <tr>
-          ${l.image_url ? `<td style="width:100px;"><img src="${l.image_url}" alt="${escapeHtml(l.address)}" style="width:100px;height:80px;object-fit:cover;display:block;" /></td>` : `<td style="width:100px;background:#dcfce7;text-align:center;font-size:32px;vertical-align:middle;">🏡</td>`}
-          <td style="padding:8px;vertical-align:top;">
-            <p style="margin:0;font-weight:bold;font-size:14px;color:#166534;">${escapeHtml(l.price)}</p>
-            <p style="margin:2px 0 0;font-size:12px;color:#374151;">${escapeHtml(l.address)}</p>
+          ${l.image_url ? `<td style="width:120px;"><img src="${l.image_url}" alt="${escapeHtml(l.address)}" style="width:120px;height:90px;object-fit:cover;display:block;" /></td>` : `<td style="width:120px;background:#f3f4f6;text-align:center;font-size:13px;color:#9ca3af;vertical-align:middle;">No Image</td>`}
+          <td style="padding:12px;vertical-align:top;">
+            <p style="margin:0;font-weight:700;font-size:16px;color:#1a1a1a;font-family:Georgia,serif;">${escapeHtml(l.price)}</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#4b5563;">${escapeHtml(l.address)}</p>
             ${l.city ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${escapeHtml(l.city)}</p>` : ''}
-            <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">${l.beds}bd · ${l.baths}ba · ${escapeHtml(l.sqft)} sqft</p>
+            <p style="margin:6px 0 0;font-size:12px;color:#9ca3af;">${l.beds} bed · ${l.baths} bath · ${escapeHtml(l.sqft)} sqft</p>
           </td>
         </tr>
       </table>`;
@@ -131,7 +141,6 @@ function renderBlock(block: NewsletterBlock, globalStyles: GlobalStyles): string
     case 'button': content = renderButton(block.props); break;
     case 'divider': content = renderDivider(block.props); break;
     case 'spacer': content = renderSpacer(block.props); break;
-    
     case 'agent_bio': content = renderAgentBio(block.props); break;
     case 'listings': content = renderListings(block.props); break;
     case 'social_icons': content = renderSocialIcons(block.props); break;
@@ -142,7 +151,7 @@ function renderBlock(block: NewsletterBlock, globalStyles: GlobalStyles): string
       const colWidth = Math.floor(100 / colCount);
       content = `<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`;
       cols.forEach((col, i) => {
-        content += `<td style="width:${colWidth}%;vertical-align:top;${i < cols.length - 1 ? `padding-right:${gap}px;` : ''}">`;
+        content += `<td class="nl-col" style="width:${colWidth}%;vertical-align:top;${i < cols.length - 1 ? `padding-right:${gap}px;` : ''}">`;
         col.forEach(child => { content += renderBlock(child, globalStyles); });
         content += `</td>`;
       });
@@ -157,13 +166,73 @@ function renderBlock(block: NewsletterBlock, globalStyles: GlobalStyles): string
   return `<div style="padding:8px 0;">${content}</div>`;
 }
 
-export function renderBlocksToHtml(blocks: NewsletterBlock[], styles?: Partial<GlobalStyles>): string {
+function replaceAgentPlaceholders(html: string, agent: AgentData): string {
+  const replacements: Record<string, { value?: string; isImage?: boolean }> = {
+    '{{agent_name}}': { value: agent.name },
+    '{{agent_email}}': { value: agent.email },
+    '{{agent_phone}}': { value: agent.phone },
+    '{{agent_office_phone}}': { value: agent.office_phone },
+    '{{agent_office_address}}': { value: agent.office_address },
+    '{{agent_brokerage}}': { value: agent.brokerage },
+    '{{agent_license}}': { value: agent.license },
+    '{{agent_website}}': { value: agent.website },
+  };
+
+  // Replace headshot placeholder
+  if (agent.headshot_url) {
+    html = html.replace('{{agent_headshot}}', `<img src="${agent.headshot_url}" alt="Agent headshot" style="width:80px;height:80px;border-radius:50%;object-fit:cover;display:inline-block;margin-bottom:8px;" />`);
+  } else {
+    // Remove the entire line containing the placeholder
+    html = html.replace(/[^\n]*\{\{agent_headshot\}\}[^\n]*/g, '');
+  }
+
+  // Replace logo placeholder
+  if (agent.logo_url) {
+    html = html.replace('{{agent_logo}}', `<img src="${agent.logo_url}" alt="Logo" style="max-width:160px;height:auto;display:inline-block;margin-bottom:8px;" />`);
+  } else {
+    html = html.replace(/[^\n]*\{\{agent_logo\}\}[^\n]*/g, '');
+  }
+
+  // Replace text placeholders
+  for (const [placeholder, { value }] of Object.entries(replacements)) {
+    if (value) {
+      html = html.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), escapeHtml(value));
+    } else {
+      // Remove the entire <p> or <a> element containing this placeholder
+      const escaped = placeholder.replace(/[{}]/g, '\\$&');
+      html = html.replace(new RegExp(`<p[^>]*>[^<]*${escaped}[^<]*</p>`, 'g'), '');
+      html = html.replace(new RegExp(`<a[^>]*>[^<]*${escaped}[^<]*</a>`, 'g'), '');
+    }
+  }
+
+  // Fix website link href if we replaced the value
+  if (agent.website) {
+    html = html.replace(`href="${escapeHtml(agent.website)}"`, `href="${agent.website}"`);
+  }
+
+  return html;
+}
+
+export function renderBlocksToHtml(blocks: NewsletterBlock[], styles?: Partial<GlobalStyles>, agentData?: AgentData): string {
   const gs = { ...DEFAULT_GLOBAL_STYLES, ...styles };
   const inner = blocks.map(b => renderBlock(b, gs)).join('');
 
-  return `<!DOCTYPE html>
+  let html = `<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<style>
+  @media only screen and (max-width: 600px) {
+    .nl-col {
+      display: block !important;
+      width: 100% !important;
+      padding-right: 0 !important;
+      padding-bottom: 12px;
+    }
+  }
+</style>
+</head>
 <body style="margin:0;padding:0;background-color:${gs.backgroundColor};font-family:${gs.fontFamily};color:${gs.bodyColor};">
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${gs.backgroundColor};">
     <tr><td align="center" style="padding:24px 16px;">
@@ -176,4 +245,10 @@ export function renderBlocksToHtml(blocks: NewsletterBlock[], styles?: Partial<G
   </table>
 </body>
 </html>`;
+
+  if (agentData) {
+    html = replaceAgentPlaceholders(html, agentData);
+  }
+
+  return html;
 }

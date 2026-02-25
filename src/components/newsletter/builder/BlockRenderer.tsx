@@ -250,31 +250,30 @@ function BlockPreview({
       const isGrid = block.props.style === 'grid';
       if (listings.length === 0) {
         return (
-          <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-6 text-center">
-            <p className="text-2xl mb-2">🏠</p>
-            <p className="font-semibold text-green-800 dark:text-green-200 text-sm">Featured Listings</p>
-            <p className="text-xs text-green-600 dark:text-green-300 mt-1">Paste listing URLs in settings to add properties →</p>
+          <div className="border border-border rounded-lg p-6 text-center">
+            <p className="font-semibold text-foreground text-sm" style={{ fontFamily: 'Georgia, serif' }}>Featured Listings</p>
+            <p className="text-xs text-muted-foreground mt-1">Paste listing URLs in settings to add properties →</p>
           </div>
         );
       }
       return (
-        <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
-          <p className="font-semibold text-green-800 dark:text-green-200 text-sm mb-3">🏠 Featured Listings</p>
-          <div className={isGrid ? 'grid grid-cols-2 gap-2' : 'space-y-2'}>
+        <div className="p-1">
+          <p className="font-semibold text-foreground text-sm mb-3" style={{ fontFamily: 'Georgia, serif' }}>Featured Listings</p>
+          <div className={isGrid ? 'grid grid-cols-2 gap-3' : 'space-y-3'}>
             {listings.map((l: any) => (
-              <div key={l.id} className={`bg-white dark:bg-green-900/40 rounded border border-green-100 dark:border-green-800 overflow-hidden ${isGrid ? '' : 'flex items-center gap-3'}`}>
+              <div key={l.id} className={`bg-card rounded-lg border border-border overflow-hidden ${isGrid ? '' : 'flex items-center gap-3'}`}>
                 {l.image_url ? (
-                  <img src={l.image_url} alt={l.address} className={`object-cover ${isGrid ? 'h-24 w-full' : 'h-16 w-20 shrink-0'}`} />
+                  <img src={l.image_url} alt={l.address} className={`object-cover ${isGrid ? 'h-28 w-full' : 'h-20 w-24 shrink-0'}`} />
                 ) : (
-                  <div className={`bg-green-100 dark:bg-green-800/50 flex items-center justify-center text-green-600 ${isGrid ? 'h-24 w-full' : 'h-16 w-20 shrink-0'}`}>
-                    <span className="text-2xl">🏡</span>
+                  <div className={`bg-muted flex items-center justify-center text-muted-foreground text-xs ${isGrid ? 'h-28 w-full' : 'h-20 w-24 shrink-0'}`}>
+                    No Image
                   </div>
                 )}
-                <div className="p-2 min-w-0">
-                  <p className="font-semibold text-xs text-green-900 dark:text-green-100 truncate">{l.price}</p>
-                  <p className="text-xs text-green-700 dark:text-green-300 truncate">{l.address}</p>
-                  {l.city && <p className="text-xs text-green-600 dark:text-green-400 truncate">{l.city}</p>}
-                  <p className="text-xs text-green-500 dark:text-green-400">{l.beds}bd · {l.baths}ba · {l.sqft} sqft</p>
+                <div className="p-3 min-w-0">
+                  <p className="font-bold text-sm text-foreground truncate" style={{ fontFamily: 'Georgia, serif' }}>{l.price}</p>
+                  <p className="text-xs text-muted-foreground truncate mt-1">{l.address}</p>
+                  {l.city && <p className="text-xs text-muted-foreground truncate">{l.city}</p>}
+                  <p className="text-xs text-muted-foreground/70 mt-1">{l.beds} bed · {l.baths} bath · {l.sqft} sqft</p>
                 </div>
               </div>
             ))}
