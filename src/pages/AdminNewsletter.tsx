@@ -110,12 +110,13 @@ export default function AdminNewsletter() {
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="flex items-center gap-2 text-sm">
                           <Mail className="h-4 w-4 text-muted-foreground" />
                           <div>
                             <div className="font-medium">{agent.contact_count || 0}</div>
-                            <div className="text-muted-foreground text-xs">Contacts with email</div>
+                            <div className="text-muted-foreground text-xs">Total contacts</div>
+                            <div className="text-muted-foreground text-xs">{agent.email_contact_count || 0} with email</div>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 text-sm">
