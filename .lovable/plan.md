@@ -1,56 +1,34 @@
 
 
-# Fix Image Alignment in Preview & Social Media Icons
+# Agent Bio Layout Setting — What It Should Do & How to Fix
 
-## Two Issues
+## Current State
 
-### 1. Image alignment broken in preview HTML
+The Agent Bio block has a `layout` prop with two options: **"Horizontal"** and **"Vertical"** (set in `BlockSettings.tsx`). The default is `'horizontal'`. However, neither the editor (`BlockRenderer.tsx`) nor the preview (`renderBlocksToHtml.ts`) reads this prop — both always render a vertically-centered, stacked layout. The setting does nothing.
 
-In `renderBlocksToHtml.ts` line 39, the `<img>` has `display:block`. The parent `<div>` uses `text-align` for alignment (line 41). But `text-align` only affects **inline** or **inline-block** elements -- it has no effect on `display:block` elements. So images always render left-aligned in the preview regardless of the alignment setting.
+## Intended Behavior
 
-**Fix**: Change the image rendering approach based on alignment:
-- For `center`: use `margin:0 auto` on the block-level image
-- For `right`: use `margin-left:auto` 
-- For `left`: keep default (no margin change)
-
-Alternatively, change `display:block` to `display:inline-block` so `text-align` works. This is simpler and matches the editor (which uses `inline-block` class on line 217).
-
-**File**: `renderBlocksToHtml.ts`, line 39 — change `display:block` to `display:inline-block` on the `<img>` tag.
-
-### 2. Social Media Icons use emoji placeholders
-
-The editor uses a `SOCIAL_PLATFORMS` map (line 170) with emojis (`📘`, `📷`, `💼`, `🐦`, `▶️`, `🎵`). The preview (line 129-134) just shows a text placeholder saying "Social media icons auto-populated from profile" -- it renders no actual icons at all.
-
-**Fix for preview** (`renderBlocksToHtml.ts`, `renderSocialIcons`): Replace the placeholder text with actual rendered social icon links. Use simple branded text-based links with platform-specific colors or a universal style since email clients don't support SVG icons reliably. The standard approach for email is to use small hosted PNG/SVG icon images or styled text links.
-
-Since we don't have hosted icon images, the pragmatic email-safe approach is to render styled text links with the platform name and a simple visual indicator (colored circle or branded color background).
-
-**Fix for editor** (`BlockRenderer.tsx`, line 170 and 310-330): Replace the emoji map with actual Lucide icons where possible. Lucide has icons for several platforms: `Facebook`, `Instagram`, `Linkedin`, `Twitter`, `Youtube`. For TikTok and others, use a generic `Globe` or `Link` icon.
+- **Vertical** (current default rendering): Headshot on top, text stacked below, everything centered — a column layout.
+- **Horizontal**: Headshot/logo on the left side, text details on the right — a side-by-side row layout. This is a common pattern for email signature-style agent bios.
 
 ## Changes
 
-### `renderBlocksToHtml.ts` — Image alignment fix (line 39)
-Change the `<img>` style from `display:block` to `display:inline-block` so that the parent's `text-align` property takes effect.
+### 1. `BlockRenderer.tsx` — Editor agent_bio (lines 289-313)
 
-### `renderBlocksToHtml.ts` — Social icons (lines 129-134)
-Replace the placeholder with actual rendered links. For each link in `props.links`, render an `<a>` tag with the platform name, styled as a small pill/badge with platform-specific background colors:
-- Facebook: `#1877F2`
-- Instagram: `#E4405F`
-- LinkedIn: `#0A66C2`
-- Twitter/X: `#000000`
-- YouTube: `#FF0000`
-- TikTok: `#000000`
-- Default: `#6b7280`
+Add layout-aware rendering:
+- **Vertical**: Keep current stacked/centered layout.
+- **Horizontal**: Render a `flex flex-row` layout with the headshot placeholder on the left and the text fields on the right, left-aligned.
 
-If no links are configured, show a subtle placeholder message.
+### 2. `renderBlocksToHtml.ts` — Preview agent_bio (lines 59-74)
 
-### `BlockRenderer.tsx` — Social icons (lines 170, 310-330)
-Replace the `SOCIAL_PLATFORMS` emoji map with Lucide icon components. Import `Facebook`, `Instagram`, `Linkedin`, `Twitter`, `Youtube`, `Globe` from `lucide-react`. Render each platform link with its corresponding icon instead of an emoji. Keep the existing layout structure but swap the emoji `<span>` for the icon component.
+Read `props.layout` and change the HTML structure:
+- **Vertical** (`text-align:center`, single column — current behavior): No change needed.
+- **Horizontal**: Wrap content in a two-column table (email-safe). Left cell: headshot/logo placeholders. Right cell: name, license, contact details, left-aligned. This uses `<table>` layout since CSS flexbox is unreliable in email clients.
 
-## Files to modify
+### Files
 
-| File | Changes |
-|------|---------|
-| `renderBlocksToHtml.ts` | Fix image `display:inline-block`; replace social icons placeholder with actual styled links |
-| `BlockRenderer.tsx` | Replace emoji map with Lucide icons for social platforms |
+| File | Change |
+|------|--------|
+| `BlockRenderer.tsx` | Conditionally render horizontal vs vertical layout for agent_bio |
+| `renderBlocksToHtml.ts` | Conditionally render table-based horizontal layout vs centered vertical layout |
 
