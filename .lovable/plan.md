@@ -1,53 +1,56 @@
 
 
-# Fix Body Text Color for Listings, Agent Bio & Other Blocks
+# Fix Image Alignment in Preview & Social Media Icons
 
-## Problem
+## Two Issues
 
-The previous fix only updated `heading` and `text` blocks. Several other blocks still hardcode their text colors in both the editor (`BlockRenderer.tsx` via Tailwind classes like `text-foreground`) and the preview (`renderBlocksToHtml.ts` via inline `color:#1a1a1a`). These ignore `globalStyles.bodyColor`.
+### 1. Image alignment broken in preview HTML
 
-## Approach
+In `renderBlocksToHtml.ts` line 39, the `<img>` has `display:block`. The parent `<div>` uses `text-align` for alignment (line 41). But `text-align` only affects **inline** or **inline-block** elements -- it has no effect on `display:block` elements. So images always render left-aligned in the preview regardless of the alignment setting.
 
-Remove explicit color assignments from **primary text elements** so they inherit the global body color. Keep muted/secondary colors (detail lines, metadata) as relative opacity instead of hardcoded grays, so they scale with the chosen body color.
+**Fix**: Change the image rendering approach based on alignment:
+- For `center`: use `margin:0 auto` on the block-level image
+- For `right`: use `margin-left:auto` 
+- For `left`: keep default (no margin change)
+
+Alternatively, change `display:block` to `display:inline-block` so `text-align` works. This is simpler and matches the editor (which uses `inline-block` class on line 217).
+
+**File**: `renderBlocksToHtml.ts`, line 39 — change `display:block` to `display:inline-block` on the `<img>` tag.
+
+### 2. Social Media Icons use emoji placeholders
+
+The editor uses a `SOCIAL_PLATFORMS` map (line 170) with emojis (`📘`, `📷`, `💼`, `🐦`, `▶️`, `🎵`). The preview (line 129-134) just shows a text placeholder saying "Social media icons auto-populated from profile" -- it renders no actual icons at all.
+
+**Fix for preview** (`renderBlocksToHtml.ts`, `renderSocialIcons`): Replace the placeholder text with actual rendered social icon links. Use simple branded text-based links with platform-specific colors or a universal style since email clients don't support SVG icons reliably. The standard approach for email is to use small hosted PNG/SVG icon images or styled text links.
+
+Since we don't have hosted icon images, the pragmatic email-safe approach is to render styled text links with the platform name and a simple visual indicator (colored circle or branded color background).
+
+**Fix for editor** (`BlockRenderer.tsx`, line 170 and 310-330): Replace the emoji map with actual Lucide icons where possible. Lucide has icons for several platforms: `Facebook`, `Instagram`, `Linkedin`, `Twitter`, `Youtube`. For TikTok and others, use a generic `Globe` or `Link` icon.
 
 ## Changes
 
-### `renderBlocksToHtml.ts` — Remove hardcoded colors on primary text
+### `renderBlocksToHtml.ts` — Image alignment fix (line 39)
+Change the `<img>` style from `display:block` to `display:inline-block` so that the parent's `text-align` property takes effect.
 
-**Listings block** (`renderListings`):
-- Line 89: `color:#1a1a1a` on "Featured Listings" `<h3>` → remove color (inherit)
-- Line 99: `color:#1a1a1a` on price `<p>` → remove color (inherit)
-- Line 100: `color:#4b5563` on address `<p>` → remove color (inherit)
-- Line 101: `color:#6b7280` on city `<p>` → `opacity:0.7` instead
-- Line 102: `color:#9ca3af` on bed/bath `<p>` → `opacity:0.5` instead
-- Lines 115-118 (list view): same pattern as above
+### `renderBlocksToHtml.ts` — Social icons (lines 129-134)
+Replace the placeholder with actual rendered links. For each link in `props.links`, render an `<a>` tag with the platform name, styled as a small pill/badge with platform-specific background colors:
+- Facebook: `#1877F2`
+- Instagram: `#E4405F`
+- LinkedIn: `#0A66C2`
+- Twitter/X: `#000000`
+- YouTube: `#FF0000`
+- TikTok: `#000000`
+- Default: `#6b7280`
 
-**Agent bio block** (`renderAgentBio`):
-- Line 63: `color:#1a1a1a` on agent name → remove (inherit)
-- Line 64: `color:#64748b` on license → `opacity:0.6` instead
-- Line 65: `color:#374151` on brokerage → remove (inherit)
-- Lines 66-68: `color:#374151` on phone/office phone/email → remove (inherit)
-- Line 69: `color:#64748b` on office address → `opacity:0.6`
-- Line 72: `color:#94a3b8` on equal housing → `opacity:0.5`
+If no links are configured, show a subtle placeholder message.
 
-**Social icons** (line ~128): `color:#64748b` → remove
+### `BlockRenderer.tsx` — Social icons (lines 170, 310-330)
+Replace the `SOCIAL_PLATFORMS` emoji map with Lucide icon components. Import `Facebook`, `Instagram`, `Linkedin`, `Twitter`, `Youtube`, `Globe` from `lucide-react`. Render each platform link with its corresponding icon instead of an emoji. Keep the existing layout structure but swap the emoji `<span>` for the icon component.
 
-### `BlockRenderer.tsx` — Remove Tailwind color classes on primary text
+## Files to modify
 
-**Listings** (lines 254-276):
-- Line 254, 261: `text-foreground` on "Featured Listings" → remove class
-- Line 273: `text-foreground` on price → remove class
-- Lines 274-276: `text-muted-foreground` → change to `opacity-70` / `opacity-50` so they scale with the inherited body color
-
-**Agent bio** (line 300):
-- `text-center` keeps but any explicit color classes should be removed so the bio text inherits
-
-These changes mean primary text always inherits `globalStyles.bodyColor`, while secondary/detail text uses opacity to appear lighter relative to whatever the body color is.
-
-## Files
-
-| File | What changes |
-|------|-------------|
-| `renderBlocksToHtml.ts` | Remove hardcoded `color:` from listings & agent_bio primary text; use `opacity` for secondary |
-| `BlockRenderer.tsx` | Remove `text-foreground` / `text-muted-foreground` from listings & agent_bio; use `opacity-` utilities for secondary text |
+| File | Changes |
+|------|---------|
+| `renderBlocksToHtml.ts` | Fix image `display:inline-block`; replace social icons placeholder with actual styled links |
+| `BlockRenderer.tsx` | Replace emoji map with Lucide icons for social platforms |
 
