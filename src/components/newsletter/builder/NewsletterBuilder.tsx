@@ -46,11 +46,38 @@ export function NewsletterBuilder() {
   const hasLoadedRef = useRef(false);
   const isInitialLoadRef = useRef(true);
 
-  // Fetch brand colors and agent profile
+  // Load existing template directly by ID (bypasses hook's agent filter)
   useEffect(() => {
-    if (!user) return;
+    if (!templateId) {
+      setTimeout(() => { isInitialLoadRef.current = false; }, 500);
+      return;
+    }
+    if (hasLoadedRef.current) return;
+
+    supabase.from('newsletter_templates').select('*').eq('id', templateId).maybeSingle()
+      .then(({ data, error }) => {
+        if (error || !data) {
+          console.error('Failed to load template:', error);
+          setTimeout(() => { isInitialLoadRef.current = false; }, 500);
+          return;
+        }
+        isInitialLoadRef.current = true;
+        setBlocks((data.blocks_json || []) as unknown as NewsletterBlock[]);
+        setGlobalStyles({ ...DEFAULT_GLOBAL_STYLES, ...(data.global_styles as any || {}) });
+        setTemplateName(data.name);
+        setCurrentId(data.id);
+        setTemplateAgentId(data.agent_id);
+        hasLoadedRef.current = true;
+        setTimeout(() => { isInitialLoadRef.current = false; }, 500);
+      });
+  }, [templateId]);
+
+  // Fetch brand colors and agent profile for the template's agent (or current user)
+  const brandOwnerId = templateAgentId || user?.id;
+  useEffect(() => {
+    if (!brandOwnerId) return;
     // Fetch marketing settings
-    supabase.from('agent_marketing_settings').select('primary_color, secondary_color, headshot_url, logo_colored_url').eq('user_id', user.id).single()
+    supabase.from('agent_marketing_settings').select('primary_color, secondary_color, headshot_url, logo_colored_url').eq('user_id', brandOwnerId).maybeSingle()
       .then(({ data }) => {
         if (data) {
           setBrandColors({ primary: data.primary_color, secondary: data.secondary_color });
@@ -62,7 +89,7 @@ export function NewsletterBuilder() {
         }
       });
     // Fetch profile
-    supabase.from('profiles').select('first_name, last_name, full_name, email, phone_number, office_number, office_address, brokerage, license_number, website').eq('user_id', user.id).single()
+    supabase.from('profiles').select('first_name, last_name, full_name, email, phone_number, office_number, office_address, brokerage, license_number, website').eq('user_id', brandOwnerId).maybeSingle()
       .then(({ data }) => {
         if (data) {
           const name = data.full_name || [data.first_name, data.last_name].filter(Boolean).join(' ');
@@ -79,26 +106,7 @@ export function NewsletterBuilder() {
           }));
         }
       });
-  }, [user]);
-
-  // Load existing template
-  useEffect(() => {
-    if (templateId && templates.length > 0) {
-      const t = templates.find(t => t.id === templateId);
-      if (t) {
-        isInitialLoadRef.current = true;
-        setBlocks(t.blocks_json);
-        setGlobalStyles(t.global_styles);
-        setTemplateName(t.name);
-        setCurrentId(t.id);
-        setTemplateAgentId(t.agent_id);
-        hasLoadedRef.current = true;
-        setTimeout(() => { isInitialLoadRef.current = false; }, 500);
-      }
-    } else if (!templateId) {
-      setTimeout(() => { isInitialLoadRef.current = false; }, 500);
-    }
-  }, [templateId, templates]);
+  }, [brandOwnerId]);
 
   // Derive selected block - either top-level or nested child
   const selectedBlock = (() => {
