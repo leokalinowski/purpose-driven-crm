@@ -20,7 +20,8 @@ function escapeHtml(text: string): string {
 function renderHeading(props: Record<string, any>): string {
   const tag = `h${props.level || 2}`;
   const sizes: Record<number, string> = { 1: '32px', 2: '26px', 3: '22px', 4: '18px' };
-  return `<${tag} style="margin:0;padding:0;text-align:${props.align || 'center'};color:${props.color || '#1a1a1a'};font-size:${sizes[props.level || 2]};line-height:1.3;">${escapeHtml(props.text || '')}</${tag}>`;
+  const colorStyle = props.color ? `color:${props.color};` : '';
+  return `<${tag} style="margin:0;padding:0;text-align:${props.align || 'center'};${colorStyle}font-size:${sizes[props.level || 2]};line-height:1.3;">${escapeHtml(props.text || '')}</${tag}>`;
 }
 
 function convertNewlines(html: string): string {
@@ -29,7 +30,8 @@ function convertNewlines(html: string): string {
 }
 
 function renderText(props: Record<string, any>): string {
-  return `<div style="text-align:${props.align || 'left'};color:${props.color || '#374151'};font-size:${props.fontSize || 16}px;line-height:1.6;">${convertNewlines(props.html || '')}</div>`;
+  const colorStyle = props.color ? `color:${props.color};` : '';
+  return `<div style="text-align:${props.align || 'left'};${colorStyle}font-size:${props.fontSize || 16}px;line-height:1.6;">${convertNewlines(props.html || '')}</div>`;
 }
 
 function renderImage(props: Record<string, any>): string {

@@ -142,8 +142,8 @@ export const DEFAULT_GLOBAL_STYLES: GlobalStyles = {
 };
 
 export const BLOCK_DEFAULTS: Record<BlockType, Record<string, any>> = {
-  heading: { text: 'Your Heading', level: 2, align: 'center', color: '#1a1a1a' },
-  text: { html: '<p>Write your content here...</p>', align: 'left', color: '#374151', fontSize: 16 },
+  heading: { text: 'Your Heading', level: 2, align: 'center', color: '' },
+  text: { html: '<p>Write your content here...</p>', align: 'left', color: '', fontSize: 16 },
   image: { src: '', alt: 'Image', width: '100%', align: 'center', linkUrl: '', borderRadius: 0 },
   button: { text: 'Click Here', url: '#', backgroundColor: '#2563eb', textColor: '#ffffff', align: 'center', borderRadius: 6, fullWidth: false },
   divider: { color: '#e5e7eb', thickness: 1, style: 'solid', width: '100%' },
