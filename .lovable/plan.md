@@ -1,76 +1,51 @@
 
 
-# Newsletter Analytics -- Full Audit and Improvement Plan
+# Rebuild Admin Newsletter Management Page
 
-## Issues Found
+## Current State
 
-### Critical: campaign_id column never populated
+The Admin Newsletter Management page (`/admin/newsletter`) has **6 tabs**, most of which are legacy artifacts from the old CSV-based market-report newsletter system:
 
-The migration added a `campaign_id` column to `email_logs`, and the webhook correctly reads it to recalculate campaign stats. However, **none of the three sending functions actually write to this column**:
+1. **CSV Upload** -- Uploads market data CSVs for the old AI-generated market report pipeline. No longer relevant to the new template builder workflow.
+2. **Test Preview** -- Calls the `market-data-grok` edge function to preview old-style AI-generated emails by ZIP code. Not connected to the template builder.
+3. **Send Newsletter** -- `NewsletterSendManager` component that sends via the old `newsletter-send` function (CSV market data + AI generation). Duplicates functionality now available in the template builder's Send panel.
+4. **Agent Settings** -- Per-agent enable/disable toggle and schedule (day of month, hour). Triggers the old `newsletter-send` function per agent.
+5. **Campaign History** -- Shows `monthly_runs` table data (the legacy run tracker). Does not show `newsletter_campaigns` records created by the new template-send flow.
+6. **Cost Tracking** -- Placeholder component with no implementation.
 
-- **newsletter-send**: stores `campaign_id` inside `metadata` JSONB, not the actual `campaign_id` column
-- **newsletter-template-send**: doesn't reference `campaign_id` at all -- no campaign record is even created for template sends
-- **newsletter-monthly**: doesn't log individual emails to `email_logs` with campaign_id
-
-This means the webhook's campaign recalculation logic will never fire. Open/click rates on campaigns will stay at 0 forever despite real Resend events coming in.
-
-### Bug: Stacked bar chart double-counts
-
-The "Email Volume by Month" bar chart stacks `delivered`, `opened`, and `bounced`. But in the hook, emails with status `opened` or `clicked` are counted in **both** `delivered` and `opened` buckets. So the stacked total overstates the actual volume.
-
-### Unused code: expandedCampaign state
-
-The `expandedCampaign` state variable is declared and the `Collapsible` component is imported, but the expandable per-campaign drill-down was never built.
-
-### Missing: Agent names on campaigns
-
-The plan called for agent name resolution via `created_by`, but the query just selects raw `created_by` UUIDs with no join.
-
-### Missing: newsletter-template-send doesn't create campaign records
-
-When sending from the template builder, no `newsletter_campaigns` row is created, so those sends are invisible in the campaign table.
-
----
+**Core problem**: This page was built entirely around the old "upload CSV → Grok AI generates email per ZIP code" pipeline. The new system uses a drag-and-drop template builder with `newsletter-template-send`. The admin page needs to be rebuilt to manage the new workflow while preserving any legacy features that are still in use.
 
 ## Plan
 
-### 1. Fix campaign_id population in all sending functions
+### New Tab Structure (4 tabs)
 
-| Function | Change |
-|----------|--------|
-| `newsletter-send/index.ts` | Add `campaign_id: campaignRecord?.id` as a top-level column in both email_logs insert calls (success + failure), alongside the existing metadata |
-| `newsletter-template-send/index.ts` | Create a `newsletter_campaigns` record before sending, then pass its id as `campaign_id` in all email_logs inserts |
-| `newsletter-monthly/index.ts` | Same pattern -- capture the campaign record id and pass it when logging to email_logs (if it logs there; otherwise add logging) |
+1. **Templates** -- Admin view of all agents' templates (not just the logged-in user's). Shows agent name, template name, last updated, and a "Preview" action. Allows sending on behalf of any agent.
+2. **Campaigns** -- Unified campaign history pulling from both `newsletter_campaigns` and `monthly_runs`. Shows delivery stats from `email_logs`, agent name, status badge, and expandable drill-down (reusing patterns from the analytics dashboard).
+3. **Agent Settings** -- Keep existing agent enable/disable and scheduling controls, cleaned up. Add a column showing how many templates each agent has.
+4. **Market Data** -- Move the CSV Upload and Test Preview here as a secondary tool (some agents may still use the market-report pipeline). Consolidate into a single tab instead of two.
 
-### 2. Fix the stacked bar chart double-counting
+Remove the "Cost Tracking" tab entirely (placeholder with no backing table). Remove the top-level "Test Mode" toggle (test sends are handled per-action in the template builder's Send panel).
 
-In `useNewsletterAnalytics.ts`, change the monthly series logic so `delivered` counts only emails that were delivered but NOT opened/clicked. This makes the stacked bars sum to the true total:
-- `delivered_only` = delivered + sent (not opened/clicked)
-- `opened_only` = opened (not clicked)
-- `clicked` = clicked
-- `bounced` = bounced
+### Files to Create/Modify
 
-Update chart dataKeys accordingly.
+| File | Action | Description |
+|------|--------|-------------|
+| `src/pages/AdminNewsletter.tsx` | Rewrite | New 4-tab layout with Templates, Campaigns, Agent Settings, Market Data |
+| `src/components/admin/AdminNewsletterTemplates.tsx` | Create | Cross-agent template gallery with agent selector, preview thumbnails, and "Send as Agent" action |
+| `src/components/admin/AdminNewsletterCampaigns.tsx` | Create | Unified campaign table from `newsletter_campaigns` + `monthly_runs`, with email_logs breakdown, agent names, status badges, date filtering |
+| `src/hooks/useAdminNewsletter.ts` | Modify | Add query for all templates across agents; add `newsletter_campaigns` query with agent profile join; keep existing agent settings logic |
+| `src/components/admin/NewsletterSendManager.tsx` | Remove import | No longer needed as a separate tab; sending is done from the Templates tab |
+| `src/components/admin/NewsletterCostTracking.tsx` | Remove import | Placeholder with no backing data |
 
-### 3. Build the per-campaign expandable drill-down
+### Technical Details
 
-Wire up the existing `expandedCampaign` state. When a campaign row is clicked, expand it to show a mini breakdown: delivered / opened / clicked / bounced counts from `email_logs` filtered by `campaign_id`. Add a new query in the hook that fetches per-campaign stats.
+**Cross-agent template query**: Query `newsletter_templates` without filtering by `agent_id`, join with `profiles` on `agent_id` to show agent names. Admin RLS should allow this (admins can read all rows).
 
-### 4. Add agent name resolution
+**Unified campaign history**: Query `newsletter_campaigns` ordered by `created_at` desc, joined with `profiles` on `created_by`. Also query `monthly_runs` and merge into the same table format. Show real delivery metrics by joining `email_logs` grouped by `campaign_id`.
 
-Update the campaigns query to join profiles: select `created_by` and resolve first_name/last_name. Display an "Agent" column in the campaign table.
+**Send as Agent**: From the Templates tab, admin selects a template and clicks "Send". This opens the same `SendSchedulePanel` dialog but pre-fills the `agent_id` from the template's owner (not the admin's ID). The edge function already accepts `agent_id` as a parameter.
 
-### 5. Add CSV export button
+**Agent Settings tab**: Reuse existing `useAdminNewsletter` hook logic for settings. Add a count of templates per agent from the templates query.
 
-Add a "Download CSV" button to the campaign table that exports all visible campaign rows with their metrics.
-
-### 6. Summary of files to change
-
-| File | Changes |
-|------|---------|
-| `supabase/functions/newsletter-send/index.ts` | Add `campaign_id` column to both email_logs inserts |
-| `supabase/functions/newsletter-template-send/index.ts` | Create campaign record; add `campaign_id` to email_logs inserts |
-| `supabase/functions/newsletter-monthly/index.ts` | Pass campaign_id to email_logs if applicable |
-| `src/hooks/useNewsletterAnalytics.ts` | Fix bar chart double-counting; add per-campaign breakdown query; add agent name join on campaigns |
-| `src/components/newsletter/analytics/NewsletterAnalyticsDashboard.tsx` | Build expandable campaign rows; add Agent column; add CSV export; fix chart dataKeys |
+**Market Data tab**: Combine `CSVUploadManager` and `AdminNewsletterPreview` into a single tab, removing the need for two separate tabs.
 
