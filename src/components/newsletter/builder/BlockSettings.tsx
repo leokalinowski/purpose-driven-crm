@@ -6,7 +6,8 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Upload, Loader2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Upload, Loader2, Plus, X } from 'lucide-react';
 import { NewsletterBlock, GlobalStyles } from './types';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,6 +19,20 @@ interface BlockSettingsProps {
   globalStyles?: GlobalStyles;
   onUpdateGlobalStyles?: (styles: Partial<GlobalStyles>) => void;
 }
+
+const AVAILABLE_METRICS = [
+  { key: 'median_sale_price', label: 'Median Sale Price' },
+  { key: 'active_listings', label: 'Active Listings' },
+  { key: 'days_on_market', label: 'Days on Market' },
+  { key: 'price_per_sqft', label: 'Price per Sq Ft' },
+  { key: 'inventory', label: 'Inventory (months)' },
+  { key: 'new_listings', label: 'New Listings' },
+  { key: 'sold_listings', label: 'Sold Listings' },
+];
+
+const SOCIAL_PLATFORM_OPTIONS = [
+  'facebook', 'instagram', 'linkedin', 'twitter', 'youtube', 'tiktok',
+];
 
 export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalStyles }: BlockSettingsProps) {
   if (!block) {
@@ -116,7 +131,35 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
           </SettingGroup>
         </div>
       );
-    case 'market_data':
+    case 'columns':
+      return (
+        <div className="space-y-4">
+          <SettingGroup label="Number of Columns">
+            <Select value={String(p.columns || 2)} onValueChange={(v) => onUpdate({ columns: Number(v) })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="2">2 Columns</SelectItem>
+                <SelectItem value="3">3 Columns</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingGroup>
+          <SettingGroup label="Gap">
+            <div className="flex items-center gap-3">
+              <Slider value={[p.gap || 16]} min={0} max={32} step={4} onValueChange={([v]) => onUpdate({ gap: v })} className="flex-1" />
+              <span className="text-xs w-8 text-right">{p.gap || 16}px</span>
+            </div>
+          </SettingGroup>
+          <p className="text-xs text-muted-foreground">Drag content blocks into each column on the canvas.</p>
+        </div>
+      );
+    case 'market_data': {
+      const selectedMetrics: string[] = p.metrics || [];
+      const toggleMetric = (key: string) => {
+        const updated = selectedMetrics.includes(key)
+          ? selectedMetrics.filter((m: string) => m !== key)
+          : [...selectedMetrics, key];
+        onUpdate({ metrics: updated });
+      };
       return (
         <div className="space-y-4">
           <SettingGroup label="Header Text"><Input value={p.headerText} onChange={(e) => onUpdate({ headerText: e.target.value })} /></SettingGroup>
@@ -130,9 +173,24 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
               </SelectContent>
             </Select>
           </SettingGroup>
-          <p className="text-xs text-muted-foreground">Metrics are auto-populated per contact ZIP code at send time.</p>
+          <SettingGroup label="Metrics to Display">
+            <div className="space-y-2">
+              {AVAILABLE_METRICS.map(m => (
+                <div key={m.key} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`metric-${m.key}`}
+                    checked={selectedMetrics.includes(m.key)}
+                    onCheckedChange={() => toggleMetric(m.key)}
+                  />
+                  <label htmlFor={`metric-${m.key}`} className="text-xs cursor-pointer">{m.label}</label>
+                </div>
+              ))}
+            </div>
+          </SettingGroup>
+          <p className="text-xs text-muted-foreground">Real data auto-populated per contact ZIP code at send time.</p>
         </div>
       );
+    }
     case 'agent_bio':
       return (
         <div className="space-y-4">
@@ -153,7 +211,14 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
           ))}
         </div>
       );
-    case 'social_icons':
+    case 'social_icons': {
+      const links: { platform: string; url: string }[] = p.links || [];
+      const addLink = () => onUpdate({ links: [...links, { platform: 'facebook', url: '' }] });
+      const removeLink = (i: number) => onUpdate({ links: links.filter((_, idx) => idx !== i) });
+      const updateLink = (i: number, field: string, value: string) => {
+        const updated = links.map((l, idx) => idx === i ? { ...l, [field]: value } : l);
+        onUpdate({ links: updated });
+      };
       return (
         <div className="space-y-4">
           <AlignSetting value={p.align} onChange={(v) => onUpdate({ align: v })} />
@@ -163,9 +228,37 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
               <span className="text-xs w-8 text-right">{p.iconSize}px</span>
             </div>
           </SettingGroup>
-          <p className="text-xs text-muted-foreground">Social links are auto-populated from your profile at send time.</p>
+          <SettingGroup label="Social Links">
+            <div className="space-y-2">
+              {links.map((link, i) => (
+                <div key={i} className="flex gap-1.5 items-start">
+                  <Select value={link.platform} onValueChange={(v) => updateLink(i, 'platform', v)}>
+                    <SelectTrigger className="w-[110px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {SOCIAL_PLATFORM_OPTIONS.map(p => (
+                        <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    value={link.url}
+                    onChange={(e) => updateLink(i, 'url', e.target.value)}
+                    placeholder="https://..."
+                    className="h-8 text-xs flex-1"
+                  />
+                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeLink(i)}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" className="w-full" onClick={addLink}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add Link
+              </Button>
+            </div>
+          </SettingGroup>
         </div>
       );
+    }
     case 'listings':
       return (
         <div className="space-y-4">

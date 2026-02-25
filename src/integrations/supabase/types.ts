@@ -1796,6 +1796,59 @@ export type Database = {
           },
         ]
       }
+      newsletter_schedules: {
+        Row: {
+          agent_id: string
+          created_at: string | null
+          id: string
+          recipient_count: number | null
+          recipient_filter: Json | null
+          scheduled_at: string | null
+          sender_name: string | null
+          sent_at: string | null
+          status: string | null
+          subject: string
+          template_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string | null
+          id?: string
+          recipient_count?: number | null
+          recipient_filter?: Json | null
+          scheduled_at?: string | null
+          sender_name?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject?: string
+          template_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string | null
+          id?: string
+          recipient_count?: number | null
+          recipient_filter?: Json | null
+          scheduled_at?: string | null
+          sender_name?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject?: string
+          template_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_schedules_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "newsletter_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       newsletter_settings: {
         Row: {
           agent_id: string

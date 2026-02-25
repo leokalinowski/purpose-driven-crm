@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Save, Eye, EyeOff, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -10,6 +10,7 @@ import { BlockPalette } from './BlockPalette';
 import { BuilderCanvas } from './BuilderCanvas';
 import { BlockSettings } from './BlockSettings';
 import { PreviewPanel } from './PreviewPanel';
+import { SendSchedulePanel } from './SendSchedulePanel';
 import { NewsletterBlock, GlobalStyles, DEFAULT_GLOBAL_STYLES } from './types';
 import { useNewsletterTemplates } from '@/hooks/useNewsletterTemplates';
 import { useAuth } from '@/hooks/useAuth';
@@ -25,6 +26,7 @@ export function NewsletterBuilder() {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState('Monthly Newsletter');
   const [showPreview, setShowPreview] = useState(false);
+  const [showSendPanel, setShowSendPanel] = useState(false);
   const [currentId, setCurrentId] = useState<string | undefined>(templateId);
 
   // Load existing template
@@ -84,6 +86,10 @@ export function NewsletterBuilder() {
             {showPreview ? <EyeOff className="h-4 w-4 mr-1.5" /> : <Eye className="h-4 w-4 mr-1.5" />}
             {showPreview ? 'Editor' : 'Preview'}
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowSendPanel(true)}>
+            <Send className="h-4 w-4 mr-1.5" />
+            Send
+          </Button>
           <Button size="sm" onClick={handleSave} disabled={isSaving}>
             <Save className="h-4 w-4 mr-1.5" />
             {isSaving ? 'Saving...' : 'Save'}
@@ -137,6 +143,13 @@ export function NewsletterBuilder() {
           </div>
         )}
       </div>
+
+      <SendSchedulePanel
+        open={showSendPanel}
+        onClose={() => setShowSendPanel(false)}
+        templateId={currentId}
+        templateName={templateName}
+      />
     </DndProvider>
   );
 }

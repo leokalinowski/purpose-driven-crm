@@ -83,7 +83,7 @@ function renderBlock(block: NewsletterBlock, globalStyles: GlobalStyles): string
       const cols = block.children || [];
       const colCount = cols.length || 2;
       const gap = block.props.gap || 16;
-      const colWidth = Math.floor((100 - (gap * (colCount - 1)) / globalStyles.contentWidth * 100) / colCount);
+      const colWidth = Math.floor(100 / colCount);
       content = `<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`;
       cols.forEach((col, i) => {
         content += `<td style="width:${colWidth}%;vertical-align:top;${i < cols.length - 1 ? `padding-right:${gap}px;` : ''}">`;
