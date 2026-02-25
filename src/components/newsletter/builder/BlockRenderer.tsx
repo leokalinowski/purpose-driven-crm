@@ -197,7 +197,7 @@ function BlockPreview({
       return (
         <Tag
           className={`${sizes[block.props.level || 2]} font-bold`}
-          style={{ textAlign: block.props.align, color: block.props.color }}
+          style={{ textAlign: block.props.align, color: block.props.color || undefined }}
         >
           {block.props.text}
         </Tag>
@@ -207,7 +207,7 @@ function BlockPreview({
       return (
         <div
           className="max-w-none"
-          style={{ textAlign: block.props.align, color: block.props.color, fontSize: block.props.fontSize }}
+          style={{ textAlign: block.props.align, color: block.props.color || undefined, fontSize: block.props.fontSize }}
           dangerouslySetInnerHTML={{ __html: convertNewlines(block.props.html || '') }}
         />
       );

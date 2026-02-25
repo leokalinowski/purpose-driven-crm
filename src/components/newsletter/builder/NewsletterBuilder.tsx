@@ -226,7 +226,7 @@ export function NewsletterBuilder() {
             <ScrollArea className="flex-1 p-6">
               <div className="max-w-[640px] mx-auto" onClick={handleClearSelection}>
                 <div className="rounded-xl shadow-sm min-h-[600px]" style={{ backgroundColor: globalStyles.backgroundColor, padding: '24px 16px' }}>
-                  <div className="mx-auto rounded-lg border p-6" style={{ maxWidth: globalStyles.contentWidth || 640, backgroundColor: '#ffffff', fontFamily: globalStyles.fontFamily }}>
+                  <div className="mx-auto rounded-lg border p-6" style={{ maxWidth: globalStyles.contentWidth || 640, backgroundColor: '#ffffff', fontFamily: globalStyles.fontFamily, color: globalStyles.bodyColor }}>
                     <BuilderCanvas
                       blocks={blocks}
                       selectedBlockId={selectedBlockId}
