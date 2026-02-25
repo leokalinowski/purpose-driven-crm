@@ -57,21 +57,34 @@ function renderSpacer(props: Record<string, any>): string {
 }
 
 function renderAgentBio(props: Record<string, any>): string {
-  const sections: string[] = [];
-  if (props.showHeadshot !== false) sections.push('<div class="agent-headshot">{{agent_headshot}}</div>');
-  if (props.showLogo !== false) sections.push('<div class="agent-logo">{{agent_logo}}</div>');
-  sections.push('<p style="margin:4px 0;font-weight:bold;font-size:16px;">{{agent_name}}</p>');
-  if (props.showLicense !== false) sections.push('<p style="margin:2px 0;font-size:12px;opacity:0.6;">License: {{agent_license}}</p>');
-  if (props.showBrokerage !== false) sections.push('<p style="margin:2px 0;font-size:13px;">{{agent_brokerage}}</p>');
-  if (props.showPhone !== false) sections.push('<p style="margin:2px 0;font-size:13px;">📱 {{agent_phone}}</p>');
-  if (props.showOfficePhone !== false) sections.push('<p style="margin:2px 0;font-size:13px;">☎️ {{agent_office_phone}}</p>');
-  if (props.showEmail !== false) sections.push('<p style="margin:2px 0;font-size:13px;">✉️ {{agent_email}}</p>');
-  if (props.showOfficeAddress !== false) sections.push('<p style="margin:2px 0;font-size:12px;opacity:0.6;">{{agent_office_address}}</p>');
-  if (props.showWebsite !== false) sections.push('<p style="margin:2px 0;font-size:13px;"><a href="{{agent_website}}" style="color:#2563eb;">{{agent_website}}</a></p>');
+  const imageSections: string[] = [];
+  const textSections: string[] = [];
+
+  if (props.showHeadshot !== false) imageSections.push('<div class="agent-headshot">{{agent_headshot}}</div>');
+  if (props.showLogo !== false) imageSections.push('<div class="agent-logo">{{agent_logo}}</div>');
+  textSections.push('<p style="margin:4px 0;font-weight:bold;font-size:16px;">{{agent_name}}</p>');
+  if (props.showLicense !== false) textSections.push('<p style="margin:2px 0;font-size:12px;opacity:0.6;">License: {{agent_license}}</p>');
+  if (props.showBrokerage !== false) textSections.push('<p style="margin:2px 0;font-size:13px;">{{agent_brokerage}}</p>');
+  if (props.showPhone !== false) textSections.push('<p style="margin:2px 0;font-size:13px;">📱 {{agent_phone}}</p>');
+  if (props.showOfficePhone !== false) textSections.push('<p style="margin:2px 0;font-size:13px;">☎️ {{agent_office_phone}}</p>');
+  if (props.showEmail !== false) textSections.push('<p style="margin:2px 0;font-size:13px;">✉️ {{agent_email}}</p>');
+  if (props.showOfficeAddress !== false) textSections.push('<p style="margin:2px 0;font-size:12px;opacity:0.6;">{{agent_office_address}}</p>');
+  if (props.showWebsite !== false) textSections.push('<p style="margin:2px 0;font-size:13px;"><a href="{{agent_website}}" style="color:#2563eb;">{{agent_website}}</a></p>');
   if (props.showEqualHousing !== false) {
-    sections.push('<p style="margin:8px 0 0;font-size:11px;opacity:0.5;">Equal Housing Opportunity. Each office independently owned and operated.</p>');
+    textSections.push('<p style="margin:8px 0 0;font-size:11px;opacity:0.5;">Equal Housing Opportunity. Each office independently owned and operated.</p>');
   }
-  return `<div style="background:#f8fafc;border-radius:8px;padding:20px;text-align:center;">${sections.join('\n    ')}</div>`;
+
+  if (props.layout === 'horizontal') {
+    return `<div style="background:#f8fafc;border-radius:8px;padding:20px;">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        ${imageSections.length > 0 ? `<td style="width:100px;vertical-align:top;text-align:center;padding-right:16px;">${imageSections.join('\n')}</td>` : ''}
+        <td style="vertical-align:top;text-align:left;">${textSections.join('\n')}</td>
+      </tr></table>
+    </div>`;
+  }
+
+  const allSections = [...imageSections, ...textSections];
+  return `<div style="background:#f8fafc;border-radius:8px;padding:20px;text-align:center;">${allSections.join('\n    ')}</div>`;
 }
 
 function renderListings(props: Record<string, any>): string {
