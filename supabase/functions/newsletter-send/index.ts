@@ -83,7 +83,7 @@ ${agent.office_number ? `Office: ${agent.office_number}` : ''}
 ${agent.email ? `Email: ${agent.email}` : ''}
 ${agent.website || ''}
 
-This email was sent because you are a valued contact in our database.
+This email was sent because you are a valued contact in our sphere.
 To unsubscribe from these market updates, reply with "unsubscribe" in the subject line.
 
 © ${new Date().getFullYear()} ${agentName}. All rights reserved.
@@ -252,7 +252,7 @@ async function generateStandardFooter(agent: AgentProfile, contactEmail: string)
             
       <div style="font-size: 12px; color: #999; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
         <p style="margin: 3px 0;">
-          This email was sent because you are a valued contact in our database.
+          This email was sent because you are a valued contact in our sphere.
         </p>
         ${companyAddress ? `<p style="margin: 3px 0;">${companyAddress}</p>` : ''}
         <p style="margin: 8px 0;">

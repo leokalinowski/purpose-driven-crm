@@ -171,7 +171,7 @@ export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
 
             <div style="font-size: 12px; color: #999; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
               <p style="margin: 3px 0;">
-                This email was sent because you are a valued contact in our database.
+                This email was sent because you are a valued contact in our sphere.
               </p>
               <p style="margin: 3px 0;">
                 If you no longer wish to receive these market updates, you can

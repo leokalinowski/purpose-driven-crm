@@ -288,7 +288,7 @@ function generateUnsubscribeFooter(unsubscribeUrl: string, agentName: string, co
   return `
     <div style="padding: 20px 0; margin-top: 20px; border-top: 1px solid #e5e5e5; text-align: center;">
       <p style="font-size: 12px; color: #999; margin: 3px 0;">
-        This email was sent because you are a valued contact in our database.
+        This email was sent because you are a valued contact in our sphere.
       </p>
       ${companyAddress ? `<p style="font-size: 12px; color: #999; margin: 3px 0;">${escapeHtml(companyAddress)}</p>` : ''}
       <p style="font-size: 12px; color: #999; margin: 8px 0;">
