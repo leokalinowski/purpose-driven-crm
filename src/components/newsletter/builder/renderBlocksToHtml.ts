@@ -60,16 +60,16 @@ function renderAgentBio(props: Record<string, any>): string {
   const sections: string[] = [];
   if (props.showHeadshot !== false) sections.push('<div class="agent-headshot">{{agent_headshot}}</div>');
   if (props.showLogo !== false) sections.push('<div class="agent-logo">{{agent_logo}}</div>');
-  sections.push('<p style="margin:4px 0;font-weight:bold;font-size:16px;color:#1a1a1a;">{{agent_name}}</p>');
-  if (props.showLicense !== false) sections.push('<p style="margin:2px 0;font-size:12px;color:#64748b;">License: {{agent_license}}</p>');
-  if (props.showBrokerage !== false) sections.push('<p style="margin:2px 0;font-size:13px;color:#374151;">{{agent_brokerage}}</p>');
-  if (props.showPhone !== false) sections.push('<p style="margin:2px 0;font-size:13px;color:#374151;">📱 {{agent_phone}}</p>');
-  if (props.showOfficePhone !== false) sections.push('<p style="margin:2px 0;font-size:13px;color:#374151;">☎️ {{agent_office_phone}}</p>');
-  if (props.showEmail !== false) sections.push('<p style="margin:2px 0;font-size:13px;color:#374151;">✉️ {{agent_email}}</p>');
-  if (props.showOfficeAddress !== false) sections.push('<p style="margin:2px 0;font-size:12px;color:#64748b;">{{agent_office_address}}</p>');
+  sections.push('<p style="margin:4px 0;font-weight:bold;font-size:16px;">{{agent_name}}</p>');
+  if (props.showLicense !== false) sections.push('<p style="margin:2px 0;font-size:12px;opacity:0.6;">License: {{agent_license}}</p>');
+  if (props.showBrokerage !== false) sections.push('<p style="margin:2px 0;font-size:13px;">{{agent_brokerage}}</p>');
+  if (props.showPhone !== false) sections.push('<p style="margin:2px 0;font-size:13px;">📱 {{agent_phone}}</p>');
+  if (props.showOfficePhone !== false) sections.push('<p style="margin:2px 0;font-size:13px;">☎️ {{agent_office_phone}}</p>');
+  if (props.showEmail !== false) sections.push('<p style="margin:2px 0;font-size:13px;">✉️ {{agent_email}}</p>');
+  if (props.showOfficeAddress !== false) sections.push('<p style="margin:2px 0;font-size:12px;opacity:0.6;">{{agent_office_address}}</p>');
   if (props.showWebsite !== false) sections.push('<p style="margin:2px 0;font-size:13px;"><a href="{{agent_website}}" style="color:#2563eb;">{{agent_website}}</a></p>');
   if (props.showEqualHousing !== false) {
-    sections.push('<p style="margin:8px 0 0;font-size:11px;color:#94a3b8;">Equal Housing Opportunity. Each office independently owned and operated.</p>');
+    sections.push('<p style="margin:8px 0 0;font-size:11px;opacity:0.5;">Equal Housing Opportunity. Each office independently owned and operated.</p>');
   }
   return `<div style="background:#f8fafc;border-radius:8px;padding:20px;text-align:center;">${sections.join('\n    ')}</div>`;
 }
@@ -86,7 +86,7 @@ function renderListings(props: Record<string, any>): string {
 
   const isGrid = style === 'grid';
   let html = `<div style="padding:4px 0;">
-    <h3 style="margin:0 0 16px;color:#1a1a1a;font-size:20px;font-weight:600;">Featured Listings</h3>`;
+    <h3 style="margin:0 0 16px;font-size:20px;font-weight:600;">Featured Listings</h3>`;
 
   if (isGrid) {
     html += `<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`;
@@ -96,10 +96,10 @@ function renderListings(props: Record<string, any>): string {
         <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#ffffff;">
           ${l.image_url ? `<img src="${l.image_url}" alt="${escapeHtml(l.address)}" style="width:100%;height:140px;object-fit:cover;display:block;" />` : `<div style="height:140px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;text-align:center;color:#9ca3af;font-size:14px;">No Image</div>`}
           <div style="padding:12px;">
-            <p style="margin:0;font-weight:700;font-size:16px;color:#1a1a1a;">${escapeHtml(l.price)}</p>
-            <p style="margin:4px 0 0;font-size:13px;color:#4b5563;">${escapeHtml(l.address)}</p>
-            ${l.city ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${escapeHtml(l.city)}</p>` : ''}
-            <p style="margin:6px 0 0;font-size:12px;color:#9ca3af;">${l.beds} bed · ${l.baths} bath · ${escapeHtml(l.sqft)} sqft</p>
+            <p style="margin:0;font-weight:700;font-size:16px;">${escapeHtml(l.price)}</p>
+             <p style="margin:4px 0 0;font-size:13px;">${escapeHtml(l.address)}</p>
+             ${l.city ? `<p style="margin:2px 0 0;font-size:12px;opacity:0.7;">${escapeHtml(l.city)}</p>` : ''}
+             <p style="margin:6px 0 0;font-size:12px;opacity:0.5;">${l.beds} bed · ${l.baths} bath · ${escapeHtml(l.sqft)} sqft</p>
           </div>
         </div>
       </td>`;
@@ -112,10 +112,10 @@ function renderListings(props: Record<string, any>): string {
         <tr>
           ${l.image_url ? `<td style="width:120px;"><img src="${l.image_url}" alt="${escapeHtml(l.address)}" style="width:120px;height:90px;object-fit:cover;display:block;" /></td>` : `<td style="width:120px;background:#f3f4f6;text-align:center;font-size:13px;color:#9ca3af;vertical-align:middle;">No Image</td>`}
           <td style="padding:12px;vertical-align:top;">
-            <p style="margin:0;font-weight:700;font-size:16px;color:#1a1a1a;">${escapeHtml(l.price)}</p>
-            <p style="margin:4px 0 0;font-size:13px;color:#4b5563;">${escapeHtml(l.address)}</p>
-            ${l.city ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${escapeHtml(l.city)}</p>` : ''}
-            <p style="margin:6px 0 0;font-size:12px;color:#9ca3af;">${l.beds} bed · ${l.baths} bath · ${escapeHtml(l.sqft)} sqft</p>
+            <p style="margin:0;font-weight:700;font-size:16px;">${escapeHtml(l.price)}</p>
+             <p style="margin:4px 0 0;font-size:13px;">${escapeHtml(l.address)}</p>
+             ${l.city ? `<p style="margin:2px 0 0;font-size:12px;opacity:0.7;">${escapeHtml(l.city)}</p>` : ''}
+             <p style="margin:6px 0 0;font-size:12px;opacity:0.5;">${l.beds} bed · ${l.baths} bath · ${escapeHtml(l.sqft)} sqft</p>
           </td>
         </tr>
       </table>`;
@@ -130,7 +130,7 @@ function renderSocialIcons(props: Record<string, any>): string {
   const align = props.align || 'center';
   const size = props.iconSize || 32;
   return `<div style="text-align:${align};padding:8px 0;">
-    <p style="color:#64748b;font-size:14px;margin:0;">Social media icons (${size}px) auto-populated from profile.</p>
+    <p style="font-size:14px;margin:0;opacity:0.6;">Social media icons (${size}px) auto-populated from profile.</p>
   </div>`;
 }
 

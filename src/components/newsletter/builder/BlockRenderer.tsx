@@ -251,14 +251,14 @@ function BlockPreview({
       if (listings.length === 0) {
         return (
           <div className="border border-border rounded-lg p-6 text-center">
-            <p className="font-semibold text-foreground text-sm">Featured Listings</p>
-            <p className="text-xs text-muted-foreground mt-1">Paste listing URLs in settings to add properties →</p>
+            <p className="font-semibold text-sm">Featured Listings</p>
+            <p className="text-xs opacity-50 mt-1">Paste listing URLs in settings to add properties →</p>
           </div>
         );
       }
       return (
         <div className="p-1">
-          <p className="font-semibold text-foreground text-sm mb-3">Featured Listings</p>
+          <p className="font-semibold text-sm mb-3">Featured Listings</p>
           <div className={isGrid ? 'grid grid-cols-2 gap-3' : 'space-y-3'}>
             {listings.map((l: any) => (
               <div key={l.id} className={`bg-card rounded-lg border border-border overflow-hidden ${isGrid ? '' : 'flex items-center gap-3'}`}>
@@ -270,10 +270,10 @@ function BlockPreview({
                   </div>
                 )}
                 <div className="p-3 min-w-0">
-                  <p className="font-bold text-sm text-foreground truncate">{l.price}</p>
-                  <p className="text-xs text-muted-foreground truncate mt-1">{l.address}</p>
-                  {l.city && <p className="text-xs text-muted-foreground truncate">{l.city}</p>}
-                  <p className="text-xs text-muted-foreground/70 mt-1">{l.beds} bed · {l.baths} bath · {l.sqft} sqft</p>
+                  <p className="font-bold text-sm truncate">{l.price}</p>
+                  <p className="text-xs opacity-70 truncate mt-1">{l.address}</p>
+                  {l.city && <p className="text-xs opacity-60 truncate">{l.city}</p>}
+                  <p className="text-xs opacity-50 mt-1">{l.beds} bed · {l.baths} bath · {l.sqft} sqft</p>
                 </div>
               </div>
             ))}
@@ -298,7 +298,7 @@ function BlockPreview({
       return (
         <div className="bg-muted rounded-lg p-4">
           <p className="font-semibold text-sm text-center mb-2">👤 Agent Bio & Compliance</p>
-          <p className="text-xs text-muted-foreground text-center mb-3">Auto-populated from your profile at send time</p>
+          <p className="text-xs opacity-60 text-center mb-3">Auto-populated from your profile at send time</p>
           <div className="flex flex-wrap gap-1.5 justify-center">
             {enabled.map(([key, label]) => (
               <span key={key} className="text-xs bg-background border rounded-full px-2 py-0.5">✓ {label}</span>
