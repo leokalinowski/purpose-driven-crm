@@ -1,35 +1,53 @@
 
 
-# Fix Editor Background & Global Font Inheritance
+# Use Global Body Text Color Across All Blocks
 
-## Three Problems Found
+## Problem
 
-1. **Editor background fills everything** — Line 228 of `NewsletterBuilder.tsx` applies `backgroundColor` directly on the canvas wrapper. But the preview HTML (line 236-238 of `renderBlocksToHtml.ts`) uses a two-layer structure: outer wrapper with background color, inner white content area. The editor needs to match this structure.
+The Global Styles panel has a "Body Text Color" (`bodyColor`) setting, but it is ignored in both the editor and the preview. Every block hardcodes its own fallback color (`#1a1a1a` for headings, `#374151` for text), so changing the global body color has no effect.
 
-2. **Fonts still differ in preview HTML** — `renderBlocksToHtml.ts` line 87 still has `font-family:Georgia,serif` hardcoded on the listings heading. This overrides the global font set on `<body>`.
+## Approach
 
-3. **Fonts don't inherit in editor** — `BlockRenderer.tsx` line 209 uses Tailwind's `prose prose-sm` class on text blocks, which applies its own `font-family` and overrides the inherited global font.
+Make blocks inherit the global body color by default, while still allowing per-block color overrides when the user explicitly sets one.
 
 ## Changes
 
-### `NewsletterBuilder.tsx` (line 228)
-Replace single wrapper with two-layer structure matching the preview:
-- **Outer div**: background color from `globalStyles.backgroundColor`, padding
-- **Inner div**: white background (`#ffffff`), border-radius, `fontFamily` from global styles, content width from `globalStyles.contentWidth`
+### 1. Editor canvas — `NewsletterBuilder.tsx` (line 229)
+Add `color: globalStyles.bodyColor` to the inner content div's inline style, so all child blocks inherit it.
 
-```
-// Before (line 228):
-<div className="rounded-xl shadow-sm border p-6 min-h-[600px]" style={{ backgroundColor: globalStyles.backgroundColor, fontFamily: globalStyles.fontFamily }}>
+### 2. Block defaults — `types.ts` (BLOCK_DEFAULTS, lines ~129-130)
+Change heading and text default colors from hardcoded values to empty string `''`:
+- `heading.color`: `'#1a1a1a'` → `''`
+- `text.color`: `'#374151'` → `''`
 
-// After:
-<div className="rounded-xl shadow-sm min-h-[600px]" style={{ backgroundColor: globalStyles.backgroundColor, padding: '24px 16px' }}>
-  <div className="mx-auto rounded-lg border p-6" style={{ maxWidth: globalStyles.contentWidth || 640, backgroundColor: '#ffffff', fontFamily: globalStyles.fontFamily }}>
-```
-And add a closing `</div>` on what is currently line 238.
+This means new blocks will have no explicit color and will inherit from the global style.
 
-### `renderBlocksToHtml.ts` (line 87)
-Remove `font-family:Georgia,serif;` from the listings `<h3>` tag so it inherits the global font.
+### 3. Editor block rendering — `BlockRenderer.tsx` (lines 200, 210)
+Only apply inline `color` when `block.props.color` is truthy (non-empty). If empty, omit it so the block inherits from the canvas wrapper:
+- Line 200: `color: block.props.color || undefined`
+- Line 210: `color: block.props.color || undefined`
 
-### `BlockRenderer.tsx` (line 209)
-Remove `prose prose-sm` from the text block's className. These Tailwind typography classes apply their own font-family, overriding inheritance. Keep only `max-w-none`.
+### 4. Preview HTML rendering — `renderBlocksToHtml.ts`
+
+Pass `globalStyles` into render functions so they can use the body color as fallback:
+
+- **`renderHeading`** (line 23): Change fallback from `'#1a1a1a'` to use inherited color — remove `color:` from inline style when `props.color` is empty, letting it inherit from `<body style="color:${gs.bodyColor}">` which is already set on line 232.
+- **`renderText`** (line 32): Same — remove `color:` when `props.color` is empty.
+
+Concretely:
+- Heading: `color:${props.color || '#1a1a1a'}` → only emit color style if `props.color` is truthy
+- Text: `color:${props.color || '#374151'}` → same
+
+The `<body>` tag already sets `color:${gs.bodyColor}` (line 232 of renderBlocksToHtml), so inheritance will work automatically once we stop overriding it in every block.
+
+## Summary of files
+
+| File | Change |
+|------|--------|
+| `NewsletterBuilder.tsx` | Add `color: globalStyles.bodyColor` to canvas inner div |
+| `types.ts` | Default heading/text color → `''` |
+| `BlockRenderer.tsx` | Only apply color when non-empty |
+| `renderBlocksToHtml.ts` | Only emit color style when non-empty; rely on body color inheritance |
+
+Existing templates with explicitly saved colors will keep working. Only new blocks will default to inheriting the global color.
 
