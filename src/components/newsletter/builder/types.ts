@@ -17,7 +17,6 @@ export interface HeadingProps {
   level: 1 | 2 | 3 | 4;
   align: 'left' | 'center' | 'right';
   color: string;
-  fontFamily: string;
 }
 
 export interface TextProps {
@@ -25,7 +24,6 @@ export interface TextProps {
   align: 'left' | 'center' | 'right';
   color: string;
   fontSize: number;
-  fontFamily: string;
 }
 
 export interface ImageProps {
@@ -144,8 +142,8 @@ export const DEFAULT_GLOBAL_STYLES: GlobalStyles = {
 };
 
 export const BLOCK_DEFAULTS: Record<BlockType, Record<string, any>> = {
-  heading: { text: 'Your Heading', level: 2, align: 'center', color: '#1a1a1a', fontFamily: 'Georgia, serif' },
-  text: { html: '<p>Write your content here...</p>', align: 'left', color: '#374151', fontSize: 16, fontFamily: 'Georgia, serif' },
+  heading: { text: 'Your Heading', level: 2, align: 'center', color: '#1a1a1a' },
+  text: { html: '<p>Write your content here...</p>', align: 'left', color: '#374151', fontSize: 16 },
   image: { src: '', alt: 'Image', width: '100%', align: 'center', linkUrl: '', borderRadius: 0 },
   button: { text: 'Click Here', url: '#', backgroundColor: '#2563eb', textColor: '#ffffff', align: 'center', borderRadius: 6, fullWidth: false },
   divider: { color: '#e5e7eb', thickness: 1, style: 'solid', width: '100%' },

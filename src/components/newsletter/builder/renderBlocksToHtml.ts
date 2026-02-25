@@ -20,7 +20,7 @@ function escapeHtml(text: string): string {
 function renderHeading(props: Record<string, any>): string {
   const tag = `h${props.level || 2}`;
   const sizes: Record<number, string> = { 1: '32px', 2: '26px', 3: '22px', 4: '18px' };
-  return `<${tag} style="margin:0;padding:0;text-align:${props.align || 'center'};color:${props.color || '#1a1a1a'};font-family:${props.fontFamily || 'Georgia, serif'};font-size:${sizes[props.level || 2]};line-height:1.3;">${escapeHtml(props.text || '')}</${tag}>`;
+  return `<${tag} style="margin:0;padding:0;text-align:${props.align || 'center'};color:${props.color || '#1a1a1a'};font-size:${sizes[props.level || 2]};line-height:1.3;">${escapeHtml(props.text || '')}</${tag}>`;
 }
 
 function convertNewlines(html: string): string {
@@ -29,7 +29,7 @@ function convertNewlines(html: string): string {
 }
 
 function renderText(props: Record<string, any>): string {
-  return `<div style="text-align:${props.align || 'left'};color:${props.color || '#374151'};font-size:${props.fontSize || 16}px;line-height:1.6;font-family:${props.fontFamily || 'Georgia, serif'};">${convertNewlines(props.html || '')}</div>`;
+  return `<div style="text-align:${props.align || 'left'};color:${props.color || '#374151'};font-size:${props.fontSize || 16}px;line-height:1.6;">${convertNewlines(props.html || '')}</div>`;
 }
 
 function renderImage(props: Record<string, any>): string {
@@ -42,7 +42,7 @@ function renderImage(props: Record<string, any>): string {
 function renderButton(props: Record<string, any>): string {
   const width = props.fullWidth ? 'display:block;width:100%;' : 'display:inline-block;';
   return `<div style="text-align:${props.align || 'center'};padding:8px 0;">
-    <a href="${props.url || '#'}" target="_blank" style="${width}background-color:${props.backgroundColor || '#2563eb'};color:${props.textColor || '#ffffff'};padding:14px 28px;border-radius:${props.borderRadius || 6}px;text-decoration:none;font-weight:600;font-size:16px;font-family:Arial,sans-serif;text-align:center;">${escapeHtml(props.text || 'Click Here')}</a>
+    <a href="${props.url || '#'}" target="_blank" style="${width}background-color:${props.backgroundColor || '#2563eb'};color:${props.textColor || '#ffffff'};padding:14px 28px;border-radius:${props.borderRadius || 6}px;text-decoration:none;font-weight:600;font-size:16px;text-align:center;">${escapeHtml(props.text || 'Click Here')}</a>
   </div>`;
 }
 
@@ -56,8 +56,8 @@ function renderSpacer(props: Record<string, any>): string {
 
 function renderAgentBio(props: Record<string, any>): string {
   const sections: string[] = [];
-  if (props.showHeadshot !== false) sections.push('{{agent_headshot}}');
-  if (props.showLogo !== false) sections.push('{{agent_logo}}');
+  if (props.showHeadshot !== false) sections.push('<div class="agent-headshot">{{agent_headshot}}</div>');
+  if (props.showLogo !== false) sections.push('<div class="agent-logo">{{agent_logo}}</div>');
   sections.push('<p style="margin:4px 0;font-weight:bold;font-size:16px;color:#1a1a1a;">{{agent_name}}</p>');
   if (props.showLicense !== false) sections.push('<p style="margin:2px 0;font-size:12px;color:#64748b;">License: {{agent_license}}</p>');
   if (props.showBrokerage !== false) sections.push('<p style="margin:2px 0;font-size:13px;color:#374151;">{{agent_brokerage}}</p>');
@@ -94,7 +94,7 @@ function renderListings(props: Record<string, any>): string {
         <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#ffffff;">
           ${l.image_url ? `<img src="${l.image_url}" alt="${escapeHtml(l.address)}" style="width:100%;height:140px;object-fit:cover;display:block;" />` : `<div style="height:140px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;text-align:center;color:#9ca3af;font-size:14px;">No Image</div>`}
           <div style="padding:12px;">
-            <p style="margin:0;font-weight:700;font-size:16px;color:#1a1a1a;font-family:Georgia,serif;">${escapeHtml(l.price)}</p>
+            <p style="margin:0;font-weight:700;font-size:16px;color:#1a1a1a;">${escapeHtml(l.price)}</p>
             <p style="margin:4px 0 0;font-size:13px;color:#4b5563;">${escapeHtml(l.address)}</p>
             ${l.city ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${escapeHtml(l.city)}</p>` : ''}
             <p style="margin:6px 0 0;font-size:12px;color:#9ca3af;">${l.beds} bed · ${l.baths} bath · ${escapeHtml(l.sqft)} sqft</p>
@@ -110,7 +110,7 @@ function renderListings(props: Record<string, any>): string {
         <tr>
           ${l.image_url ? `<td style="width:120px;"><img src="${l.image_url}" alt="${escapeHtml(l.address)}" style="width:120px;height:90px;object-fit:cover;display:block;" /></td>` : `<td style="width:120px;background:#f3f4f6;text-align:center;font-size:13px;color:#9ca3af;vertical-align:middle;">No Image</td>`}
           <td style="padding:12px;vertical-align:top;">
-            <p style="margin:0;font-weight:700;font-size:16px;color:#1a1a1a;font-family:Georgia,serif;">${escapeHtml(l.price)}</p>
+            <p style="margin:0;font-weight:700;font-size:16px;color:#1a1a1a;">${escapeHtml(l.price)}</p>
             <p style="margin:4px 0 0;font-size:13px;color:#4b5563;">${escapeHtml(l.address)}</p>
             ${l.city ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${escapeHtml(l.city)}</p>` : ''}
             <p style="margin:6px 0 0;font-size:12px;color:#9ca3af;">${l.beds} bed · ${l.baths} bath · ${escapeHtml(l.sqft)} sqft</p>
@@ -182,15 +182,14 @@ function replaceAgentPlaceholders(html: string, agent: AgentData): string {
   if (agent.headshot_url) {
     html = html.replace('{{agent_headshot}}', `<img src="${agent.headshot_url}" alt="Agent headshot" style="width:80px;height:80px;border-radius:50%;object-fit:cover;display:inline-block;margin-bottom:8px;" />`);
   } else {
-    // Remove the entire line containing the placeholder
-    html = html.replace(/[^\n]*\{\{agent_headshot\}\}[^\n]*/g, '');
+    html = html.replace(/<div class="agent-headshot">[^<]*\{\{agent_headshot\}\}[^<]*<\/div>/g, '');
   }
 
   // Replace logo placeholder
   if (agent.logo_url) {
     html = html.replace('{{agent_logo}}', `<img src="${agent.logo_url}" alt="Logo" style="max-width:160px;height:auto;display:inline-block;margin-bottom:8px;" />`);
   } else {
-    html = html.replace(/[^\n]*\{\{agent_logo\}\}[^\n]*/g, '');
+    html = html.replace(/<div class="agent-logo">[^<]*\{\{agent_logo\}\}[^<]*<\/div>/g, '');
   }
 
   // Replace text placeholders
