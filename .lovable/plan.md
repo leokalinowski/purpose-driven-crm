@@ -1,40 +1,24 @@
 
 
-# Fix: Admin-Created Templates Being Saved to Admin's Account
+# Plan: Match Agent TemplateList Layout to Admin Layout
 
-## Root Cause
+## Current State
 
-The `NewsletterBuilder` component calls `useNewsletterTemplates()` on line 30 **without any agentId argument**. This means the hook defaults to `user.id` (the logged-in admin) and filters templates with `.eq('agent_id', user.id)`.
+The agent's `TemplateList` (image-71) uses a plain `div` wrapper, taller thumbnails (h-48), simple date format, no status badge, and only Edit/Copy/Delete buttons. The admin's `AdminNewsletterTemplates` (image-70) wraps everything in a Card with CardHeader, uses h-40 thumbnails, shows "Active" badges, `formatDistanceToNow` dates, and has Edit + Send + Copy + Delete buttons.
 
-When an admin opens `/newsletter-builder/{id}` for an agent's template, the query returns **zero results** because it only fetches the admin's own templates. The `useEffect` on line 86 tries to find the template in `templates` but fails (`templates.find(t => t.id === templateId)` returns `undefined`). So:
+## Changes to `src/components/newsletter/builder/TemplateList.tsx`
 
-1. `templateAgentId` is never set (stays `undefined`)
-2. On save, `agent_id: templateAgentId || user.id` resolves to `user.id` (the admin)
-3. The template gets reassigned to the admin's account
+1. **Wrap in Card with CardHeader** -- Match the admin's outer Card wrapper with title "Email Templates" and description in a CardHeader, and the grid inside CardContent
+2. **Thumbnail height** -- Change from `h-48` to `h-40` to match admin
+3. **Date format** -- Switch from `format(date, 'MMM d, yyyy')` to `formatDistanceToNow` with "ago" suffix
+4. **Add "Active" badge** -- Show a status badge (agent templates are always active, so show "Active")
+5. **Add Send button** -- Add a Send button that opens `SendSchedulePanel` inline, same as admin does. Import `SendSchedulePanel` and wire it with the template's ID and name (no `agentId` prop needed since the agent is the logged-in user)
+6. **Button layout** -- Match admin: Edit (outline) + Send (default, flex-1) + Copy (icon) + Delete (icon)
+7. **Remove `max-w-4xl mx-auto`** -- Let the card fill available width like the admin version
 
-Additionally, the brand colors and profile data fetched in lines 50-80 always use `user.id` (the admin), not the template's agent. So previews show the admin's branding instead of the agent's.
-
-## Fix
-
-### 1. `NewsletterBuilder.tsx` -- Fetch the template directly instead of relying on filtered list
-
-When a `templateId` URL param exists, fetch that specific template directly from Supabase (admins have RLS access to all templates) instead of relying on the `useNewsletterTemplates` hook which filters by agent. This guarantees the template is found regardless of ownership.
-
-- Add a direct `supabase.from('newsletter_templates').select('*').eq('id', templateId).single()` query when `templateId` is present
-- Set `templateAgentId` from the fetched template's `agent_id`
-- Keep `useNewsletterTemplates(templateAgentId)` for the save mutation only, passing the correct agent ID
-
-### 2. `NewsletterBuilder.tsx` -- Load brand colors and profile for the template's agent
-
-Change the brand colors/profile fetch (lines 50-80) to use `templateAgentId` instead of `user.id` when available. This ensures the preview shows the correct agent's branding.
-
-### 3. `useNewsletterTemplates.ts` -- No changes needed
-
-The hook's filtering logic is correct for normal agent use. The fix is in the Builder loading the template directly.
-
-## Files to Change
+## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/components/newsletter/builder/NewsletterBuilder.tsx` | Replace template loading from hook's filtered list with a direct Supabase query by `templateId`; use `templateAgentId` for brand colors and profile fetching |
+| `src/components/newsletter/builder/TemplateList.tsx` | Restructure layout to match admin card style; add Send button with SendSchedulePanel; update thumbnail height, date format, badge, button arrangement |
 
