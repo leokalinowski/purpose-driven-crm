@@ -3,24 +3,32 @@ import { useDrop } from 'react-dnd';
 import { NewsletterBlock, BlockType, BLOCK_DEFAULTS } from './types';
 import { BlockRenderer } from './BlockRenderer';
 import { Plus } from 'lucide-react';
+import { BrandColors } from './BlockSettings';
 
 interface BuilderCanvasProps {
   blocks: NewsletterBlock[];
   selectedBlockId: string | null;
   onSelectBlock: (id: string | null) => void;
   onUpdateBlocks: (blocks: NewsletterBlock[]) => void;
+  brandColors?: BrandColors;
 }
 
 function generateId() {
   return crypto.randomUUID();
 }
 
-export function BuilderCanvas({ blocks, selectedBlockId, onSelectBlock, onUpdateBlocks }: BuilderCanvasProps) {
+export function BuilderCanvas({ blocks, selectedBlockId, onSelectBlock, onUpdateBlocks, brandColors }: BuilderCanvasProps) {
   const createBlock = useCallback((type: BlockType, index?: number): void => {
+    const defaults = { ...BLOCK_DEFAULTS[type] };
+    // Apply brand colors to new blocks
+    if (brandColors?.primary) {
+      if (type === 'button') defaults.backgroundColor = brandColors.primary;
+      if (type === 'heading') defaults.color = brandColors.primary;
+    }
     const newBlock: NewsletterBlock = {
       id: generateId(),
       type,
-      props: { ...BLOCK_DEFAULTS[type] },
+      props: defaults,
       ...(type === 'columns' ? { children: [[], []] } : {}),
     };
     const updated = [...blocks];
@@ -31,7 +39,7 @@ export function BuilderCanvas({ blocks, selectedBlockId, onSelectBlock, onUpdate
     }
     onUpdateBlocks(updated);
     onSelectBlock(newBlock.id);
-  }, [blocks, onUpdateBlocks, onSelectBlock]);
+  }, [blocks, onUpdateBlocks, onSelectBlock, brandColors]);
 
   const [{ isOver }, drop] = useDrop(() => ({
     accept: 'BLOCK',

@@ -109,6 +109,11 @@ const SOCIAL_PLATFORMS: Record<string, string> = {
   facebook: '📘', instagram: '📷', linkedin: '💼', twitter: '🐦', youtube: '▶️', tiktok: '🎵',
 };
 
+function convertNewlines(html: string): string {
+  if (/<(p|div|br|ul|ol|li|h[1-6])\b/i.test(html)) return html;
+  return html.replace(/\n/g, '<br />');
+}
+
 function BlockPreview({ block, onUpdateChildren }: { block: NewsletterBlock; onUpdateChildren?: (children: NewsletterBlock[][]) => void }) {
   switch (block.type) {
     case 'heading': {
@@ -128,7 +133,7 @@ function BlockPreview({ block, onUpdateChildren }: { block: NewsletterBlock; onU
         <div
           className="prose prose-sm max-w-none"
           style={{ textAlign: block.props.align, color: block.props.color, fontSize: block.props.fontSize, fontFamily: block.props.fontFamily }}
-          dangerouslySetInnerHTML={{ __html: block.props.html }}
+          dangerouslySetInnerHTML={{ __html: convertNewlines(block.props.html || '') }}
         />
       );
     case 'image':
@@ -203,13 +208,32 @@ function BlockPreview({ block, onUpdateChildren }: { block: NewsletterBlock; onU
         </div>
       );
     }
-    case 'agent_bio':
+    case 'agent_bio': {
+      const bioFields = [
+        ['showHeadshot', 'Headshot'],
+        ['showLogo', 'Brokerage Logo'],
+        ['showPhone', 'Phone'],
+        ['showEmail', 'Email'],
+        ['showLicense', 'License #'],
+        ['showBrokerage', 'Brokerage Name'],
+        ['showOfficeAddress', 'Office Address'],
+        ['showOfficePhone', 'Office Phone'],
+        ['showWebsite', 'Website'],
+        ['showEqualHousing', 'Equal Housing Opportunity'],
+      ];
+      const enabled = bioFields.filter(([key]) => block.props[key] !== false);
       return (
-        <div className="bg-muted rounded-lg p-4 text-center">
-          <p className="font-semibold text-sm">👤 Agent Bio Block</p>
-          <p className="text-xs text-muted-foreground mt-1">Auto-populated from your profile at send time.</p>
+        <div className="bg-muted rounded-lg p-4">
+          <p className="font-semibold text-sm text-center mb-2">👤 Agent Bio & Compliance</p>
+          <p className="text-xs text-muted-foreground text-center mb-3">Auto-populated from your profile at send time</p>
+          <div className="flex flex-wrap gap-1.5 justify-center">
+            {enabled.map(([key, label]) => (
+              <span key={key} className="text-xs bg-background border rounded-full px-2 py-0.5">✓ {label}</span>
+            ))}
+          </div>
         </div>
       );
+    }
     case 'social_icons': {
       const links: { platform: string; url: string }[] = block.props.links || [];
       return (

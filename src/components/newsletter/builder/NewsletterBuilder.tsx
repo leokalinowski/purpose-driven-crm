@@ -8,12 +8,13 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { BlockPalette } from './BlockPalette';
 import { BuilderCanvas } from './BuilderCanvas';
-import { BlockSettings } from './BlockSettings';
+import { BlockSettings, BrandColors } from './BlockSettings';
 import { PreviewPanel } from './PreviewPanel';
 import { SendSchedulePanel } from './SendSchedulePanel';
 import { NewsletterBlock, GlobalStyles, DEFAULT_GLOBAL_STYLES } from './types';
 import { useNewsletterTemplates } from '@/hooks/useNewsletterTemplates';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 export function NewsletterBuilder() {
   const navigate = useNavigate();
@@ -29,10 +30,20 @@ export function NewsletterBuilder() {
   const [showSendPanel, setShowSendPanel] = useState(false);
   const [currentId, setCurrentId] = useState<string | undefined>(templateId);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [brandColors, setBrandColors] = useState<BrandColors>({ primary: null, secondary: null });
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const hasLoadedRef = useRef(false);
   const isInitialLoadRef = useRef(true);
+
+  // Fetch brand colors
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('agent_marketing_settings').select('primary_color, secondary_color').eq('user_id', user.id).single()
+      .then(({ data }) => {
+        if (data) setBrandColors({ primary: data.primary_color, secondary: data.secondary_color });
+      });
+  }, [user]);
 
   // Load existing template
   useEffect(() => {
@@ -152,6 +163,7 @@ export function NewsletterBuilder() {
                     selectedBlockId={selectedBlockId}
                     onSelectBlock={setSelectedBlockId}
                     onUpdateBlocks={setBlocks}
+                    brandColors={brandColors}
                   />
                 </div>
               </div>
@@ -164,7 +176,7 @@ export function NewsletterBuilder() {
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
                     {selectedBlock.type.replace('_', ' ')} Settings
                   </h3>
-                  <BlockSettings block={selectedBlock} onUpdate={handleUpdateBlockProps} />
+                  <BlockSettings block={selectedBlock} onUpdate={handleUpdateBlockProps} brandColors={brandColors} />
                 </div>
               ) : (
                 <BlockSettings
@@ -172,6 +184,7 @@ export function NewsletterBuilder() {
                   onUpdate={() => {}}
                   globalStyles={globalStyles}
                   onUpdateGlobalStyles={handleUpdateGlobalStyles}
+                  brandColors={brandColors}
                 />
               )}
             </ScrollArea>

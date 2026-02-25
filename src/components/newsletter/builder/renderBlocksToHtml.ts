@@ -10,8 +10,13 @@ function renderHeading(props: Record<string, any>): string {
   return `<${tag} style="margin:0;padding:0;text-align:${props.align || 'center'};color:${props.color || '#1a1a1a'};font-family:${props.fontFamily || 'Georgia, serif'};font-size:${sizes[props.level || 2]};line-height:1.3;">${escapeHtml(props.text || '')}</${tag}>`;
 }
 
+function convertNewlines(html: string): string {
+  if (/<(p|div|br|ul|ol|li|h[1-6])\b/i.test(html)) return html;
+  return html.replace(/\n/g, '<br />');
+}
+
 function renderText(props: Record<string, any>): string {
-  return `<div style="text-align:${props.align || 'left'};color:${props.color || '#374151'};font-size:${props.fontSize || 16}px;line-height:1.6;font-family:${props.fontFamily || 'Georgia, serif'};">${props.html || ''}</div>`;
+  return `<div style="text-align:${props.align || 'left'};color:${props.color || '#374151'};font-size:${props.fontSize || 16}px;line-height:1.6;font-family:${props.fontFamily || 'Georgia, serif'};">${convertNewlines(props.html || '')}</div>`;
 }
 
 function renderImage(props: Record<string, any>): string {
@@ -40,9 +45,21 @@ function renderSpacer(props: Record<string, any>): string {
 
 
 function renderAgentBio(props: Record<string, any>): string {
-  return `<div style="background:#f8fafc;border-radius:8px;padding:20px;text-align:center;">
-    <p style="color:#64748b;font-size:14px;margin:0;">Agent bio & branding auto-populated at send time.</p>
-  </div>`;
+  const sections: string[] = [];
+  if (props.showHeadshot !== false) sections.push('{{agent_headshot}}');
+  if (props.showLogo !== false) sections.push('{{agent_logo}}');
+  sections.push('<p style="margin:4px 0;font-weight:bold;font-size:16px;color:#1a1a1a;">{{agent_name}}</p>');
+  if (props.showLicense !== false) sections.push('<p style="margin:2px 0;font-size:12px;color:#64748b;">License: {{agent_license}}</p>');
+  if (props.showBrokerage !== false) sections.push('<p style="margin:2px 0;font-size:13px;color:#374151;">{{agent_brokerage}}</p>');
+  if (props.showPhone !== false) sections.push('<p style="margin:2px 0;font-size:13px;color:#374151;">📱 {{agent_phone}}</p>');
+  if (props.showOfficePhone !== false) sections.push('<p style="margin:2px 0;font-size:13px;color:#374151;">☎️ {{agent_office_phone}}</p>');
+  if (props.showEmail !== false) sections.push('<p style="margin:2px 0;font-size:13px;color:#374151;">✉️ {{agent_email}}</p>');
+  if (props.showOfficeAddress !== false) sections.push('<p style="margin:2px 0;font-size:12px;color:#64748b;">{{agent_office_address}}</p>');
+  if (props.showWebsite !== false) sections.push('<p style="margin:2px 0;font-size:13px;"><a href="{{agent_website}}" style="color:#2563eb;">{{agent_website}}</a></p>');
+  if (props.showEqualHousing !== false) {
+    sections.push('<p style="margin:8px 0 0;font-size:11px;color:#94a3b8;">Equal Housing Opportunity. Each office independently owned and operated.</p>');
+  }
+  return `<div style="background:#f8fafc;border-radius:8px;padding:20px;text-align:center;">${sections.join('\n    ')}</div>`;
 }
 
 function renderListings(props: Record<string, any>): string {
