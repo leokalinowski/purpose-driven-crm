@@ -143,7 +143,7 @@ The newsletter should feel personal and valuable, not salesy. Focus on providing
             },
           },
         }],
-        tool_choice: { type: 'function', function: { name: 'create_newsletter' } },
+        tool_choice: 'auto',
       }),
     });
 
@@ -164,12 +164,45 @@ The newsletter should feel personal and valuable, not salesy. Focus on providing
     }
 
     const aiData = await aiResponse.json();
-    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall?.function?.arguments) {
-      throw new Error('AI did not return structured output');
+
+    console.log('AI response structure:', JSON.stringify({
+      hasChoices: !!aiData.choices,
+      finishReason: aiData.choices?.[0]?.finish_reason,
+      hasToolCalls: !!aiData.choices?.[0]?.message?.tool_calls,
+      hasContent: !!aiData.choices?.[0]?.message?.content,
+    }));
+
+    const message = aiData.choices?.[0]?.message;
+    let generated: any;
+
+    // Try tool_calls first
+    const toolCall = message?.tool_calls?.[0];
+    if (toolCall?.function?.arguments) {
+      try {
+        generated = JSON.parse(toolCall.function.arguments);
+      } catch (e) {
+        console.error('Tool call parse failed:', e);
+      }
+    }
+    
+    // Fallback: extract JSON from content
+    if (!generated && message?.content) {
+      const content = message.content;
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          generated = JSON.parse(jsonMatch[0]);
+        } catch (parseError) {
+          console.error('Content JSON parse failed:', jsonMatch[0].substring(0, 200));
+        }
+      }
     }
 
-    const generated = JSON.parse(toolCall.function.arguments);
+    if (!generated?.blocks) {
+      console.error('AI response:', JSON.stringify(aiData).slice(0, 500));
+      throw new Error('AI did not return valid newsletter blocks');
+    }
+
     const subject = generated.subject || 'Monthly Newsletter';
 
     // Add unique IDs to each block
