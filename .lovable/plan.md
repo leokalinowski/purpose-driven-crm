@@ -1,25 +1,29 @@
 
-# Newsletter Builder Status
 
-## Completed
+# Remove Market Data Block
 
-### Featured Listings Overhaul
-- Agents paste listing URLs (Zillow, Homes.com, Realtor.com, Redfin) and the system scrapes property details via Firecrawl + Lovable AI
-- `ListingItem` interface with id, url, image_url, price, address, city, beds, baths, sqft, status
-- `scrape-listing` edge function: Firecrawl scrape → AI structured extraction → regex fallback
-- Settings panel: URL paste input + scraped listing cards with delete
-- Canvas preview: shows real scraped listings or empty state prompt
-- HTML renderer: renders actual listing cards with images in email
+The user wants to scrap the Market Data block entirely because it's unreliable. This is a straightforward removal across all builder files.
 
-### Market Data Block
-- Uses existing `fetch-market-data-grok` edge function (AI-generated per ZIP code)
-- Builder shows sample data preview; real data injected at send time
-- Metric selection checkboxes and style options (cards/table/minimal)
+## Changes
 
-### Other Fixes Applied
-- Template creation button feedback for unauthenticated users
-- Working columns block with drop zones
-- Social icons link editor
-- Raw HTML block preview
-- Send/Schedule panel with subject, sender, recipients, test email
-- Columns HTML renderer math bug fixed
+### 1. `src/components/newsletter/builder/types.ts`
+- Remove `'market_data'` from the `BlockType` union
+- Remove the `MarketDataProps` interface
+- Remove `MarketDataProps` from the `BlockProps` union
+- Remove the `market_data` entry from `BLOCK_DEFAULTS`
+
+### 2. `src/components/newsletter/builder/BlockPalette.tsx`
+- Remove the `market_data` entry from `PALETTE_ITEMS`
+- Remove the `BarChart3` icon import
+
+### 3. `src/components/newsletter/builder/BlockSettings.tsx`
+- Remove the `market_data` case (header text input, style selector, metric checkboxes)
+
+### 4. `src/components/newsletter/builder/BlockRenderer.tsx`
+- Remove the `market_data` case from the canvas preview renderer
+
+### 5. `src/components/newsletter/builder/renderBlocksToHtml.ts`
+- Remove the `market_data` case from the HTML renderer
+
+No database changes needed. The block type simply stops being available. Any existing templates that contain a `market_data` block will render as an unknown block (harmless fallback).
+
