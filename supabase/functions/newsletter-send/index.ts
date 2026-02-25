@@ -616,8 +616,8 @@ serve(async (req) => {
                     subject: subject,
                     status: 'sent',
                     resend_email_id: emailResult.data?.id || null,
+                    campaign_id: campaignRecord?.id || null,
                     metadata: {
-                      campaign_id: campaignRecord?.id,
                       campaign_name: campaignName,
                       contact_id: contact.id,
                       zip_code: zipCode,
@@ -657,8 +657,8 @@ serve(async (req) => {
                     subject: subject,
                     status: 'failed',
                     error_message: errorMessage,
+                    campaign_id: campaignRecord?.id || null,
                     metadata: {
-                      campaign_id: campaignRecord?.id,
                       campaign_name: campaignName,
                       contact_id: contact.id,
                       zip_code: zipCode,

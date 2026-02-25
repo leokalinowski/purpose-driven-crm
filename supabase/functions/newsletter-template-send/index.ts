@@ -407,6 +407,23 @@ serve(async (req) => {
 
     // ── Production send ──
 
+    // 4b. Create a newsletter_campaigns record for tracking
+    const campaignName = `Template: ${template.name} - ${new Date().toLocaleDateString()}`;
+    const { data: campaignRecord, error: campaignErr } = await supabase
+      .from('newsletter_campaigns')
+      .insert({
+        campaign_name: campaignName,
+        created_by: agent_id,
+        send_date: new Date().toISOString().split('T')[0],
+        status: 'sending',
+        open_rate: 0,
+        click_through_rate: 0,
+      })
+      .select()
+      .single();
+
+    if (campaignErr) console.error('Failed to create campaign record:', campaignErr);
+
     // 5. Get unsubscribed emails
     const { data: unsubs } = await supabase
       .from('newsletter_unsubscribes')
@@ -481,6 +498,7 @@ serve(async (req) => {
           subject: emailSubject,
           status: 'sent',
           resend_email_id: result.data?.id || null,
+          campaign_id: campaignRecord?.id || null,
           metadata: { template_id, template_name: template.name, contact_id: contact.id },
           sent_at: new Date().toISOString(),
         });
@@ -506,6 +524,7 @@ serve(async (req) => {
           subject: emailSubject,
           status: 'failed',
           error_message: err.message,
+          campaign_id: campaignRecord?.id || null,
           metadata: { template_id, template_name: template.name, contact_id: contact.id },
         });
         if (logErr) console.error('Failed to log failed email:', logErr);
@@ -514,11 +533,22 @@ serve(async (req) => {
 
     console.log(`Template send complete: ${sent} sent, ${failed} failed`);
 
+    // Update campaign record with final results
+    if (campaignRecord) {
+      await supabase.from('newsletter_campaigns').update({
+        status: failed > 0 && sent === 0 ? 'failed' : 'sent',
+        recipient_count: sent,
+        open_rate: 0,
+        click_through_rate: 0,
+      }).eq('id', campaignRecord.id);
+    }
+
     return new Response(JSON.stringify({
       success: true,
       emails_sent: sent,
       emails_failed: failed,
       total_recipients: recipients.length,
+      campaign_id: campaignRecord?.id,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
