@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { Monitor, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NewsletterBlock, GlobalStyles } from './types';
-import { renderBlocksToHtml } from './renderBlocksToHtml';
+import { renderBlocksToHtml, AgentData } from './renderBlocksToHtml';
 
 interface PreviewPanelProps {
   blocks: NewsletterBlock[];
   globalStyles: GlobalStyles;
+  agentData?: AgentData;
 }
 
-export function PreviewPanel({ blocks, globalStyles }: PreviewPanelProps) {
+export function PreviewPanel({ blocks, globalStyles, agentData }: PreviewPanelProps) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
-  const html = renderBlocksToHtml(blocks, globalStyles);
+  const html = renderBlocksToHtml(blocks, globalStyles, agentData);
 
   return (
     <div className="flex flex-col h-full">
