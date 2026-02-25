@@ -7,28 +7,24 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { useAdminNewsletter } from "@/hooks/useAdminNewsletter";
-import { NewsletterCostTracking } from "@/components/admin/NewsletterCostTracking";
+import { AdminNewsletterTemplates } from "@/components/admin/AdminNewsletterTemplates";
+import { AdminNewsletterCampaigns } from "@/components/admin/AdminNewsletterCampaigns";
 import { CSVUploadManager } from "@/components/admin/CSVUploadManager";
 import { AdminNewsletterPreview } from "@/components/admin/AdminNewsletterPreview";
-import { NewsletterSendManager } from "@/components/admin/NewsletterSendManager";
-import { formatDistanceToNow } from "date-fns";
-import { CalendarDays, Send, Settings, TestTube, Users, DollarSign, Upload, FileText, Mail } from "lucide-react";
+import { FileText, BarChart3, Settings, Database, Users } from "lucide-react";
 import { useState } from "react";
+
 export default function AdminNewsletter() {
   const {
     agents,
     settings,
-    runs,
+    templates,
+    campaigns,
     isLoading,
-    isDryRun,
-    setIsDryRun,
     updateSettings,
-    triggerNewsletter,
     isUpdating,
-    isTriggering,
   } = useAdminNewsletter();
 
   const [agentSettings, setAgentSettings] = useState<Record<string, { enabled: boolean; day: number; hour: number }>>({});
@@ -36,7 +32,6 @@ export default function AdminNewsletter() {
   const getAgentSettings = (agentId: string) => {
     const existing = settings.find(s => s.agent_id === agentId);
     const local = agentSettings[agentId];
-    
     return {
       enabled: local?.enabled ?? existing?.enabled ?? false,
       day: local?.day ?? existing?.schedule_day ?? 1,
@@ -52,24 +47,8 @@ export default function AdminNewsletter() {
   };
 
   const saveAgentSettings = (agentId: string) => {
-    const settings = getAgentSettings(agentId);
-    updateSettings({
-      agentId,
-      enabled: settings.enabled,
-      scheduleDay: settings.day,
-      scheduleHour: settings.hour,
-    });
-  };
-
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      pending: "secondary",
-      running: "default",
-      completed: "default",
-      failed: "destructive",
-    } as const;
-    
-    return <Badge variant={variants[status as keyof typeof variants] || "secondary"}>{status}</Badge>;
+    const s = getAgentSettings(agentId);
+    updateSettings({ agentId, enabled: s.enabled, scheduleDay: s.day, scheduleHour: s.hour });
   };
 
   if (isLoading) {
@@ -89,95 +68,50 @@ export default function AdminNewsletter() {
       </Helmet>
 
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Newsletter Management</h1>
-            <p className="text-muted-foreground">
-              Manage monthly newsletter campaigns for agents
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <TestTube className="h-4 w-4" />
-              <Label htmlFor="dry-run">Test Mode</Label>
-              <Switch
-                id="dry-run"
-                checked={isDryRun}
-                onCheckedChange={setIsDryRun}
-              />
-            </div>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold">Newsletter Management</h1>
+          <p className="text-muted-foreground">
+            Manage templates, campaigns, and agent settings
+          </p>
         </div>
 
-        <Tabs defaultValue="csv-upload" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="csv-upload" className="flex items-center gap-2">
-              <Upload className="h-4 w-4" />
-              CSV Upload
-            </TabsTrigger>
-            <TabsTrigger value="test-preview" className="flex items-center gap-2">
+        <Tabs defaultValue="templates" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="templates" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              Test Preview
+              Templates
             </TabsTrigger>
-            <TabsTrigger value="send-newsletter" className="flex items-center gap-2">
-              <Mail className="h-4 w-4" />
-              Send Newsletter
+            <TabsTrigger value="campaigns" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Campaigns
             </TabsTrigger>
-            <TabsTrigger value="agents" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
+            <TabsTrigger value="agent-settings" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
               Agent Settings
             </TabsTrigger>
-            <TabsTrigger value="history" className="flex items-center gap-2">
-              <CalendarDays className="h-4 w-4" />
-              Campaign History
-            </TabsTrigger>
-            <TabsTrigger value="costs" className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Cost Tracking
+            <TabsTrigger value="market-data" className="flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              Market Data
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="csv-upload" className="space-y-4">
-            <CSVUploadManager />
+          {/* Templates Tab */}
+          <TabsContent value="templates">
+            <AdminNewsletterTemplates templates={templates} agents={agents} />
           </TabsContent>
 
-          <TabsContent value="test-preview" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Newsletter Preview</CardTitle>
-                <CardDescription>Test newsletter generation with a ZIP code</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AdminNewsletterPreview />
-              </CardContent>
-            </Card>
+          {/* Campaigns Tab */}
+          <TabsContent value="campaigns">
+            <AdminNewsletterCampaigns campaigns={campaigns} />
           </TabsContent>
 
-          <TabsContent value="send-newsletter" className="space-y-4">
-            <NewsletterSendManager />
-          </TabsContent>
-
-          <TabsContent value="agents" className="space-y-4">
-            {isDryRun && (
-              <Card className="border-warning bg-warning/5">
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-2 text-warning">
-                    <TestTube className="h-4 w-4" />
-                    <span className="font-medium">Test Mode Active</span>
-                  </div>
-                  <p className="text-sm text-warning/80 mt-1">
-                    Test mode processes one ZIP code with full Grok research and sends only to your admin email with [TEST] prefix.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
+          {/* Agent Settings Tab */}
+          <TabsContent value="agent-settings" className="space-y-4">
             <div className="grid gap-4">
               {agents.map((agent) => {
-                const settings = getAgentSettings(agent.user_id);
-                const displayName = agent.first_name && agent.last_name 
-                  ? `${agent.first_name} ${agent.last_name}` 
+                const s = getAgentSettings(agent.user_id);
+                const displayName = agent.first_name && agent.last_name
+                  ? `${agent.first_name} ${agent.last_name}`
                   : agent.email || 'Unknown Agent';
 
                 return (
@@ -187,165 +121,76 @@ export default function AdminNewsletter() {
                         <div className="space-y-1">
                           <CardTitle className="text-lg">{displayName}</CardTitle>
                           <CardDescription>{agent.email}</CardDescription>
-                          <div className="flex items-center gap-1.5">
-                            <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">
-                              {agent.contact_count || 0} {agent.contact_count === 1 ? 'contact' : 'contacts'}
+                          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Users className="h-3.5 w-3.5" />
+                              {agent.contact_count || 0} contacts
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <FileText className="h-3.5 w-3.5" />
+                              {agent.template_count || 0} templates
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                disabled={isTriggering}
-                              >
-                                <Send className="h-4 w-4 mr-2" />
-                                {isDryRun ? 'Test Run' : 'Send Now'}
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  {isDryRun ? 'Test Newsletter' : 'Send Newsletter'}
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  {isDryRun 
-                                    ? `This will run a test newsletter for ${displayName}. It processes only one ZIP code, makes full Grok API calls for research, generates the complete HTML email, and sends it only to you (the admin) with a [TEST] prefix.`
-                                    : `This will send the monthly newsletter to all contacts for ${displayName}. This action cannot be undone.`
-                                  }
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => triggerNewsletter({ agentId: agent.user_id })}
-                                  className={isDryRun ? "bg-primary" : "bg-destructive hover:bg-destructive/90"}
-                                >
-                                  {isDryRun ? 'Run Test' : 'Send Newsletter'}
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`enabled-${agent.user_id}`} className="text-sm">Enabled</Label>
+                          <Switch
+                            id={`enabled-${agent.user_id}`}
+                            checked={s.enabled}
+                            onCheckedChange={(enabled) => updateAgentSettings(agent.user_id, { enabled })}
+                          />
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor={`enabled-${agent.user_id}`}>Enable Monthly Newsletter</Label>
-                        <Switch
-                          id={`enabled-${agent.user_id}`}
-                          checked={settings.enabled}
-                          onCheckedChange={(enabled) => updateAgentSettings(agent.user_id, { enabled })}
-                        />
-                      </div>
-
-                      {settings.enabled && (
-                        <>
-                          <Separator />
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor={`day-${agent.user_id}`}>Day of Month</Label>
-                              <Input
-                                id={`day-${agent.user_id}`}
-                                type="number"
-                                min="1"
-                                max="31"
-                                value={settings.day}
-                                onChange={(e) => updateAgentSettings(agent.user_id, { day: parseInt(e.target.value) || 1 })}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor={`hour-${agent.user_id}`}>Hour (24h format)</Label>
-                              <Input
-                                id={`hour-${agent.user_id}`}
-                                type="number"
-                                min="0"
-                                max="23"
-                                value={settings.hour}
-                                onChange={(e) => updateAgentSettings(agent.user_id, { hour: parseInt(e.target.value) || 9 })}
-                              />
-                            </div>
+                    {s.enabled && (
+                      <CardContent className="space-y-4">
+                        <Separator />
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor={`day-${agent.user_id}`}>Day of Month</Label>
+                            <Input
+                              id={`day-${agent.user_id}`}
+                              type="number" min="1" max="31"
+                              value={s.day}
+                              onChange={(e) => updateAgentSettings(agent.user_id, { day: parseInt(e.target.value) || 1 })}
+                            />
                           </div>
-                        </>
-                      )}
-
-                      <div className="flex justify-end">
-                        <Button
-                          size="sm"
-                          onClick={() => saveAgentSettings(agent.user_id)}
-                          disabled={isUpdating}
-                        >
-                          <Settings className="h-4 w-4 mr-2" />
-                          Save Settings
-                        </Button>
-                      </div>
-                    </CardContent>
+                          <div className="space-y-2">
+                            <Label htmlFor={`hour-${agent.user_id}`}>Hour (24h)</Label>
+                            <Input
+                              id={`hour-${agent.user_id}`}
+                              type="number" min="0" max="23"
+                              value={s.hour}
+                              onChange={(e) => updateAgentSettings(agent.user_id, { hour: parseInt(e.target.value) || 9 })}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end">
+                          <Button size="sm" onClick={() => saveAgentSettings(agent.user_id)} disabled={isUpdating}>
+                            <Settings className="h-4 w-4 mr-2" />
+                            Save Settings
+                          </Button>
+                        </div>
+                      </CardContent>
+                    )}
                   </Card>
                 );
               })}
             </div>
           </TabsContent>
 
-          <TabsContent value="history" className="space-y-4">
+          {/* Market Data Tab */}
+          <TabsContent value="market-data" className="space-y-6">
+            <CSVUploadManager />
             <Card>
               <CardHeader>
-                <CardTitle>Recent Campaign Runs</CardTitle>
-                <CardDescription>
-                  View the history of newsletter campaigns and their status
-                </CardDescription>
+                <CardTitle>Newsletter Preview</CardTitle>
+                <CardDescription>Test AI-generated newsletter with a ZIP code (legacy pipeline)</CardDescription>
               </CardHeader>
               <CardContent>
-                {runs.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No newsletter campaigns have been run yet.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {runs.map((run) => {
-                      const agent = agents.find(a => a.user_id === run.agent_id);
-                      const displayName = agent?.first_name && agent?.last_name 
-                        ? `${agent.first_name} ${agent.last_name}` 
-                        : agent?.email || 'Unknown Agent';
-
-                      return (
-                        <div key={run.id} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{displayName}</span>
-                              {run.dry_run && (
-                                <Badge variant="outline" className="text-xs">
-                                  <TestTube className="h-3 w-3 mr-1" />
-                                  Test
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {run.run_date} • {formatDistanceToNow(new Date(run.created_at))} ago
-                            </div>
-                            {run.error && (
-                              <div className="text-sm text-destructive">{run.error}</div>
-                            )}
-                          </div>
-                          <div className="text-right space-y-1">
-                            {getStatusBadge(run.status)}
-                            <div className="text-sm text-muted-foreground">
-                              {run.emails_sent} emails • {run.contacts_processed} contacts
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <AdminNewsletterPreview />
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="costs" className="space-y-4">
-            <NewsletterCostTracking />
           </TabsContent>
         </Tabs>
       </div>

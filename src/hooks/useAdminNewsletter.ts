@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import type { NewsletterBlock, GlobalStyles } from '@/components/newsletter/builder/types';
+import { DEFAULT_GLOBAL_STYLES } from '@/components/newsletter/builder/types';
 
 export interface AgentProfile {
   user_id: string;
@@ -9,6 +11,7 @@ export interface AgentProfile {
   last_name: string | null;
   email: string | null;
   contact_count?: number;
+  template_count?: number;
 }
 
 export interface NewsletterSettings {
@@ -19,51 +22,55 @@ export interface NewsletterSettings {
   schedule_hour: number | null;
 }
 
-export interface MonthlyRun {
+export interface AdminTemplate {
   id: string;
   agent_id: string;
-  run_date: string;
-  status: string;
-  emails_sent: number;
-  contacts_processed: number;
-  zip_codes_processed: number;
-  started_at: string | null;
-  finished_at: string | null;
-  error: string | null;
-  dry_run: boolean;
+  name: string;
+  blocks_json: NewsletterBlock[];
+  global_styles: GlobalStyles;
+  thumbnail_url: string | null;
+  is_active: boolean;
   created_at: string;
+  updated_at: string;
+  agent_name?: string;
+}
+
+export interface AdminCampaign {
+  id: string;
+  campaign_name: string;
+  send_date: string | null;
+  recipient_count: number | null;
+  open_rate: number | null;
+  click_through_rate: number | null;
+  status: string | null;
+  created_at: string;
+  created_by: string | null;
+  agent_name?: string;
+  source: 'template' | 'legacy';
 }
 
 export function useAdminNewsletter() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [isDryRun, setIsDryRun] = useState(true);
 
-  // Fetch all agents (including admin users for testing) using two-step fetch
+  // Fetch all agents (agents + admins)
   const { data: agents = [], isLoading: agentsLoading } = useQuery({
     queryKey: ['admin-agents'],
     queryFn: async () => {
-      // Step 1: Fetch user_roles for agents and admins
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, role')
         .in('role', ['agent', 'admin']);
-      
       if (rolesError) throw rolesError;
 
       const userIds = Array.from(new Set((roles || []).map(r => r.user_id)));
-      
-      if (userIds.length === 0) {
-        return [];
-      }
+      if (userIds.length === 0) return [];
 
-      // Step 2: Fetch profiles for those user_ids
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('user_id, first_name, last_name, email')
         .in('user_id', userIds)
         .order('first_name');
-      
       if (profilesError) throw profilesError;
 
       return profiles as AgentProfile[];
@@ -74,10 +81,7 @@ export function useAdminNewsletter() {
   const { data: settings = [], isLoading: settingsLoading } = useQuery({
     queryKey: ['newsletter-settings'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('newsletter_settings')
-        .select('*');
-      
+      const { data, error } = await supabase.from('newsletter_settings').select('*');
       if (error) throw error;
       return data as NewsletterSettings[];
     },
@@ -87,24 +91,63 @@ export function useAdminNewsletter() {
   const { data: contactCounts = {} } = useQuery({
     queryKey: ['agent-contact-counts'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('contacts')
-        .select('agent_id');
-      
+      const { data, error } = await supabase.from('contacts').select('agent_id');
       if (error) throw error;
-      
-      // Count contacts per agent_id
       const counts: Record<string, number> = {};
-      data?.forEach((contact) => {
-        counts[contact.agent_id] = (counts[contact.agent_id] || 0) + 1;
-      });
-      
+      data?.forEach((c) => { counts[c.agent_id] = (counts[c.agent_id] || 0) + 1; });
       return counts;
     },
   });
 
-  // Fetch monthly runs
-  const { data: runs = [], isLoading: runsLoading } = useQuery({
+  // Fetch ALL templates across agents (admin view)
+  const { data: allTemplates = [], isLoading: templatesLoading } = useQuery({
+    queryKey: ['admin-all-templates'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('newsletter_templates')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((t: any) => ({
+        ...t,
+        blocks_json: (t.blocks_json || []) as NewsletterBlock[],
+        global_styles: { ...DEFAULT_GLOBAL_STYLES, ...(t.global_styles || {}) } as GlobalStyles,
+      })) as AdminTemplate[];
+    },
+  });
+
+  // Fetch newsletter_campaigns with agent name resolution
+  const { data: campaigns = [], isLoading: campaignsLoading } = useQuery({
+    queryKey: ['admin-newsletter-campaigns'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('newsletter_campaigns')
+        .select('id,campaign_name,send_date,recipient_count,open_rate,click_through_rate,status,created_at,created_by')
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+
+      const rows = (data || []) as AdminCampaign[];
+      rows.forEach(r => r.source = 'template');
+
+      // Resolve agent names
+      const creatorIds = [...new Set(rows.map(c => c.created_by).filter(Boolean))] as string[];
+      if (creatorIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('user_id, first_name, last_name')
+          .in('user_id', creatorIds);
+        const profileMap = new Map((profiles || []).map(p => [p.user_id, `${p.first_name || ''} ${p.last_name || ''}`.trim()]));
+        for (const c of rows) {
+          if (c.created_by) c.agent_name = profileMap.get(c.created_by) || undefined;
+        }
+      }
+      return rows;
+    },
+  });
+
+  // Fetch legacy monthly_runs
+  const { data: legacyRuns = [], isLoading: runsLoading } = useQuery({
     queryKey: ['monthly-runs'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -112,102 +155,80 @@ export function useAdminNewsletter() {
         .select('*')
         .order('created_at', { ascending: false })
         .limit(100);
-      
       if (error) throw error;
-      return data as MonthlyRun[];
+      return data || [];
     },
   });
 
-  // Merge contact counts with agents
+  // Merge templates with agent names
+  const templatesWithAgents: AdminTemplate[] = allTemplates.map(t => {
+    const agent = agents.find(a => a.user_id === t.agent_id);
+    return {
+      ...t,
+      agent_name: agent ? `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || agent.email || 'Unknown' : 'Unknown',
+    };
+  });
+
+  // Template counts per agent
+  const templateCounts: Record<string, number> = {};
+  allTemplates.forEach(t => { templateCounts[t.agent_id] = (templateCounts[t.agent_id] || 0) + 1; });
+
+  // Merge contact counts + template counts with agents
   const agentsWithCounts: AgentProfile[] = agents.map(agent => ({
     ...agent,
     contact_count: contactCounts[agent.user_id] || 0,
+    template_count: templateCounts[agent.user_id] || 0,
   }));
+
+  // Unified campaigns: merge newsletter_campaigns + monthly_runs
+  const unifiedCampaigns: AdminCampaign[] = [
+    ...campaigns,
+    ...legacyRuns.map((run: any) => {
+      const agent = agents.find(a => a.user_id === run.agent_id);
+      return {
+        id: run.id,
+        campaign_name: `Legacy Run – ${run.run_date}`,
+        send_date: run.created_at,
+        recipient_count: run.contacts_processed || 0,
+        open_rate: null,
+        click_through_rate: null,
+        status: run.status,
+        created_at: run.created_at,
+        created_by: run.agent_id,
+        agent_name: agent ? `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || agent.email || 'Unknown' : 'Unknown',
+        source: 'legacy' as const,
+      };
+    }),
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   // Update newsletter settings mutation
   const updateSettingsMutation = useMutation({
-    mutationFn: async ({ 
-      agentId, 
-      enabled, 
-      scheduleDay, 
-      scheduleHour 
-    }: {
-      agentId: string;
-      enabled: boolean;
-      scheduleDay?: number;
-      scheduleHour?: number;
+    mutationFn: async ({ agentId, enabled, scheduleDay, scheduleHour }: {
+      agentId: string; enabled: boolean; scheduleDay?: number; scheduleHour?: number;
     }) => {
       const { data, error } = await supabase
         .from('newsletter_settings')
-        .upsert({
-          agent_id: agentId,
-          enabled,
-          schedule_day: scheduleDay,
-          schedule_hour: scheduleHour,
-        }, {
-          onConflict: 'agent_id'
-        })
-        .select()
-        .single();
-
+        .upsert({ agent_id: agentId, enabled, schedule_day: scheduleDay, schedule_hour: scheduleHour }, { onConflict: 'agent_id' })
+        .select().single();
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['newsletter-settings'] });
-      toast({
-        title: "Settings updated",
-        description: "Newsletter settings have been updated successfully.",
-      });
+      toast({ title: "Settings updated" });
     },
     onError: (error) => {
-      toast({
-        title: "Error updating settings",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Manual trigger mutation
-  const triggerNewsletterMutation = useMutation({
-    mutationFn: async ({ agentId }: { agentId: string }) => {
-      const { data, error } = await supabase.functions.invoke('newsletter-send', {
-        body: {
-          agent_id: agentId,
-          dry_run: isDryRun,
-        },
-      });
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['monthly-runs'] });
-      toast({
-        title: "Newsletter triggered",
-        description: `Newsletter ${isDryRun ? 'test' : 'send'} has been initiated.`,
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error triggering newsletter",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Error updating settings", description: error.message, variant: "destructive" });
     },
   });
 
   return {
     agents: agentsWithCounts,
     settings,
-    runs,
-    isLoading: agentsLoading || settingsLoading || runsLoading,
-    isDryRun,
-    setIsDryRun,
+    templates: templatesWithAgents,
+    campaigns: unifiedCampaigns,
+    isLoading: agentsLoading || settingsLoading || templatesLoading || campaignsLoading || runsLoading,
     updateSettings: updateSettingsMutation.mutate,
-    triggerNewsletter: triggerNewsletterMutation.mutate,
     isUpdating: updateSettingsMutation.isPending,
-    isTriggering: triggerNewsletterMutation.isPending,
   };
 }
