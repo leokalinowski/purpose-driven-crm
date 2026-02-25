@@ -2,21 +2,26 @@ import { useDrag, useDrop } from 'react-dnd';
 import { Trash2, Copy, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NewsletterBlock, BlockType, BLOCK_DEFAULTS } from './types';
+import { ChildPath } from './NewsletterBuilder';
 
 interface BlockRendererProps {
   block: NewsletterBlock;
   index: number;
   isSelected: boolean;
+  selectedChildPath: ChildPath | null;
   onSelect: () => void;
+  onSelectChild: (path: ChildPath | null) => void;
   onDelete: () => void;
   onDuplicate: () => void;
   onMove: (from: number, to: number) => void;
   onUpdate: (props: Record<string, any>) => void;
   onUpdateChildren?: (children: NewsletterBlock[][]) => void;
+  onDeleteChild?: (parentId: string, colIndex: number, childId: string) => void;
+  onDuplicateChild?: (parentId: string, colIndex: number, childId: string) => void;
   totalBlocks: number;
 }
 
-export function BlockRenderer({ block, index, isSelected, onSelect, onDelete, onDuplicate, onMove, onUpdate, onUpdateChildren, totalBlocks }: BlockRendererProps) {
+export function BlockRenderer({ block, index, isSelected, selectedChildPath, onSelect, onSelectChild, onDelete, onDuplicate, onMove, onUpdate, onUpdateChildren, onDeleteChild, onDuplicateChild, totalBlocks }: BlockRendererProps) {
   const [{ isDragging }, drag, preview] = useDrag(() => ({
     type: 'CANVAS_BLOCK',
     item: { index },
@@ -65,14 +70,39 @@ export function BlockRenderer({ block, index, isSelected, onSelect, onDelete, on
 
       {/* Block preview */}
       <div className="p-4">
-        <BlockPreview block={block} onUpdateChildren={onUpdateChildren} />
+        <BlockPreview
+          block={block}
+          onUpdateChildren={onUpdateChildren}
+          selectedChildPath={selectedChildPath}
+          onSelectChild={onSelectChild}
+          onDeleteChild={onDeleteChild}
+          onDuplicateChild={onDuplicateChild}
+        />
       </div>
     </div>
   );
 }
 
-// Column drop zone sub-component
-function ColumnDropZone({ children, columnIndex, onAddBlock }: { children: NewsletterBlock[]; columnIndex: number; onAddBlock: (colIndex: number, blockType: BlockType) => void }) {
+// Column drop zone sub-component with interactive children
+function ColumnDropZone({
+  children,
+  columnIndex,
+  parentId,
+  onAddBlock,
+  selectedChildPath,
+  onSelectChild,
+  onDeleteChild,
+  onDuplicateChild,
+}: {
+  children: NewsletterBlock[];
+  columnIndex: number;
+  parentId: string;
+  onAddBlock: (colIndex: number, blockType: BlockType) => void;
+  selectedChildPath?: ChildPath | null;
+  onSelectChild?: (path: ChildPath | null) => void;
+  onDeleteChild?: (parentId: string, colIndex: number, childId: string) => void;
+  onDuplicateChild?: (parentId: string, colIndex: number, childId: string) => void;
+}) {
   const [{ isOver }, drop] = useDrop(() => ({
     accept: 'BLOCK',
     drop: (item: { blockType: BlockType }, monitor) => {
@@ -91,18 +121,49 @@ function ColumnDropZone({ children, columnIndex, onAddBlock }: { children: Newsl
         <p className="text-xs text-muted-foreground text-center py-4">Drop blocks here</p>
       ) : (
         <div className="space-y-1">
-          {children.map((child) => (
-            <div key={child.id} className="rounded border border-border bg-background p-2">
-              <BlockPreview block={child} />
-            </div>
-          ))}
+          {children.map((child) => {
+            const isChildSelected = selectedChildPath?.parentId === parentId
+              && selectedChildPath?.colIndex === columnIndex
+              && selectedChildPath?.childId === child.id;
+            return (
+              <div
+                key={child.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectChild?.({ parentId, colIndex: columnIndex, childId: child.id });
+                }}
+                className={`group/child relative rounded border bg-background p-2 cursor-pointer transition-all
+                  ${isChildSelected ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:border-primary/50'}`}
+              >
+                {/* Child toolbar */}
+                <div className={`absolute -top-2 right-1 z-10 flex items-center gap-0.5 bg-background border rounded shadow-sm px-0.5
+                  ${isChildSelected ? 'opacity-100' : 'opacity-0 group-hover/child:opacity-100'} transition-opacity`}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5"
+                    onClick={(e) => { e.stopPropagation(); onDuplicateChild?.(parentId, columnIndex, child.id); }}
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 text-destructive hover:text-destructive"
+                    onClick={(e) => { e.stopPropagation(); onDeleteChild?.(parentId, columnIndex, child.id); }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+                <BlockPreview block={child} />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
-
-
 
 
 const SOCIAL_PLATFORMS: Record<string, string> = {
@@ -114,7 +175,21 @@ function convertNewlines(html: string): string {
   return html.replace(/\n/g, '<br />');
 }
 
-function BlockPreview({ block, onUpdateChildren }: { block: NewsletterBlock; onUpdateChildren?: (children: NewsletterBlock[][]) => void }) {
+function BlockPreview({
+  block,
+  onUpdateChildren,
+  selectedChildPath,
+  onSelectChild,
+  onDeleteChild,
+  onDuplicateChild,
+}: {
+  block: NewsletterBlock;
+  onUpdateChildren?: (children: NewsletterBlock[][]) => void;
+  selectedChildPath?: ChildPath | null;
+  onSelectChild?: (path: ChildPath | null) => void;
+  onDeleteChild?: (parentId: string, colIndex: number, childId: string) => void;
+  onDuplicateChild?: (parentId: string, colIndex: number, childId: string) => void;
+}) {
   switch (block.type) {
     case 'heading': {
       const Tag = `h${block.props.level || 2}` as keyof JSX.IntrinsicElements;
@@ -169,7 +244,6 @@ function BlockPreview({ block, onUpdateChildren }: { block: NewsletterBlock; onU
       return <div className="flex items-center justify-center" style={{ height: block.props.height }}>
         <span className="text-xs text-muted-foreground">{block.props.height}px</span>
       </div>;
-
 
     case 'listings': {
       const listings = block.props.listings || [];
@@ -278,7 +352,17 @@ function BlockPreview({ block, onUpdateChildren }: { block: NewsletterBlock; onU
           <p className="text-xs text-muted-foreground text-center mb-2">{colCount}-Column Layout</p>
           <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${colCount}, 1fr)` }}>
             {cols.slice(0, colCount).map((col, i) => (
-              <ColumnDropZone key={i} columnIndex={i} children={col} onAddBlock={handleAddBlock} />
+              <ColumnDropZone
+                key={i}
+                columnIndex={i}
+                parentId={block.id}
+                children={col}
+                onAddBlock={handleAddBlock}
+                selectedChildPath={selectedChildPath}
+                onSelectChild={onSelectChild}
+                onDeleteChild={onDeleteChild}
+                onDuplicateChild={onDuplicateChild}
+              />
             ))}
           </div>
         </div>
