@@ -86,7 +86,6 @@ export function TemplateList() {
   const handleDelete = (id: string) => {
     deleteTemplate(id);
     setDeleteId(null);
-    toast({ title: 'Template deleted' });
   };
 
   if (isLoading) {

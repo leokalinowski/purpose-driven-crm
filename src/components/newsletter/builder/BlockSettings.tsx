@@ -161,7 +161,7 @@ export function BlockSettings({ block, onUpdate, globalStyles, onUpdateGlobalSty
       return (
         <div className="space-y-4">
           <SettingGroup label="Number of Columns">
-            <Select value={String(p.columns || 2)} onValueChange={(v) => onUpdate({ columns: Number(v) })}>
+            <Select value={String(p.columns || 2)} onValueChange={(v) => onUpdate({ columns: Number(v), _syncChildren: true })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="2">2 Columns</SelectItem>

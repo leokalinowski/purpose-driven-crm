@@ -134,3 +134,6 @@ verify_jwt = false
 
 [functions.scrape-listing]
 verify_jwt = false
+
+[functions.newsletter-template-send]
+verify_jwt = false
