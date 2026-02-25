@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Copy, Trash2, FileText, Send } from 'lucide-react';
+import { Plus, Pencil, Copy, Trash2, FileText, Send, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -146,7 +146,18 @@ export function TemplateList() {
                       Updated {formatDistanceToNow(new Date(t.updated_at), { addSuffix: true })}
                     </p>
                   </div>
-                  <Badge variant="secondary" className="text-[10px] ml-2 shrink-0">Active</Badge>
+                  <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                    {(t as any).ai_generated && (
+                      <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-700 dark:text-purple-300">
+                        <Sparkles className="h-2.5 w-2.5 mr-0.5" /> AI
+                      </Badge>
+                    )}
+                    {(t as any).review_status === 'pending_review' ? (
+                      <Badge variant="secondary" className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">Pending Review</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-[10px]">Active</Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 px-4 py-3 border-t border-border">
                   <Button size="sm" variant="outline" onClick={() => navigate(`/newsletter-builder/${t.id}`)}>

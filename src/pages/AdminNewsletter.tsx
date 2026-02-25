@@ -8,11 +8,18 @@ import { Badge } from "@/components/ui/badge";
 import { useAdminNewsletter } from "@/hooks/useAdminNewsletter";
 import { AdminNewsletterTemplates } from "@/components/admin/AdminNewsletterTemplates";
 import { AdminNewsletterCampaigns } from "@/components/admin/AdminNewsletterCampaigns";
-import { FileText, BarChart3, Users, Plus, Eye, Mail, Calendar, TrendingUp } from "lucide-react";
+import { FileText, BarChart3, Users, Plus, Eye, Mail, Calendar, TrendingUp, Sparkles, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AdminNewsletter() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const {
     agents,
     templates,
@@ -21,6 +28,30 @@ export default function AdminNewsletter() {
     deleteTemplate,
     duplicateTemplate,
   } = useAdminNewsletter();
+
+  const [aiDialogAgent, setAiDialogAgent] = useState<{ user_id: string; name: string } | null>(null);
+  const [topicHint, setTopicHint] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleGenerateAI = async () => {
+    if (!aiDialogAgent) return;
+    setIsGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-ai-newsletter', {
+        body: { agent_id: aiDialogAgent.user_id, topic_hint: topicHint || undefined },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: 'AI Newsletter Generated', description: `Draft created with ${data.block_count} blocks. Redirecting to editor...` });
+      setAiDialogAgent(null);
+      setTopicHint('');
+      navigate(`/newsletter-builder/${data.template_id}`);
+    } catch (err: any) {
+      toast({ title: 'Generation failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -87,6 +118,14 @@ export default function AdminNewsletter() {
                           <CardDescription>{agent.email}</CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => setAiDialogAgent({ user_id: agent.user_id, name: displayName })}
+                          >
+                            <Sparkles className="h-3.5 w-3.5 mr-1" />
+                            AI Newsletter
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -174,6 +213,48 @@ export default function AdminNewsletter() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* AI Newsletter Generation Dialog */}
+      <Dialog open={!!aiDialogAgent} onOpenChange={(open) => { if (!open) { setAiDialogAgent(null); setTopicHint(''); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" />
+              Generate AI Newsletter
+            </DialogTitle>
+            <DialogDescription>
+              Create an AI-generated newsletter draft for {aiDialogAgent?.name}. The AI will use their branding, tone guidelines, and content preferences.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="topic-hint">Topic or Theme (optional)</Label>
+              <Input
+                id="topic-hint"
+                placeholder="e.g. Summer market update, Home maintenance tips..."
+                value={topicHint}
+                onChange={(e) => setTopicHint(e.target.value)}
+                disabled={isGenerating}
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave blank for a general market update newsletter.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setAiDialogAgent(null); setTopicHint(''); }} disabled={isGenerating}>
+              Cancel
+            </Button>
+            <Button onClick={handleGenerateAI} disabled={isGenerating}>
+              {isGenerating ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating...</>
+              ) : (
+                <><Sparkles className="h-4 w-4 mr-2" /> Generate</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

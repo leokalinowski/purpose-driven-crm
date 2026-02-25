@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Eye, EyeOff, Send, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, Eye, EyeOff, Send, Check, Loader2, Sparkles, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -12,6 +12,7 @@ import { BlockSettings, BrandColors } from './BlockSettings';
 import { PreviewPanel } from './PreviewPanel';
 import { SendSchedulePanel } from './SendSchedulePanel';
 import { NewsletterBlock, GlobalStyles, DEFAULT_GLOBAL_STYLES } from './types';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useNewsletterTemplates } from '@/hooks/useNewsletterTemplates';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -41,6 +42,8 @@ export function NewsletterBuilder() {
   const [brandColors, setBrandColors] = useState<BrandColors>({ primary: null, secondary: null });
   const [agentData, setAgentData] = useState<AgentData>({});
   const [templateAgentId, setTemplateAgentId] = useState<string | undefined>();
+  const [reviewStatus, setReviewStatus] = useState<string | null>(null);
+  const [aiGenerated, setAiGenerated] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const hasLoadedRef = useRef(false);
@@ -67,6 +70,8 @@ export function NewsletterBuilder() {
         setTemplateName(data.name);
         setCurrentId(data.id);
         setTemplateAgentId(data.agent_id);
+        setReviewStatus((data as any).review_status || null);
+        setAiGenerated((data as any).ai_generated || false);
         hasLoadedRef.current = true;
         setTimeout(() => { isInitialLoadRef.current = false; }, 500);
       });
@@ -204,9 +209,37 @@ export function NewsletterBuilder() {
     };
   }, [blocks, globalStyles, templateName]);
 
+  const handleApprove = async () => {
+    if (!currentId) return;
+    await supabase.from('newsletter_templates').update({ review_status: 'approved', is_active: true }).eq('id', currentId);
+    setReviewStatus('approved');
+  };
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="h-screen flex flex-col bg-background">
+        {/* AI Review Banner */}
+        {aiGenerated && reviewStatus === 'pending_review' && (
+          <Alert className="rounded-none border-x-0 border-t-0 bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
+            <Sparkles className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="flex items-center justify-between">
+              <span className="text-amber-800 dark:text-amber-200">
+                <strong>AI-Generated Draft</strong> — Review and edit this newsletter before sending.
+              </span>
+              <Button size="sm" variant="outline" className="border-amber-300 hover:bg-amber-100" onClick={handleApprove}>
+                <CheckCircle className="h-3.5 w-3.5 mr-1.5" /> Approve
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+        {aiGenerated && reviewStatus === 'approved' && (
+          <Alert className="rounded-none border-x-0 border-t-0 bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-green-800 dark:text-green-200">
+              <strong>Approved</strong> — This AI-generated newsletter has been reviewed and approved.
+            </AlertDescription>
+          </Alert>
+        )}
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-card shadow-sm">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>

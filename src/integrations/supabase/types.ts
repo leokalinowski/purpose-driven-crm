@@ -1892,6 +1892,7 @@ export type Database = {
       newsletter_templates: {
         Row: {
           agent_id: string
+          ai_generated: boolean
           blocks_json: Json
           created_at: string | null
           created_by: string | null
@@ -1899,11 +1900,13 @@ export type Database = {
           id: string
           is_active: boolean | null
           name: string
+          review_status: string | null
           thumbnail_url: string | null
           updated_at: string | null
         }
         Insert: {
           agent_id: string
+          ai_generated?: boolean
           blocks_json?: Json
           created_at?: string | null
           created_by?: string | null
@@ -1911,11 +1914,13 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name?: string
+          review_status?: string | null
           thumbnail_url?: string | null
           updated_at?: string | null
         }
         Update: {
           agent_id?: string
+          ai_generated?: boolean
           blocks_json?: Json
           created_at?: string | null
           created_by?: string | null
@@ -1923,6 +1928,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name?: string
+          review_status?: string | null
           thumbnail_url?: string | null
           updated_at?: string | null
         }
