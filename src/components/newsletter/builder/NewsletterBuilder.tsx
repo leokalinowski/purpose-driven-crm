@@ -225,16 +225,18 @@ export function NewsletterBuilder() {
             {/* Center: Canvas */}
             <ScrollArea className="flex-1 p-6">
               <div className="max-w-[640px] mx-auto" onClick={handleClearSelection}>
-                <div className="rounded-xl shadow-sm border p-6 min-h-[600px]" style={{ backgroundColor: globalStyles.backgroundColor, fontFamily: globalStyles.fontFamily }}>
-                  <BuilderCanvas
-                    blocks={blocks}
-                    selectedBlockId={selectedBlockId}
-                    selectedChildPath={selectedChildPath}
-                    onSelectBlock={handleSelectBlock}
-                    onSelectChild={handleSelectChild}
-                    onUpdateBlocks={setBlocks}
-                    brandColors={brandColors}
-                  />
+                <div className="rounded-xl shadow-sm min-h-[600px]" style={{ backgroundColor: globalStyles.backgroundColor, padding: '24px 16px' }}>
+                  <div className="mx-auto rounded-lg border p-6" style={{ maxWidth: globalStyles.contentWidth || 640, backgroundColor: '#ffffff', fontFamily: globalStyles.fontFamily }}>
+                    <BuilderCanvas
+                      blocks={blocks}
+                      selectedBlockId={selectedBlockId}
+                      selectedChildPath={selectedChildPath}
+                      onSelectBlock={handleSelectBlock}
+                      onSelectChild={handleSelectChild}
+                      onUpdateBlocks={setBlocks}
+                      brandColors={brandColors}
+                    />
+                  </div>
                 </div>
               </div>
             </ScrollArea>

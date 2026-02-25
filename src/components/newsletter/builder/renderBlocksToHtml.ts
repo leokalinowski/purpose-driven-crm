@@ -84,7 +84,7 @@ function renderListings(props: Record<string, any>): string {
 
   const isGrid = style === 'grid';
   let html = `<div style="padding:4px 0;">
-    <h3 style="margin:0 0 16px;color:#1a1a1a;font-family:Georgia,serif;font-size:20px;font-weight:600;">Featured Listings</h3>`;
+    <h3 style="margin:0 0 16px;color:#1a1a1a;font-size:20px;font-weight:600;">Featured Listings</h3>`;
 
   if (isGrid) {
     html += `<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`;
