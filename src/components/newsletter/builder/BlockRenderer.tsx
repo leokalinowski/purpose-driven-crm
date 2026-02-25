@@ -300,6 +300,33 @@ function BlockPreview({
         ['showEqualHousing', 'Equal Housing Opportunity'],
       ];
       const enabled = bioFields.filter(([key]) => block.props[key] !== false);
+      const isHorizontal = block.props.layout === 'horizontal';
+      const imageFields = enabled.filter(([key]) => key === 'showHeadshot' || key === 'showLogo');
+      const textFields = enabled.filter(([key]) => key !== 'showHeadshot' && key !== 'showLogo');
+
+      if (isHorizontal) {
+        return (
+          <div className="bg-muted rounded-lg p-4">
+            <p className="font-semibold text-sm text-center mb-2">👤 Agent Bio & Compliance (Horizontal)</p>
+            <p className="text-xs opacity-60 text-center mb-3">Auto-populated from your profile at send time</p>
+            <div className="flex flex-row gap-4 items-start">
+              {imageFields.length > 0 && (
+                <div className="flex flex-col gap-1.5 items-center shrink-0">
+                  {imageFields.map(([key, label]) => (
+                    <span key={key} className="text-xs bg-background border rounded-full px-2 py-0.5">✓ {label}</span>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                {textFields.map(([key, label]) => (
+                  <span key={key} className="text-xs bg-background border rounded-full px-2 py-0.5">✓ {label}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="bg-muted rounded-lg p-4">
           <p className="font-semibold text-sm text-center mb-2">👤 Agent Bio & Compliance</p>
