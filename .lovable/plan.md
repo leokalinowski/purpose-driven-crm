@@ -1,55 +1,52 @@
 
 
-# Fix Image Upload, Add Action URL Picker & Multi-Slide Support
+# Announcement Positioning, Styles & Extended Types
 
-## 1. Fix Image Upload (Storage Policy)
+## Database Change
 
-**Root cause**: The `assets` bucket has zero RLS policies — no INSERT, no SELECT, nothing. Uploads are blocked by RLS.
+Add two new columns to `announcements`:
 
-**Fix**: Add storage policies for the `assets` bucket:
-- Admin INSERT policy (only admins upload announcement images)
-- Public SELECT policy (the bucket is already marked public, but needs an RLS SELECT policy to actually serve files)
+| Column | Type | Default | Values |
+|--------|------|---------|--------|
+| `display_position` | text | `'center'` | `center`, `top-right`, `top-left`, `bottom-right`, `bottom-left` |
+| `display_style` | text | `'modal'` | `modal` (current full dialog), `toast` (compact notification card), `banner` (slim top/bottom bar) |
 
-## 2. Action URL — Page Picker Dropdown
+## New Announcement Types
 
-Replace the free-text Action URL input with a Select dropdown listing all app routes, plus a "Custom URL" option for external links.
+Expand `typeConfig` in `announcementConstants.ts`:
 
-Routes to include:
-| Label | Value |
-|-------|-------|
-| Dashboard | `/` |
-| SphereSync Tasks | `/spheresync-tasks` |
-| Database | `/database` |
-| Events | `/events` |
-| Newsletter | `/newsletter` |
-| Coaching | `/coaching` |
-| Transactions | `/transactions` |
-| Pipeline | `/pipeline` |
-| Social Scheduler | `/social-scheduler` |
-| Support | `/support` |
-| Newsletter Builder | `/newsletter-builder` |
-| Custom URL... | (shows text input) |
+| Type | Label | Use Case |
+|------|-------|----------|
+| `feature` | New Feature | System updates |
+| `update` | Update | General updates |
+| `tip` | Tip | Usage tips |
+| `strategy` | Strategy | New business strategies |
+| `meeting` | Meeting | Meeting changes/reminders |
+| `announcement` | Announcement | General company announcements |
 
-When "Custom URL" is selected, a text input appears for pasting an external link.
+## AnnouncementModal Rendering
 
-## 3. Multi-Slide Support
+Based on `display_style` and `display_position`, render three different layouts:
 
-**Database**: Add a `slides` JSONB column to the `announcements` table (nullable, default null). Each slide is an object: `{ title, content, image_url }`. When `slides` is null, the announcement behaves as a single-slide announcement (backward compatible).
+- **`modal`** (current behavior): Centered dialog, ignores position. Full content with slides.
+- **`toast`**: Compact card positioned absolutely in the chosen corner. Smaller, less intrusive. Shows title + short content + dismiss button. Expands on click to show full content.
+- **`banner`**: Slim horizontal bar at top or bottom of screen. Single line with title, dismiss X. Position only uses top vs bottom (top-left/top-right → top, bottom-left/bottom-right → bottom).
 
-**Admin form**: Add a "Slides" section below the main content area:
-- Toggle: "Multi-slide walkthrough"
-- When enabled, shows a list of slide cards with title, content, and image upload for each
-- Add/remove slide buttons
-- The main title/content become the "intro slide"
+Implementation: Replace the single `<Dialog>` with conditional rendering. Toast uses a fixed-position card with Tailwind positioning classes. Banner uses a fixed bar. Modal stays as-is.
 
-**Modal**: When `slides` exists and has items, render them as additional pages after the main content, using the existing pagination dots.
+## Admin Form Updates
+
+Add two new Select dropdowns in the create/edit form:
+- **Display Style**: Modal / Toast / Banner
+- **Position**: Center / Top-Right / Top-Left / Bottom-Right / Bottom-Left (disabled options grayed out when not applicable to the chosen style)
 
 ## Files to Change
 
 | File | Change |
 |------|--------|
-| New migration | Add storage policies for `assets` bucket; add `slides` JSONB column to `announcements` |
-| `src/pages/AdminAnnouncements.tsx` | Replace action URL input with page picker; add slide builder UI |
-| `src/components/announcements/AnnouncementModal.tsx` | Render slides from the `slides` field as extra pages |
-| `src/components/announcements/announcementConstants.ts` | Add `APP_PAGES` constant for the route picker |
+| New migration | Add `display_position` and `display_style` columns |
+| `announcementConstants.ts` | Add new types (strategy, meeting, announcement), add position/style constants |
+| `useAnnouncements.ts` | Update `Announcement` interface with new fields |
+| `AnnouncementModal.tsx` | Rewrite to render modal/toast/banner based on style+position |
+| `AdminAnnouncements.tsx` | Add style and position selectors to form, update preview |
 
