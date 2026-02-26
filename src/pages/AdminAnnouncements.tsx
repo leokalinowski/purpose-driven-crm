@@ -116,6 +116,10 @@ export default function AdminAnnouncements() {
       toast({ title: 'Title and content are required', variant: 'destructive' });
       return;
     }
+    if (!user) {
+      toast({ title: 'Not authenticated', variant: 'destructive' });
+      return;
+    }
     try {
       const payload: any = {
         title: form.title,
@@ -128,7 +132,7 @@ export default function AdminAnnouncements() {
         expires_at: form.expires_at || null,
         priority: form.priority,
         is_active: form.is_active,
-        created_by: user!.id,
+        created_by: user.id,
         slides: form.multiSlide && form.slides.length > 0 ? form.slides : null,
         display_style: form.display_style,
         display_position: form.display_position,
