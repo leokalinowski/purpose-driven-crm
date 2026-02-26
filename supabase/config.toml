@@ -31,7 +31,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.opentoclose-sync]
-verify_jwt = true
+verify_jwt = false
 
 [functions.opentoclose-webhook]
 verify_jwt = false
