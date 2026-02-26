@@ -24,13 +24,11 @@ export function useAnnouncements() {
   const { role } = useUserRole();
   const queryClient = useQueryClient();
 
-  // Fetch active, un-dismissed, non-expired announcements for the current user
   const { data: announcements = [], isLoading } = useQuery({
-    queryKey: ['announcements', 'active', user?.id],
+    queryKey: ['announcements', 'active', user?.id, role],
     queryFn: async () => {
       if (!user) return [];
 
-      // Get dismissed announcement IDs
       const { data: dismissals } = await supabase
         .from('announcement_dismissals')
         .select('announcement_id')
@@ -38,7 +36,6 @@ export function useAnnouncements() {
 
       const dismissedIds = (dismissals || []).map(d => d.announcement_id);
 
-      // Get active announcements
       let query = supabase
         .from('announcements')
         .select('*')
@@ -53,7 +50,6 @@ export function useAnnouncements() {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Filter by role and expiry client-side
       const now = new Date().toISOString();
       return (data as Announcement[]).filter(a => {
         if (a.expires_at && a.expires_at < now) return false;
@@ -77,7 +73,21 @@ export function useAnnouncements() {
     },
   });
 
-  return { announcements, isLoading, dismissAnnouncement };
+  const dismissAllAnnouncements = useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!user) throw new Error('Not authenticated');
+      const rows = ids.map(id => ({ announcement_id: id, user_id: user.id }));
+      const { error } = await supabase
+        .from('announcement_dismissals')
+        .insert(rows);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements', 'active'] });
+    },
+  });
+
+  return { announcements, isLoading, dismissAnnouncement, dismissAllAnnouncements };
 }
 
 // Admin hook for managing all announcements
@@ -93,6 +103,22 @@ export function useAdminAnnouncements() {
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data as Announcement[];
+    },
+  });
+
+  // Fetch dismissal counts per announcement
+  const { data: dismissalCounts = {} } = useQuery({
+    queryKey: ['announcements', 'dismissal-counts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('announcement_dismissals')
+        .select('announcement_id');
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      (data || []).forEach(d => {
+        counts[d.announcement_id] = (counts[d.announcement_id] || 0) + 1;
+      });
+      return counts;
     },
   });
 
@@ -126,5 +152,5 @@ export function useAdminAnnouncements() {
     },
   });
 
-  return { announcements, isLoading, createAnnouncement, updateAnnouncement, deleteAnnouncement };
+  return { announcements, isLoading, dismissalCounts, createAnnouncement, updateAnnouncement, deleteAnnouncement };
 }

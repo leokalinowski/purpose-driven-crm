@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { useAdminAnnouncements, Announcement } from '@/hooks/useAnnouncements';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,14 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, Sparkles, Info, Zap, Eye, Megaphone } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Plus, Pencil, Trash2, Eye, Megaphone, Upload, Users } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-
-const typeConfig: Record<string, { label: string; icon: React.ElementType; variant: 'default' | 'secondary' | 'outline' }> = {
-  feature: { label: 'New Feature', icon: Sparkles, variant: 'default' },
-  update: { label: 'Update', icon: Zap, variant: 'secondary' },
-  tip: { label: 'Tip', icon: Info, variant: 'outline' },
-};
+import { typeConfig } from '@/components/announcements/announcementConstants';
 
 const emptyForm = {
   title: '',
@@ -34,12 +31,14 @@ const emptyForm = {
 };
 
 export default function AdminAnnouncements() {
-  const { announcements, isLoading, createAnnouncement, updateAnnouncement, deleteAnnouncement } = useAdminAnnouncements();
+  const { announcements, isLoading, dismissalCounts, createAnnouncement, updateAnnouncement, deleteAnnouncement } = useAdminAnnouncements();
   const { user } = useAuth();
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [previewItem, setPreviewItem] = useState<Announcement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openCreate = () => {
     setEditingId(null);
@@ -62,6 +61,33 @@ export default function AdminAnnouncements() {
       is_active: a.is_active,
     });
     setFormOpen(true);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const fileName = `announcements/${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('assets')
+        .upload(fileName, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('assets')
+        .getPublicUrl(fileName);
+
+      setForm(prev => ({ ...prev, image_url: publicUrl }));
+      toast({ title: 'Image uploaded' });
+    } catch (err: any) {
+      toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleSubmit = async () => {
@@ -140,6 +166,7 @@ export default function AdminAnnouncements() {
               const config = typeConfig[a.type] || typeConfig.feature;
               const TypeIcon = config.icon;
               const isExpired = a.expires_at && new Date(a.expires_at) < new Date();
+              const dismissCount = dismissalCounts[a.id] || 0;
               return (
                 <Card key={a.id} className={!a.is_active ? 'opacity-60' : ''}>
                   <CardHeader className="pb-2">
@@ -153,6 +180,12 @@ export default function AdminAnnouncements() {
                           <Badge variant="outline" className="text-xs">{a.target_role}</Badge>
                         )}
                         {isExpired && <Badge variant="destructive" className="text-xs">Expired</Badge>}
+                        {dismissCount > 0 && (
+                          <Badge variant="outline" className="text-xs gap-1">
+                            <Users className="h-3 w-3" />
+                            {dismissCount} dismissed
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <Switch checked={a.is_active} onCheckedChange={() => handleToggleActive(a)} />
@@ -162,9 +195,25 @@ export default function AdminAnnouncements() {
                         <Button variant="ghost" size="icon" onClick={() => openEdit(a)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(a.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete announcement?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently delete "{a.title}" and all associated dismissal records.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(a.id)}>Delete</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                     <CardTitle className="text-lg">{a.title}</CardTitle>
@@ -224,8 +273,34 @@ export default function AdminAnnouncements() {
               </div>
             </div>
             <div>
-              <Label>Image URL (screenshot or GIF)</Label>
-              <Input value={form.image_url} onChange={e => setForm({ ...form, image_url: e.target.value })} placeholder="https://..." />
+              <Label>Image (screenshot or GIF)</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={form.image_url}
+                  onChange={e => setForm({ ...form, image_url: e.target.value })}
+                  placeholder="Paste URL or upload..."
+                  className="flex-1"
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,.gif"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  <Upload className="h-4 w-4" />
+                </Button>
+              </div>
+              {form.image_url && (
+                <img src={form.image_url} alt="Preview" className="mt-2 rounded border max-h-32 object-contain" />
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
