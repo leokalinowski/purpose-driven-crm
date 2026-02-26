@@ -66,11 +66,15 @@ export function AdminTransactionsDashboard() {
     ? transactions.filter((t) => t.responsible_agent === selectedAgent.agentId)
     : [];
 
+  const totalTx = transactions.length;
+  const closedCount = teamMetrics.totalClosed;
+  const ongoingCount = teamMetrics.totalOngoing;
+
   const kpiCards = [
-    { label: 'YTD Sales Volume', value: fmt(teamMetrics.ytdSalesVolume), icon: DollarSign },
-    { label: 'YTD GCI', value: fmt(teamMetrics.ytdGci), icon: TrendingUp },
+    { label: 'YTD Sales Volume', value: fmt(teamMetrics.ytdSalesVolume), icon: DollarSign, sub: `${closedCount} closed` },
+    { label: 'YTD GCI', value: fmt(teamMetrics.ytdGci), icon: TrendingUp, sub: `${totalTx} total` },
     { label: 'MTD GCI', value: fmt(teamMetrics.mtdGci), icon: DollarSign },
-    { label: 'Active Pipeline', value: fmt(teamMetrics.activePipelineValue), icon: Target },
+    { label: 'Active Pipeline', value: fmt(teamMetrics.activePipelineValue), icon: Target, sub: `${ongoingCount} active` },
     { label: 'Avg Deal Velocity', value: `${teamMetrics.avgDealVelocity.toFixed(0)}d`, icon: Clock },
     { label: 'Closing Rate', value: `${teamMetrics.teamClosingRate.toFixed(0)}%`, icon: Trophy },
   ];
@@ -87,6 +91,7 @@ export function AdminTransactionsDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{kpi.value}</div>
+              {(kpi as any).sub && <p className="text-xs text-muted-foreground mt-1">{(kpi as any).sub}</p>}
             </CardContent>
           </Card>
         ))}
@@ -170,29 +175,35 @@ export function AdminTransactionsDashboard() {
             </div>
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Property</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Stage</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">GCI</TableHead>
-                  <TableHead>Close Date</TableHead>
-                </TableRow>
+                 <TableRow>
+                   <TableHead>Property</TableHead>
+                   <TableHead>Client</TableHead>
+                   <TableHead>Type</TableHead>
+                   <TableHead>Stage</TableHead>
+                   <TableHead className="text-right">Price</TableHead>
+                   <TableHead className="text-right">GCI</TableHead>
+                   <TableHead>Close Date</TableHead>
+                 </TableRow>
               </TableHeader>
               <TableBody>
                 {agentDrillDown.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell className="font-medium max-w-[200px] truncate">{t.property_address || '—'}</TableCell>
-                    <TableCell>{t.client_name || '—'}</TableCell>
-                    <TableCell>
-                      <Badge variant={t.transaction_stage === 'closed' ? 'default' : 'secondary'}>
-                        {t.transaction_stage}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">{t.sale_price ? fmt(t.sale_price) : '—'}</TableCell>
-                    <TableCell className="text-right">{t.gci ? fmt(t.gci) : '—'}</TableCell>
-                    <TableCell>{t.closing_date ? format(new Date(t.closing_date), 'MMM d, yyyy') : '—'}</TableCell>
-                  </TableRow>
+                   <TableRow key={t.id}>
+                     <TableCell className="font-medium max-w-[200px] truncate">{t.property_address || '—'}</TableCell>
+                     <TableCell>{t.client_name || '—'}</TableCell>
+                     <TableCell>
+                       <Badge variant="outline" className="text-xs">
+                         {t.transaction_type === 'buy' ? 'Buyer' : t.transaction_type === 'sell' ? 'Seller' : '—'}
+                       </Badge>
+                     </TableCell>
+                     <TableCell>
+                       <Badge variant={t.transaction_stage === 'closed' ? 'default' : 'secondary'}>
+                         {t.transaction_stage}
+                       </Badge>
+                     </TableCell>
+                     <TableCell className="text-right">{t.sale_price ? fmt(t.sale_price) : '—'}</TableCell>
+                     <TableCell className="text-right">{t.gci ? fmt(t.gci) : '—'}</TableCell>
+                     <TableCell>{t.closing_date ? format(new Date(t.closing_date), 'MMM d, yyyy') : '—'}</TableCell>
+                   </TableRow>
                 ))}
               </TableBody>
             </Table>
@@ -234,42 +245,48 @@ export function AdminTransactionsDashboard() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Agent</TableHead>
-                <TableHead>Property</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Stage</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">GCI</TableHead>
-                <TableHead>Close Date</TableHead>
-                <TableHead>Last Synced</TableHead>
+                 <TableHead>Agent</TableHead>
+                 <TableHead>Property</TableHead>
+                 <TableHead>Client</TableHead>
+                 <TableHead>Type</TableHead>
+                 <TableHead>Stage</TableHead>
+                 <TableHead className="text-right">Price</TableHead>
+                 <TableHead className="text-right">GCI</TableHead>
+                 <TableHead>Close Date</TableHead>
+                 <TableHead>Last Synced</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredTransactions.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                    No transactions found.
-                  </TableCell>
-                </TableRow>
+               <TableRow>
+                   <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                     No transactions found.
+                   </TableCell>
+                 </TableRow>
               ) : (
-                filteredTransactions.slice(0, 100).map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell>{profiles[t.responsible_agent || ''] || '—'}</TableCell>
-                    <TableCell className="max-w-[180px] truncate">{t.property_address || '—'}</TableCell>
-                    <TableCell>{t.client_name || '—'}</TableCell>
-                    <TableCell>
-                      <Badge variant={t.transaction_stage === 'closed' ? 'default' : 'secondary'}>
-                        {t.transaction_stage}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">{t.sale_price ? fmt(t.sale_price) : '—'}</TableCell>
-                    <TableCell className="text-right">{t.gci ? fmt(t.gci) : '—'}</TableCell>
-                    <TableCell>{t.closing_date ? format(new Date(t.closing_date), 'MMM d, yyyy') : '—'}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {t.last_synced_at ? format(new Date(t.last_synced_at), 'MMM d, HH:mm') : '—'}
-                    </TableCell>
-                  </TableRow>
-                ))
+                 filteredTransactions.slice(0, 100).map((t) => (
+                   <TableRow key={t.id}>
+                     <TableCell>{profiles[t.responsible_agent || ''] || '—'}</TableCell>
+                     <TableCell className="max-w-[180px] truncate">{t.property_address || '—'}</TableCell>
+                     <TableCell>{t.client_name || '—'}</TableCell>
+                     <TableCell>
+                       <Badge variant="outline" className="text-xs">
+                         {t.transaction_type === 'buy' ? 'Buyer' : t.transaction_type === 'sell' ? 'Seller' : '—'}
+                       </Badge>
+                     </TableCell>
+                     <TableCell>
+                       <Badge variant={t.transaction_stage === 'closed' ? 'default' : 'secondary'}>
+                         {t.transaction_stage}
+                       </Badge>
+                     </TableCell>
+                     <TableCell className="text-right">{t.sale_price ? fmt(t.sale_price) : '—'}</TableCell>
+                     <TableCell className="text-right">{t.gci ? fmt(t.gci) : '—'}</TableCell>
+                     <TableCell>{t.closing_date ? format(new Date(t.closing_date), 'MMM d, yyyy') : '—'}</TableCell>
+                     <TableCell className="text-xs text-muted-foreground">
+                       {t.last_synced_at ? format(new Date(t.last_synced_at), 'MMM d, HH:mm') : '—'}
+                     </TableCell>
+                   </TableRow>
+                 ))
               )}
             </TableBody>
           </Table>

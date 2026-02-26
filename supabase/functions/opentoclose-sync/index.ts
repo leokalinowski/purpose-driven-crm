@@ -23,26 +23,53 @@ function normalize(s: string): string {
 
 function extractAgentFromNotes(notes: string | null): string | null {
   if (!notes) return null
-  // Replace <br> and <br/> with newlines before stripping other tags
   const withNewlines = notes.replace(/<br\s*\/?>/gi, '\n')
-  // Strip remaining HTML tags
   const stripped = withNewlines.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ')
   const match = stripped.match(/RA:\s*([^\n]+)/i)
   if (!match) return null
-  // Clean up extra spaces and trim
   return match[1].trim().replace(/\s+/g, ' ')
 }
 
-function mapStage(status: string | null): string {
-  if (!status) return 'under_contract'
-  const s = status.toLowerCase()
-  if (s.includes('closed') || s.includes('settled')) return 'closed'
+function extractClientFromNotes(notes: string | null): string | null {
+  if (!notes) return null
+  const withNewlines = notes.replace(/<br\s*\/?>/gi, '\n')
+  const stripped = withNewlines.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+  // Look for lines after RA that might contain client info
+  const lines = stripped.split('\n').map(l => l.trim()).filter(Boolean)
+  // Skip RA line, look for anything that isn't a field label
+  let foundRA = false
+  for (const line of lines) {
+    if (/^RA:/i.test(line)) { foundRA = true; continue }
+    if (foundRA && line.length > 2 && !/^(Title|Buyer|Seller|SentriLock|lockbox|occupied|vacant)/i.test(line)) {
+      return line.replace(/\s+/g, ' ').substring(0, 100)
+    }
+  }
+  return null
+}
+
+function mapStage(contractStatus: string | null, closingDate: string | null): string {
+  // Past closing date is the strongest signal
+  if (closingDate) {
+    const closeDate = new Date(closingDate)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    if (closeDate <= today) return 'closed'
+  }
+  
+  if (!contractStatus) return 'under_contract'
+  const s = contractStatus.toLowerCase()
+  
+  if (s.includes('closed') || s.includes('settled') || s.includes('archive') || s.includes('post-occ') || s.includes('compliance only')) return 'closed'
+  if (s.includes('listing') && !s.includes('complete')) return 'listing'
+  if (s.includes('listing-complete') || s.includes('listing complete')) return 'closed'
+  if (s.includes('on hold')) return 'on_hold'
+  
   return 'under_contract'
 }
 
-function mapStatus(status: string | null): string {
-  if (!status) return 'ongoing'
-  return status.toLowerCase().includes('closed') ? 'closed' : 'ongoing'
+function mapStatus(contractStatus: string | null, closingDate: string | null): string {
+  const stage = mapStage(contractStatus, closingDate)
+  return stage === 'closed' ? 'closed' : 'ongoing'
 }
 
 function mapTransactionType(clientType: string | null): string {
@@ -63,19 +90,66 @@ function buildAddress(property: any): string {
   return parts.join(', ') || 'Unknown'
 }
 
-function parseCommissionDollar(val: string | null): number {
+/**
+ * Parse commission value. Handles:
+ * - "2.5% ($26,000)" → extracts $26,000
+ * - "$26,000" → extracts 26000
+ * - "3.5%" or "3.5" → treats as percentage if < 100, computes from salePrice
+ * - "11375" → keeps as dollar amount
+ */
+function parseCommission(val: string | null, salePrice: number): number {
   if (!val) return 0
-  // Extract dollar amount from patterns like "2.5% ($26,000)" or "$26,000"
-  const dollarMatch = val.match(/\$\s*([\d,]+(?:\.\d+)?)/);
-  if (dollarMatch) return parseFloat(dollarMatch[1].replace(/,/g, '')) || 0
-  // Try as plain number
-  return parseFloat(val.replace(/[^0-9.]/g, '')) || 0
+  
+  // 1. Try to extract explicit dollar amount from patterns like "2.5% ($26,000)"
+  const dollarMatch = val.match(/\$\s*([\d,]+(?:\.\d+)?)/)
+  if (dollarMatch) {
+    const amount = parseFloat(dollarMatch[1].replace(/,/g, '')) || 0
+    if (amount > 0) return amount
+  }
+  
+  // 2. Check if it's a percentage format like "3.5%" or "2.5%"
+  const pctMatch = val.match(/([\d.]+)\s*%/)
+  if (pctMatch) {
+    const pct = parseFloat(pctMatch[1]) || 0
+    if (pct > 0 && pct < 100 && salePrice > 0) {
+      return (pct / 100) * salePrice
+    }
+    return pct
+  }
+  
+  // 3. Plain number — if small, treat as percentage; if large, treat as dollars
+  const num = parseFloat(val.replace(/[^0-9.]/g, '')) || 0
+  if (num > 0 && num < 100 && salePrice > 10000) {
+    return (num / 100) * salePrice
+  }
+  return num
+}
+
+/**
+ * Extract the percentage rate from commission strings.
+ * "2.5% ($26,000)" → 2.5
+ * "3.5%" → 3.5
+ * "3.5" → 3.5 (if < 100)
+ */
+function extractCommissionRate(val: string | null): number | null {
+  if (!val) return null
+  const pctMatch = val.match(/([\d.]+)\s*%/)
+  if (pctMatch) return parseFloat(pctMatch[1]) || null
+  const num = parseFloat(val.replace(/[^0-9.]/g, '')) || 0
+  if (num > 0 && num < 100) return num
+  return null
 }
 
 function mapPropertyToTransaction(property: any, agentId: string, clientName: string | null) {
   const contractStatus = getFieldValue(property, 'contract_status')
   const listingStatus = getFieldValue(property, 'listing_status')
   const effectiveStatus = contractStatus || listingStatus
+
+  const closingDate = getFieldValue(property, 'closing_date') || getFieldValue(property, 'settlement_date')
+  const contractDate = getFieldValue(property, 'contract_date') || getFieldValue(property, 'ratification_date')
+  const listingDate = getFieldValue(property, 'listing_date') || getFieldValue(property, 'mls_active_date')
+
+  const salePrice = parseFloat(getFieldValue(property, 'purchase_amount') || getFieldValue(property, 'listing_price') || '0') || 0
 
   // Determine representation to pick the right commission field
   const representation = getFieldValue(property, 'contract_client_type') || ''
@@ -85,36 +159,65 @@ function mapPropertyToTransaction(property: any, agentId: string, clientName: st
   // Try explicit GCI fields first
   gci = parseFloat(getFieldValue(property, 'gci') || getFieldValue(property, 'gci_amount') || '0') || 0
   
+  // If explicit GCI is a percentage (< 100), compute from sale price
+  if (gci > 0 && gci < 100 && salePrice > 10000) {
+    gci = (gci / 100) * salePrice
+  }
+  
   // If no explicit GCI, parse from commission fields based on representation
   if (gci === 0) {
     if (repLower.includes('buyer') || repLower.includes('buy')) {
-      gci = parseCommissionDollar(getFieldValue(property, 'seller_to_buyer_broker'))
+      gci = parseCommission(getFieldValue(property, 'seller_to_buyer_broker'), salePrice)
     } else if (repLower.includes('seller') || repLower.includes('sell') || repLower.includes('list')) {
-      gci = parseCommissionDollar(getFieldValue(property, 'seller_to_listing_broker'))
+      gci = parseCommission(getFieldValue(property, 'seller_to_listing_broker'), salePrice)
     }
     // If still 0, try both
     if (gci === 0) {
-      gci = parseCommissionDollar(getFieldValue(property, 'seller_to_listing_broker'))
-        || parseCommissionDollar(getFieldValue(property, 'seller_to_buyer_broker'))
+      gci = parseCommission(getFieldValue(property, 'seller_to_listing_broker'), salePrice)
+        || parseCommission(getFieldValue(property, 'seller_to_buyer_broker'), salePrice)
     }
   }
+
+  // Extract commission rate
+  let commissionRate: number | null = null
+  if (repLower.includes('buyer') || repLower.includes('buy')) {
+    commissionRate = extractCommissionRate(getFieldValue(property, 'seller_to_buyer_broker'))
+  } else if (repLower.includes('seller') || repLower.includes('sell') || repLower.includes('list')) {
+    commissionRate = extractCommissionRate(getFieldValue(property, 'seller_to_listing_broker'))
+  }
+  if (!commissionRate) {
+    commissionRate = extractCommissionRate(getFieldValue(property, 'total_commission_percentage'))
+      || extractCommissionRate(getFieldValue(property, 'seller_to_listing_broker'))
+      || extractCommissionRate(getFieldValue(property, 'seller_to_buyer_broker'))
+  }
+
+  // Client name: try notes, then field values, then null
+  const notes = getFieldValue(property, 'important_notes') || property.important_notes || ''
+  const extractedClient = clientName || extractClientFromNotes(notes)
+  const finalClientName = extractedClient 
+    || getFieldValue(property, 'buyer_name') 
+    || getFieldValue(property, 'seller_name')
+    || getFieldValue(property, 'client_name')
+    || getFieldValue(property, 'primary_client')
+    || getFieldValue(property, 'contact_name')
+    || null
 
   return {
     responsible_agent: agentId,
     otc_deal_id: String(property.id),
-    client_name: clientName || getFieldValue(property, 'buyer_name') || getFieldValue(property, 'seller_name') || 'Unknown',
+    client_name: finalClientName,
     property_address: buildAddress(property),
-    sale_price: parseFloat(getFieldValue(property, 'purchase_amount') || getFieldValue(property, 'listing_price') || '0') || 0,
+    sale_price: salePrice,
     gci,
-    status: mapStatus(effectiveStatus),
-    transaction_stage: mapStage(effectiveStatus),
+    status: mapStatus(effectiveStatus, closingDate),
+    transaction_stage: mapStage(effectiveStatus, closingDate),
     transaction_type: mapTransactionType(getFieldValue(property, 'contract_client_type')),
-    contract_date: getFieldValue(property, 'contract_date') || getFieldValue(property, 'ratification_date'),
-    closing_date: getFieldValue(property, 'closing_date') || getFieldValue(property, 'settlement_date'),
-    listing_date: getFieldValue(property, 'listing_date') || getFieldValue(property, 'mls_active_date'),
+    contract_date: contractDate,
+    closing_date: closingDate,
+    listing_date: listingDate,
     property_type: getFieldValue(property, 'property_type'),
     lead_source: getFieldValue(property, 'referred_by'),
-    commission_rate: parseFloat(getFieldValue(property, 'total_commission_percentage') || '0') || null,
+    commission_rate: commissionRate,
     milestone_dates: {
       emd_due: getFieldValue(property, 'emd_due'),
       contingency_ends_hi: getFieldValue(property, 'contingency_ends_hi'),
@@ -123,7 +226,21 @@ function mapPropertyToTransaction(property: any, agentId: string, clientName: st
       final_walkthrough: getFieldValue(property, 'final_walkthough_date'),
       settlement_date: getFieldValue(property, 'settlement_date'),
     },
-    raw_api_data: { id: property.id, team_user_name: property.team_user_name, created: property.created },
+    raw_api_data: {
+      id: property.id,
+      team_user_name: property.team_user_name,
+      created: property.created,
+      contract_status: effectiveStatus,
+      representation: representation,
+      referral_amount: getFieldValue(property, 'referral_amount'),
+      scalable_tc_fee: getFieldValue(property, 'scalable_tc_fee'),
+      agent_admin_fee: getFieldValue(property, 'agent_admin_fee'),
+      raw_gci: getFieldValue(property, 'gci') || getFieldValue(property, 'gci_amount'),
+      raw_seller_to_listing: getFieldValue(property, 'seller_to_listing_broker'),
+      raw_seller_to_buyer: getFieldValue(property, 'seller_to_buyer_broker'),
+      brokerage: getFieldValue(property, 'brokerage'),
+      team_name: getFieldValue(property, 'team_name'),
+    },
     last_synced_at: new Date().toISOString(),
     sync_errors: [],
     updated_at: new Date().toISOString(),
@@ -157,14 +274,13 @@ async function fetchAllProperties(apiToken: string): Promise<any[]> {
     if (all.length % 500 === 0) console.log(`Fetched ${all.length} properties so far`)
     if (props.length < limit) break
     offset += limit
-    // Rate limit: OTC allows ~1 req/sec
     await new Promise(r => setTimeout(r, 1200))
   }
   console.log('Total OTC properties:', all.length)
   return all
 }
 
-// --- Agent Map (full-name matching only) ---
+// --- Agent Map ---
 
 interface ProfileEntry {
   userId: string
@@ -187,14 +303,12 @@ async function loadProfiles(supabase: any): Promise<ProfileEntry[]> {
 function matchAgentByName(raName: string, profiles: ProfileEntry[]): { userId: string; matchedName: string } | null {
   const normRA = normalize(raName)
   
-  // 1. Exact full-name match (normalized)
   for (const p of profiles) {
     if (normalize(p.fullName) === normRA) {
       return { userId: p.userId, matchedName: p.fullName }
     }
   }
 
-  // 2. Full name contained in RA string or vice versa
   for (const p of profiles) {
     const normFull = normalize(p.fullName)
     if (normRA.includes(normFull) || normFull.includes(normRA)) {
@@ -202,7 +316,6 @@ function matchAgentByName(raName: string, profiles: ProfileEntry[]): { userId: s
     }
   }
 
-  // 3. Last-name match (only if last name is 4+ chars to avoid false positives)
   for (const p of profiles) {
     if (p.lastName.length >= 4 && normalize(p.lastName) === normRA.slice(-normalize(p.lastName).length)) {
       return { userId: p.userId, matchedName: p.fullName }
@@ -229,13 +342,11 @@ async function syncProperties(supabase: any, properties: any[], profiles: Profil
     try {
       const { isReop, raName } = isREOPProperty(prop)
       
-      // Skip non-REOP properties
       if (!isReop || !raName) {
         skippedNoRA++
         continue
       }
 
-      // Match RA name to Hub profile
       const match = matchAgentByName(raName, profiles)
       if (!match) {
         unmatchedNames.set(raName, (unmatchedNames.get(raName) || 0) + 1)
@@ -286,60 +397,73 @@ serve(async (req) => {
 
     // --- DISCOVER ---
     if (mode === 'discover') {
-      // Fetch a batch of properties to analyze
-      const raw = await otcFetch('/properties?limit=50', apiKey)
-      const props = raw?.data || raw || []
+      // Fetch more properties to ensure REOP samples
+      const allProps: any[] = []
+      for (let offset = 0; offset < 200; offset += 50) {
+        const raw = await otcFetch(`/properties?limit=50&offset=${offset}`, apiKey)
+        const batch = raw?.data || raw || []
+        if (!Array.isArray(batch) || batch.length === 0) break
+        allProps.push(...batch)
+        if (batch.length < 50) break
+        await new Promise(r => setTimeout(r, 1200))
+      }
 
-      // Find REOP vs non-REOP samples
       const reopSamples: any[] = []
       const nonReopSamples: any[] = []
-      for (const p of props) {
+      const statusValues = new Set<string>()
+      
+      for (const p of allProps) {
         const { isReop, raName } = isREOPProperty(p)
+        const contractStatus = getFieldValue(p, 'contract_status')
+        if (contractStatus) statusValues.add(contractStatus)
+        
         const summary = {
           id: p.id,
           team_user_name: p.team_user_name,
-          agent_name: p.agent_name,
-          important_notes: getFieldValue(p, 'important_notes'),
-          contract_status: getFieldValue(p, 'contract_status'),
-          contract_title: getFieldValue(p, 'contract_title'),
+          important_notes_raw: (getFieldValue(p, 'important_notes') || '').substring(0, 200),
+          contract_status: contractStatus,
+          listing_status: getFieldValue(p, 'listing_status'),
           property_address: buildAddress(p),
           purchase_amount: getFieldValue(p, 'purchase_amount'),
+          listing_price: getFieldValue(p, 'listing_price'),
           gci: getFieldValue(p, 'gci'),
           gci_amount: getFieldValue(p, 'gci_amount'),
-          commission_amount: getFieldValue(p, 'commission_amount'),
-          total_commission_amount: getFieldValue(p, 'total_commission_amount'),
-          agent_commission: getFieldValue(p, 'agent_commission'),
           seller_to_buyer_broker: getFieldValue(p, 'seller_to_buyer_broker'),
           seller_to_listing_broker: getFieldValue(p, 'seller_to_listing_broker'),
+          contract_client_type: getFieldValue(p, 'contract_client_type'),
+          referral_amount: getFieldValue(p, 'referral_amount'),
           buyer_name: getFieldValue(p, 'buyer_name'),
           seller_name: getFieldValue(p, 'seller_name'),
+          client_name: getFieldValue(p, 'client_name'),
+          closing_date: getFieldValue(p, 'closing_date'),
+          settlement_date: getFieldValue(p, 'settlement_date'),
+          contract_date: getFieldValue(p, 'contract_date'),
           raName,
         }
-        if (isReop && reopSamples.length < 5) reopSamples.push(summary)
+        if (isReop && reopSamples.length < 10) reopSamples.push(summary)
         if (!isReop && nonReopSamples.length < 3) nonReopSamples.push(summary)
       }
 
-      // Load profiles for matching test
       const profiles = await loadProfiles(supabase)
       const matchResults = reopSamples.map(s => {
         const match = s.raName ? matchAgentByName(s.raName, profiles) : null
         return { raName: s.raName, matched: match?.matchedName || 'NO MATCH', userId: match?.userId || null }
       })
 
-      // All field keys from first property
-      const fieldKeys = props[0]?.field_values?.map((f: any) => ({ 
+      const fieldKeys = allProps[0]?.field_values?.map((f: any) => ({ 
         key: f.key, label: f.label, sampleValue: f.value 
       })).filter((f: any) => f.sampleValue) || []
 
       return new Response(JSON.stringify({
         success: true, mode: 'discover',
-        totalFetched: props.length,
-        reopCount: props.filter((p: any) => isREOPProperty(p).isReop).length,
+        totalFetched: allProps.length,
+        reopCount: allProps.filter((p: any) => isREOPProperty(p).isReop).length,
         reopSamples,
         nonReopSamples,
         matchResults,
         hubProfiles: profiles.map(p => p.fullName),
         fieldKeys,
+        contractStatusValues: [...statusValues],
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
