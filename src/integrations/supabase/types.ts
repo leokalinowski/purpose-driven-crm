@@ -223,6 +223,83 @@ export type Database = {
         }
         Relationships: []
       }
+      announcement_dismissals: {
+        Row: {
+          announcement_id: string
+          dismissed_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          announcement_id: string
+          dismissed_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          announcement_id?: string
+          dismissed_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_dismissals_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcements: {
+        Row: {
+          action_label: string | null
+          action_url: string | null
+          content: string
+          created_at: string
+          created_by: string
+          expires_at: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean
+          priority: number
+          target_role: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          action_label?: string | null
+          action_url?: string | null
+          content: string
+          created_at?: string
+          created_by: string
+          expires_at?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          priority?: number
+          target_role?: string | null
+          title: string
+          type?: string
+        }
+        Update: {
+          action_label?: string | null
+          action_url?: string | null
+          content?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          priority?: number
+          target_role?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: []
+      }
       automation_runs: {
         Row: {
           created_at: string
