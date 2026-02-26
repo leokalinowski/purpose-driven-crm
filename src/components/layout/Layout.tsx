@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { Separator } from '@/components/ui/separator';
+import { AnnouncementModal } from '@/components/announcements/AnnouncementModal';
 
 interface LayoutProps {
   children: ReactNode;
@@ -20,6 +21,7 @@ export function Layout({ children }: LayoutProps) {
           {children}
         </div>
       </SidebarInset>
+      <AnnouncementModal />
     </SidebarProvider>
   );
 }

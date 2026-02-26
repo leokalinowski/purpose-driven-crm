@@ -1,0 +1,130 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  type: string;
+  image_url: string | null;
+  action_url: string | null;
+  action_label: string | null;
+  is_active: boolean;
+  priority: number;
+  target_role: string | null;
+  created_at: string;
+  expires_at: string | null;
+  created_by: string;
+}
+
+export function useAnnouncements() {
+  const { user } = useAuth();
+  const { role } = useUserRole();
+  const queryClient = useQueryClient();
+
+  // Fetch active, un-dismissed, non-expired announcements for the current user
+  const { data: announcements = [], isLoading } = useQuery({
+    queryKey: ['announcements', 'active', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+
+      // Get dismissed announcement IDs
+      const { data: dismissals } = await supabase
+        .from('announcement_dismissals')
+        .select('announcement_id')
+        .eq('user_id', user.id);
+
+      const dismissedIds = (dismissals || []).map(d => d.announcement_id);
+
+      // Get active announcements
+      let query = supabase
+        .from('announcements')
+        .select('*')
+        .eq('is_active', true)
+        .order('priority', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (dismissedIds.length > 0) {
+        query = query.not('id', 'in', `(${dismissedIds.join(',')})`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      // Filter by role and expiry client-side
+      const now = new Date().toISOString();
+      return (data as Announcement[]).filter(a => {
+        if (a.expires_at && a.expires_at < now) return false;
+        if (a.target_role && a.target_role !== role) return false;
+        return true;
+      });
+    },
+    enabled: !!user,
+  });
+
+  const dismissAnnouncement = useMutation({
+    mutationFn: async (announcementId: string) => {
+      if (!user) throw new Error('Not authenticated');
+      const { error } = await supabase
+        .from('announcement_dismissals')
+        .insert({ announcement_id: announcementId, user_id: user.id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements', 'active'] });
+    },
+  });
+
+  return { announcements, isLoading, dismissAnnouncement };
+}
+
+// Admin hook for managing all announcements
+export function useAdminAnnouncements() {
+  const queryClient = useQueryClient();
+
+  const { data: announcements = [], isLoading } = useQuery({
+    queryKey: ['announcements', 'admin'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data as Announcement[];
+    },
+  });
+
+  const createAnnouncement = useMutation({
+    mutationFn: async (announcement: Omit<Announcement, 'id' | 'created_at'>) => {
+      const { error } = await supabase.from('announcements').insert(announcement);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+    },
+  });
+
+  const updateAnnouncement = useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<Announcement> & { id: string }) => {
+      const { error } = await supabase.from('announcements').update(updates).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+    },
+  });
+
+  const deleteAnnouncement = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('announcements').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+    },
+  });
+
+  return { announcements, isLoading, createAnnouncement, updateAnnouncement, deleteAnnouncement };
+}

@@ -18,6 +18,7 @@ import {
   Handshake,
   ClipboardList,
   ChevronRight,
+  Megaphone,
   type LucideIcon,
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -180,6 +181,7 @@ export function AppSidebar() {
                 items={[
                   { title: 'Sponsor Database', url: '/admin/sponsors', icon: Handshake },
                   { title: 'Survey Results', url: '/admin/survey-results', icon: ClipboardList },
+                  { title: 'Announcements', url: '/admin/announcements', icon: Megaphone },
                 ]}
                 pathname={location.pathname}
               />
