@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Layout } from '@/components/layout/Layout';
-import { useAdminAnnouncements, Announcement } from '@/hooks/useAnnouncements';
+import { useAdminAnnouncements, Announcement, AnnouncementSlide } from '@/hooks/useAnnouncements';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,9 +13,11 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Trash2, Eye, Megaphone, Upload, Users } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, Megaphone, Upload, Users, Layers } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { typeConfig } from '@/components/announcements/announcementConstants';
+import { typeConfig, APP_PAGES } from '@/components/announcements/announcementConstants';
+
+const emptySlide: AnnouncementSlide = { title: '', content: '', image_url: '' };
 
 const emptyForm = {
   title: '',
@@ -28,6 +30,8 @@ const emptyForm = {
   expires_at: '',
   priority: 0,
   is_active: true,
+  slides: [] as AnnouncementSlide[],
+  multiSlide: false,
 };
 
 export default function AdminAnnouncements() {
@@ -38,16 +42,21 @@ export default function AdminAnnouncements() {
   const [form, setForm] = useState(emptyForm);
   const [previewItem, setPreviewItem] = useState<Announcement | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [actionUrlMode, setActionUrlMode] = useState<'page' | 'custom'>('page');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setActionUrlMode('page');
     setFormOpen(true);
   };
 
   const openEdit = (a: Announcement) => {
     setEditingId(a.id);
+    const slides = (a.slides as AnnouncementSlide[]) || [];
+    const isCustomUrl = a.action_url ? !APP_PAGES.some(p => p.value === a.action_url) : false;
+    setActionUrlMode(isCustomUrl ? 'custom' : 'page');
     setForm({
       title: a.title,
       content: a.content,
@@ -59,34 +68,42 @@ export default function AdminAnnouncements() {
       expires_at: a.expires_at ? a.expires_at.slice(0, 16) : '',
       priority: a.priority,
       is_active: a.is_active,
+      slides,
+      multiSlide: slides.length > 0,
     });
     setFormOpen(true);
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const uploadImage = async (file: File): Promise<string | null> => {
+    const ext = file.name.split('.').pop();
+    const fileName = `announcements/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from('assets')
+      .upload(fileName, file, { upsert: true });
+    if (uploadError) throw uploadError;
+    const { data: { publicUrl } } = supabase.storage.from('assets').getPublicUrl(fileName);
+    return publicUrl;
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, slideIndex?: number) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploading(true);
     try {
-      const ext = file.name.split('.').pop();
-      const fileName = `announcements/${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from('assets')
-        .upload(fileName, file, { upsert: true });
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('assets')
-        .getPublicUrl(fileName);
-
-      setForm(prev => ({ ...prev, image_url: publicUrl }));
+      const publicUrl = await uploadImage(file);
+      if (slideIndex !== undefined) {
+        const newSlides = [...form.slides];
+        newSlides[slideIndex] = { ...newSlides[slideIndex], image_url: publicUrl };
+        setForm(prev => ({ ...prev, slides: newSlides }));
+      } else {
+        setForm(prev => ({ ...prev, image_url: publicUrl || '' }));
+      }
       toast({ title: 'Image uploaded' });
     } catch (err: any) {
       toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      e.target.value = '';
     }
   };
 
@@ -96,7 +113,7 @@ export default function AdminAnnouncements() {
       return;
     }
     try {
-      const payload = {
+      const payload: any = {
         title: form.title,
         content: form.content,
         type: form.type,
@@ -108,6 +125,7 @@ export default function AdminAnnouncements() {
         priority: form.priority,
         is_active: form.is_active,
         created_by: user!.id,
+        slides: form.multiSlide && form.slides.length > 0 ? form.slides : null,
       };
 
       if (editingId) {
@@ -134,6 +152,20 @@ export default function AdminAnnouncements() {
 
   const handleToggleActive = async (a: Announcement) => {
     await updateAnnouncement.mutateAsync({ id: a.id, is_active: !a.is_active });
+  };
+
+  const addSlide = () => {
+    setForm(prev => ({ ...prev, slides: [...prev.slides, { ...emptySlide }] }));
+  };
+
+  const removeSlide = (index: number) => {
+    setForm(prev => ({ ...prev, slides: prev.slides.filter((_, i) => i !== index) }));
+  };
+
+  const updateSlide = (index: number, field: keyof AnnouncementSlide, value: string) => {
+    const newSlides = [...form.slides];
+    newSlides[index] = { ...newSlides[index], [field]: value };
+    setForm(prev => ({ ...prev, slides: newSlides }));
   };
 
   return (
@@ -163,19 +195,26 @@ export default function AdminAnnouncements() {
         ) : (
           <div className="grid gap-4">
             {announcements.map(a => {
-              const config = typeConfig[a.type] || typeConfig.feature;
-              const TypeIcon = config.icon;
+              const config_ = typeConfig[a.type] || typeConfig.feature;
+              const TypeIcon = config_.icon;
               const isExpired = a.expires_at && new Date(a.expires_at) < new Date();
               const dismissCount = dismissalCounts[a.id] || 0;
+              const hasSlides = a.slides && (a.slides as AnnouncementSlide[]).length > 0;
               return (
                 <Card key={a.id} className={!a.is_active ? 'opacity-60' : ''}>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Badge variant={config.variant} className="gap-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant={config_.variant} className="gap-1">
                           <TypeIcon className="h-3 w-3" />
-                          {config.label}
+                          {config_.label}
                         </Badge>
+                        {hasSlides && (
+                          <Badge variant="outline" className="text-xs gap-1">
+                            <Layers className="h-3 w-3" />
+                            {(a.slides as AnnouncementSlide[]).length + 1} slides
+                          </Badge>
+                        )}
                         {a.target_role && (
                           <Badge variant="outline" className="text-xs">{a.target_role}</Badge>
                         )}
@@ -286,7 +325,7 @@ export default function AdminAnnouncements() {
                   type="file"
                   accept="image/*,.gif"
                   className="hidden"
-                  onChange={handleImageUpload}
+                  onChange={e => handleImageUpload(e)}
                 />
                 <Button
                   type="button"
@@ -302,10 +341,43 @@ export default function AdminAnnouncements() {
                 <img src={form.image_url} alt="Preview" className="mt-2 rounded border max-h-32 object-contain" />
               )}
             </div>
+
+            {/* Action URL picker */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Action URL</Label>
-                <Input value={form.action_url} onChange={e => setForm({ ...form, action_url: e.target.value })} placeholder="/events or https://..." />
+                <Select
+                  value={actionUrlMode === 'custom' ? '__custom__' : (form.action_url || '__none__')}
+                  onValueChange={v => {
+                    if (v === '__custom__') {
+                      setActionUrlMode('custom');
+                      setForm(prev => ({ ...prev, action_url: '' }));
+                    } else if (v === '__none__') {
+                      setActionUrlMode('page');
+                      setForm(prev => ({ ...prev, action_url: '' }));
+                    } else {
+                      setActionUrlMode('page');
+                      setForm(prev => ({ ...prev, action_url: v }));
+                    }
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="No action" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No action</SelectItem>
+                    {APP_PAGES.map(p => (
+                      <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                    ))}
+                    <SelectItem value="__custom__">Custom URL...</SelectItem>
+                  </SelectContent>
+                </Select>
+                {actionUrlMode === 'custom' && (
+                  <Input
+                    className="mt-2"
+                    value={form.action_url}
+                    onChange={e => setForm({ ...form, action_url: e.target.value })}
+                    placeholder="https://..."
+                  />
+                )}
               </div>
               <div>
                 <Label>Button Label</Label>
@@ -325,6 +397,77 @@ export default function AdminAnnouncements() {
             <div className="flex items-center gap-2">
               <Switch checked={form.is_active} onCheckedChange={v => setForm({ ...form, is_active: v })} />
               <Label>Active</Label>
+            </div>
+
+            {/* Multi-slide section */}
+            <div className="border-t pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Switch checked={form.multiSlide} onCheckedChange={v => setForm({ ...form, multiSlide: v, slides: v ? form.slides : [] })} />
+                <Label className="flex items-center gap-1">
+                  <Layers className="h-4 w-4" />
+                  Multi-slide walkthrough
+                </Label>
+              </div>
+              {form.multiSlide && (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    The main title/content above is slide 1. Add extra slides below.
+                  </p>
+                  {form.slides.map((slide, i) => (
+                    <Card key={i} className="p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-medium">Slide {i + 2}</Label>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeSlide(i)}>
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      </div>
+                      <Input
+                        value={slide.title}
+                        onChange={e => updateSlide(i, 'title', e.target.value)}
+                        placeholder="Slide title"
+                      />
+                      <Textarea
+                        value={slide.content}
+                        onChange={e => updateSlide(i, 'content', e.target.value)}
+                        placeholder="Slide content..."
+                        rows={2}
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={slide.image_url || ''}
+                          onChange={e => updateSlide(i, 'image_url', e.target.value)}
+                          placeholder="Image URL or upload..."
+                          className="flex-1"
+                        />
+                        <div className="relative">
+                          <input
+                            type="file"
+                            accept="image/*,.gif"
+                            className="hidden"
+                            id={`slide-upload-${i}`}
+                            onChange={e => handleImageUpload(e, i)}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => document.getElementById(`slide-upload-${i}`)?.click()}
+                            disabled={uploading}
+                          >
+                            <Upload className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      {slide.image_url && (
+                        <img src={slide.image_url} alt="Slide preview" className="rounded border max-h-24 object-contain" />
+                      )}
+                    </Card>
+                  ))}
+                  <Button variant="outline" size="sm" onClick={addSlide} className="w-full">
+                    <Plus className="h-4 w-4 mr-1" /> Add Slide
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

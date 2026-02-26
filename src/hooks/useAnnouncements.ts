@@ -3,6 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 
+export interface AnnouncementSlide {
+  title: string;
+  content: string;
+  image_url?: string | null;
+}
+
 export interface Announcement {
   id: string;
   title: string;
@@ -17,6 +23,7 @@ export interface Announcement {
   created_at: string;
   expires_at: string | null;
   created_by: string;
+  slides: AnnouncementSlide[] | null;
 }
 
 export function useAnnouncements() {
@@ -51,7 +58,7 @@ export function useAnnouncements() {
       if (error) throw error;
 
       const now = new Date().toISOString();
-      return (data as Announcement[]).filter(a => {
+      return (data as unknown as Announcement[]).filter(a => {
         if (a.expires_at && a.expires_at < now) return false;
         if (a.target_role && a.target_role !== role) return false;
         return true;
@@ -102,11 +109,10 @@ export function useAdminAnnouncements() {
         .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data as Announcement[];
+      return data as unknown as Announcement[];
     },
   });
 
-  // Fetch dismissal counts per announcement
   const { data: dismissalCounts = {} } = useQuery({
     queryKey: ['announcements', 'dismissal-counts'],
     queryFn: async () => {
@@ -123,7 +129,7 @@ export function useAdminAnnouncements() {
   });
 
   const createAnnouncement = useMutation({
-    mutationFn: async (announcement: Omit<Announcement, 'id' | 'created_at'>) => {
+    mutationFn: async (announcement: any) => {
       const { error } = await supabase.from('announcements').insert(announcement);
       if (error) throw error;
     },
@@ -134,7 +140,7 @@ export function useAdminAnnouncements() {
 
   const updateAnnouncement = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<Announcement> & { id: string }) => {
-      const { error } = await supabase.from('announcements').update(updates).eq('id', id);
+      const { error } = await supabase.from('announcements').update(updates as any).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
