@@ -264,6 +264,7 @@ export type Database = {
           image_url: string | null
           is_active: boolean
           priority: number
+          slides: Json | null
           target_role: string | null
           title: string
           type: string
@@ -279,6 +280,7 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean
           priority?: number
+          slides?: Json | null
           target_role?: string | null
           title: string
           type?: string
@@ -294,6 +296,7 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean
           priority?: number
+          slides?: Json | null
           target_role?: string | null
           title?: string
           type?: string
