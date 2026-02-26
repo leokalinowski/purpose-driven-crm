@@ -47,6 +47,11 @@ function ToastAnnouncement({ announcement, onDismiss, onAction }: {
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
+          {announcement.image_url && (
+            <div className="mt-2 rounded border overflow-hidden bg-muted">
+              <img src={announcement.image_url} alt={announcement.title} className={`w-full h-auto object-contain ${expanded ? 'max-h-40' : 'max-h-24'}`} />
+            </div>
+          )}
           <h4 className="font-semibold text-sm mt-2 leading-tight">{announcement.title}</h4>
           <p className={`text-xs text-muted-foreground mt-1 leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}>
             {announcement.content}
@@ -55,11 +60,6 @@ function ToastAnnouncement({ announcement, onDismiss, onAction }: {
             <button className="text-xs text-primary mt-1 hover:underline" onClick={() => setExpanded(true)}>
               Read more
             </button>
-          )}
-          {expanded && announcement.image_url && (
-            <div className="mt-2 rounded border overflow-hidden bg-muted">
-              <img src={announcement.image_url} alt={announcement.title} className="w-full h-auto max-h-40 object-contain" />
-            </div>
           )}
           <div className="flex gap-2 mt-3">
             {announcement.action_url && (
@@ -91,6 +91,9 @@ function BannerAnnouncement({ announcement, onDismiss, onAction }: {
       <div className="bg-primary text-primary-foreground px-4 py-2.5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <TypeIcon className="h-4 w-4 shrink-0 opacity-80" />
+          {announcement.image_url && (
+            <img src={announcement.image_url} alt={announcement.title} className="h-6 w-6 rounded object-cover shrink-0" />
+          )}
           <span className="font-medium text-sm truncate">{announcement.title}</span>
           <span className="text-xs opacity-80 hidden sm:inline truncate">{announcement.content}</span>
         </div>
