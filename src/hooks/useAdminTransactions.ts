@@ -13,6 +13,7 @@ export interface AgentLeaderboardEntry {
   avgDealSize: number;
   closingRate: number;
   ongoingDeals: number;
+  isExternal: boolean;
 }
 
 export interface TeamMetrics {
@@ -75,6 +76,20 @@ export function useAdminTransactions() {
     }
   };
 
+  // Helper to get display name for a transaction's agent
+  const getAgentDisplayInfo = (t: Transaction): { name: string; isExternal: boolean } => {
+    if (t.responsible_agent && profiles[t.responsible_agent]) {
+      return { name: profiles[t.responsible_agent], isExternal: false };
+    }
+    // No Hub match — use OTC agent name from raw_api_data
+    const rawData = t.raw_api_data as any;
+    const otcName = rawData?.otc_agent_name;
+    if (otcName) {
+      return { name: otcName, isExternal: true };
+    }
+    return { name: 'Unknown Agent', isExternal: true };
+  };
+
   const teamMetrics = useMemo<TeamMetrics>(() => {
     const now = new Date();
     const yearStart = new Date(now.getFullYear(), 0, 1);
@@ -119,15 +134,21 @@ export function useAdminTransactions() {
   }, [transactions]);
 
   const leaderboard = useMemo<AgentLeaderboardEntry[]>(() => {
-    const byAgent: Record<string, Transaction[]> = {};
+    const byAgent: Record<string, { txs: Transaction[]; isExternal: boolean; displayName: string }> = {};
+    
     transactions.forEach((t) => {
-      const id = t.responsible_agent || 'unassigned';
-      if (!byAgent[id]) byAgent[id] = [];
-      byAgent[id].push(t);
+      const info = getAgentDisplayInfo(t);
+      // Use responsible_agent as key if matched, otherwise use OTC agent name
+      const key = t.responsible_agent || `ext_${info.name}`;
+      
+      if (!byAgent[key]) {
+        byAgent[key] = { txs: [], isExternal: info.isExternal, displayName: info.name };
+      }
+      byAgent[key].txs.push(t);
     });
 
     return Object.entries(byAgent)
-      .map(([agentId, txs]) => {
+      .map(([agentId, { txs, isExternal, displayName }]) => {
         const closed = txs.filter((t) => t.transaction_stage === 'closed');
         const totalGci = closed.reduce((s, t) => s + (t.gci || 0), 0);
         const salesVolume = closed.reduce((s, t) => s + (t.sale_price || 0), 0);
@@ -135,13 +156,14 @@ export function useAdminTransactions() {
 
         return {
           agentId,
-          agentName: profiles[agentId] || 'Unknown Agent',
+          agentName: displayName,
           closedDeals: closed.length,
           totalGci,
           salesVolume,
           avgDealSize: closed.length > 0 ? salesVolume / closed.length : 0,
           closingRate: txs.length > 0 ? (closed.length / txs.length) * 100 : 0,
           ongoingDeals: ongoing.length,
+          isExternal,
         };
       })
       .sort((a, b) => b.totalGci - a.totalGci);
@@ -155,7 +177,8 @@ export function useAdminTransactions() {
     const errorsByAgent: Record<string, string[]> = {};
     transactions.forEach((t) => {
       if (t.sync_errors && t.sync_errors.length > 0) {
-        const id = t.responsible_agent || 'unknown';
+        const info = getAgentDisplayInfo(t);
+        const id = t.responsible_agent || `ext_${info.name}`;
         if (!errorsByAgent[id]) errorsByAgent[id] = [];
         errorsByAgent[id].push(...t.sync_errors);
       }
@@ -166,7 +189,7 @@ export function useAdminTransactions() {
       syncErrorCount: Object.values(errorsByAgent).flat().length,
       syncErrors: Object.entries(errorsByAgent).map(([agentId, errors]) => ({
         agentId,
-        agentName: profiles[agentId] || 'Unknown',
+        agentName: profiles[agentId] || agentId.replace('ext_', ''),
         errors,
       })),
     };
@@ -183,7 +206,7 @@ export function useAdminTransactions() {
 
       toast({
         title: 'Sync Complete',
-        description: `Synced ${data?.totalSynced || 0} transactions across ${data?.agentCount || 0} agents.`,
+        description: `Synced ${data?.syncedCount || 0} REOP transactions. ${data?.skippedNotREOP || 0} non-REOP skipped. ${data?.unmatchedAgents?.length || 0} unmatched agents.`,
       });
 
       await fetchData();
@@ -230,5 +253,6 @@ export function useAdminTransactions() {
     syncAllAgents,
     discoverOTC,
     refetch: fetchData,
+    getAgentDisplayInfo,
   };
 }
