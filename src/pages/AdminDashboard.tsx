@@ -14,6 +14,7 @@ import { AgentSelector } from '@/components/admin/AgentSelector';
 import { AgentSpecificDashboard } from '@/components/admin/AgentSpecificDashboard';
 import { UserManagement } from '@/components/admin/UserManagement';
 import { SphereSyncAccountability } from '@/components/admin/SphereSyncAccountability';
+import { AdminTransactionsDashboard } from '@/components/admin/AdminTransactionsDashboard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
@@ -83,9 +84,10 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs defaultValue="company" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="company">Company Overview</TabsTrigger>
             <TabsTrigger value="agent">Agent Performance</TabsTrigger>
+            <TabsTrigger value="transactions">Transactions</TabsTrigger>
             <TabsTrigger value="spheresync">SphereSync</TabsTrigger>
             <TabsTrigger value="users">User Management</TabsTrigger>
           </TabsList>
@@ -123,6 +125,10 @@ const AdminDashboard = () => {
             </div>
             
             <AgentSpecificDashboard selectedAgentId={selectedAgentId} />
+          </TabsContent>
+          
+          <TabsContent value="transactions" className="space-y-6">
+            <AdminTransactionsDashboard />
           </TabsContent>
           
           <TabsContent value="spheresync" className="space-y-6">
