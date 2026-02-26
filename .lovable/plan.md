@@ -1,58 +1,52 @@
 
 
-# Fix OpenToClose API Connection — Wrong Endpoint & Auth Method
+# Fix OTC Sync: Filter to REOP Agents Only + Correct Agent Matching
 
-## Root Cause
+## Problem Analysis
 
-The edge function logs show clearly:
-```
-OpenToClose API error: 404 {"detail":"Not Found"}
-```
+From the edge function logs, the current sync is broken in three ways:
 
-**Two critical bugs in `opentoclose-sync/index.ts`:**
+1. **No team filtering**: Fetching all 2,493 properties from the OTC account — most belong to other teams, not "Real Estate on Purpose"
+2. **Wrong agent matching**: The `matchAgent` function matches by first name, causing false positives (e.g., "Ashley" in an OTC field matches Ashley Spencer even though she's not the agent for that property). Currently 18 properties synced — all incorrectly assigned.
+3. **Missing GCI data**: All synced properties show `gci: 0` because the field keys may not match exactly
 
-1. **Wrong endpoint**: The code calls `https://api.opentoclose.com/v1/deals` — but OTC has no `/deals` endpoint. In OpenToClose, transactions are called **Properties** and the correct endpoint is `https://api.opentoclose.com/v1/properties`.
+The `important_notes` field contains "RA: Agent Name" which identifies the REOP agent, but names don't match Hub profiles precisely enough. The `team_user_name` top-level field is the transaction coordinator (Alicia Brown, Christine Jones, Wendy Heisen), NOT the agent.
 
-2. **Wrong authentication**: The code sends `X-API-Key` as a header, but OTC uses a **query string parameter**: `?api_token=YOUR_TOKEN`. This is documented at [docs.opentoclose.com](https://docs.opentoclose.com/).
+## Plan
 
-3. **Wrong data mapping**: OTC Properties don't return flat fields like `sale_price`, `gci`, `client_name`. Instead they return a `field_values` array of `{key, value, label}` objects (e.g., `contract_title`, `contract_status`, `property_address`). Each property also has `agent_id`, `agent_name`, `team_user_name` at the top level.
+### Step 1: Set `verify_jwt = false` for opentoclose-sync
+So we can invoke discover mode from the dashboard and test calls.
 
-## Changes
+### Step 2: Enhance discover mode to log filtering clues
+Return samples of `important_notes`, `team_user_name`, `team_name`, `contract_title`, and any team-related fields from 10+ properties — so we can see how REOP properties are distinguished from others.
 
-### `supabase/functions/opentoclose-sync/index.ts`
+### Step 3: Fix the edge function sync logic
 
-**Fix `fetchOtcDeals`:**
-- Change URL from `/v1/deals` to `/v1/properties`
-- Move API token from `X-API-Key` header to `?api_token=` query parameter
-- Paginate with `offset` + `limit` (max 50 per call) to fetch all properties
-- Log the raw response structure on first call for debugging
+**A. Add team filtering**: Filter properties where the "RA:" pattern exists in `important_notes` — this is the REOP identifier. Properties without "RA:" in notes are from other teams and should be skipped entirely.
 
-**Fix `mapDealToTransaction`:**
-- Add a helper `getFieldValue(property, key)` that extracts values from the `field_values` array by key
-- Map OTC field keys to our schema:
-  - `contract_title` → used for display
-  - `contract_status` → maps to `transaction_stage` (Active/Pending → under_contract, Closed → closed)
-  - `contract_client_type` → maps to `transaction_type` (Buyer/Seller)
-  - `property_address`, `property_city`, `property_state`, `property_zip` → concatenated into `property_address`
-  - `agent_name` / `agent_id` (top-level fields) → used for agent matching
-- Use OTC `agent_name` to match against Hub profiles by name (since OTC agent IDs won't match Supabase UUIDs)
+**B. Fix agent matching**: 
+- Remove first-name-only matching (too many false positives)
+- Match "RA: Name" against Hub profiles using full name (fuzzy: normalize spaces, case-insensitive)
+- Also try `last_name` matching as fallback (more unique than first name)
+- Log detailed match attempts for debugging
 
-**Fix agent matching in team sync:**
-- Instead of blindly assigning all deals to every agent, fetch OTC agents list (`/v1/agents`) to get their names/emails
-- Match OTC `agent_name` or `agent_id` to Hub profiles by email or name
-- Only assign properties to the matched agent
+**C. Fix GCI mapping**: Check additional field keys like `commission_amount`, `gci_amount`, `agent_commission`, `total_commission_amount` in discover output and map correctly.
 
-**Add discovery/debug endpoint:**
-- When called with `mode: 'discover'`, return raw OTC response + field keys so we can see exactly what fields your account uses (field keys are customizable per OTC account)
+**D. Fix client_name**: Currently using `contract_title` which returns the address. Try `buyer_name`, `seller_name`, or contacts endpoint for the actual client name.
 
-### `supabase/functions/opentoclose-sync/index.ts` — also fetch property contacts
-- For each property, call `/v1/properties/{id}/contacts` to get client names (buyer/seller contacts)
-- Rate-limit to 1 request/second per OTC docs
+### Step 4: Clean up bad data
+Delete all incorrectly synced transactions from `transaction_coordination` (the 18 wrong ones) before re-syncing.
 
-## Implementation Order
-1. Fix auth method (query string) and endpoint (`/properties`) — deploy and test
-2. Add discover mode to log raw field structure from your account
-3. Update field mapping based on actual field keys from your OTC account
-4. Fix agent matching using OTC agent names/emails → Hub profiles
-5. Add pagination to fetch all properties (not just first 20)
+### Step 5: Add discover button to Admin UI
+Add a "Discover OTC Fields" button in the sync controls section that calls `mode: 'discover'` and displays the raw field structure — so you can see exactly what OTC returns and verify the mapping is correct.
+
+### Step 6: Re-sync and verify
+Trigger a fresh sync after the fix. Verify Traci Johnson and Timothy Raiford appear with correct data.
+
+## Files to Modify
+- `supabase/config.toml` — set `verify_jwt = false` for opentoclose-sync
+- `supabase/functions/opentoclose-sync/index.ts` — enhanced discover mode, team filtering, fixed agent matching
+- `src/components/admin/AdminTransactionsDashboard.tsx` — add discover button
+- `src/hooks/useAdminTransactions.ts` — add discover function
+- SQL migration to delete bad data
 
