@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Plus, Pencil, Trash2, Eye, Megaphone, Upload, Users, Layers } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { typeConfig, APP_PAGES } from '@/components/announcements/announcementConstants';
+import { typeConfig, APP_PAGES, DISPLAY_STYLES, DISPLAY_POSITIONS } from '@/components/announcements/announcementConstants';
 
 const emptySlide: AnnouncementSlide = { title: '', content: '', image_url: '' };
 
@@ -32,6 +32,8 @@ const emptyForm = {
   is_active: true,
   slides: [] as AnnouncementSlide[],
   multiSlide: false,
+  display_style: 'modal',
+  display_position: 'center',
 };
 
 export default function AdminAnnouncements() {
@@ -70,6 +72,8 @@ export default function AdminAnnouncements() {
       is_active: a.is_active,
       slides,
       multiSlide: slides.length > 0,
+      display_style: (a as any).display_style || 'modal',
+      display_position: (a as any).display_position || 'center',
     });
     setFormOpen(true);
   };
@@ -126,6 +130,8 @@ export default function AdminAnnouncements() {
         is_active: form.is_active,
         created_by: user!.id,
         slides: form.multiSlide && form.slides.length > 0 ? form.slides : null,
+        display_style: form.display_style,
+        display_position: form.display_position,
       };
 
       if (editingId) {
@@ -296,6 +302,9 @@ export default function AdminAnnouncements() {
                     <SelectItem value="feature">New Feature</SelectItem>
                     <SelectItem value="update">Update</SelectItem>
                     <SelectItem value="tip">Tip</SelectItem>
+                    <SelectItem value="strategy">Strategy</SelectItem>
+                    <SelectItem value="meeting">Meeting</SelectItem>
+                    <SelectItem value="announcement">Announcement</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -307,6 +316,30 @@ export default function AdminAnnouncements() {
                     <SelectItem value="all">Everyone</SelectItem>
                     <SelectItem value="agent">Agents only</SelectItem>
                     <SelectItem value="admin">Admins only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Display Style</Label>
+                <Select value={form.display_style} onValueChange={v => setForm({ ...form, display_style: v, display_position: v === 'modal' ? 'center' : form.display_position })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {DISPLAY_STYLES.map(s => (
+                      <SelectItem key={s.value} value={s.value}>{s.label} — {s.description}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Position</Label>
+                <Select value={form.display_position} onValueChange={v => setForm({ ...form, display_position: v })} disabled={form.display_style === 'modal'}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {DISPLAY_POSITIONS.map(p => (
+                      <SelectItem key={p.value} value={p.value} disabled={form.display_style === 'modal' && p.value !== 'center'}>{p.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
