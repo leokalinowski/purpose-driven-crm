@@ -1,40 +1,73 @@
 
 
-# Fix OTC Sync: GCI, Stage Mapping, and Data Quality
+# Fix OTC Sync: Filter by Team Name + Use Agent Name Field
 
-## Problems Found (from DB + API analysis)
+## Root Cause
 
-**1. GCI values are wrong** — Some stored as percentages (`3.5`, `11.359`, `1`, `2`) instead of dollar amounts. The `parseCommissionDollar` function extracts `3.5` from `"3.5%"` and stores it as $3.50 instead of computing `0.035 × sale_price`. Meanwhile values like `"2.5% ($32,500)"` correctly extract $32,500.
-
-**2. All 19 transactions stuck as `under_contract`** — `mapStage()` only recognizes "closed"/"settled" in `contract_status`. OTC uses: "Closed", "Contract Maintenance", "Contract Setup", "Listing", "Listing-Complete", "On Hold", "Compliance Only", "Archive", "Post-Occ". Additionally, transactions with `closing_date` in the past (some from 2024) should be marked closed regardless of status text.
-
-**3. Client names all "Unknown"** — `buyer_name`/`seller_name` field keys don't exist in OTC. The `agent_name` field key exists in `field_values` and contains the REOP agent name. For client identification, `contract_title` contains the property address (not useful). Should extract client info from `important_notes` where available, or leave blank rather than "Unknown".
-
-**4. Dashboard KPIs show $0** — Because metrics filter on `transaction_stage === 'closed'` and nothing is marked closed. Direct consequence of issue #2.
-
-**5. `referral_amount` field from OTC screenshot** — The screenshot shows a "Referral Amount" column. This field key isn't in the first 50 properties' `field_values` but likely exists on closed properties. Should be captured as an additional data point.
+Discovery data confirms:
+- OTC has a `team_name` field in `field_values` — REOP properties have `"Real Estate on Purpose"`
+- OTC has an `agent_name` field in `field_values` — contains the actual agent name (e.g., "Matt Leighton")
+- Current code filters by "RA:" in `important_notes` — this is fragile and catches properties from OTHER teams that happen to have RA: in notes
+- Current DB: only 4 of 19 records have `team_name = "Real Estate on Purpose"`, 14 have `null`, 1 has `"No Team"` — most are wrongly assigned
+- All 19 records stuck as `under_contract`, GCI values still broken (percentages stored as dollars), client names are garbage
 
 ## Changes
 
-### `supabase/functions/opentoclose-sync/index.ts`
+### 1. Edge Function (`supabase/functions/opentoclose-sync/index.ts`)
 
-- **Fix `parseCommissionDollar`**: Add `salePrice` parameter. When value contains `%` but no `$` amount, or when extracted number < 100, compute `(value / 100) * salePrice`
-- **Fix `mapStage`**: Add `closingDate` parameter. If `closing_date` is in the past → `closed`. Map "Contract Maintenance"/"Contract Setup" → `under_contract`, "Listing"/"Listing-Complete" → `listing`, "Closed" → `closed`, "Archive"/"Post-Occ" → `closed`
-- **Fix `mapStatus`**: Same closing_date logic — past closing = `closed`, otherwise `ongoing`
-- **Fix `client_name`**: Remove "Unknown" default, try parsing client info from notes after the RA line, fall back to `null`
-- **Capture additional fields**: `referral_amount`, `scalable_tc_fee`, `agent_admin_fee`, `brokerage`, `team_name`, `coordinator`, `contract_status` (raw value) into `raw_api_data`
-- **Fix `commission_rate`**: Extract the percentage number from broker fields (e.g., `2.5` from `"2.5% ($32,500)"`)
-- **Enhance discover mode**: Include all commission-related field values and contract_status values across samples
+**Replace team filter logic:**
+- Remove `isREOPProperty()` function (RA: notes parsing)
+- New filter: `getFieldValue(property, 'team_name')` must contain "Real Estate on Purpose" (case-insensitive)
+- This is the definitive filter — no more false positives
 
-### `src/components/admin/AdminTransactionsDashboard.tsx`
+**Replace agent identification:**
+- Use `getFieldValue(property, 'agent_name')` as the primary agent identifier (not RA: from notes)
+- Fall back to `extractAgentFromNotes()` only if `agent_name` field is empty
+- Match against Hub profiles using existing `matchAgentByName()`
 
-- Add "Type" (Buy/Sell) column to transaction tables
-- Show raw `contract_status` from OTC instead of computed stage in badge
-- Add total transaction counts to header (e.g., "19 total: 12 closed, 7 active")
+**Handle unmatched agents:**
+- Currently: skips properties where agent doesn't match a Hub profile
+- New: sync ALL "Real Estate on Purpose" properties regardless of agent match
+- Set `responsible_agent = null` when no Hub match found
+- Store OTC agent name in `raw_api_data.otc_agent_name`
 
-### No changes needed to hooks
-The metric calculations in `useAdminTransactions.ts` and `useTransactions.ts` are correct — they just need properly staged data.
+**Fix GCI (still broken in DB):**
+- Ensure `parseCommission` and explicit GCI percentage detection run on every sync
+- The existing code is correct but the DB has stale data from before the fix
 
-### Data refresh
-After deploying the edge function fix, a re-sync will upsert all 19+ records with corrected GCI, stage, and status values via the existing `otc_deal_id` conflict resolution.
+**Fix stage mapping (still broken in DB):**
+- Same — the `mapStage` logic with closing_date is correct but DB has stale data
+
+**Fix client_name:**
+- Stop extracting garbage from notes ("- built 2023" etc.)
+- Tighten `extractClientFromNotes` to skip lines starting with "-"
+
+**Enhance discover mode:**
+- Include `team_name` and `agent_name` fields in REOP sample output
+- Show all unique `team_name` values across sampled properties
+
+### 2. Dashboard (`src/components/admin/AdminTransactionsDashboard.tsx`)
+
+**Show unmatched agents in red:**
+- In the Agent column: if `responsible_agent` is null, display `raw_api_data.otc_agent_name` in red text
+- In the leaderboard: group unmatched agents under their OTC name with red styling
+- In drill-down: same red treatment
+
+### 3. Hook (`src/hooks/useAdminTransactions.ts`)
+
+**Handle null `responsible_agent`:**
+- Leaderboard grouping: use `raw_api_data.otc_agent_name` as the agent key when `responsible_agent` is null
+- Add `isExternal` flag to `AgentLeaderboardEntry`
+
+### 4. Data Cleanup
+
+**SQL migration:**
+- Delete all existing `transaction_coordination` records (they're all wrong — wrong assignments, wrong GCI, wrong stages)
+- Fresh sync will repopulate with correct data filtered by team name
+
+## Files to Modify
+- `supabase/functions/opentoclose-sync/index.ts` — team_name filter, agent_name field, unmatched agent handling
+- `src/components/admin/AdminTransactionsDashboard.tsx` — red styling for external agents
+- `src/hooks/useAdminTransactions.ts` — handle null responsible_agent in leaderboard
+- New SQL migration to clean up bad data
 
