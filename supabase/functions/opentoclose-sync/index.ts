@@ -38,7 +38,6 @@ function extractClientFromNotes(notes: string | null): string | null {
   let foundRA = false
   for (const line of lines) {
     if (/^RA:/i.test(line)) { foundRA = true; continue }
-    // Skip lines starting with "-" (bullet points like "- built 2023")
     if (line.startsWith('-')) continue
     if (foundRA && line.length > 2 && !/^(Title|Buyer|Seller|SentriLock|lockbox|occupied|vacant)/i.test(line)) {
       return line.replace(/\s+/g, ' ').substring(0, 100)
@@ -54,15 +53,12 @@ function mapStage(contractStatus: string | null, closingDate: string | null): st
     today.setHours(0, 0, 0, 0)
     if (closeDate <= today) return 'closed'
   }
-  
   if (!contractStatus) return 'under_contract'
   const s = contractStatus.toLowerCase()
-  
   if (s.includes('closed') || s.includes('settled') || s.includes('archive') || s.includes('post-occ') || s.includes('compliance only')) return 'closed'
   if (s.includes('listing') && !s.includes('complete')) return 'listing'
   if (s.includes('listing-complete') || s.includes('listing complete')) return 'closed'
   if (s.includes('on hold')) return 'on_hold'
-  
   return 'under_contract'
 }
 
@@ -120,21 +116,15 @@ function extractCommissionRate(val: string | null): number | null {
   return null
 }
 
-// --- TEAM FILTER: Use team_name field instead of RA: notes ---
-
 function isREOPProperty(property: any): boolean {
   const teamName = getFieldValue(property, 'team_name')
   if (!teamName) return false
   return teamName.toLowerCase().includes('real estate on purpose')
 }
 
-// --- Get agent name: prefer agent_name field, fallback to RA: in notes ---
-
 function getAgentName(property: any): string | null {
   const agentName = getFieldValue(property, 'agent_name')
   if (agentName && agentName.length > 1) return agentName
-  
-  // Fallback: extract from notes
   const notes = getFieldValue(property, 'important_notes') || property.important_notes || ''
   return extractAgentFromNotes(notes)
 }
@@ -143,16 +133,13 @@ function mapPropertyToTransaction(property: any, agentId: string | null, otcAgen
   const contractStatus = getFieldValue(property, 'contract_status')
   const listingStatus = getFieldValue(property, 'listing_status')
   const effectiveStatus = contractStatus || listingStatus
-
   const closingDate = getFieldValue(property, 'closing_date') || getFieldValue(property, 'settlement_date')
   const contractDate = getFieldValue(property, 'contract_date') || getFieldValue(property, 'ratification_date')
   const listingDate = getFieldValue(property, 'listing_date') || getFieldValue(property, 'mls_active_date')
-
   const salePrice = parseFloat(getFieldValue(property, 'purchase_amount') || getFieldValue(property, 'listing_price') || '0') || 0
-
   const representation = getFieldValue(property, 'contract_client_type') || ''
   const repLower = representation.toLowerCase()
-  
+
   let gci = 0
   gci = parseFloat(getFieldValue(property, 'gci') || getFieldValue(property, 'gci_amount') || '0') || 0
   if (gci > 0 && gci < 100 && salePrice > 10000) {
@@ -238,37 +225,33 @@ function mapPropertyToTransaction(property: any, agentId: string | null, otcAgen
   }
 }
 
-// --- OTC API ---
+// --- OTC API with retry ---
 
 async function otcFetch(path: string, apiToken: string): Promise<any> {
   const separator = path.includes('?') ? '&' : '?'
   const url = `${OTC_BASE}${path}${separator}api_token=${apiToken}`
-  const response = await fetch(url, { headers: { 'Accept': 'application/json' } })
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error(`OTC API error [${path}]:`, response.status, errorText)
-    throw new Error(`OTC API ${response.status}: ${response.statusText}`)
+  
+  const maxRetries = 3
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, { headers: { 'Accept': 'application/json' } })
+    
+    if (response.status === 429) {
+      if (attempt < maxRetries) {
+        const waitMs = 5000 * Math.pow(2, attempt) // 5s, 10s, 20s
+        console.log(`Rate limited on ${path}, waiting ${waitMs / 1000}s (attempt ${attempt + 1}/${maxRetries})`)
+        await new Promise(r => setTimeout(r, waitMs))
+        continue
+      }
+    }
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`OTC API error [${path}]:`, response.status, errorText)
+      throw new Error(`OTC API ${response.status}: ${response.statusText}`)
+    }
+    return response.json()
   }
-  return response.json()
-}
-
-async function fetchAllProperties(apiToken: string): Promise<any[]> {
-  const all: any[] = []
-  let offset = 0
-  const limit = 50
-
-  while (true) {
-    const data = await otcFetch(`/properties?limit=${limit}&offset=${offset}`, apiToken)
-    const props = data?.data || data || []
-    if (!Array.isArray(props) || props.length === 0) break
-    all.push(...props)
-    if (all.length % 500 === 0) console.log(`Fetched ${all.length} properties so far`)
-    if (props.length < limit) break
-    offset += limit
-    await new Promise(r => setTimeout(r, 1200))
-  }
-  console.log('Total OTC properties:', all.length)
-  return all
+  throw new Error('OTC API: max retries exceeded')
 }
 
 // --- Agent Map ---
@@ -283,7 +266,6 @@ async function loadProfiles(supabase: any): Promise<ProfileEntry[]> {
   const { data: profiles } = await supabase
     .from('profiles')
     .select('user_id, first_name, last_name, email')
-
   return (profiles || []).map((p: any) => ({
     userId: p.user_id,
     fullName: `${p.first_name || ''} ${p.last_name || ''}`.trim(),
@@ -293,86 +275,19 @@ async function loadProfiles(supabase: any): Promise<ProfileEntry[]> {
 
 function matchAgentByName(raName: string, profiles: ProfileEntry[]): { userId: string; matchedName: string } | null {
   const normRA = normalize(raName)
-  
   for (const p of profiles) {
-    if (normalize(p.fullName) === normRA) {
-      return { userId: p.userId, matchedName: p.fullName }
-    }
+    if (normalize(p.fullName) === normRA) return { userId: p.userId, matchedName: p.fullName }
   }
-
   for (const p of profiles) {
     const normFull = normalize(p.fullName)
-    if (normRA.includes(normFull) || normFull.includes(normRA)) {
-      return { userId: p.userId, matchedName: p.fullName }
-    }
+    if (normRA.includes(normFull) || normFull.includes(normRA)) return { userId: p.userId, matchedName: p.fullName }
   }
-
   for (const p of profiles) {
     if (p.lastName.length >= 4 && normalize(p.lastName) === normRA.slice(-normalize(p.lastName).length)) {
       return { userId: p.userId, matchedName: p.fullName }
     }
   }
-
   return null
-}
-
-// --- Filter & Sync ---
-
-async function syncProperties(supabase: any, properties: any[], profiles: ProfileEntry[]) {
-  let synced = 0, errors = 0, skippedNotREOP = 0
-  const errorList: string[] = []
-  const unmatchedNames = new Map<string, number>()
-  const matchedNames = new Map<string, number>()
-
-  for (const prop of properties) {
-    try {
-      // FILTER: Only sync properties where team_name = "Real Estate on Purpose"
-      if (!isREOPProperty(prop)) {
-        skippedNotREOP++
-        continue
-      }
-
-      // Get agent name from agent_name field (primary) or RA: notes (fallback)
-      const otcAgentName = getAgentName(prop)
-      
-      // Try to match against Hub profiles
-      let agentId: string | null = null
-      if (otcAgentName) {
-        const match = matchAgentByName(otcAgentName, profiles)
-        if (match) {
-          agentId = match.userId
-          matchedNames.set(match.matchedName, (matchedNames.get(match.matchedName) || 0) + 1)
-        } else {
-          unmatchedNames.set(otcAgentName, (unmatchedNames.get(otcAgentName) || 0) + 1)
-        }
-      }
-
-      // Sync ALL REOP properties regardless of agent match
-      const tx = mapPropertyToTransaction(prop, agentId, otcAgentName)
-      const { error } = await supabase
-        .from('transaction_coordination')
-        .upsert(tx, { onConflict: 'otc_deal_id', ignoreDuplicates: false })
-
-      if (error) {
-        errorList.push(`${prop.id}: ${error.message}`)
-        errors++
-      } else {
-        synced++
-      }
-    } catch (e: any) {
-      errorList.push(`${prop.id}: ${e.message}`)
-      errors++
-    }
-  }
-
-  const unmatchedAgents = [...unmatchedNames.entries()].map(([name, count]) => `${name} (${count})`)
-  const matchedAgents = [...matchedNames.entries()].map(([name, count]) => `${name} (${count})`)
-
-  return { 
-    syncedCount: synced, errorCount: errors, 
-    skippedNotREOP,
-    errors: errorList, unmatchedAgents, matchedAgents
-  }
 }
 
 // --- Handler ---
@@ -384,7 +299,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json()
-    const mode = body.mode || 'single'
+    const mode = body.mode || 'batch'
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
     const apiKey = Deno.env.get('OPENTOCLOSE_API_KEY')
@@ -399,7 +314,7 @@ serve(async (req) => {
         if (!Array.isArray(batch) || batch.length === 0) break
         allProps.push(...batch)
         if (batch.length < 50) break
-        await new Promise(r => setTimeout(r, 1200))
+        await new Promise(r => setTimeout(r, 3000))
       }
 
       const reopSamples: any[] = []
@@ -416,26 +331,18 @@ serve(async (req) => {
         if (teamName) teamNameValues.add(teamName)
         
         const summary = {
-          id: p.id,
-          team_user_name: p.team_user_name,
-          team_name: teamName,
-          agent_name: agentName,
+          id: p.id, team_user_name: p.team_user_name, team_name: teamName, agent_name: agentName,
           important_notes_raw: (getFieldValue(p, 'important_notes') || '').substring(0, 200),
-          contract_status: contractStatus,
-          listing_status: getFieldValue(p, 'listing_status'),
+          contract_status: contractStatus, listing_status: getFieldValue(p, 'listing_status'),
           property_address: buildAddress(p),
-          purchase_amount: getFieldValue(p, 'purchase_amount'),
-          listing_price: getFieldValue(p, 'listing_price'),
-          gci: getFieldValue(p, 'gci'),
-          gci_amount: getFieldValue(p, 'gci_amount'),
+          purchase_amount: getFieldValue(p, 'purchase_amount'), listing_price: getFieldValue(p, 'listing_price'),
+          gci: getFieldValue(p, 'gci'), gci_amount: getFieldValue(p, 'gci_amount'),
           seller_to_buyer_broker: getFieldValue(p, 'seller_to_buyer_broker'),
           seller_to_listing_broker: getFieldValue(p, 'seller_to_listing_broker'),
           contract_client_type: getFieldValue(p, 'contract_client_type'),
           referral_amount: getFieldValue(p, 'referral_amount'),
-          closing_date: getFieldValue(p, 'closing_date'),
-          settlement_date: getFieldValue(p, 'settlement_date'),
-          contract_date: getFieldValue(p, 'contract_date'),
-          isReop,
+          closing_date: getFieldValue(p, 'closing_date'), settlement_date: getFieldValue(p, 'settlement_date'),
+          contract_date: getFieldValue(p, 'contract_date'), isReop,
         }
         if (isReop && reopSamples.length < 15) reopSamples.push(summary)
         if (!isReop && nonReopSamples.length < 3) nonReopSamples.push(summary)
@@ -445,50 +352,84 @@ serve(async (req) => {
       const matchResults = reopSamples.map(s => {
         const otcAgent = s.agent_name || extractAgentFromNotes(s.important_notes_raw)
         const match = otcAgent ? matchAgentByName(otcAgent, profiles) : null
-        return { 
-          otcAgentName: otcAgent, 
-          matched: match?.matchedName || 'NO MATCH', 
-          userId: match?.userId || null,
-          teamName: s.team_name,
-        }
+        return { otcAgentName: otcAgent, matched: match?.matchedName || 'NO MATCH', userId: match?.userId || null, teamName: s.team_name }
       })
 
-      const fieldKeys = allProps[0]?.field_values?.map((f: any) => ({ 
-        key: f.key, label: f.label, sampleValue: f.value 
-      })).filter((f: any) => f.sampleValue) || []
+      const fieldKeys = allProps[0]?.field_values?.map((f: any) => ({ key: f.key, label: f.label, sampleValue: f.value })).filter((f: any) => f.sampleValue) || []
 
       return new Response(JSON.stringify({
-        success: true, mode: 'discover',
-        totalFetched: allProps.length,
+        success: true, mode: 'discover', totalFetched: allProps.length,
         reopCount: allProps.filter((p: any) => isREOPProperty(p)).length,
-        reopSamples,
-        nonReopSamples,
-        matchResults,
-        hubProfiles: profiles.map(p => p.fullName),
-        fieldKeys,
-        contractStatusValues: [...statusValues],
-        teamNameValues: [...teamNameValues],
+        reopSamples, nonReopSamples, matchResults,
+        hubProfiles: profiles.map(p => p.fullName), fieldKeys,
+        contractStatusValues: [...statusValues], teamNameValues: [...teamNameValues],
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // --- SYNC ---
-    const allProperties = await fetchAllProperties(apiKey)
-    const profiles = await loadProfiles(supabase)
-    console.log(`Starting sync: ${allProperties.length} properties, ${profiles.length} profiles`)
+    // --- BATCH MODE: Process one page of 50 properties per invocation ---
+    const offset = body.offset || 0
+    const limit = 50
+    
+    console.log(`Batch sync: fetching offset=${offset}, limit=${limit}`)
+    
+    const raw = await otcFetch(`/properties?limit=${limit}&offset=${offset}`, apiKey)
+    const props = raw?.data || raw || []
+    
+    if (!Array.isArray(props) || props.length === 0) {
+      console.log(`Batch sync: no more properties at offset=${offset}`)
+      return new Response(JSON.stringify({
+        success: true, mode: 'batch', offset, synced: 0, skipped: 0,
+        errors: 0, hasMore: false, nextOffset: offset,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
 
-    const result = await syncProperties(supabase, allProperties, profiles)
-    console.log(`Sync done: ${result.syncedCount} synced, ${result.skippedNotREOP} skipped (not REOP), ${result.errorCount} errors`)
-    if (result.unmatchedAgents.length > 0) {
-      console.log('Unmatched REOP agents (synced but no Hub match):', result.unmatchedAgents.join(' | '))
+    // Load profiles for agent matching
+    const profiles = await loadProfiles(supabase)
+    
+    // Filter and sync REOP properties from this batch
+    let synced = 0, skipped = 0, errorCount = 0
+    const errorList: string[] = []
+    
+    for (const prop of props) {
+      if (!isREOPProperty(prop)) {
+        skipped++
+        continue
+      }
+      
+      try {
+        const otcAgentName = getAgentName(prop)
+        let agentId: string | null = null
+        if (otcAgentName) {
+          const match = matchAgentByName(otcAgentName, profiles)
+          if (match) agentId = match.userId
+        }
+        
+        const tx = mapPropertyToTransaction(prop, agentId, otcAgentName)
+        const { error } = await supabase
+          .from('transaction_coordination')
+          .upsert(tx, { onConflict: 'otc_deal_id', ignoreDuplicates: false })
+        
+        if (error) {
+          errorList.push(`${prop.id}: ${error.message}`)
+          errorCount++
+        } else {
+          synced++
+        }
+      } catch (e: any) {
+        errorList.push(`${prop.id}: ${e.message}`)
+        errorCount++
+      }
     }
-    if (result.matchedAgents.length > 0) {
-      console.log('Matched agents:', result.matchedAgents.join(' | '))
-    }
+
+    const hasMore = props.length >= limit
+    const nextOffset = offset + props.length
+    
+    console.log(`Batch done: offset=${offset}, fetched=${props.length}, synced=${synced}, skipped=${skipped}, errors=${errorCount}, hasMore=${hasMore}`)
 
     return new Response(JSON.stringify({
-      success: true, mode,
-      totalProperties: allProperties.length,
-      ...result,
+      success: true, mode: 'batch', offset, fetched: props.length,
+      synced, skipped, errors: errorCount, errorDetails: errorList.slice(0, 5),
+      hasMore, nextOffset,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (error: any) {

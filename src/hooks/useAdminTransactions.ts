@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -33,6 +33,14 @@ export interface SyncStatus {
   syncErrors: Array<{ agentId: string; agentName: string; errors: string[] }>;
 }
 
+export interface SyncProgress {
+  currentPage: number;
+  totalSynced: number;
+  totalSkipped: number;
+  totalErrors: number;
+  isRunning: boolean;
+}
+
 export function useAdminTransactions() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -40,6 +48,7 @@ export function useAdminTransactions() {
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress>({ currentPage: 0, totalSynced: 0, totalSkipped: 0, totalErrors: 0, isRunning: false });
   const [discovering, setDiscovering] = useState(false);
   const [discoverData, setDiscoverData] = useState<any>(null);
 
@@ -48,20 +57,12 @@ export function useAdminTransactions() {
     setLoading(true);
     try {
       const [txRes, profileRes] = await Promise.all([
-        supabase
-          .from('transaction_coordination')
-          .select('*')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('profiles')
-          .select('user_id, first_name, last_name, email'),
+        supabase.from('transaction_coordination').select('*').order('created_at', { ascending: false }),
+        supabase.from('profiles').select('user_id, first_name, last_name, email'),
       ]);
-
       if (txRes.error) throw txRes.error;
       if (profileRes.error) throw profileRes.error;
-
       setTransactions(txRes.data || []);
-
       const profileMap: Record<string, string> = {};
       (profileRes.data || []).forEach((p) => {
         const name = [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email || 'Unknown';
@@ -76,104 +77,123 @@ export function useAdminTransactions() {
     }
   };
 
-  // Helper to get display name for a transaction's agent
   const getAgentDisplayInfo = (t: Transaction): { name: string; isExternal: boolean } => {
     if (t.responsible_agent && profiles[t.responsible_agent]) {
       return { name: profiles[t.responsible_agent], isExternal: false };
     }
-    // No Hub match — use OTC agent name from raw_api_data
     const rawData = t.raw_api_data as any;
     const otcName = rawData?.otc_agent_name;
-    if (otcName) {
-      return { name: otcName, isExternal: true };
-    }
+    if (otcName) return { name: otcName, isExternal: true };
     return { name: 'Unknown Agent', isExternal: true };
   };
 
+  // --- Batch sync: one page per edge function call ---
+  const syncAllAgents = useCallback(async () => {
+    setSyncing(true);
+    const progress: SyncProgress = { currentPage: 0, totalSynced: 0, totalSkipped: 0, totalErrors: 0, isRunning: true };
+    setSyncProgress(progress);
+
+    let offset = 0;
+    let hasMore = true;
+
+    try {
+      while (hasMore) {
+        progress.currentPage++;
+        setSyncProgress({ ...progress });
+
+        const { data, error } = await supabase.functions.invoke('opentoclose-sync', {
+          body: { mode: 'batch', offset },
+        });
+
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Batch sync failed');
+
+        progress.totalSynced += data.synced || 0;
+        progress.totalSkipped += data.skipped || 0;
+        progress.totalErrors += data.errors || 0;
+        setSyncProgress({ ...progress });
+
+        hasMore = data.hasMore;
+        offset = data.nextOffset;
+
+        // Wait 2s between batches to respect OTC rate limits
+        if (hasMore) {
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+
+      toast({
+        title: 'Sync Complete',
+        description: `Synced ${progress.totalSynced} REOP transactions across ${progress.currentPage} pages. ${progress.totalSkipped} non-REOP skipped.`,
+      });
+
+      await fetchData();
+    } catch (error: any) {
+      console.error('Batch sync error:', error);
+      toast({
+        title: 'Sync Failed',
+        description: `Failed on page ${progress.currentPage}. ${progress.totalSynced} synced before failure. Error: ${error.message}`,
+        variant: 'destructive',
+      });
+    } finally {
+      progress.isRunning = false;
+      setSyncProgress({ ...progress });
+      setSyncing(false);
+    }
+  }, [toast]);
+
+  // --- Team Metrics ---
   const teamMetrics = useMemo<TeamMetrics>(() => {
     const now = new Date();
     const yearStart = new Date(now.getFullYear(), 0, 1);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    const closed = transactions.filter(
-      (t) => t.transaction_stage === 'closed' && t.closing_date
-    );
-    const ongoing = transactions.filter(
-      (t) => t.transaction_stage === 'under_contract' || (t.status === 'ongoing' && t.transaction_stage !== 'closed')
-    );
-
+    const closed = transactions.filter((t) => t.transaction_stage === 'closed' && t.closing_date);
+    const ongoing = transactions.filter((t) => t.transaction_stage === 'under_contract' || (t.status === 'ongoing' && t.transaction_stage !== 'closed'));
     const ytdClosed = closed.filter((t) => new Date(t.closing_date!) >= yearStart);
     const mtdClosed = closed.filter((t) => new Date(t.closing_date!) >= monthStart);
-
     const ytdSalesVolume = ytdClosed.reduce((s, t) => s + (t.sale_price || 0), 0);
     const ytdGci = ytdClosed.reduce((s, t) => s + (t.gci || 0), 0);
     const mtdGci = mtdClosed.reduce((s, t) => s + (t.gci || 0), 0);
     const activePipelineValue = ongoing.reduce((s, t) => s + (t.sale_price || 0), 0);
-
     const withDates = closed.filter((t) => t.contract_date && t.closing_date);
-    const avgDealVelocity =
-      withDates.length > 0
-        ? withDates.reduce((s, t) => {
-            const days = (new Date(t.closing_date!).getTime() - new Date(t.contract_date!).getTime()) / 86400000;
-            return s + Math.max(0, days);
-          }, 0) / withDates.length
-        : 0;
-
+    const avgDealVelocity = withDates.length > 0
+      ? withDates.reduce((s, t) => {
+          const days = (new Date(t.closing_date!).getTime() - new Date(t.contract_date!).getTime()) / 86400000;
+          return s + Math.max(0, days);
+        }, 0) / withDates.length
+      : 0;
     const teamClosingRate = transactions.length > 0 ? (closed.length / transactions.length) * 100 : 0;
-
-    return {
-      ytdSalesVolume,
-      ytdGci,
-      mtdGci,
-      activePipelineValue,
-      avgDealVelocity,
-      teamClosingRate,
-      totalOngoing: ongoing.length,
-      totalClosed: closed.length,
-    };
+    return { ytdSalesVolume, ytdGci, mtdGci, activePipelineValue, avgDealVelocity, teamClosingRate, totalOngoing: ongoing.length, totalClosed: closed.length };
   }, [transactions]);
 
+  // --- Leaderboard ---
   const leaderboard = useMemo<AgentLeaderboardEntry[]>(() => {
     const byAgent: Record<string, { txs: Transaction[]; isExternal: boolean; displayName: string }> = {};
-    
     transactions.forEach((t) => {
       const info = getAgentDisplayInfo(t);
-      // Use responsible_agent as key if matched, otherwise use OTC agent name
       const key = t.responsible_agent || `ext_${info.name}`;
-      
-      if (!byAgent[key]) {
-        byAgent[key] = { txs: [], isExternal: info.isExternal, displayName: info.name };
-      }
+      if (!byAgent[key]) byAgent[key] = { txs: [], isExternal: info.isExternal, displayName: info.name };
       byAgent[key].txs.push(t);
     });
-
     return Object.entries(byAgent)
       .map(([agentId, { txs, isExternal, displayName }]) => {
         const closed = txs.filter((t) => t.transaction_stage === 'closed');
         const totalGci = closed.reduce((s, t) => s + (t.gci || 0), 0);
         const salesVolume = closed.reduce((s, t) => s + (t.sale_price || 0), 0);
         const ongoing = txs.filter((t) => t.transaction_stage !== 'closed');
-
         return {
-          agentId,
-          agentName: displayName,
-          closedDeals: closed.length,
-          totalGci,
-          salesVolume,
+          agentId, agentName: displayName, closedDeals: closed.length, totalGci, salesVolume,
           avgDealSize: closed.length > 0 ? salesVolume / closed.length : 0,
           closingRate: txs.length > 0 ? (closed.length / txs.length) * 100 : 0,
-          ongoingDeals: ongoing.length,
-          isExternal,
+          ongoingDeals: ongoing.length, isExternal,
         };
       })
       .sort((a, b) => b.totalGci - a.totalGci);
   }, [transactions, profiles]);
 
+  // --- Sync Status ---
   const syncStatus = useMemo<SyncStatus>(() => {
-    const synced = transactions
-      .filter((t) => t.last_synced_at)
-      .sort((a, b) => new Date(b.last_synced_at!).getTime() - new Date(a.last_synced_at!).getTime());
-
+    const synced = transactions.filter((t) => t.last_synced_at).sort((a, b) => new Date(b.last_synced_at!).getTime() - new Date(a.last_synced_at!).getTime());
     const errorsByAgent: Record<string, string[]> = {};
     transactions.forEach((t) => {
       if (t.sync_errors && t.sync_errors.length > 0) {
@@ -183,48 +203,20 @@ export function useAdminTransactions() {
         errorsByAgent[id].push(...t.sync_errors);
       }
     });
-
     return {
       lastSyncedAt: synced[0]?.last_synced_at || null,
       syncErrorCount: Object.values(errorsByAgent).flat().length,
       syncErrors: Object.entries(errorsByAgent).map(([agentId, errors]) => ({
-        agentId,
-        agentName: profiles[agentId] || agentId.replace('ext_', ''),
-        errors,
+        agentId, agentName: profiles[agentId] || agentId.replace('ext_', ''), errors,
       })),
     };
   }, [transactions, profiles]);
-
-  const syncAllAgents = async () => {
-    setSyncing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('opentoclose-sync', {
-        body: { mode: 'team' },
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: 'Sync Complete',
-        description: `Synced ${data?.syncedCount || 0} REOP transactions. ${data?.skippedNotREOP || 0} non-REOP skipped. ${data?.unmatchedAgents?.length || 0} unmatched agents.`,
-      });
-
-      await fetchData();
-    } catch (error) {
-      console.error('Team sync error:', error);
-      toast({ title: 'Sync Failed', description: 'Failed to sync team transactions.', variant: 'destructive' });
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const discoverOTC = async () => {
     setDiscovering(true);
     setDiscoverData(null);
     try {
-      const { data, error } = await supabase.functions.invoke('opentoclose-sync', {
-        body: { mode: 'discover' },
-      });
+      const { data, error } = await supabase.functions.invoke('opentoclose-sync', { body: { mode: 'discover' } });
       if (error) throw error;
       setDiscoverData(data);
       toast({ title: 'Discovery Complete', description: `Found ${data?.reopCount || 0} REOP properties out of ${data?.totalFetched || 0} sampled.` });
@@ -241,18 +233,8 @@ export function useAdminTransactions() {
   }, [user]);
 
   return {
-    transactions,
-    teamMetrics,
-    leaderboard,
-    syncStatus,
-    profiles,
-    loading,
-    syncing,
-    discovering,
-    discoverData,
-    syncAllAgents,
-    discoverOTC,
-    refetch: fetchData,
-    getAgentDisplayInfo,
+    transactions, teamMetrics, leaderboard, syncStatus, profiles,
+    loading, syncing, syncProgress, discovering, discoverData,
+    syncAllAgents, discoverOTC, refetch: fetchData, getAgentDisplayInfo,
   };
 }

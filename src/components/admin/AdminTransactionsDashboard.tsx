@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
 import { useAdminTransactions, AgentLeaderboardEntry } from '@/hooks/useAdminTransactions';
 import { DollarSign, TrendingUp, Clock, Target, RefreshCw, AlertTriangle, Trophy, ChevronDown, Users, Search } from 'lucide-react';
 import { format } from 'date-fns';
@@ -33,6 +34,7 @@ export function AdminTransactionsDashboard() {
     profiles,
     loading,
     syncing,
+    syncProgress,
     discovering,
     discoverData,
     syncAllAgents,
@@ -339,12 +341,25 @@ export function AdminTransactionsDashboard() {
               </Button>
               <Button onClick={syncAllAgents} disabled={syncing}>
                 <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                {syncing ? 'Syncing...' : 'Sync All Agents'}
+                {syncing ? `Syncing page ${syncProgress.currentPage}...` : 'Sync All Agents'}
               </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          {syncing && (
+            <div className="space-y-2 mb-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">
+                  Page {syncProgress.currentPage} — {syncProgress.totalSynced} REOP synced, {syncProgress.totalSkipped} skipped
+                </span>
+                {syncProgress.totalErrors > 0 && (
+                  <span className="text-destructive">{syncProgress.totalErrors} errors</span>
+                )}
+              </div>
+              <Progress value={undefined} className="h-2" />
+            </div>
+          )}
           <div className="flex items-center gap-4 text-sm">
             <span className="text-muted-foreground">Last synced:</span>
             <span className="font-medium">
