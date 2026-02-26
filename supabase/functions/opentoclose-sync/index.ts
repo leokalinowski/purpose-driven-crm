@@ -6,129 +6,208 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-function mapTransactionStage(otcStage: string | undefined, status: string | undefined): string {
-  const stageMapping: Record<string, string> = {
-    'under_contract': 'under_contract',
-    'pending': 'under_contract',
-    'contract': 'under_contract',
-    'closed': 'closed',
-    'active': 'under_contract',
-    'listing': 'under_contract',
-    'sold': 'closed',
-    'complete': 'closed',
-    'settlement': 'closed',
-  }
-  if (status && status.toLowerCase() === 'closed') return 'closed'
-  return stageMapping[otcStage?.toLowerCase() || ''] || 'under_contract'
+const OTC_BASE = 'https://api.opentoclose.com/v1'
+
+// --- Helpers ---
+
+function getFieldValue(property: any, key: string): string | null {
+  if (!property?.field_values) return null
+  const field = property.field_values.find((f: any) => f.key === key)
+  const val = field?.value?.toString().trim()
+  return val || null
 }
 
-function mapDealToTransaction(deal: any, agentId: string) {
+function extractAgentFromNotes(notes: string | null): string | null {
+  if (!notes) return null
+  // Pattern: "RA: Agent Name" (REOP Agent)
+  const match = notes.match(/RA:\s*([^<\n]+)/i)
+  return match ? match[1].trim() : null
+}
+
+function mapStage(status: string | null): string {
+  if (!status) return 'under_contract'
+  const s = status.toLowerCase()
+  if (s.includes('closed') || s.includes('settled')) return 'closed'
+  return 'under_contract'
+}
+
+function mapStatus(status: string | null): string {
+  if (!status) return 'ongoing'
+  return status.toLowerCase().includes('closed') ? 'closed' : 'ongoing'
+}
+
+function mapTransactionType(clientType: string | null): string {
+  if (!clientType) return 'both'
+  const t = clientType.toLowerCase()
+  if (t.includes('buyer') || t.includes('buy')) return 'buy'
+  if (t.includes('seller') || t.includes('sell') || t.includes('list')) return 'sell'
+  return 'both'
+}
+
+function buildAddress(property: any): string {
+  const parts = [
+    getFieldValue(property, 'property_address'),
+    getFieldValue(property, 'property_city'),
+    getFieldValue(property, 'property_state'),
+    getFieldValue(property, 'property_zip'),
+  ].filter(Boolean)
+  return parts.join(', ') || 'Unknown'
+}
+
+function mapPropertyToTransaction(property: any, agentId: string) {
+  const contractStatus = getFieldValue(property, 'contract_status')
+  const listingStatus = getFieldValue(property, 'listing_status')
+  const effectiveStatus = contractStatus || listingStatus
+
   return {
     responsible_agent: agentId,
-    otc_deal_id: deal.id || deal.deal_id || deal._id,
-    client_name: deal.client_name || deal.buyer_name || deal.seller_name ||
-      `${deal.first_name || ''} ${deal.last_name || ''}`.trim() ||
-      `${deal.buyer?.first_name || ''} ${deal.buyer?.last_name || ''}`.trim() ||
-      `${deal.seller?.first_name || ''} ${deal.seller?.last_name || ''}`.trim(),
-    property_address: deal.property_address || deal.address || deal.property?.address ||
-      deal.listing?.address || deal.property?.street_address,
-    sale_price: parseFloat(deal.sale_price || deal.price || deal.listing_price ||
-      deal.purchase_price || deal.contract_price || 0),
-    gci: parseFloat(deal.gci || deal.commission || deal.agent_commission ||
-      deal.total_commission || deal.gross_commission || 0),
-    status: (deal.status === 'closed' || deal.stage === 'closed' || deal.transaction_stage === 'closed') ? 'closed' : 'ongoing',
-    transaction_stage: mapTransactionStage(deal.transaction_stage || deal.stage || deal.status, deal.status),
-    contract_date: deal.contract_date || deal.contract_executed_date || deal.offer_accepted_date ||
-      deal.under_contract_date || deal.agreement_date,
-    closing_date: deal.closing_date || deal.settlement_date || deal.close_date ||
-      deal.scheduled_closing_date || deal.actual_closing_date,
-    listing_agent_id: deal.listing_agent?.id || deal.listing_agent_id,
-    buyer_agent_id: deal.buyer_agent?.id || deal.buying_agent?.id || deal.buyer_agent_id,
-    property_type: deal.property_type || deal.property?.type || deal.listing?.property_type,
-    square_footage: parseInt(deal.square_footage || deal.property?.square_feet || deal.sqft || 0) || null,
-    bedrooms: parseInt(deal.bedrooms || deal.property?.bedrooms || deal.beds || 0) || null,
-    bathrooms: parseFloat(deal.bathrooms || deal.property?.bathrooms || deal.baths || 0) || null,
-    listing_date: deal.listing_date || deal.list_date || deal.date_listed,
-    days_on_market: parseInt(deal.days_on_market || deal.dom || 0) || null,
-    price_per_sqft: deal.price_per_sqft || deal.price_per_square_foot ||
-      (deal.sale_price && deal.square_footage ? parseFloat(deal.sale_price) / parseInt(deal.square_footage) : null),
-    commission_rate: parseFloat(deal.commission_rate || deal.commission_percentage || 0) || null,
-    brokerage_split: parseFloat(deal.brokerage_split || deal.split_percentage || 0) || null,
-    transaction_type: deal.transaction_type || deal.side ||
-      (deal.listing_agent?.id === agentId ? 'sell' : deal.buyer_agent?.id === agentId ? 'buy' : 'both'),
-    lead_source: deal.lead_source || deal.source || deal.referral_source,
-    referral_source: deal.referral_source || deal.referred_by,
+    otc_deal_id: String(property.id),
+    client_name: getFieldValue(property, 'contract_title') || 'Unknown',
+    property_address: buildAddress(property),
+    sale_price: parseFloat(getFieldValue(property, 'purchase_amount') || getFieldValue(property, 'listing_price') || '0') || 0,
+    gci: parseFloat(getFieldValue(property, 'total_commission_amount') || getFieldValue(property, 'commission_amount') || '0') || 0,
+    status: mapStatus(effectiveStatus),
+    transaction_stage: mapStage(effectiveStatus),
+    transaction_type: mapTransactionType(getFieldValue(property, 'contract_client_type')),
+    contract_date: getFieldValue(property, 'contract_date') || getFieldValue(property, 'ratification_date'),
+    closing_date: getFieldValue(property, 'closing_date') || getFieldValue(property, 'settlement_date'),
+    listing_date: getFieldValue(property, 'listing_date') || getFieldValue(property, 'mls_active_date'),
+    property_type: getFieldValue(property, 'property_type'),
+    lead_source: getFieldValue(property, 'referred_by'),
+    commission_rate: parseFloat(getFieldValue(property, 'total_commission_percentage') || '0') || null,
     milestone_dates: {
-      inspection_date: deal.inspection_date,
-      appraisal_date: deal.appraisal_date,
-      financing_contingency_date: deal.financing_contingency_date,
-      title_search_date: deal.title_search_date,
-      final_walkthrough_date: deal.final_walkthrough_date,
-      settlement_date: deal.settlement_date || deal.closing_date,
-      ...(deal.milestone_dates || {}),
+      emd_due: getFieldValue(property, 'emd_due'),
+      contingency_ends_hi: getFieldValue(property, 'contingency_ends_hi'),
+      contingency_ends_financing: getFieldValue(property, 'contingency_ends_financing'),
+      contingency_ends_appraisal: getFieldValue(property, 'contingency_ends_appraisal'),
+      final_walkthrough: getFieldValue(property, 'final_walkthough_date'),
+      settlement_date: getFieldValue(property, 'settlement_date'),
     },
-    risk_factors: [
-      ...(deal.financing_contingency ? ['financing_contingency'] : []),
-      ...(deal.inspection_contingency ? ['inspection_contingency'] : []),
-      ...(deal.appraisal_contingency ? ['appraisal_contingency'] : []),
-      ...(deal.sale_of_home_contingency ? ['sale_of_home_contingency'] : []),
-      ...(deal.risk_factors || []),
-    ],
-    raw_api_data: deal,
+    raw_api_data: { id: property.id, team_user_name: property.team_user_name, created: property.created },
     last_synced_at: new Date().toISOString(),
     sync_errors: [],
     updated_at: new Date().toISOString(),
   }
 }
 
-async function fetchOtcDeals(otcApiKey: string): Promise<any[]> {
-  try {
-    const response = await fetch('https://api.opentoclose.com/v1/deals', {
-      headers: {
-        'X-API-Key': otcApiKey,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    })
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('OpenToClose API error:', response.status, errorText)
-      throw new Error(`OpenToClose API returned ${response.status}: ${response.statusText}`)
-    }
-    const apiData = await response.json()
-    console.log('OTC API returned', apiData?.data?.length || 0, 'deals')
-    return apiData?.data || []
-  } catch (error) {
-    console.error('Failed to fetch from OTC API:', error)
-    return []
+// --- OTC API ---
+
+async function otcFetch(path: string, apiToken: string): Promise<any> {
+  const separator = path.includes('?') ? '&' : '?'
+  const url = `${OTC_BASE}${path}${separator}api_token=${apiToken}`
+  const response = await fetch(url, { headers: { 'Accept': 'application/json' } })
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error(`OTC API error [${path}]:`, response.status, errorText)
+    throw new Error(`OTC API ${response.status}: ${response.statusText}`)
   }
+  return response.json()
 }
 
-async function syncAgentDeals(supabase: any, agentId: string, deals: any[]) {
-  let syncedCount = 0
-  let errorCount = 0
-  const errors: string[] = []
+async function fetchAllProperties(apiToken: string): Promise<any[]> {
+  const all: any[] = []
+  let offset = 0
+  const limit = 50
 
-  for (const deal of deals) {
+  while (true) {
+    const data = await otcFetch(`/properties?limit=${limit}&offset=${offset}`, apiToken)
+    const props = data?.data || data || []
+    if (!Array.isArray(props) || props.length === 0) break
+    all.push(...props)
+    console.log(`Fetched ${all.length} properties so far`)
+    if (props.length < limit) break
+    offset += limit
+  }
+  console.log('Total OTC properties:', all.length)
+  return all
+}
+
+// --- Agent Map ---
+
+async function buildAgentMap(supabase: any): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('user_id, first_name, last_name, email')
+
+  for (const p of profiles || []) {
+    const full = `${p.first_name || ''} ${p.last_name || ''}`.trim().toLowerCase()
+    if (full) map.set(full, p.user_id)
+    if (p.first_name) map.set(p.first_name.toLowerCase(), p.user_id)
+    if (p.email) map.set(p.email.toLowerCase(), p.user_id)
+  }
+  return map
+}
+
+function matchAgent(property: any, agentMap: Map<string, string>): string | null {
+  // 1. Try agent_name from OTC top-level
+  if (property.agent_name) {
+    const m = agentMap.get(property.agent_name.toLowerCase())
+    if (m) return m
+  }
+  
+  // 2. Try extracting from important_notes "RA: Agent Name"
+  const notesAgent = extractAgentFromNotes(getFieldValue(property, 'important_notes'))
+  if (notesAgent) {
+    const m = agentMap.get(notesAgent.toLowerCase())
+    if (m) return m
+    // Try first name only
+    const first = notesAgent.split(' ')[0]
+    if (first) {
+      const fm = agentMap.get(first.toLowerCase())
+      if (fm) return fm
+    }
+  }
+
+  // 3. Try listing_agent field value
+  const listingAgent = getFieldValue(property, 'listing_agent')
+  if (listingAgent) {
+    const m = agentMap.get(listingAgent.toLowerCase())
+    if (m) return m
+  }
+
+  return null
+}
+
+// --- Sync ---
+
+async function syncProperties(supabase: any, properties: any[], agentMap: Map<string, string>) {
+  let synced = 0, errors = 0, skipped = 0
+  const errorList: string[] = []
+  const unmatched = new Set<string>()
+
+  for (const prop of properties) {
     try {
-      const txData = mapDealToTransaction(deal, agentId)
+      const agentId = matchAgent(prop, agentMap)
+      if (!agentId) {
+        const desc = extractAgentFromNotes(getFieldValue(prop, 'important_notes'))
+          || prop.agent_name || prop.team_user_name || `property ${prop.id}`
+        unmatched.add(desc)
+        skipped++
+        continue
+      }
+
+      const tx = mapPropertyToTransaction(prop, agentId)
       const { error } = await supabase
         .from('transaction_coordination')
-        .upsert(txData, { onConflict: 'otc_deal_id', ignoreDuplicates: false })
+        .upsert(tx, { onConflict: 'otc_deal_id', ignoreDuplicates: false })
+
       if (error) {
-        console.error('Upsert error:', error)
-        errors.push(`Deal ${deal.id}: ${error.message}`)
-        errorCount++
+        errorList.push(`${prop.id}: ${error.message}`)
+        errors++
       } else {
-        syncedCount++
+        synced++
       }
-    } catch (error: any) {
-      errors.push(`Deal ${deal.id}: ${error.message}`)
-      errorCount++
+    } catch (e: any) {
+      errorList.push(`${prop.id}: ${e.message}`)
+      errors++
     }
   }
-  return { syncedCount, errorCount, errors }
+
+  return { syncedCount: synced, errorCount: errors, skippedCount: skipped, errors: errorList, unmatchedAgents: [...unmatched] }
 }
+
+// --- Handler ---
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -138,73 +217,58 @@ serve(async (req) => {
   try {
     const body = await req.json()
     const mode = body.mode || 'single'
-    const agentId = body.agentId
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+    const apiKey = Deno.env.get('OPENTOCLOSE_API_KEY')
+    if (!apiKey) throw new Error('OpenToClose API key not configured')
 
-    const otcApiKey = Deno.env.get('OPENTOCLOSE_API_KEY')
-    if (!otcApiKey) throw new Error('OpenToClose API key not configured')
+    // --- DISCOVER ---
+    if (mode === 'discover') {
+      const raw = await otcFetch('/properties?limit=3', apiKey)
+      const props = raw?.data || raw || []
+      let agents = null
+      try { agents = await otcFetch('/agents', apiKey) } catch (_) {}
 
-    // Fetch all deals from OTC once
-    const allDeals = await fetchOtcDeals(otcApiKey)
-
-    if (mode === 'team') {
-      // Team mode: sync all agents
-      console.log('Starting team-wide OTC sync')
-
-      const { data: roleRows, error: roleErr } = await supabase
-        .from('user_roles')
-        .select('user_id, role')
-        .in('role', ['agent', 'admin'])
-
-      if (roleErr) throw roleErr
-
-      const agentIds = (roleRows || []).map((r: any) => r.user_id)
-      console.log('Syncing for', agentIds.length, 'agents')
-
-      const results: Record<string, any> = {}
-      let totalSynced = 0
-      let totalErrors = 0
-
-      for (const aid of agentIds) {
-        // For now, assign all deals to each agent (OTC doesn't filter by agent)
-        // In production, you'd filter deals by agent name/email match
-        const result = await syncAgentDeals(supabase, aid, allDeals)
-        results[aid] = result
-        totalSynced += result.syncedCount
-        totalErrors += result.errorCount
+      // Sample contacts for first property
+      let contacts = null
+      if (props[0]?.id) {
+        try { contacts = await otcFetch(`/properties/${props[0].id}/contacts`, apiKey) } catch (_) {}
       }
 
-      return new Response(
-        JSON.stringify({
-          success: true,
-          mode: 'team',
-          agentCount: agentIds.length,
-          totalSynced,
-          totalErrors,
-          results,
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-      )
-    } else {
-      // Single agent mode (original behavior)
-      if (!agentId) throw new Error('Agent ID is required for single mode')
-      console.log('Starting OTC sync for agent:', agentId)
+      const contactSummary = (contacts?.data || contacts || []).map((c: any) => ({
+        name: `${c.contact?.first_name || ''} ${c.contact?.last_name || ''}`.trim(),
+        role: c.contact_role?.title || 'unknown',
+        email: c.contact?.email,
+      }))
 
-      const result = await syncAgentDeals(supabase, agentId, allDeals)
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          mode: 'single',
-          message: `Synced ${result.syncedCount} transactions`,
-          ...result,
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-      )
+      return new Response(JSON.stringify({
+        success: true, mode: 'discover',
+        propertyCount: props.length,
+        topLevelKeys: props[0] ? Object.keys(props[0]).filter((k: string) => k !== 'field_values') : [],
+        sampleProperty: props[0] ? { id: props[0].id, team_user_name: props[0].team_user_name, agent_id: props[0].agent_id, agent_name: props[0].agent_name } : null,
+        fieldKeys: props[0]?.field_values?.map((f: any) => ({ key: f.key, label: f.label, sampleValue: f.value })).filter((f: any) => f.sampleValue) || [],
+        contactRoles: contactSummary,
+        agents,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
+
+    // --- SYNC ---
+    const allProperties = await fetchAllProperties(apiKey)
+    const agentMap = await buildAgentMap(supabase)
+    console.log(`Starting ${mode} sync: ${allProperties.length} properties, ${agentMap.size} agent mappings`)
+
+    const result = await syncProperties(supabase, allProperties, agentMap)
+    console.log(`Sync done: ${result.syncedCount} synced, ${result.skippedCount} skipped, ${result.errorCount} errors`)
+    if (result.unmatchedAgents.length > 0) {
+      console.log('Unmatched:', result.unmatchedAgents.join(' | '))
+    }
+
+    return new Response(JSON.stringify({
+      success: true, mode,
+      totalProperties: allProperties.length,
+      ...result,
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
   } catch (error: any) {
     console.error('Sync error:', error)
     return new Response(
