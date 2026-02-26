@@ -39,6 +39,8 @@ export function useAdminTransactions() {
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverData, setDiscoverData] = useState<any>(null);
 
   const fetchData = async () => {
     if (!user) return;
@@ -193,6 +195,24 @@ export function useAdminTransactions() {
     }
   };
 
+  const discoverOTC = async () => {
+    setDiscovering(true);
+    setDiscoverData(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('opentoclose-sync', {
+        body: { mode: 'discover' },
+      });
+      if (error) throw error;
+      setDiscoverData(data);
+      toast({ title: 'Discovery Complete', description: `Found ${data?.reopCount || 0} REOP properties out of ${data?.totalFetched || 0} sampled.` });
+    } catch (error) {
+      console.error('Discover error:', error);
+      toast({ title: 'Discovery Failed', description: 'Failed to fetch OTC structure.', variant: 'destructive' });
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
   useEffect(() => {
     if (user) fetchData();
   }, [user]);
@@ -205,7 +225,10 @@ export function useAdminTransactions() {
     profiles,
     loading,
     syncing,
+    discovering,
+    discoverData,
     syncAllAgents,
+    discoverOTC,
     refetch: fetchData,
   };
 }

@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAdminTransactions, AgentLeaderboardEntry } from '@/hooks/useAdminTransactions';
-import { DollarSign, TrendingUp, Clock, Target, RefreshCw, AlertTriangle, Trophy, ChevronDown, Users } from 'lucide-react';
+import { DollarSign, TrendingUp, Clock, Target, RefreshCw, AlertTriangle, Trophy, ChevronDown, Users, Search } from 'lucide-react';
 import { format } from 'date-fns';
 
 const fmt = (n: number) =>
@@ -33,7 +33,10 @@ export function AdminTransactionsDashboard() {
     profiles,
     loading,
     syncing,
+    discovering,
+    discoverData,
     syncAllAgents,
+    discoverOTC,
   } = useAdminTransactions();
 
   const [stageFilter, setStageFilter] = useState<string>('all');
@@ -286,10 +289,16 @@ export function AdminTransactionsDashboard() {
               <RefreshCw className="h-5 w-5" />
               Sync Controls
             </CardTitle>
-            <Button onClick={syncAllAgents} disabled={syncing}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Syncing...' : 'Sync All Agents'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={discoverOTC} disabled={discovering}>
+                <Search className={`h-4 w-4 mr-2 ${discovering ? 'animate-pulse' : ''}`} />
+                {discovering ? 'Discovering...' : 'Discover OTC Fields'}
+              </Button>
+              <Button onClick={syncAllAgents} disabled={syncing}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Syncing...' : 'Sync All Agents'}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -326,6 +335,74 @@ export function AdminTransactionsDashboard() {
                 ))}
               </CollapsibleContent>
             </Collapsible>
+          )}
+          {discoverData && (
+            <div className="mt-4 space-y-3">
+              <div className="text-sm font-medium">Discovery Results: {discoverData.reopCount} REOP properties out of {discoverData.totalFetched} sampled</div>
+              <Collapsible>
+                <CollapsibleTrigger className="flex items-center gap-1 text-sm text-primary hover:underline">
+                  <ChevronDown className="h-4 w-4" />
+                  Agent Match Results ({discoverData.matchResults?.length || 0})
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>RA Name (OTC)</TableHead>
+                        <TableHead>Matched To</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(discoverData.matchResults || []).map((m: any, i: number) => (
+                        <TableRow key={i}>
+                          <TableCell>{m.raName}</TableCell>
+                          <TableCell>
+                            <Badge variant={m.userId ? 'default' : 'destructive'}>
+                              {m.matched}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CollapsibleContent>
+              </Collapsible>
+              <Collapsible>
+                <CollapsibleTrigger className="flex items-center gap-1 text-sm text-primary hover:underline">
+                  <ChevronDown className="h-4 w-4" />
+                  REOP Property Samples ({discoverData.reopSamples?.length || 0})
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2">
+                  <pre className="text-xs bg-muted p-3 rounded max-h-64 overflow-auto">
+                    {JSON.stringify(discoverData.reopSamples, null, 2)}
+                  </pre>
+                </CollapsibleContent>
+              </Collapsible>
+              <Collapsible>
+                <CollapsibleTrigger className="flex items-center gap-1 text-sm text-primary hover:underline">
+                  <ChevronDown className="h-4 w-4" />
+                  Hub Profiles ({discoverData.hubProfiles?.length || 0})
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2">
+                  <div className="flex flex-wrap gap-1">
+                    {(discoverData.hubProfiles || []).map((name: string, i: number) => (
+                      <Badge key={i} variant="outline">{name}</Badge>
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+              <Collapsible>
+                <CollapsibleTrigger className="flex items-center gap-1 text-sm text-primary hover:underline">
+                  <ChevronDown className="h-4 w-4" />
+                  All OTC Field Keys ({discoverData.fieldKeys?.length || 0})
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2">
+                  <pre className="text-xs bg-muted p-3 rounded max-h-64 overflow-auto">
+                    {JSON.stringify(discoverData.fieldKeys, null, 2)}
+                  </pre>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
           )}
         </CardContent>
       </Card>
