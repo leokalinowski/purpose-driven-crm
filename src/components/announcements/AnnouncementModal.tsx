@@ -3,38 +3,37 @@ import { useAnnouncements } from '@/hooks/useAnnouncements';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Sparkles, Info, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-const typeConfig: Record<string, { label: string; icon: React.ElementType; variant: 'default' | 'secondary' | 'outline' }> = {
-  feature: { label: 'New Feature', icon: Sparkles, variant: 'default' },
-  update: { label: 'Update', icon: Zap, variant: 'secondary' },
-  tip: { label: 'Tip', icon: Info, variant: 'outline' },
-};
+import { typeConfig } from './announcementConstants';
 
 export function AnnouncementModal() {
-  const { announcements, dismissAnnouncement } = useAnnouncements();
+  const { announcements, dismissAnnouncement, dismissAllAnnouncements } = useAnnouncements();
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isOpen, setIsOpen] = useState(true);
   const navigate = useNavigate();
 
-  if (announcements.length === 0) return null;
+  if (!isOpen || announcements.length === 0) return null;
 
-  const current = announcements[currentIndex];
+  const safeIndex = Math.min(currentIndex, announcements.length - 1);
+  const current = announcements[safeIndex];
+  if (!current) return null;
+
   const config = typeConfig[current.type] || typeConfig.feature;
   const TypeIcon = config.icon;
   const total = announcements.length;
 
   const handleDismiss = async () => {
     await dismissAnnouncement.mutateAsync(current.id);
-    if (currentIndex >= announcements.length - 1) {
-      setCurrentIndex(0);
+    // If that was the last one, the array will become empty and we'll return null above
+    if (safeIndex >= announcements.length - 1) {
+      setCurrentIndex(Math.max(0, safeIndex - 1));
     }
   };
 
-  const handleDismissAll = async () => {
-    for (const a of announcements) {
-      await dismissAnnouncement.mutateAsync(a.id);
-    }
+  const handleClose = () => {
+    // Just hide for this session — don't dismiss anything
+    setIsOpen(false);
   };
 
   const handleAction = () => {
@@ -49,7 +48,7 @@ export function AnnouncementModal() {
   };
 
   return (
-    <Dialog open={true} onOpenChange={() => handleDismissAll()}>
+    <Dialog open={true} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-2 mb-1">
@@ -59,7 +58,7 @@ export function AnnouncementModal() {
             </Badge>
             {total > 1 && (
               <span className="text-xs text-muted-foreground ml-auto">
-                {currentIndex + 1} of {total}
+                {safeIndex + 1} of {total}
               </span>
             )}
           </div>
@@ -88,8 +87,8 @@ export function AnnouncementModal() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
-                  onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
-                  disabled={currentIndex === 0}
+                  onClick={() => setCurrentIndex(Math.max(0, safeIndex - 1))}
+                  disabled={safeIndex === 0}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
@@ -97,7 +96,7 @@ export function AnnouncementModal() {
                   {announcements.map((_, i) => (
                     <button
                       key={i}
-                      className={`h-1.5 rounded-full transition-all ${i === currentIndex ? 'w-4 bg-primary' : 'w-1.5 bg-muted-foreground/30'}`}
+                      className={`h-1.5 rounded-full transition-all ${i === safeIndex ? 'w-4 bg-primary' : 'w-1.5 bg-muted-foreground/30'}`}
                       onClick={() => setCurrentIndex(i)}
                     />
                   ))}
@@ -106,8 +105,8 @@ export function AnnouncementModal() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
-                  onClick={() => setCurrentIndex(Math.min(total - 1, currentIndex + 1))}
-                  disabled={currentIndex === total - 1}
+                  onClick={() => setCurrentIndex(Math.min(total - 1, safeIndex + 1))}
+                  disabled={safeIndex === total - 1}
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
