@@ -1,9 +1,12 @@
-import { Sparkles, Info, Zap } from 'lucide-react';
+import { Sparkles, Info, Zap, Target, CalendarCheck, Megaphone } from 'lucide-react';
 
 export const typeConfig: Record<string, { label: string; icon: React.ElementType; variant: 'default' | 'secondary' | 'outline' }> = {
   feature: { label: 'New Feature', icon: Sparkles, variant: 'default' },
   update: { label: 'Update', icon: Zap, variant: 'secondary' },
   tip: { label: 'Tip', icon: Info, variant: 'outline' },
+  strategy: { label: 'Strategy', icon: Target, variant: 'default' },
+  meeting: { label: 'Meeting', icon: CalendarCheck, variant: 'secondary' },
+  announcement: { label: 'Announcement', icon: Megaphone, variant: 'outline' },
 };
 
 export const APP_PAGES = [
@@ -18,4 +21,18 @@ export const APP_PAGES = [
   { label: 'Pipeline', value: '/pipeline' },
   { label: 'Social Scheduler', value: '/social-scheduler' },
   { label: 'Support', value: '/support' },
+] as const;
+
+export const DISPLAY_STYLES = [
+  { label: 'Modal', value: 'modal', description: 'Full dialog, centered' },
+  { label: 'Toast', value: 'toast', description: 'Compact corner card' },
+  { label: 'Banner', value: 'banner', description: 'Slim top/bottom bar' },
+] as const;
+
+export const DISPLAY_POSITIONS = [
+  { label: 'Center', value: 'center' },
+  { label: 'Top Right', value: 'top-right' },
+  { label: 'Top Left', value: 'top-left' },
+  { label: 'Bottom Right', value: 'bottom-right' },
+  { label: 'Bottom Left', value: 'bottom-left' },
 ] as const;

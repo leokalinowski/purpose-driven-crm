@@ -24,6 +24,8 @@ export interface Announcement {
   expires_at: string | null;
   created_by: string;
   slides: AnnouncementSlide[] | null;
+  display_position: string;
+  display_style: string;
 }
 
 export function useAnnouncements() {
