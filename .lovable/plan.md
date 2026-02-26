@@ -1,78 +1,95 @@
 
 
-# In-App Announcements & Feature Tour System
+# Announcement System Review
 
-## Concept
+## Bugs Found
 
-A system where admins create announcements (new features, tips, how-tos) that appear as a modal/dialog when agents log in. Agents can dismiss them, and they won't see the same announcement twice. Optionally, announcements can include step-by-step slides for feature walkthroughs.
+### 1. Modal crashes after dismissing announcements (index out of bounds)
+When "Got it" is clicked, `handleDismiss` dismisses the current announcement, which triggers a query invalidation. The `announcements` array shrinks, but `currentIndex` may now point past the end. For example: 3 announcements, viewing index 1, dismiss it -- array becomes length 2, but `currentIndex` is still 1 pointing to what was previously item 2. If you're on the last item and dismiss it, `setCurrentIndex(0)` runs, but the stale `announcements` array is used in the check. This causes the component to briefly render with `current = undefined`, crashing.
 
-## Database
+**Fix**: Add a guard `if (!current) return null` after the array access, and use optimistic removal from the local state instead of relying on query invalidation timing.
 
-### New table: `announcements`
+### 2. Closing the dialog (X button or Escape) dismisses ALL announcements
+`onOpenChange={() => handleDismissAll()}` means pressing Escape or clicking the X permanently dismisses every announcement. Users who just want to close and come back later lose all announcements forever.
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | uuid (PK) | |
-| `title` | text | Headline |
-| `content` | text | Rich description / markdown |
-| `type` | text | `'feature'`, `'update'`, `'tip'` |
-| `image_url` | text (nullable) | Screenshot or GIF |
-| `action_url` | text (nullable) | "Try it now" link |
-| `action_label` | text (nullable) | Button text |
-| `is_active` | boolean | Toggle visibility |
-| `priority` | integer | Sort order |
-| `target_role` | text (nullable) | `'agent'`, `'admin'`, or null for all |
-| `created_at` | timestamptz | |
-| `expires_at` | timestamptz (nullable) | Auto-hide after date |
-| `created_by` | uuid | Admin who created it |
+**Fix**: Change `onOpenChange` to only close the modal visually (e.g. set a local `isOpen` state to false), not dismiss. Only "Got it" should dismiss.
 
-### New table: `announcement_dismissals`
+### 3. handleDismissAll fires sequential mutations with invalidations
+The loop `for (const a of announcements) { await dismissAnnouncement.mutateAsync(a.id) }` invalidates the query after each mutation, causing the array to change mid-loop. Later iterations may reference stale data.
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | uuid (PK) | |
-| `announcement_id` | uuid (FK) | |
-| `user_id` | uuid | |
-| `dismissed_at` | timestamptz | |
+**Fix**: Either batch the dismissals or suppress query invalidation during the loop.
 
-Unique constraint on `(announcement_id, user_id)` so each user can only dismiss once.
+## Security Issues
 
-RLS: Agents can read active announcements and insert/read their own dismissals. Admins can CRUD announcements.
+### 4. Announcements SELECT policy is open to anonymous users
+The policy `USING (is_active = true)` has no `TO authenticated` clause, meaning unauthenticated/anonymous users can read all active announcements.
 
-## Frontend Components
+**Fix**: Add `TO authenticated` to the policy.
 
-### 1. `AnnouncementModal` (new component)
-- Shown inside `Layout.tsx` after login
-- Queries `announcements` where `is_active = true` and no matching row in `announcement_dismissals` for the current user
-- Renders as a dialog with: title, optional image/GIF, content text, optional CTA button, and a "Got it" dismiss button
-- If multiple announcements exist, shows them as paginated slides (dots at bottom, next/prev)
-- On dismiss, inserts into `announcement_dismissals`
+### 5. Dismissals table has no admin delete policy
+If an admin deletes an announcement, the CASCADE handles dismissals. But admins can't manually clean up orphaned dismissals if needed.
 
-### 2. Admin Announcements Page (new page at `/admin/announcements`)
-- Form to create/edit announcements: title, content, type badge, image URL, action URL, target role, expiry date
-- List of all announcements with toggle for `is_active`
-- Preview of how it will look to agents
+**Fix**: Add an admin DELETE policy on `announcement_dismissals`.
 
-### 3. Sidebar link
-- Add "Announcements" under the admin menu in `AppSidebar.tsx`
+## UX Improvements
 
-## Hook: `useAnnouncements`
-- Fetches un-dismissed, active, non-expired announcements for the current user
-- Provides `dismissAnnouncement` mutation
-- Admin version fetches all announcements for management
+### 6. No delete confirmation
+The trash button immediately deletes with no confirmation. Easy to accidentally destroy an announcement.
 
-## Files to Create/Modify
+**Fix**: Add an AlertDialog confirmation before delete.
 
-| File | Action |
-|------|-------|
-| DB migration | Create `announcements` and `announcement_dismissals` tables with RLS |
-| `src/hooks/useAnnouncements.ts` | New hook |
-| `src/components/announcements/AnnouncementModal.tsx` | New modal component |
-| `src/pages/AdminAnnouncements.tsx` | New admin page |
-| `src/components/layout/Layout.tsx` | Add `AnnouncementModal` |
-| `src/components/layout/AppSidebar.tsx` | Add admin menu link |
-| `src/App.tsx` | Add route `/admin/announcements` |
+### 7. No image upload -- admins must paste URLs
+The image field only accepts a URL. Admins would need to upload images elsewhere and paste the link.
 
-## No new dependencies needed
-Uses existing Dialog, Badge, Button, and form components.
+**Fix**: Add a file upload button that uploads to the existing `assets` storage bucket and populates the URL field automatically.
+
+### 8. No dismissal/read stats for admins
+Admins have no visibility into how many agents have seen or dismissed each announcement.
+
+**Fix**: Add a dismissal count next to each announcement in the admin list (simple count query from `announcement_dismissals`).
+
+### 9. `role` not in queryKey causing stale results
+The `useAnnouncements` hook filters by `role` client-side, but `role` isn't in the `queryKey`. If the role loads after the initial fetch, the cached result won't update.
+
+**Fix**: Add `role` to the queryKey: `['announcements', 'active', user?.id, role]`.
+
+### 10. typeConfig duplicated across two files
+The same `typeConfig` object is defined in both `AnnouncementModal.tsx` and `AdminAnnouncements.tsx`.
+
+**Fix**: Extract to a shared constants file.
+
+---
+
+## Implementation Plan
+
+### Migration (new SQL)
+- Update the announcements SELECT policy to add `TO authenticated`
+- Add admin DELETE policy on `announcement_dismissals`
+
+### `src/components/announcements/announcementConstants.ts` (new)
+- Extract shared `typeConfig` object
+
+### `src/hooks/useAnnouncements.ts`
+- Add `role` to the queryKey
+- Add a `dismissAllAnnouncements` mutation that batches inserts instead of looping with individual mutations
+
+### `src/components/announcements/AnnouncementModal.tsx`
+- Add `isOpen` local state so X/Escape just hides without dismissing
+- Add `if (!current) return null` guard
+- Use shared typeConfig import
+- "Got it" dismisses only the current one; closing the dialog just hides it temporarily (re-shows on next page load)
+
+### `src/pages/AdminAnnouncements.tsx`
+- Add AlertDialog confirmation before delete
+- Add dismissal count badge per announcement (query `announcement_dismissals` grouped by `announcement_id`)
+- Add image upload button using `assets` storage bucket
+- Use shared typeConfig import
+
+| File | Change |
+|------|--------|
+| New migration | Fix SELECT policy, add admin DELETE on dismissals |
+| `src/components/announcements/announcementConstants.ts` | New shared constants |
+| `src/hooks/useAnnouncements.ts` | Fix queryKey, add batch dismiss |
+| `src/components/announcements/AnnouncementModal.tsx` | Fix crash, fix close behavior, import shared constants |
+| `src/pages/AdminAnnouncements.tsx` | Delete confirmation, dismissal stats, image upload, shared constants |
 
