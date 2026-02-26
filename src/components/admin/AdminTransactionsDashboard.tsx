@@ -37,6 +37,7 @@ export function AdminTransactionsDashboard() {
     discoverData,
     syncAllAgents,
     discoverOTC,
+    getAgentDisplayInfo,
   } = useAdminTransactions();
 
   const [stageFilter, setStageFilter] = useState<string>('all');
@@ -58,12 +59,20 @@ export function AdminTransactionsDashboard() {
 
   const filteredTransactions = transactions.filter((t) => {
     if (stageFilter !== 'all' && t.transaction_stage !== stageFilter) return false;
-    if (agentFilter !== 'all' && t.responsible_agent !== agentFilter) return false;
+    if (agentFilter !== 'all') {
+      const info = getAgentDisplayInfo(t);
+      const key = t.responsible_agent || `ext_${info.name}`;
+      if (key !== agentFilter) return false;
+    }
     return true;
   });
 
   const agentDrillDown = selectedAgent
-    ? transactions.filter((t) => t.responsible_agent === selectedAgent.agentId)
+    ? transactions.filter((t) => {
+        const info = getAgentDisplayInfo(t);
+        const key = t.responsible_agent || `ext_${info.name}`;
+        return key === selectedAgent.agentId;
+      })
     : [];
 
   const totalTx = transactions.length;
@@ -78,6 +87,15 @@ export function AdminTransactionsDashboard() {
     { label: 'Avg Deal Velocity', value: `${teamMetrics.avgDealVelocity.toFixed(0)}d`, icon: Clock },
     { label: 'Closing Rate', value: `${teamMetrics.teamClosingRate.toFixed(0)}%`, icon: Trophy },
   ];
+
+  // Helper to render agent name — red if external/unmatched
+  const AgentName = ({ transaction }: { transaction: any }) => {
+    const info = getAgentDisplayInfo(transaction);
+    if (info.isExternal) {
+      return <span className="text-red-500 font-medium">{info.name}</span>;
+    }
+    return <span>{info.name}</span>;
+  };
 
   return (
     <div className="space-y-6">
@@ -130,7 +148,10 @@ export function AdminTransactionsDashboard() {
                     onClick={() => setSelectedAgent(selectedAgent?.agentId === agent.agentId ? null : agent)}
                   >
                     <TableCell>{rankBadge(i)}</TableCell>
-                    <TableCell className="font-medium">{agent.agentName}</TableCell>
+                    <TableCell className={`font-medium ${agent.isExternal ? 'text-red-500' : ''}`}>
+                      {agent.agentName}
+                      {agent.isExternal && <span className="text-xs text-red-400 ml-1">(not in Hub)</span>}
+                    </TableCell>
                     <TableCell className="text-right">{agent.closedDeals}</TableCell>
                     <TableCell className="text-right">{fmt(agent.totalGci)}</TableCell>
                     <TableCell className="text-right">{fmt(agent.salesVolume)}</TableCell>
@@ -151,7 +172,11 @@ export function AdminTransactionsDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
-              {selectedAgent.agentName} — Transaction Details
+              <span className={selectedAgent.isExternal ? 'text-red-500' : ''}>
+                {selectedAgent.agentName}
+                {selectedAgent.isExternal && <span className="text-xs text-red-400 ml-1">(not in Hub)</span>}
+              </span>
+              — Transaction Details
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -236,6 +261,7 @@ export function AdminTransactionsDashboard() {
                   <SelectItem value="all">All Stages</SelectItem>
                   <SelectItem value="under_contract">Under Contract</SelectItem>
                   <SelectItem value="closed">Closed</SelectItem>
+                  <SelectItem value="listing">Listing</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -266,7 +292,7 @@ export function AdminTransactionsDashboard() {
               ) : (
                  filteredTransactions.slice(0, 100).map((t) => (
                    <TableRow key={t.id}>
-                     <TableCell>{profiles[t.responsible_agent || ''] || '—'}</TableCell>
+                     <TableCell><AgentName transaction={t} /></TableCell>
                      <TableCell className="max-w-[180px] truncate">{t.property_address || '—'}</TableCell>
                      <TableCell>{t.client_name || '—'}</TableCell>
                      <TableCell>
@@ -356,6 +382,16 @@ export function AdminTransactionsDashboard() {
           {discoverData && (
             <div className="mt-4 space-y-3">
               <div className="text-sm font-medium">Discovery Results: {discoverData.reopCount} REOP properties out of {discoverData.totalFetched} sampled</div>
+              {discoverData.teamNameValues && (
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Team names found: </span>
+                  {discoverData.teamNameValues.map((tn: string, i: number) => (
+                    <Badge key={i} variant={tn.toLowerCase().includes('real estate on purpose') ? 'default' : 'outline'} className="mr-1">
+                      {tn}
+                    </Badge>
+                  ))}
+                </div>
+              )}
               <Collapsible>
                 <CollapsibleTrigger className="flex items-center gap-1 text-sm text-primary hover:underline">
                   <ChevronDown className="h-4 w-4" />
@@ -365,14 +401,16 @@ export function AdminTransactionsDashboard() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>RA Name (OTC)</TableHead>
+                        <TableHead>OTC Agent Name</TableHead>
+                        <TableHead>Team Name</TableHead>
                         <TableHead>Matched To</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {(discoverData.matchResults || []).map((m: any, i: number) => (
                         <TableRow key={i}>
-                          <TableCell>{m.raName}</TableCell>
+                          <TableCell>{m.otcAgentName || m.raName || '—'}</TableCell>
+                          <TableCell>{m.teamName || '—'}</TableCell>
                           <TableCell>
                             <Badge variant={m.userId ? 'default' : 'destructive'}>
                               {m.matched}
