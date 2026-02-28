@@ -39,7 +39,7 @@ const AdminTeamManagement = () => {
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
   const [editEmail, setEditEmail] = useState('');
-  const [editRole, setEditRole] = useState<'agent' | 'admin'>('agent');
+  const [editRole, setEditRole] = useState<'agent' | 'admin' | 'managed' | 'core'>('agent');
   const [editTeamName, setEditTeamName] = useState('');
   const [editBrokerage, setEditBrokerage] = useState('');
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
@@ -296,7 +296,7 @@ const AdminTeamManagement = () => {
     setEditFirstName(agent.first_name || '');
     setEditLastName(agent.last_name || '');
     setEditEmail(agent.email || '');
-    setEditRole(agent.role as 'agent' | 'admin');
+    setEditRole(agent.role as 'agent' | 'admin' | 'managed' | 'core');
 
     // Reset file upload states
     setHeadshotFile(null);
@@ -697,17 +697,21 @@ const AdminTeamManagement = () => {
                         </div>
 
                         <div className="flex items-center gap-3">
-                          <Badge variant={agent.role === 'admin' ? 'default' : 'secondary'}>
+                          <Badge 
+                            variant={agent.role === 'admin' ? 'default' : agent.role === 'agent' ? 'secondary' : 'outline'}
+                            className={
+                              agent.role === 'managed' ? 'border-blue-500 text-blue-700 dark:text-blue-400' :
+                              agent.role === 'core' ? 'border-amber-500 text-amber-700 dark:text-amber-400' : ''
+                            }
+                          >
                             {agent.role === 'admin' ? (
-                              <>
-                                <ShieldCheck className="h-3 w-3 mr-1" />
-                                Admin
-                              </>
+                              <><ShieldCheck className="h-3 w-3 mr-1" />Admin</>
+                            ) : agent.role === 'agent' ? (
+                              <><Shield className="h-3 w-3 mr-1" />Agent (DFY)</>
+                            ) : agent.role === 'managed' ? (
+                              <><Shield className="h-3 w-3 mr-1" />Managed</>
                             ) : (
-                              <>
-                                <Shield className="h-3 w-3 mr-1" />
-                                Agent
-                              </>
+                              <><Shield className="h-3 w-3 mr-1" />Core</>
                             )}
                           </Badge>
 
@@ -978,12 +982,14 @@ const AdminTeamManagement = () => {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Role</label>
-                  <Select value={editRole} onValueChange={(value: 'agent' | 'admin') => setEditRole(value)}>
+                  <Select value={editRole} onValueChange={(value: 'agent' | 'admin' | 'managed' | 'core') => setEditRole(value)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="agent">Agent</SelectItem>
+                      <SelectItem value="core">Core ($149/mo)</SelectItem>
+                      <SelectItem value="managed">Managed ($449/mo)</SelectItem>
+                      <SelectItem value="agent">Agent (DFY Premium)</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>

@@ -24,7 +24,7 @@ export const useAgents = () => {
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, role')
-        .in('role', ['agent', 'admin']);
+        .in('role', ['agent', 'admin', 'managed', 'core']);
       
       if (rolesError) {
         throw rolesError;
