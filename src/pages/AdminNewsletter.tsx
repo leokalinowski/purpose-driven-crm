@@ -12,8 +12,9 @@ import { FileText, BarChart3, Users, Plus, Eye, Mail, Calendar, TrendingUp, Spar
 import { format } from "date-fns";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -30,21 +31,38 @@ export default function AdminNewsletter() {
   } = useAdminNewsletter();
 
   const [aiDialogAgent, setAiDialogAgent] = useState<{ user_id: string; name: string } | null>(null);
-  const [topicHint, setTopicHint] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedPrompt, setSelectedPrompt] = useState<'market' | 'seasonal' | 'educational'>('market');
+
+  const getSeason = () => {
+    const month = new Date().getMonth();
+    if (month >= 2 && month <= 4) return 'Spring';
+    if (month >= 5 && month <= 7) return 'Summer';
+    if (month >= 8 && month <= 10) return 'Fall';
+    return 'Winter';
+  };
+
+  const defaultPrompts = {
+    market: 'Write a newsletter featuring current real estate market data and trends for [City/Area]. Include median home prices, inventory levels, days on market, and what this means for buyers and sellers right now.',
+    seasonal: `Write a newsletter about the ${getSeason()} ${new Date().getFullYear()} real estate market. Cover seasonal buying/selling trends, what homeowners should be doing this time of year, and market outlook for the coming months.`,
+    educational: 'Write an educational newsletter about the real estate process. Cover topics like home maintenance tips, understanding title insurance, how the transaction process works from offer to closing, or general homeownership advice that provides value to your database.',
+  };
+
+  const [prompts, setPrompts] = useState(defaultPrompts);
 
   const handleGenerateAI = async () => {
     if (!aiDialogAgent) return;
     setIsGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-ai-newsletter', {
-        body: { agent_id: aiDialogAgent.user_id, topic_hint: topicHint || undefined },
+        body: { agent_id: aiDialogAgent.user_id, topic_hint: prompts[selectedPrompt] },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       toast({ title: 'AI Newsletter Generated', description: `Draft created with ${data.block_count} blocks. Redirecting to editor...` });
       setAiDialogAgent(null);
-      setTopicHint('');
+      setPrompts(defaultPrompts);
+      setSelectedPrompt('market');
       navigate(`/newsletter-builder/${data.template_id}`);
     } catch (err: any) {
       toast({ title: 'Generation failed', description: err.message, variant: 'destructive' });
@@ -215,34 +233,47 @@ export default function AdminNewsletter() {
       </div>
 
       {/* AI Newsletter Generation Dialog */}
-      <Dialog open={!!aiDialogAgent} onOpenChange={(open) => { if (!open) { setAiDialogAgent(null); setTopicHint(''); } }}>
-        <DialogContent>
+      <Dialog open={!!aiDialogAgent} onOpenChange={(open) => { if (!open) { setAiDialogAgent(null); setPrompts(defaultPrompts); setSelectedPrompt('market'); } }}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5" />
               Generate AI Newsletter
             </DialogTitle>
             <DialogDescription>
-              Create an AI-generated newsletter draft for {aiDialogAgent?.name}. The AI will use their branding, tone guidelines, and content preferences.
+              Select a prompt template for {aiDialogAgent?.name}. Edit the text to customize before generating.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="topic-hint">Topic or Theme (optional)</Label>
-              <Input
-                id="topic-hint"
-                placeholder="e.g. Summer market update, Home maintenance tips..."
-                value={topicHint}
-                onChange={(e) => setTopicHint(e.target.value)}
-                disabled={isGenerating}
-              />
-              <p className="text-xs text-muted-foreground">
-                Leave blank for a general market update newsletter.
-              </p>
-            </div>
-          </div>
+          <RadioGroup value={selectedPrompt} onValueChange={(v) => setSelectedPrompt(v as any)} className="space-y-3 py-2">
+            {([
+              { key: 'market' as const, label: 'Market Data', icon: TrendingUp },
+              { key: 'seasonal' as const, label: 'Seasonal', icon: Calendar },
+              { key: 'educational' as const, label: 'Educational', icon: FileText },
+            ]).map(({ key, label, icon: Icon }) => (
+              <div
+                key={key}
+                className={`rounded-lg border p-3 cursor-pointer transition-colors ${selectedPrompt === key ? 'border-primary bg-primary/5' : 'border-border'}`}
+                onClick={() => setSelectedPrompt(key)}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <RadioGroupItem value={key} id={key} />
+                  <Label htmlFor={key} className="flex items-center gap-1.5 cursor-pointer font-medium">
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </Label>
+                </div>
+                <Textarea
+                  value={prompts[key]}
+                  onChange={(e) => setPrompts(prev => ({ ...prev, [key]: e.target.value }))}
+                  disabled={isGenerating || selectedPrompt !== key}
+                  className="min-h-[80px] text-sm"
+                  rows={3}
+                />
+              </div>
+            ))}
+          </RadioGroup>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setAiDialogAgent(null); setTopicHint(''); }} disabled={isGenerating}>
+            <Button variant="outline" onClick={() => { setAiDialogAgent(null); setPrompts(defaultPrompts); setSelectedPrompt('market'); }} disabled={isGenerating}>
               Cancel
             </Button>
             <Button onClick={handleGenerateAI} disabled={isGenerating}>
