@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { buildAuthRedirectPath } from '@/utils/authRedirect';
 
 const Events = () => {
   const { hasAccess, currentTier, getRequiredTier } = useFeatureAccess();
@@ -37,7 +38,7 @@ const Events = () => {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate('/auth');
+      navigate(buildAuthRedirectPath(), { replace: true });
     } else if (user) {
       document.title = 'Events | Real Estate on Purpose';
     }

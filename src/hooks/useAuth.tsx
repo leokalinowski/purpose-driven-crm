@@ -57,26 +57,35 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let initialised = false;
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
+        // Only set loading=false from the listener AFTER getSession has resolved,
+        // so we never briefly flash an unauthenticated state on page refresh.
+        if (initialised) {
+          setLoading(false);
+        }
       }
     );
 
-    // THEN check for existing session
+    // THEN check for existing session – this is the single source of truth
+    // for the initial loading state.
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
       })
       .catch((error) => {
         console.error('Error getting session:', error);
         setSession(null);
         setUser(null);
+      })
+      .finally(() => {
+        initialised = true;
         setLoading(false);
       });
 

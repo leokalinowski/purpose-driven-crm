@@ -28,6 +28,7 @@ import {
   Download,
   ArrowUpDown
 } from 'lucide-react';
+import { buildAuthRedirectPath } from '@/utils/authRedirect';
 import { toast } from '@/hooks/use-toast';
 
 interface EmailLog {
@@ -88,7 +89,7 @@ const AdminEmailLogs = () => {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate('/auth');
+      navigate(buildAuthRedirectPath(), { replace: true });
     } else if (!roleLoading && !isAdmin) {
       navigate('/');
     }

@@ -17,6 +17,7 @@ import { SphereSyncAccountability } from '@/components/admin/SphereSyncAccountab
 import { AdminTransactionsDashboard } from '@/components/admin/AdminTransactionsDashboard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { buildAuthRedirectPath } from '@/utils/authRedirect';
 
 const AdminDashboard = () => {
   const { user, loading: authLoading } = useAuth();
@@ -26,7 +27,7 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate('/auth');
+      navigate(buildAuthRedirectPath(), { replace: true });
     } else if (!roleLoading && !isAdmin) {
       navigate('/');
     } else if (user && isAdmin) {

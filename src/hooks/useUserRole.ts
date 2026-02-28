@@ -5,7 +5,7 @@ import { useAuth } from './useAuth';
 type AppRole = 'admin' | 'editor' | 'agent' | 'managed' | 'core' | string;
 
 export const useUserRole = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -16,6 +16,12 @@ export const useUserRole = () => {
   }, []);
 
   const fetchUserRole = useCallback(async () => {
+    // While auth is still loading, keep role in loading state too
+    // so downstream guards don't redirect prematurely.
+    if (authLoading) {
+      return;
+    }
+
     if (!user) {
       setRole(null);
       setError(null);
@@ -44,7 +50,7 @@ export const useUserRole = () => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   useEffect(() => {
     fetchUserRole();
