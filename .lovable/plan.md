@@ -1,64 +1,30 @@
 
 
-# Fix OTC Sync: Rate Limit Crash + Paginated Architecture
+# Fix: Admin Newsletter Page Crash — `r.map is not a function`
 
 ## Root Cause
 
-The logs show the exact failure:
-
-```
-OTC API error [/properties?limit=50&offset=250]: 429 {"message":"rate limit exceeded"}
-Sync error: Error: OTC API 429: Too Many Requests
-```
-
-The function tries to fetch **all 2,493 properties** in memory before syncing any. With a 1.2s delay between 50-property pages, it hits OTC's rate limit after ~5 pages (250 properties). The entire function crashes, saving **zero records**. The DB is empty.
-
-## Fix: Paginated Batch Sync
-
-Instead of fetching everything then syncing, process **one batch per function invocation**. The frontend loops through batches.
-
-### Edge Function Changes (`opentoclose-sync/index.ts`)
-
-**A. Add retry with exponential backoff to `otcFetch`:**
-- On 429, wait 5s then retry (up to 3 times)
-- Increase base delay between pages from 1.2s to 3s
-
-**B. New `mode: 'batch'` — process one page at a time:**
-- Accept `offset` parameter (default 0)
-- Fetch one page of 50 properties
-- Filter for REOP (`team_name` contains "Real Estate on Purpose")
-- Upsert matching properties immediately
-- Return `{ offset, synced, hasMore, nextOffset }` so frontend can loop
-
-**C. Keep `mode: 'discover'` as-is** (only fetches 200 properties, usually OK)
-
-**D. Remove the old full-fetch `mode: 'team'`** — replace with batch orchestration
-
-### Frontend Changes (`useAdminTransactions.ts`)
-
-**Replace `syncAllAgents` with batch loop:**
-```
-async syncAllAgents():
-  offset = 0
-  totalSynced = 0
-  loop:
-    invoke('opentoclose-sync', { mode: 'batch', offset })
-    totalSynced += result.synced
-    if !result.hasMore: break
-    offset = result.nextOffset
-    wait 1s between calls
-  refetch data
+The `TemplateThumbnail` component on the Admin Newsletter page calls `renderBlocksToHtml()` for every template to generate iframe previews. Inside `renderSocialIcons()`, the code does:
+```js
+const links = props.links || [];
+links.map(...)
 ```
 
-This avoids edge function timeouts and respects OTC rate limits since each invocation only makes 1 API call.
+If any template in the database has a `social_icons` block where `links` is stored as a non-array truthy value (e.g., a JSON object, string, or `null` that gets deserialized oddly), the `|| []` fallback doesn't trigger and `.map()` crashes. This crashes the entire page via the ErrorBoundary.
 
-### Dashboard Changes (`AdminTransactionsDashboard.tsx`)
+The same vulnerability exists in `BlockRenderer.tsx` line 343 and `renderBlocksToHtml.ts` line 145.
 
-- Show sync progress during batch loop: "Syncing... page 3, 12 REOP found so far"
-- Keep all existing UI (leaderboard, tables, KPIs, red external agents)
+## Fix
 
-## Files to Modify
-- `supabase/functions/opentoclose-sync/index.ts` — retry logic, batch mode, remove full-fetch
-- `src/hooks/useAdminTransactions.ts` — batch loop sync
-- `src/components/admin/AdminTransactionsDashboard.tsx` — sync progress display
+### 1. `src/components/newsletter/builder/renderBlocksToHtml.ts`
+- Line 145: Change `const links = props.links || []` to `const links = Array.isArray(props.links) ? props.links : []`
+- Line 94 (listings): Same fix for `listings` array: `Array.isArray(props.listings) ? props.listings : []`
+
+### 2. `src/components/newsletter/builder/BlockRenderer.tsx`
+- Line 343: Change `const links = block.props.links || []` to `const links = Array.isArray(block.props.links) ? block.props.links : []`
+
+### 3. `src/components/newsletter/builder/renderBlocksToHtml.ts`
+- Wrap the entire `renderBlock` function body in a try/catch that returns an empty string on error, so one bad block doesn't crash the whole page
+
+These are 3 small surgical changes — no structural changes needed.
 
