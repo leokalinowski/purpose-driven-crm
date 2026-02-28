@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEvents } from '@/hooks/useEvents';
 import { useContacts } from '@/hooks/useContacts';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { Layout } from '@/components/layout/Layout';
+import { UpgradePrompt } from '@/components/ui/UpgradePrompt';
 import { EventProgressDashboard } from '@/components/events/EventProgressDashboard';
 import { EventForm } from '@/components/events/EventForm';
 import { RSVPManagement } from '@/components/events/RSVPManagement';
@@ -17,6 +19,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 const Events = () => {
+  const { hasAccess, currentTier, getRequiredTier } = useFeatureAccess();
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -61,6 +64,19 @@ const Events = () => {
   }
 
   if (!user) return null;
+
+  if (!hasAccess('/events')) {
+    return (
+      <Layout>
+        <UpgradePrompt
+          featureName="Events"
+          requiredTier={getRequiredTier('/events') || 'managed'}
+          currentTier={currentTier}
+          description="Plan, manage, and track your client appreciation events, seminars, and workshops with RSVP tracking and email invitations."
+        />
+      </Layout>
+    );
+  }
 
   const nextEvent = getNextEvent();
   const eligibleContactCount = contacts.filter(c => !c.dnc && c.email).length;

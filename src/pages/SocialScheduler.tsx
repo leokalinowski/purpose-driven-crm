@@ -2,12 +2,28 @@ import { Helmet } from 'react-helmet-async';
 import { Layout } from '@/components/layout/Layout';
 import { MetricoolIframe } from '@/components/metricool/MetricoolIframe';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { UpgradePrompt } from '@/components/ui/UpgradePrompt';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function SocialScheduler() {
   const { isAdmin } = useUserRole();
+  const { hasAccess, currentTier, getRequiredTier } = useFeatureAccess();
+
+  if (!hasAccess('/social-scheduler')) {
+    return (
+      <Layout>
+        <UpgradePrompt
+          featureName="Social Media Management"
+          requiredTier={getRequiredTier('/social-scheduler') || 'managed'}
+          currentTier={currentTier}
+          description="Access your social media dashboard to schedule posts, track analytics, and grow your real estate business online."
+        />
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

@@ -6,6 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -25,7 +32,15 @@ interface UserData {
   email_confirmed_at: string | null;
   profile_exists: boolean;
   profile_id?: string;
+  current_role?: string;
 }
+
+const ROLE_OPTIONS = [
+  { value: 'core', label: 'Core ($149/mo)' },
+  { value: 'managed', label: 'Managed ($449/mo)' },
+  { value: 'agent', label: 'Agent (DFY Premium)' },
+  { value: 'admin', label: 'Admin' },
+] as const;
 
 export const UserManagement = () => {
   const [searchEmail, setSearchEmail] = useState('');
@@ -62,13 +77,23 @@ export const UserManagement = () => {
         return;
       }
 
+      // Get role from user_roles table
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', profileData.user_id)
+        .order('role')
+        .limit(1)
+        .maybeSingle();
+
       setUserData({
         id: profileData.user_id,
         email: profileData.email || searchEmail,
         created_at: profileData.created_at,
-        email_confirmed_at: null, // We can't access this from profiles
+        email_confirmed_at: null,
         profile_exists: true,
         profile_id: profileData.user_id,
+        current_role: roleData?.role || 'agent',
       });
     } catch (error: any) {
       toast({
@@ -191,6 +216,51 @@ export const UserManagement = () => {
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground">User ID:</span>
                         <span className="text-xs font-mono">{userData.id}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 pt-2">
+                        <span className="text-muted-foreground">Role / Tier:</span>
+                        <Select
+                          value={userData.current_role || 'agent'}
+                          onValueChange={async (newRole) => {
+                            try {
+                              // Delete existing roles and insert new one
+                              await supabase
+                                .from('user_roles')
+                                .delete()
+                                .eq('user_id', userData.id);
+                              
+                              const { error } = await supabase
+                                .from('user_roles')
+                                .insert([{ user_id: userData.id, role: newRole as any }]);
+                              
+                              if (error) throw error;
+                              
+                              setUserData({ ...userData, current_role: newRole });
+                              toast({
+                                title: 'Role updated',
+                                description: `${userData.email} is now "${newRole}"`,
+                              });
+                            } catch (err: any) {
+                              toast({
+                                title: 'Error updating role',
+                                description: err.message,
+                                variant: 'destructive',
+                              });
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-[200px] h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ROLE_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   </div>

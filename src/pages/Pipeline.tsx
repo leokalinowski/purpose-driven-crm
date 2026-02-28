@@ -5,11 +5,14 @@ import { PipelineBoard } from "@/components/pipeline/PipelineBoard";
 import { PipelineMetrics } from "@/components/pipeline/PipelineMetrics";
 import { AddOpportunityDialog } from "@/components/pipeline/AddOpportunityDialog";
 import { EditOpportunityDialog } from "@/components/pipeline/EditOpportunityDialog";
+import { UpgradePrompt } from "@/components/ui/UpgradePrompt";
 import { usePipeline, Opportunity } from "@/hooks/usePipeline";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 
 export default function Pipeline() {
+  const { hasAccess, currentTier, getRequiredTier } = useFeatureAccess();
   const { opportunities, metrics, loading, updateStage, createOpportunity, refresh } = usePipeline();
   const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -18,6 +21,19 @@ export default function Pipeline() {
     setEditingOpportunity(opportunity);
     setEditDialogOpen(true);
   };
+
+  if (!hasAccess('/pipeline')) {
+    return (
+      <Layout>
+        <UpgradePrompt
+          featureName="Pipeline"
+          requiredTier={getRequiredTier('/pipeline') || 'managed'}
+          currentTier={currentTier}
+          description="Track your deals from lead to closing with a visual Kanban board, metrics, and deal management tools."
+        />
+      </Layout>
+    );
+  }
 
   return (
     <>
