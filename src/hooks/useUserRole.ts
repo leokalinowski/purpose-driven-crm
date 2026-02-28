@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
-type AppRole = 'admin' | 'editor' | 'agent' | string;
+type AppRole = 'admin' | 'editor' | 'agent' | 'managed' | 'core' | string;
 
 export const useUserRole = () => {
   const { user } = useAuth();
@@ -52,11 +52,17 @@ export const useUserRole = () => {
 
   const isAdmin = role === 'admin';
   const isEditor = role === 'editor';
+  const isAgent = role === 'agent';
+  const isManaged = role === 'managed';
+  const isCore = role === 'core';
 
   return {
     role,
     isAdmin,
     isEditor,
+    isAgent,
+    isManaged,
+    isCore,
     loading,
     error,
     refetch,
