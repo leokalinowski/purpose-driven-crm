@@ -1,30 +1,77 @@
-
-
-# Improve AI Newsletter Generator Dialog — 3 Editable Prompt Options
+# Add Subscription Tiers: Core & Managed Access Levels
 
 ## Current State
-The dialog has a single free-text `Input` for an optional topic hint. The user types a theme or leaves it blank.
 
-## Change
-Replace the single input with **3 pre-filled prompt options** displayed as editable `Textarea` fields, each with a label and description. The user selects one (radio-style) and can edit the prompt text before generating.
+- `app_role` enum: `admin | editor | agent`
+- `user_roles` table + `get_current_user_role()` RPC
+- All agents see all sidebar items
 
-### Prompt Templates
+## New Access Hierarchy (highest to lowest)
 
-1. **Market Data** — Pre-filled with: *"Write a newsletter featuring current real estate market data and trends for [City/Area]. Include median home prices, inventory levels, days on market, and what this means for buyers and sellers right now."*
+1. **Admin** — full access + admin panel
+2. **Agent** — existing DFY premium, all tabs (no change for current users)
+3. **Managed** ($449) — Core + Events, Social Media, Pipeline
+4. **Core** ($149) — SphereSync, Database, Scoreboard, Newsletter, DNC, Support Hub, basic Dashboard
 
-2. **Seasonal** — Pre-filled with a dynamically computed prompt based on the current month/season: *"Write a newsletter about the [Season] [Year] real estate market. Cover seasonal buying/selling trends, what homeowners should be doing this time of year, and market outlook for the coming months."*
+## Step 1: Database Migration
 
-3. **Educational** — Pre-filled with: *"Write an educational newsletter about the real estate process. Cover topics like home maintenance tips, understanding title insurance, how the transaction process works from offer to closing, or general homeownership advice that provides value to your database."*
+Add `core` and `managed` to the `app_role` enum:
 
-### UI Design
-- 3 cards/sections, each with a radio button, title, and an editable `Textarea` showing the prompt
-- Selecting a card highlights it; the textarea for the selected option is fully editable
-- The selected prompt text is sent as `topic_hint` to the edge function
-- Dialog width increased slightly (`max-w-2xl`) to accommodate the textareas
+```sql
+ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'managed';
+ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'core';
+```
 
-### File to Modify
-- `src/pages/AdminNewsletter.tsx` — Replace the single input with the 3-option prompt selector UI, add state for selected option and prompt texts
+Update `get_current_user_role()` to handle the new priority order: admin(1) > editor(2) > agent(3) > managed(4) > core(5).
 
-### No backend changes needed
-The `topic_hint` parameter already accepts any string and is passed directly to the AI system prompt.
+## Step 2: Feature Access Map + Hook
 
+Create `src/hooks/useFeatureAccess.ts`:
+
+- Define a `FEATURE_ACCESS` constant mapping each nav route to minimum tier
+- Expose `hasAccess(feature)` that checks current role against the map
+- Admin and agent roles bypass all checks (full access)
+- Core users see: `/`, `/spheresync-tasks`, `/database`, `/coaching`, `/newsletter`, `/support`
+- Managed users see all Core routes + `/events`, `/social-scheduler`
+
+## Step 3: Sidebar Gating (`AppSidebar.tsx`)
+
+- Import `useFeatureAccess`
+- Filter `menuItems` array: only show items the user's tier can access
+- Show a lock icon + "Upgrade" badge on items the user can't access (visible but not navigable)
+
+## Step 4: Page-Level Guards
+
+- Create `src/components/ui/UpgradePrompt.tsx` — displays current tier, required tier, and feature description
+- Wrap gated pages (Events, SocialScheduler, Pipeline) with a tier check: if insufficient, render `UpgradePrompt` instead of page content
+
+## Step 5: Admin Tier Assignment UI
+
+- Extend `UserManagement.tsx` (or the Team Management page) with a dropdown to assign `core`, `managed`, or `agent` role to any user
+- Uses existing `admin-update-user-metadata` edge function pattern or direct `user_roles` table update
+
+## Step 6: Update TypeScript Types
+
+- Update `src/integrations/supabase/types.ts` to include `core` and `managed` in the `app_role` enum type
+- Update `useUserRole.ts` type to include the new roles
+
+## Files to Create
+
+- `src/hooks/useFeatureAccess.ts`
+- `src/components/ui/UpgradePrompt.tsx`
+
+## Files to Modify
+
+- `src/integrations/supabase/types.ts` (enum update)
+- `src/hooks/useUserRole.ts` (add `isAgent`, `isManaged`, `isCore` helpers)
+- `src/components/layout/AppSidebar.tsx` (filter nav items by tier)
+- `src/pages/Events.tsx`, `src/pages/SocialScheduler.tsx`, `src/pages/Pipeline.tsx` (page guards)
+- `src/components/admin/UserManagement.tsx` (tier assignment dropdown)
+- 1 Supabase migration (enum + function update)
+
+## What Does NOT Change
+
+- Existing agents keep `agent` role — no data migration needed, full access preserved
+- Admin access unchanged
+- All RLS policies continue working (they check `admin` or `auth.uid()`, not tier)
+- No Stripe integration in this phase
