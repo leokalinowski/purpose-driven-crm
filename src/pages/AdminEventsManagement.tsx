@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { format, startOfToday } from 'date-fns';
 import { EventForm } from '@/components/events/EventForm';
+import { buildAuthRedirectPath } from '@/utils/authRedirect';
 import { RSVPManagement } from '@/components/events/RSVPManagement';
 import { EmailManagement } from '@/components/events/email/EmailManagement';
 import { AdminEventTasks } from '@/components/admin/AdminEventTasks';
@@ -79,7 +80,7 @@ interface EventStats {
 type TaskStatsMap = Record<string, { total: number; completed: number }>;
 
 const AdminEventsManagement = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -106,10 +107,15 @@ const AdminEventsManagement = () => {
   });
 
   useEffect(() => {
-    if (!roleLoading && !isAdmin) {
+    if (authLoading || roleLoading) return;
+    if (!user) {
+      navigate(buildAuthRedirectPath(), { replace: true });
+      return;
+    }
+    if (!isAdmin) {
       navigate('/');
     }
-  }, [isAdmin, roleLoading, navigate]);
+  }, [user, isAdmin, authLoading, roleLoading, navigate]);
 
   useEffect(() => {
     if (isAdmin && user) {

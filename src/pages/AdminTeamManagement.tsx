@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAgents, Agent } from '@/hooks/useAgents';
 import { AgentMarketingSettingsForm } from '@/components/admin/AgentMarketingSettingsForm';
 import { Copy, Mail, Plus, Users, Clock, CheckCircle, XCircle, Trash2, Edit, Shield, ShieldCheck, Upload, X, Settings2 } from 'lucide-react';
+import { buildAuthRedirectPath } from '@/utils/authRedirect';
 import { format, isAfter } from 'date-fns';
 
 interface Invitation {
@@ -67,18 +68,19 @@ const AdminTeamManagement = () => {
   const [marketingSettingsAgent, setMarketingSettingsAgent] = useState<Agent | null>(null);
   const [marketingDialogOpen, setMarketingDialogOpen] = useState(false);
 
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { agents, fetchAgents, getAgentDisplayName } = useAgents();
 
   useEffect(() => {
+    if (authLoading) return;
     if (!user) {
-      navigate('/auth');
+      navigate(buildAuthRedirectPath(), { replace: true });
       return;
     }
     fetchInvitations();
     fetchAgents();
-  }, [user, navigate, fetchAgents]);
+  }, [user, authLoading, navigate, fetchAgents]);
 
   const fetchInvitations = async () => {
     try {

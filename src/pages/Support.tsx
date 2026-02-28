@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LifeBuoy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { buildAuthRedirectPath } from '@/utils/authRedirect';
 import { Layout } from '@/components/layout/Layout';
 import { ActionItemsBanner } from '@/components/support/ActionItemsBanner';
 import { ActionItemsCard } from '@/components/support/ActionItemsCard';
@@ -31,7 +32,7 @@ const Support = () => {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate('/auth');
+      navigate(buildAuthRedirectPath(), { replace: true });
     } else if (user && !authLoading) {
       document.title = 'Support Hub | Real Estate on Purpose';
     }

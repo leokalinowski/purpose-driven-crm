@@ -11,6 +11,7 @@ import { SupportWidget } from '@/components/support/SupportWidget';
 import { EventsWidget } from '@/components/events/EventsWidget';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { buildAuthRedirectPath } from '@/utils/authRedirect';
 
 const Index = () => {
   const { user, loading } = useAuth();
@@ -18,7 +19,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!loading && !user) {
-      navigate('/auth');
+      navigate(buildAuthRedirectPath(), { replace: true });
     } else if (user && !loading) {
       document.title = 'Agent Dashboard | Real Estate on Purpose';
     }

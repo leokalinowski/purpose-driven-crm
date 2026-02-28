@@ -26,6 +26,7 @@ import {
   Users,
   Mail
 } from 'lucide-react';
+import { buildAuthRedirectPath } from '@/utils/authRedirect';
 import { getCurrentWeekTasks } from '@/utils/sphereSyncLogic';
 
 interface RunLog {
@@ -83,7 +84,7 @@ export default function AdminSphereSyncRecovery() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate('/auth');
+      navigate(buildAuthRedirectPath(), { replace: true });
     } else if (!roleLoading && !isAdmin) {
       navigate('/');
     }
