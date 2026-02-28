@@ -88,7 +88,7 @@ function renderAgentBio(props: Record<string, any>): string {
 }
 
 function renderListings(props: Record<string, any>): string {
-  const listings = props.listings || [];
+  const listings = Array.isArray(props.listings) ? props.listings : [];
   const style = props.style || 'grid';
 
   if (listings.length === 0) {
@@ -142,7 +142,7 @@ function renderListings(props: Record<string, any>): string {
 function renderSocialIcons(props: Record<string, any>): string {
   const align = props.align || 'center';
   const iconSize = props.iconSize || 24;
-  const links: { platform: string; url: string }[] = props.links || [];
+  const links: { platform: string; url: string }[] = Array.isArray(props.links) ? props.links : [];
   const platformColors: Record<string, string> = {
     facebook: '#1877F2', instagram: '#E4405F', linkedin: '#0A66C2',
     twitter: '#000000', youtube: '#FF0000', tiktok: '#000000',
@@ -169,37 +169,42 @@ function renderSocialIcons(props: Record<string, any>): string {
 }
 
 function renderBlock(block: NewsletterBlock, globalStyles: GlobalStyles): string {
-  let content = '';
-  switch (block.type) {
-    case 'heading': content = renderHeading(block.props); break;
-    case 'text': content = renderText(block.props); break;
-    case 'image': content = renderImage(block.props); break;
-    case 'button': content = renderButton(block.props); break;
-    case 'divider': content = renderDivider(block.props); break;
-    case 'spacer': content = renderSpacer(block.props); break;
-    case 'agent_bio': content = renderAgentBio(block.props); break;
-    case 'listings': content = renderListings(block.props); break;
-    case 'social_icons': content = renderSocialIcons(block.props); break;
-    case 'columns': {
-      const cols = block.children || [];
-      const colCount = cols.length || 2;
-      const gap = block.props.gap || 16;
-      const colWidth = Math.floor(100 / colCount);
-      content = `<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`;
-      cols.forEach((col, i) => {
-        content += `<td class="nl-col" style="width:${colWidth}%;vertical-align:top;${i < cols.length - 1 ? `padding-right:${gap}px;` : ''}">`;
-        col.forEach(child => { content += renderBlock(child, globalStyles); });
-        content += `</td>`;
-      });
-      content += `</tr></table>`;
-      break;
+  try {
+    let content = '';
+    switch (block.type) {
+      case 'heading': content = renderHeading(block.props); break;
+      case 'text': content = renderText(block.props); break;
+      case 'image': content = renderImage(block.props); break;
+      case 'button': content = renderButton(block.props); break;
+      case 'divider': content = renderDivider(block.props); break;
+      case 'spacer': content = renderSpacer(block.props); break;
+      case 'agent_bio': content = renderAgentBio(block.props); break;
+      case 'listings': content = renderListings(block.props); break;
+      case 'social_icons': content = renderSocialIcons(block.props); break;
+      case 'columns': {
+        const cols = block.children || [];
+        const colCount = cols.length || 2;
+        const gap = block.props.gap || 16;
+        const colWidth = Math.floor(100 / colCount);
+        content = `<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`;
+        cols.forEach((col, i) => {
+          content += `<td class="nl-col" style="width:${colWidth}%;vertical-align:top;${i < cols.length - 1 ? `padding-right:${gap}px;` : ''}">`;
+          col.forEach(child => { content += renderBlock(child, globalStyles); });
+          content += `</td>`;
+        });
+        content += `</tr></table>`;
+        break;
+      }
+      case 'html_raw':
+        content = block.props.html || '';
+        break;
+      default: content = `<div style="color:#999;font-size:14px;padding:12px;">[${block.type} block]</div>`;
     }
-    case 'html_raw':
-      content = block.props.html || '';
-      break;
-    default: content = `<div style="color:#999;font-size:14px;padding:12px;">[${block.type} block]</div>`;
+    return `<div style="padding:8px 0;">${content}</div>`;
+  } catch (e) {
+    console.error('renderBlock error:', e);
+    return '';
   }
-  return `<div style="padding:8px 0;">${content}</div>`;
 }
 
 function replaceAgentPlaceholders(html: string, agent: AgentData): string {

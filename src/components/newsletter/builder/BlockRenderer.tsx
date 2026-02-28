@@ -340,7 +340,7 @@ function BlockPreview({
       );
     }
     case 'social_icons': {
-      const links: { platform: string; url: string }[] = block.props.links || [];
+      const links: { platform: string; url: string }[] = Array.isArray(block.props.links) ? block.props.links : [];
       return (
         <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-4" style={{ textAlign: block.props.align }}>
           {links.length > 0 ? (
