@@ -1,30 +1,30 @@
 
 
-# Fix: Admin Newsletter Page Crash — `r.map is not a function`
+# Improve AI Newsletter Generator Dialog — 3 Editable Prompt Options
 
-## Root Cause
+## Current State
+The dialog has a single free-text `Input` for an optional topic hint. The user types a theme or leaves it blank.
 
-The `TemplateThumbnail` component on the Admin Newsletter page calls `renderBlocksToHtml()` for every template to generate iframe previews. Inside `renderSocialIcons()`, the code does:
-```js
-const links = props.links || [];
-links.map(...)
-```
+## Change
+Replace the single input with **3 pre-filled prompt options** displayed as editable `Textarea` fields, each with a label and description. The user selects one (radio-style) and can edit the prompt text before generating.
 
-If any template in the database has a `social_icons` block where `links` is stored as a non-array truthy value (e.g., a JSON object, string, or `null` that gets deserialized oddly), the `|| []` fallback doesn't trigger and `.map()` crashes. This crashes the entire page via the ErrorBoundary.
+### Prompt Templates
 
-The same vulnerability exists in `BlockRenderer.tsx` line 343 and `renderBlocksToHtml.ts` line 145.
+1. **Market Data** — Pre-filled with: *"Write a newsletter featuring current real estate market data and trends for [City/Area]. Include median home prices, inventory levels, days on market, and what this means for buyers and sellers right now."*
 
-## Fix
+2. **Seasonal** — Pre-filled with a dynamically computed prompt based on the current month/season: *"Write a newsletter about the [Season] [Year] real estate market. Cover seasonal buying/selling trends, what homeowners should be doing this time of year, and market outlook for the coming months."*
 
-### 1. `src/components/newsletter/builder/renderBlocksToHtml.ts`
-- Line 145: Change `const links = props.links || []` to `const links = Array.isArray(props.links) ? props.links : []`
-- Line 94 (listings): Same fix for `listings` array: `Array.isArray(props.listings) ? props.listings : []`
+3. **Educational** — Pre-filled with: *"Write an educational newsletter about the real estate process. Cover topics like home maintenance tips, understanding title insurance, how the transaction process works from offer to closing, or general homeownership advice that provides value to your database."*
 
-### 2. `src/components/newsletter/builder/BlockRenderer.tsx`
-- Line 343: Change `const links = block.props.links || []` to `const links = Array.isArray(block.props.links) ? block.props.links : []`
+### UI Design
+- 3 cards/sections, each with a radio button, title, and an editable `Textarea` showing the prompt
+- Selecting a card highlights it; the textarea for the selected option is fully editable
+- The selected prompt text is sent as `topic_hint` to the edge function
+- Dialog width increased slightly (`max-w-2xl`) to accommodate the textareas
 
-### 3. `src/components/newsletter/builder/renderBlocksToHtml.ts`
-- Wrap the entire `renderBlock` function body in a try/catch that returns an empty string on error, so one bad block doesn't crash the whole page
+### File to Modify
+- `src/pages/AdminNewsletter.tsx` — Replace the single input with the 3-option prompt selector UI, add state for selected option and prompt texts
 
-These are 3 small surgical changes — no structural changes needed.
+### No backend changes needed
+The `topic_hint` parameter already accepts any string and is passed directly to the AI system prompt.
 
