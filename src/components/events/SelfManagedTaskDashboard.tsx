@@ -155,7 +155,7 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
     return (
       <div className="space-y-4">
         <Skeleton className="h-40 w-full" />
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24" />)}
         </div>
         <Skeleton className="h-64 w-full" />
@@ -283,7 +283,7 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
                   </Badge>
                 </button>
                 {!isCollapsed && (
-                  <div className="space-y-1 ml-6">
+                  <div className="space-y-1 sm:ml-6">
                     {group.tasks.map((task) => {
                       const status = task.status || 'pending';
                       const isComplete = status === 'completed';
