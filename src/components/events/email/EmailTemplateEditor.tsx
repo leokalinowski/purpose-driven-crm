@@ -254,6 +254,7 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
                 emailType={emailType}
                 htmlContent={htmlContent}
                 onHtmlChange={setHtmlContent}
+                agentColors={eventData?.primary_color && eventData?.secondary_color ? { primary: eventData.primary_color, secondary: eventData.secondary_color } : undefined}
               />
               )}
             </div>
