@@ -1,90 +1,57 @@
 
 
-## Plan: Self-Service Account Settings + Unified Branding
+## Plan: Uploadable Images + Unified Branding References
 
-### Problem
+### Issues Found
 
-There are **two separate copies of branding colors** being maintained:
-1. **`profiles` table** -- written by the Admin "Edit" button in Team Management (lines 448-466 of AdminTeamManagement.tsx)
-2. **`agent_marketing_settings` table** -- written by the Admin "Marketing" button
+**1. No file upload for headshot/logos in Settings or AgentMarketingSettingsForm**
+The Branding tab in `AgentMarketingSettingsForm` only has text URL inputs for headshot, colored logo, and white logo. Users cannot upload files -- they must paste URLs manually. The file upload functionality only exists in `AdminTeamManagement.tsx`.
 
-Most edge functions (event emails, RSVP confirmation, invitation emails) read branding from `profiles`. The EventForm was recently updated to read from `agent_marketing_settings`. These two sources frequently disagree.
+**2. Two places still read branding from `profiles` instead of `agent_marketing_settings`**
+- `src/hooks/useRSVP.ts` line 216: `getEventBySlug` fetches `primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url` from `profiles`
+- `src/components/events/email/EmailManagement.tsx` line 105: email preview loads branding from `profiles`
 
-Additionally, there is **no Settings page** for non-admin users. They cannot edit their own name, brokerage, phone, branding, logos, etc.
+These are the last two places in the frontend reading branding from `profiles`. Everything else (edge functions, EventForm, useEvents, NewsletterBuilder) already reads from `agent_marketing_settings`.
 
-### Solution
+**3. `event-email-scheduler` edge function still falls back to `profiles` for images**
+The `makeReplaceVars` function (line 81-83) uses `event.profiles?.headshot_url || event._marketingBranding?.headshot_url` -- profiles is checked first. Since the profiles JOIN (line 237) no longer selects branding columns, this works by accident (profiles fields are undefined, so it falls through to marketing settings). But the code is misleading and fragile.
 
-1. **Make `agent_marketing_settings` the single source of truth for branding** (colors, headshot, logos). Remove branding fields from the `profiles` update flow in Admin Team Management -- instead sync them to `agent_marketing_settings`.
+**4. Storage: no DELETE policy for non-admin users**
+Users can upload to `agent-assets` bucket but cannot delete/replace their own files. They need UPDATE and DELETE policies to manage their own images.
 
-2. **Create a `/settings` page** available to ALL tiers where users can edit their own profile info and branding.
+### Implementation
 
-3. **Update edge functions** to read branding from `agent_marketing_settings` instead of `profiles`.
+**1. Add file upload to `AgentMarketingSettingsForm` (Branding tab)**
 
-4. **Restrict admin-only tabs** (Integrations, Images, Backgrounds) when rendered in self-service mode.
+Replace the three plain text inputs (headshot, colored logo, white logo) with upload components that:
+- Show a file input + current image preview
+- Upload to `agent-assets/{userId}/headshot.ext`, `agent-assets/{userId}/logo-colored.ext`, `agent-assets/{userId}/logo-white.ext`
+- Include a delete/clear button
+- Fall back to manual URL input
 
-### Implementation Details
+**2. Fix `useRSVP.ts` -- read branding from `agent_marketing_settings`**
 
-**1. New RLS policies on `agent_marketing_settings`**
+In `getEventBySlug`, after fetching the event and profile (for name, contact info), also fetch branding from `agent_marketing_settings` and merge it into the returned data. Remove branding columns from the profiles query.
 
-Migration to add INSERT and UPDATE policies so users can manage their own row:
-- `Users can insert their own marketing settings` (INSERT, `user_id = auth.uid()`)
-- `Users can update their own marketing settings` (UPDATE, `user_id = auth.uid()`)
+**3. Fix `EmailManagement.tsx` -- read branding from `agent_marketing_settings`**
 
-**2. Create `/settings` page (`src/pages/Settings.tsx`)**
+In `loadPreviewData`, fetch branding from `agent_marketing_settings` instead of `profiles`. Keep profiles query for contact info only (name, email, phone, etc.).
 
-A new page that:
-- Loads profile data from `profiles` (name, email, brokerage, team, phone, office, website, licenses)
-- Loads branding data from `agent_marketing_settings` (colors, headshot, logos, content guidelines)
-- Saves profile info to `profiles`, branding to `agent_marketing_settings` (via upsert)
-- Reuses `AgentMarketingSettingsForm` internally but with a new `isAdmin` prop that hides the Integrations, Images, and Backgrounds tabs for non-admin users
-- Includes file upload for headshot and logos (reusing existing `uploadFile` pattern from AdminTeamManagement)
+**4. Clean up `event-email-scheduler` `makeReplaceVars`**
 
-**3. Update `AgentMarketingSettingsForm` to support self-service mode**
+Change the fallback order so `_marketingBranding` is checked first (it's the source of truth), with profiles as fallback only for backward compat.
 
-Add an `isAdmin?: boolean` prop (default `true` for backward compatibility). When `false`:
-- Hide the Integrations, Images, and Backgrounds tabs (show only Branding + Content)
-- Change header text from "Marketing Settings for {name}" to "My Branding & Content"
+**5. Storage migration: add UPDATE + DELETE policies for `agent-assets`**
 
-**4. Consolidate branding in Admin Team Management**
-
-In `handleSaveAgentChanges` (AdminTeamManagement.tsx), after saving profile fields to `profiles`, also upsert the branding fields (colors, headshot, logos) to `agent_marketing_settings`. Remove the duplicate branding color fields from the Edit dialog entirely -- branding is now managed via the Marketing button or the user's own Settings page.
-
-**5. Update edge functions to read from `agent_marketing_settings`**
-
-These 4 edge functions currently read `primary_color`, `secondary_color`, `headshot_url`, `logo_colored_url` from `profiles`:
-- `event-reminder-email`
-- `event-email-scheduler`  
-- `rsvp-confirmation-email`
-- `send-event-invitation`
-
-Update each to JOIN or separately query `agent_marketing_settings` for branding, falling back to `profiles` values (for backward compat during migration).
-
-**6. Update `useEvents.ts` to read from `agent_marketing_settings`**
-
-Lines 137-141 currently query `profiles` for `primary_color`. Change to query `agent_marketing_settings`.
-
-**7. Add Settings link to sidebar**
-
-Add a "Settings" item to the main navigation in `AppSidebar.tsx` (below Support Hub, above admin section), available to all roles.
-
-**8. Add route to `App.tsx`**
-
-Add `<Route path="/settings" element={<Settings />} />`.
+Add policies allowing authenticated users to update/delete their own files in the `agent-assets` bucket (where folder name matches their user ID).
 
 ### Files to Create/Modify
 
 | File | Action |
 |---|---|
-| Migration | **Create** -- add INSERT/UPDATE RLS for `agent_marketing_settings` |
-| `src/pages/Settings.tsx` | **Create** -- self-service settings page |
-| `src/components/admin/AgentMarketingSettingsForm.tsx` | **Modify** -- add `isAdmin` prop to hide admin-only tabs |
-| `src/pages/AdminTeamManagement.tsx` | **Modify** -- remove duplicate branding from Edit dialog, sync to `agent_marketing_settings` on save |
-| `src/components/layout/AppSidebar.tsx` | **Modify** -- add Settings nav item |
-| `src/App.tsx` | **Modify** -- add `/settings` route |
-| `src/hooks/useEvents.ts` | **Modify** -- read branding from `agent_marketing_settings` |
-| `src/components/events/EventForm.tsx` | Already reads from `agent_marketing_settings` (done) |
-| `supabase/functions/event-reminder-email/index.ts` | **Modify** -- read branding from `agent_marketing_settings` |
-| `supabase/functions/event-email-scheduler/index.ts` | **Modify** -- read branding from `agent_marketing_settings` |
-| `supabase/functions/rsvp-confirmation-email/index.ts` | **Modify** -- read branding from `agent_marketing_settings` |
-| `supabase/functions/send-event-invitation/index.ts` | **Modify** -- read branding from `agent_marketing_settings` |
+| Migration | **Create** -- add UPDATE + DELETE storage policies for `agent-assets` |
+| `src/components/admin/AgentMarketingSettingsForm.tsx` | **Modify** -- replace URL inputs with file upload + preview for headshot, logos |
+| `src/hooks/useRSVP.ts` | **Modify** -- read branding from `agent_marketing_settings` instead of `profiles` |
+| `src/components/events/email/EmailManagement.tsx` | **Modify** -- read branding from `agent_marketing_settings` instead of `profiles` |
+| `supabase/functions/event-email-scheduler/index.ts` | **Modify** -- fix fallback order in `makeReplaceVars` |
 
