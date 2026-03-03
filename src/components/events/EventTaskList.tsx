@@ -80,7 +80,7 @@ export function EventTaskList({ tasks, tasksByPhase }: EventTaskListProps) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <CardTitle
             className="flex items-center gap-2 cursor-pointer select-none"
             onClick={() => setExpanded(!expanded)}
@@ -92,7 +92,7 @@ export function EventTaskList({ tasks, tasksByPhase }: EventTaskListProps) {
             <div className="flex items-center gap-2 flex-wrap">
               {hasPhases && (
                 <Select value={phaseFilter} onValueChange={setPhaseFilter}>
-                  <SelectTrigger className="w-[130px] h-8 text-xs">
+                  <SelectTrigger className="w-full sm:w-[130px] h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -104,7 +104,7 @@ export function EventTaskList({ tasks, tasksByPhase }: EventTaskListProps) {
                 </Select>
               )}
               <Select value={filter} onValueChange={(v) => setFilter(v as FilterType)}>
-                <SelectTrigger className="w-[130px] h-8 text-xs">
+                <SelectTrigger className="w-full sm:w-[130px] h-8 text-xs">
                   <Filter className="h-3 w-3 mr-1" />
                   <SelectValue />
                 </SelectTrigger>
@@ -116,7 +116,7 @@ export function EventTaskList({ tasks, tasksByPhase }: EventTaskListProps) {
                 </SelectContent>
               </Select>
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-                <SelectTrigger className="w-[130px] h-8 text-xs">
+                <SelectTrigger className="w-full sm:w-[130px] h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -141,14 +141,14 @@ export function EventTaskList({ tasks, tasksByPhase }: EventTaskListProps) {
                 return (
                   <div
                     key={task.id}
-                    className={`flex items-center justify-between p-3 rounded-lg border ${
+                    className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg border ${
                       task.completed_at ? 'bg-muted/30' : status.label === 'Overdue' ? 'border-destructive/30 bg-red-50/50 dark:bg-red-950/10' : ''
                     }`}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <status.icon className={`h-4 w-4 flex-shrink-0 ${status.color}`} />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <p className={`text-sm font-medium truncate ${task.completed_at ? 'line-through text-muted-foreground' : ''}`}>
                             {task.task_name}
                           </p>
@@ -163,7 +163,7 @@ export function EventTaskList({ tasks, tasksByPhase }: EventTaskListProps) {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-7 sm:ml-0">
                       {task.due_date && (
                         <span className={`text-xs ${status.label === 'Overdue' ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
                           {format(new Date(task.due_date), 'MMM d')}

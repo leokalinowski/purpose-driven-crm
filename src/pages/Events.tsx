@@ -48,15 +48,15 @@ const Events = () => {
     return (
       <Layout>
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="space-y-2">
               <Skeleton className="h-9 w-48" />
-              <Skeleton className="h-5 w-96" />
+              <Skeleton className="h-5 w-64 sm:w-96" />
             </div>
-            <Skeleton className="h-10 w-32" />
+            <Skeleton className="h-10 w-full sm:w-32" />
           </div>
           <Skeleton className="h-40 w-full" />
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24" />)}
           </div>
         </div>

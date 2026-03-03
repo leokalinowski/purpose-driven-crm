@@ -31,9 +31,10 @@ interface EventTask {
 interface TaskEditFormProps {
   task: EventTask;
   onClose: () => void;
+  onTaskUpdated?: () => void;
 }
 
-export function TaskEditForm({ task, onClose }: TaskEditFormProps) {
+export function TaskEditForm({ task, onClose, onTaskUpdated }: TaskEditFormProps) {
   const { updateTask } = useEvents();
   const [taskName, setTaskName] = useState(task.task_name);
   const [responsiblePerson, setResponsiblePerson] = useState(task.responsible_person);
@@ -66,7 +67,11 @@ export function TaskEditForm({ task, onClose }: TaskEditFormProps) {
       } as any);
       
       toast.success("Task updated successfully");
-      onClose();
+      if (onTaskUpdated) {
+        onTaskUpdated();
+      } else {
+        onClose();
+      }
     } catch (error) {
       console.error("Error updating task:", error);
       toast.error("Failed to update task");
