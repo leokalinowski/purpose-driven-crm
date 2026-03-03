@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
-import { differenceInDays, format, isAfter, isBefore, addDays } from 'date-fns';
+import { useState, useMemo, useCallback } from 'react';
+import { differenceInDays, format, isBefore, addDays } from 'date-fns';
 import {
   Calendar, Target, CheckCircle2, Circle, Clock, AlertTriangle,
-  CalendarClock, Plus, Pencil, Trash2, ChevronDown, ChevronRight,
+  Plus, Pencil, Trash2, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -14,7 +14,6 @@ import { TaskForm } from './TaskForm';
 import { TaskEditForm } from './TaskEditForm';
 import { useEvents } from '@/hooks/useEvents';
 import type { Event, EventTask } from '@/hooks/useEvents';
-import type { ClickUpTaskStats } from '@/hooks/useClickUpTasks';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { buildTaskInserts } from '@/utils/defaultEventTasks';
@@ -32,9 +31,15 @@ const PHASE_LABELS: Record<string, string> = {
 
 const PHASE_ORDER = ['pre_event', 'event_day', 'post_event', 'unassigned'];
 
+const STATUS_OPTIONS = [
+  { value: 'pending', label: 'To Do', icon: Circle, color: 'text-muted-foreground', activeBg: 'bg-muted' },
+  { value: 'in_progress', label: 'In Progress', icon: Clock, color: 'text-blue-600', activeBg: 'bg-blue-100 dark:bg-blue-900/40' },
+  { value: 'completed', label: 'Done', icon: CheckCircle2, color: 'text-green-600', activeBg: 'bg-green-100 dark:bg-green-900/40' },
+] as const;
+
 export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProps) {
   const { user } = useAuth();
-  const { tasks, markTaskComplete, updateTask, deleteTask, fetchEventTasks, loading } = useEvents();
+  const { tasks, markTaskComplete, updateTask, deleteTask, addTask, fetchEventTasks, loading } = useEvents();
   const [showAddTask, setShowAddTask] = useState(false);
   const [editingTask, setEditingTask] = useState<EventTask | null>(null);
   const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set());
@@ -94,23 +99,17 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
   }, [eventTasks]);
 
   // ── Handlers ──────────────────────────────────────────
-  const handleCycleStatus = async (task: EventTask) => {
-    const nextStatus: Record<string, string> = {
-      pending: 'in_progress',
-      in_progress: 'completed',
-      completed: 'pending',
-    };
-    const current = task.status || 'pending';
-    const next = nextStatus[current] || 'pending';
+  const handleSetStatus = async (task: EventTask, newStatus: string) => {
     try {
-      if (next === 'completed') {
+      if (newStatus === 'completed') {
         await markTaskComplete(task.id);
       } else {
         await updateTask(task.id, {
-          status: next,
+          status: newStatus,
           completed_at: null,
         } as any);
       }
+      await fetchEventTasks();
     } catch {
       toast.error('Failed to update task');
     }
@@ -140,6 +139,16 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
       setGeneratingTasks(false);
     }
   };
+
+  const handleTaskAdded = useCallback(async () => {
+    await fetchEventTasks();
+    setShowAddTask(false);
+  }, [fetchEventTasks]);
+
+  const handleTaskUpdated = useCallback(async () => {
+    await fetchEventTasks();
+    setEditingTask(null);
+  }, [fetchEventTasks]);
 
   const togglePhase = (phase: string) => {
     setCollapsedPhases((prev) => {
@@ -173,7 +182,7 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
           <p className="text-muted-foreground text-center max-w-md mb-4">
             Get started by generating a default checklist for this event, or add tasks manually.
           </p>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <Button onClick={handleGenerateDefaults} disabled={generatingTasks}>
               {generatingTasks ? 'Generating...' : 'Generate Default Checklist'}
             </Button>
@@ -181,7 +190,13 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
               <Plus className="h-4 w-4 mr-1" /> Add Task
             </Button>
           </div>
-          {showAddTask && <TaskForm eventId={event.id} onClose={() => setShowAddTask(false)} />}
+          {showAddTask && (
+            <TaskForm
+              eventId={event.id}
+              onClose={() => setShowAddTask(false)}
+              onTaskAdded={handleTaskAdded}
+            />
+          )}
         </CardContent>
       </Card>
     );
@@ -198,7 +213,7 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
               <CardTitle className="text-xl">{event.title}</CardTitle>
-              <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3.5 w-3.5" />
                   {format(eventDate, 'EEEE, MMMM d, yyyy')}
@@ -260,9 +275,9 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
       {/* Task List by Phase */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <CardTitle className="text-base">Tasks</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => setShowAddTask(true)}>
+            <Button size="sm" variant="outline" onClick={() => setShowAddTask(true)} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-1" /> Add Task
             </Button>
           </div>
@@ -293,7 +308,7 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
                       return (
                         <div
                           key={task.id}
-                          className={`flex items-center gap-3 p-2 rounded-md border transition-colors ${
+                          className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-2 rounded-md border transition-colors ${
                             isComplete
                               ? 'bg-muted/40 border-muted'
                               : isOverdue
@@ -303,25 +318,12 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
                                   : 'border-border hover:bg-muted/30'
                           }`}
                         >
-                          <button
-                            onClick={() => handleCycleStatus(task)}
-                            className="shrink-0"
-                            title={`Status: ${status === 'pending' ? 'To Do' : status === 'in_progress' ? 'In Progress' : 'Done'} — click to change`}
-                          >
-                            {isComplete ? (
-                              <CheckCircle2 className="h-5 w-5 text-green-600" />
-                            ) : isInProgress ? (
-                              <Clock className="h-5 w-5 text-blue-600" />
-                            ) : (
-                              <Circle className="h-5 w-5 text-muted-foreground hover:text-primary" />
-                            )}
-                          </button>
-
+                          {/* Task info */}
                           <div className="flex-1 min-w-0">
                             <p className={`text-sm font-medium truncate ${isComplete ? 'line-through text-muted-foreground' : ''}`}>
                               {task.task_name}
                             </p>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-muted-foreground">
                               {task.responsible_person && <span>{task.responsible_person}</span>}
                               {task.due_date && (
                                 <span className={isOverdue ? 'text-destructive font-medium' : ''}>
@@ -335,7 +337,32 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
                             )}
                           </div>
 
-                          <div className="flex items-center gap-1 shrink-0">
+                          {/* Inline status toggle + actions */}
+                          <div className="flex items-center gap-1 shrink-0 flex-wrap">
+                            {/* Status toggle buttons */}
+                            <div className="inline-flex items-center rounded-md border border-border p-0.5 gap-0.5">
+                              {STATUS_OPTIONS.map((opt) => {
+                                const Icon = opt.icon;
+                                const isActive = status === opt.value;
+                                return (
+                                  <button
+                                    key={opt.value}
+                                    onClick={() => handleSetStatus(task, opt.value)}
+                                    className={`inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs font-medium transition-colors ${
+                                      isActive
+                                        ? `${opt.activeBg} ${opt.color}`
+                                        : 'text-muted-foreground hover:bg-muted/50'
+                                    }`}
+                                    title={opt.label}
+                                  >
+                                    <Icon className="h-3 w-3" />
+                                    <span className="hidden sm:inline">{opt.label}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Edit / Delete */}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -365,8 +392,20 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
       </Card>
 
       {/* Dialogs */}
-      {showAddTask && <TaskForm eventId={event.id} onClose={() => setShowAddTask(false)} />}
-      {editingTask && <TaskEditForm task={editingTask} onClose={() => setEditingTask(null)} />}
+      {showAddTask && (
+        <TaskForm
+          eventId={event.id}
+          onClose={() => setShowAddTask(false)}
+          onTaskAdded={handleTaskAdded}
+        />
+      )}
+      {editingTask && (
+        <TaskEditForm
+          task={editingTask}
+          onClose={() => setEditingTask(null)}
+          onTaskUpdated={handleTaskUpdated}
+        />
+      )}
     </div>
   );
 }

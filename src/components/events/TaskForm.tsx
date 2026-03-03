@@ -10,9 +10,10 @@ import { useToast } from '@/hooks/use-toast';
 interface TaskFormProps {
   eventId: string;
   onClose: () => void;
+  onTaskAdded?: () => void;
 }
 
-export const TaskForm = ({ eventId, onClose }: TaskFormProps) => {
+export const TaskForm = ({ eventId, onClose, onTaskAdded }: TaskFormProps) => {
   const [taskName, setTaskName] = useState('');
   const [responsiblePerson, setResponsiblePerson] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -49,7 +50,11 @@ export const TaskForm = ({ eventId, onClose }: TaskFormProps) => {
         description: "Task has been added successfully.",
       });
       
-      onClose();
+      if (onTaskAdded) {
+        onTaskAdded();
+      } else {
+        onClose();
+      }
     } catch (error) {
       toast({
         title: "Error",
