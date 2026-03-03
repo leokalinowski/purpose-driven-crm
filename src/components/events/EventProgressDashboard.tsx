@@ -18,11 +18,11 @@ interface EventProgressDashboardProps {
 export function EventProgressDashboard({ event }: EventProgressDashboardProps) {
   const { role, isAdmin, isAgent, isEditor, loading: roleLoading } = useUserRole();
 
-  // Agent/Admin/Editor tiers use the ClickUp-based read-only view
-  const useClickUp = isAdmin || isAgent || isEditor;
-
   // Always call the hook but only use its data for ClickUp tiers
   const { tasks, stats, tasksByResponsible, tasksByPhase, loading } = useClickUpTasks(event.id);
+
+  // Data-driven: only use ClickUp view if there are actual ClickUp tasks
+  const useClickUp = (isAdmin || isAgent || isEditor) && tasks.length > 0;
 
   const eventDate = new Date(event.event_date);
   const today = new Date();
