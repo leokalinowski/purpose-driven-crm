@@ -1,68 +1,60 @@
 
 
-## Database Page Review: Bugs, Inconsistencies, and Improvements
+## Database Improvement Opportunities
 
-### Bugs
+After reviewing the current state, the 9 priority bugs from the previous plan have been fixed. Here are the remaining and new improvements worth pursuing:
 
-**1. ContactActivitiesDialog: Broken border-left color (line 144)**
-The `style={{ borderLeftColor: getActivityColor(...).replace('bg-', '') }}` produces strings like `"blue-500"` -- not valid CSS colors. The `bg-blue-500` Tailwind class gets `.replace('bg-', '')` applied, yielding `"blue-500"`, which CSS ignores. The border-left-4 shows with the default border color, not the intended activity color. Fix: use actual hex values in `getActivityColor` or apply the color via a Tailwind `border-l-*` class instead of inline style.
+### High-Value Improvements
 
-**2. BulkContactEnricher: Inconsistent quality scoring (lines 59-66)**
-Uses a **3-field** scoring formula (`totalFields = 3`, combining phone+email into one field) while `DataQualityDashboard` and `calculateDataQualityScore()` in `dataEnrichment.ts` use a **4-field** formula. This means the enricher's "original quality" vs "new quality" comparison uses different thresholds than the dashboard, causing mismatches in what's flagged as "needing enrichment."
+**1. Add search by tags, city, state, and address**
+Currently `useContacts` only searches `first_name`, `last_name`, `email`, and `phone`. Agents with many contacts can't find people by location or tag, which is a significant limitation for a real estate CRM.
 
-**3. BulkContactEditor: Tag operations don't merge with existing contact tags (lines 119-141)**
-When adding tags via bulk edit, `handleTagOperation` builds `newTags` from `prev.tags || []` -- the `updates` object's tags, NOT the contacts' existing tags. If a user types "VIP" to add, and the contacts already have `["client"]`, the bulk update will SET tags to `["VIP"]`, wiping out `["client"]`. The merge logic only works within the updates accumulator, not against actual contact data.
+- File: `src/hooks/useContacts.ts` (lines 71-78 and 116-123)
+- Add `city.ilike`, `state.ilike`, `address_1.ilike`, and a tag array search to both `fetchAllContacts` and `fetchContacts`
+- Update the search placeholder text in `Database.tsx` (line 529) to reflect the expanded search
 
-**4. ContactForm: DNC single-check only fires on edit, not on new contact creation (line 188)**
-The background DNC check `if (contactInput.phone && contact?.id)` only runs when `contact` exists (edit mode). For new contacts, `contact` is undefined, so the single-check never fires. This is a minor gap since CSV upload triggers batch DNC checks, but individually added contacts with phones skip it.
+**2. Replace custom Duplicate Cleanup modal with a proper Dialog**
+The duplicate cleanup uses a raw `div.fixed.inset-0` overlay (Database.tsx lines 628-644) instead of the project's existing `Dialog` component. This means no focus trapping, no `Escape` key to close, no accessibility, and inconsistent styling.
 
-**5. `useContacts`: Double-fetch on every data load (lines 134-136)**
-`fetchContacts` calls `fetchAllContacts()` on every paginated fetch to populate `allContacts` for the DataQualityDashboard. With 5000 contacts, this means every page change fires TWO queries -- one paginated and one unbounded. This is a performance issue, especially with larger databases.
+- File: `src/pages/Database.tsx` (lines 627-644)
+- Wrap `DuplicateCleanup` in a `<Dialog>` with `DialogContent` instead of a manual overlay
 
-**6. Address standardization regex: False positives (dataEnrichment.ts lines 88-92)**
-The `\brd\b` regex replaces the word "rd" with "Road" globally, which would incorrectly transform "3rd" to "3Road", "23rd Street" to "23Road Street". Similarly `\bst\b` would transform "1st Avenue" to "1Street Avenue". The word-boundary regex doesn't account for ordinal suffixes.
+**3. Duplicate `ContactInput` type definitions**
+Three separate definitions exist:
+- `src/hooks/useContacts.ts` (Omit-based, `dnc: boolean` required)
+- `src/utils/contactUtils.ts` (manual interface, `dnc?: boolean` optional)
+- `src/types/api.ts` (manual interface, different optionals)
 
-### Inconsistencies
+Consolidate to a single source of truth exported from one file, and re-export from the others.
 
-**7. Duplicate `ContactInput` type definitions**
-`ContactInput` is defined in three separate places with slightly different shapes:
-- `src/hooks/useContacts.ts` (line 28): Omit-based, includes `dnc: boolean` (non-optional)
-- `src/utils/contactUtils.ts` (line 5): Manual interface, `dnc?: boolean` (optional)
-- `src/types/api.ts` (line 57): Manual interface, different optional fields
+**4. `useContactActivities` bypasses TypeScript with `(supabase as any)`**
+All four Supabase queries in `src/hooks/useContactActivities.ts` use `as any` casts, hiding type errors. The `contact_activities` table likely needs to be added to the generated types, or the queries should use `.from('contact_activities' as any)` with proper return typing at minimum.
 
-This creates confusion about which type is authoritative and could cause subtle bugs when components import from different sources.
+**5. Duplicate cleanup doesn't refresh parent contacts list**
+After `DuplicateCleanup` executes cleanup, it only shows a toast. The parent `Database.tsx` never calls `fetchContacts()` after duplicates are removed, so the table still shows deleted contacts until the user manually refreshes.
 
-**8. DNCStatsCard renders nested Card inside Card**
-In `Database.tsx` (line 481-515), `DNCStatsCard` is rendered inside a `<Card><CardContent>`, but `DNCStatsCard` itself renders its own `<Card>` wrapper (line 40-42 of DNCStatsCard.tsx). This creates a nested card-in-card layout with double borders.
+- File: `src/pages/Database.tsx` — pass `fetchContacts` as an `onComplete` callback to `DuplicateCleanup`
+- File: `src/components/database/DuplicateCleanup.tsx` — call `onComplete()` after cleanup succeeds
 
-**9. `useContactActivities` uses `(supabase as any)` casts (lines 40, 65, 91, 114)**
-All Supabase queries in this hook bypass TypeScript type checking. This suggests the `contact_activities` table may be missing from the generated types file, which hides potential query errors.
+**6. ZIP code enrichment is hardcoded to 5 cities**
+`enrichFromZipCode()` in `dataEnrichment.ts` (line 192) has a static lookup of only 5 ZIP codes. For a real estate CRM, this is essentially useless. Either remove the feature or connect it to a real ZIP code API/dataset.
 
-### Improvement Opportunities
+### Medium-Value Improvements
 
-**10. DataQualityDashboard fetches ALL contacts for quality stats**
-The dashboard processes up to 5000 contacts client-side on every render to calculate quality scores. This could be moved to a SQL view or RPC function for better performance, returning only aggregated stats.
+**7. No export/download contacts feature**
+Agents can upload CSVs but can't export their contact list. A "Download CSV" button would be useful for backups and data portability.
 
-**11. CSV upload closes dialog even on error (line 361)**
-The `finally` block in `handleCSVUpload` (line 359-362) always calls `setShowCSVUpload(false)`, which hides the dialog even when an upload fails. The user loses their file selection and mapping and must start over. This contradicts the catch block which already closes it.
+**8. Contact form name validation too restrictive**
+The regex `^[a-zA-Z\s'-]+$` (ContactForm.tsx line 26) rejects names with periods (e.g., "Dr. Smith"), accented characters (e.g., "José"), and other valid name characters. This is a real estate CRM serving diverse clients.
 
-**12. No search by tags, city, or address**
-The search in `useContacts` only filters on `first_name`, `last_name`, `email`, and `phone`. Tags, city, state, and address are not searchable, which limits the utility for agents with many contacts.
+### Proposed Implementation (if approved)
 
-**13. Selection state persists across page changes**
-`selectedContacts` in `Database.tsx` is never cleared when the user navigates between pages. Contacts selected on page 1 remain selected when viewing page 2, but they're no longer visible in the table. This can lead to confusion about what's actually selected for bulk operations.
-
-### Proposed Fixes (Priority Order)
-
-| # | Issue | File(s) | Severity |
-|---|-------|---------|----------|
-| 1 | Fix broken activity border colors | `ContactActivitiesDialog.tsx` | Bug - visual |
-| 2 | Fix BulkContactEnricher scoring inconsistency | `BulkContactEnricher.tsx` | Bug - logic |
-| 3 | Fix bulk tag operations wiping existing tags | `BulkContactEditor.tsx` | Bug - data loss |
-| 4 | Fix DNC single-check for new contacts | `ContactForm.tsx` | Bug - minor |
-| 5 | Fix nested Card-in-Card for DNC stats | `Database.tsx` | Inconsistency |
-| 6 | Fix address standardization regex false positives | `dataEnrichment.ts` | Bug - data corruption |
-| 7 | Clear selection on page change | `Database.tsx` | UX improvement |
-| 8 | Remove double-fetch of allContacts on page nav | `useContacts.ts` | Performance |
-| 9 | Fix CSV upload dialog closing on error | `Database.tsx` | UX improvement |
+| # | Improvement | Files | Impact |
+|---|---|---|---|
+| 1 | Expand search to tags/city/state/address | `useContacts.ts`, `Database.tsx` | High - core usability |
+| 2 | Proper Dialog for duplicate cleanup | `Database.tsx` | Medium - accessibility |
+| 3 | Consolidate ContactInput types | `useContacts.ts`, `contactUtils.ts`, `api.ts` | Medium - maintainability |
+| 4 | Duplicate cleanup refreshes parent list | `Database.tsx`, `DuplicateCleanup.tsx` | Medium - UX |
+| 5 | Relax name validation regex | `ContactForm.tsx` | Medium - data integrity |
+| 6 | Add CSV export button | `Database.tsx` | Medium - feature gap |
 
