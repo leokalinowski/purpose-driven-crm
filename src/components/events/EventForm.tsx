@@ -46,7 +46,6 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
       if (timeStr) {
         const time = timeStr.substring(0, 5);
         return time;
-        return time;
       }
     }
     return '09:00';
