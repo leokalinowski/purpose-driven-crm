@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useEvents } from '@/hooks/useEvents';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 interface TaskFormProps {
   eventId: string;
@@ -21,16 +21,11 @@ export const TaskForm = ({ eventId, onClose, onTaskAdded }: TaskFormProps) => {
   const [loading, setLoading] = useState(false);
   
   const { addTask } = useEvents();
-  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!taskName.trim() || !responsiblePerson.trim()) {
-      toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields.",
-        variant: "destructive",
-      });
+      toast.error("Please fill in all required fields.");
       return;
     }
 
@@ -45,10 +40,7 @@ export const TaskForm = ({ eventId, onClose, onTaskAdded }: TaskFormProps) => {
         status: 'pending'
       } as any);
 
-      toast({
-        title: "Task added",
-        description: "Task has been added successfully.",
-      });
+      toast.success("Task has been added successfully.");
       
       if (onTaskAdded) {
         onTaskAdded();
@@ -56,11 +48,7 @@ export const TaskForm = ({ eventId, onClose, onTaskAdded }: TaskFormProps) => {
         onClose();
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add task. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Failed to add task. Please try again.");
     } finally {
       setLoading(false);
     }

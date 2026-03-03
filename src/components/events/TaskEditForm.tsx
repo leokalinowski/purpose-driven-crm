@@ -59,7 +59,7 @@ export function TaskEditForm({ task, onClose, onTaskUpdated }: TaskEditFormProps
       await updateTask(task.id, {
         task_name: taskName.trim(),
         responsible_person: responsiblePerson.trim(),
-        due_date: dueDate ? dueDate.toISOString().split('T')[0] : null,
+        due_date: dueDate ? dueDate.toISOString().split('T')[0] : undefined,
         notes: notes.trim() || null,
         phase: phase || null,
         status,

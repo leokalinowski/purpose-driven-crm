@@ -7,6 +7,7 @@ interface EventProgressStatsProps {
 }
 
 export function EventProgressStats({ stats }: EventProgressStatsProps) {
+  // In Progress = incomplete tasks that are NOT overdue (overdue is a subset of incomplete)
   const inProgress = (stats as any).inProgress ?? (stats.total - stats.completed - stats.overdue);
 
   const items = [

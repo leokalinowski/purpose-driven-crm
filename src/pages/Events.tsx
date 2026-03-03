@@ -177,6 +177,7 @@ const Events = () => {
               <RSVPManagement 
                 eventId={activeEvent.id}
                 publicSlug={activeEvent.public_slug}
+                maxCapacity={activeEvent.max_capacity ?? undefined}
               />
             ) : (
               <Card>

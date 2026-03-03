@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EventProgressStats } from './EventProgressStats';
+import { EventHeroCard } from './EventHeroCard';
 import { TaskForm } from './TaskForm';
 import { TaskEditForm } from './TaskEditForm';
 import { useEvents } from '@/hooks/useEvents';
@@ -208,43 +209,12 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
   return (
     <div className="space-y-4">
       {/* Hero Progress */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div>
-              <CardTitle className="text-xl">{event.title}</CardTitle>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-3.5 w-3.5" />
-                  {format(eventDate, 'EEEE, MMMM d, yyyy')}
-                </span>
-                {event.location && <span>{event.location}</span>}
-              </div>
-            </div>
-            <div className="text-right">
-              {isPast ? (
-                <span className="text-sm font-medium text-green-600">Event Complete</span>
-              ) : daysUntil === 0 ? (
-                <span className="text-lg font-bold text-primary">Today!</span>
-              ) : (
-                <div>
-                  <span className="text-3xl font-bold text-foreground">{daysUntil}</span>
-                  <span className="text-sm text-muted-foreground ml-1">days left</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Overall Progress</span>
-              <span className={`font-bold ${progressColor}`}>{stats.progressPct}%</span>
-            </div>
-            <Progress value={stats.progressPct} className="h-3" />
-          </div>
-        </CardContent>
-      </Card>
+      <EventHeroCard
+        title={event.title}
+        eventDate={event.event_date}
+        location={event.location}
+        progressPct={stats.progressPct}
+      />
 
       {/* Stats */}
       <EventProgressStats stats={stats} />

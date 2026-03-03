@@ -8,7 +8,7 @@ import { EmailTemplateEditor, EventPreviewData } from './EmailTemplateEditor'
 import { EmailMetricsDashboard } from './EmailMetricsDashboard'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { Send, Mail, Calendar, Heart, UserX, Users } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 import { supabase } from '@/integrations/supabase/client'
 
 interface EmailManagementProps {
@@ -77,7 +77,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
   const currentEventTitle = selectedEventTitle || initialEventTitle
 
   const { sendReminderEmails, sendThankYouEmails, sendNoShowEmails, sendInvitationEmails, getTemplateByType } = useEmailTemplates(currentEventId)
-  const { toast } = useToast()
+  
 
   // Load available events if no eventId provided
   useEffect(() => {
@@ -192,11 +192,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
       setEvents(formattedEvents)
     } catch (error: any) {
       console.error('Error loading events:', error)
-      toast({
-        title: "Error loading events",
-        description: error.message || "Could not load available events for email management.",
-        variant: "destructive"
-      })
+      toast.error(error.message || "Could not load available events for email management.")
     } finally {
       setLoadingEvents(false)
     }
@@ -212,21 +208,13 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
 
   const handleSendTestEmails = async () => {
     if (!currentEventId) {
-      toast({
-        title: "No event selected",
-        description: "Please select an event first.",
-        variant: "destructive"
-      })
+      toast.error("Please select an event first.")
       return
     }
 
     const template = getTemplateByType(selectedType)
     if (!template) {
-      toast({
-        title: "No template found",
-        description: "Please create and save an email template first.",
-        variant: "destructive"
-      })
+      toast.error("Please create and save an email template first.")
       return
     }
 
@@ -251,17 +239,10 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
           throw new Error('Manual sending not supported for this email type')
       }
 
-      toast({
-        title: "Emails sent successfully",
-        description: result.message || `${EMAIL_TYPES.find(t => t.key === selectedType)?.label} emails sent.`
-      })
+      toast.success(result.message || `${EMAIL_TYPES.find(t => t.key === selectedType)?.label} emails sent.`)
     } catch (error) {
       console.error('Error sending emails:', error)
-      toast({
-        title: "Error sending emails",
-        description: "There was an error sending the emails. Please try again.",
-        variant: "destructive"
-      })
+      toast.error("There was an error sending the emails. Please try again.")
     } finally {
       setSending(false)
     }
