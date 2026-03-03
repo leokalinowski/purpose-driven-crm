@@ -1,0 +1,1 @@
+UPDATE event_tasks SET phase = 'pre_event' WHERE phase IS NULL;

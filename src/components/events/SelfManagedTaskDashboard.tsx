@@ -2,8 +2,9 @@ import { useState, useMemo, useCallback } from 'react';
 import { differenceInDays, format, isBefore, addDays } from 'date-fns';
 import {
   Calendar, Target, CheckCircle2, Circle, Clock, AlertTriangle,
-  Plus, Pencil, Trash2, ChevronDown, ChevronRight,
+  Plus, Pencil, Trash2,
 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -43,7 +44,7 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
   const { tasks, markTaskComplete, updateTask, deleteTask, addTask, fetchEventTasks, loading } = useEvents();
   const [showAddTask, setShowAddTask] = useState(false);
   const [editingTask, setEditingTask] = useState<EventTask | null>(null);
-  const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set());
+  const [activePhase, setActivePhase] = useState('pre_event');
   const [generatingTasks, setGeneratingTasks] = useState(false);
 
   const eventTasks = useMemo(
@@ -151,14 +152,8 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
     setEditingTask(null);
   }, [fetchEventTasks]);
 
-  const togglePhase = (phase: string) => {
-    setCollapsedPhases((prev) => {
-      const next = new Set(prev);
-      if (next.has(phase)) next.delete(phase);
-      else next.add(phase);
-      return next;
-    });
-  };
+  // Phase tab helper
+  const activeGroup = tasksByPhase.find((g) => g.phase === activePhase) || tasksByPhase[0];
 
   // ── Loading ───────────────────────────────────────────
   if (loading) {
@@ -242,7 +237,7 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
         </Card>
       )}
 
-      {/* Task List by Phase */}
+      {/* Task List by Phase — Tabs */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -252,116 +247,118 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {tasksByPhase.map((group) => {
-            const isCollapsed = collapsedPhases.has(group.phase);
-            return (
-              <div key={group.phase}>
-                <button
-                  onClick={() => togglePhase(group.phase)}
-                  className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-2 hover:text-foreground transition-colors"
-                >
-                  {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  {group.label}
-                  <Badge variant="secondary" className="text-xs ml-1">
-                    {group.completed}/{group.total}
-                  </Badge>
-                </button>
-                {!isCollapsed && (
-                  <div className="space-y-1 sm:ml-6">
-                    {group.tasks.map((task) => {
-                      const status = task.status || 'pending';
-                      const isComplete = status === 'completed';
-                      const isInProgress = status === 'in_progress';
-                      const isOverdue =
-                        !isComplete && task.due_date && isBefore(new Date(task.due_date), today);
-                      return (
-                        <div
-                          key={task.id}
-                          className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-2 rounded-md border transition-colors ${
-                            isComplete
-                              ? 'bg-muted/40 border-muted'
-                              : isOverdue
-                                ? 'border-destructive/30 bg-destructive/5'
-                                : isInProgress
-                                  ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/30'
-                                  : 'border-border hover:bg-muted/30'
-                          }`}
-                        >
-                          {/* Task info */}
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium truncate ${isComplete ? 'line-through text-muted-foreground' : ''}`}>
-                              {task.task_name}
-                            </p>
-                            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-muted-foreground">
-                              {task.responsible_person && <span>{task.responsible_person}</span>}
-                              {task.due_date && (
-                                <span className={isOverdue ? 'text-destructive font-medium' : ''}>
-                                  {format(new Date(task.due_date), 'MMM d')}
-                                  {isOverdue && ' (overdue)'}
-                                </span>
+        <CardContent>
+          <Tabs value={activePhase} onValueChange={setActivePhase}>
+            <TabsList className="w-full">
+              {PHASE_ORDER.filter((p) => p !== 'unassigned').map((phase) => {
+                const group = tasksByPhase.find((g) => g.phase === phase);
+                return (
+                  <TabsTrigger key={phase} value={phase} className="flex-1 text-xs sm:text-sm">
+                    {PHASE_LABELS[phase] || phase}
+                    {group && (
+                      <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">
+                        {group.completed}/{group.total}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+
+            {PHASE_ORDER.filter((p) => p !== 'unassigned').map((phase) => {
+              const group = tasksByPhase.find((g) => g.phase === phase);
+              return (
+                <TabsContent key={phase} value={phase} className="mt-3">
+                  {!group || group.tasks.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">No tasks in this phase.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {group.tasks.map((task) => {
+                        const status = task.status || 'pending';
+                        const isComplete = status === 'completed';
+                        const isInProgress = status === 'in_progress';
+                        const isOverdue =
+                          !isComplete && task.due_date && isBefore(new Date(task.due_date), today);
+                        return (
+                          <div
+                            key={task.id}
+                            className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-2 rounded-md border transition-colors ${
+                              isComplete
+                                ? 'bg-muted/40 border-muted'
+                                : isOverdue
+                                  ? 'border-destructive/30 bg-destructive/5'
+                                  : isInProgress
+                                    ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/30'
+                                    : 'border-border hover:bg-muted/30'
+                            }`}
+                          >
+                            {/* Task info */}
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm font-medium break-words ${isComplete ? 'line-through text-muted-foreground' : ''}`}>
+                                {task.task_name}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-muted-foreground">
+                                {task.responsible_person && <span>{task.responsible_person}</span>}
+                                {task.due_date && (
+                                  <span className={isOverdue ? 'text-destructive font-medium' : ''}>
+                                    {format(new Date(task.due_date), 'MMM d')}
+                                    {isOverdue && ' (overdue)'}
+                                  </span>
+                                )}
+                              </div>
+                              {task.notes && (
+                                <p className="text-xs text-muted-foreground mt-0.5 break-words">{task.notes}</p>
                               )}
                             </div>
-                            {task.notes && (
-                              <p className="text-xs text-muted-foreground mt-0.5 truncate">{task.notes}</p>
-                            )}
-                          </div>
 
-                          {/* Inline status toggle + actions */}
-                          <div className="flex items-center gap-1 shrink-0 flex-wrap">
-                            {/* Status toggle buttons */}
-                            <div className="inline-flex items-center rounded-md border border-border p-0.5 gap-0.5">
-                              {STATUS_OPTIONS.map((opt) => {
-                                const Icon = opt.icon;
-                                const isActive = status === opt.value;
-                                return (
-                                  <button
-                                    key={opt.value}
-                                    onClick={() => handleSetStatus(task, opt.value)}
-                                    className={`inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs font-medium transition-colors ${
-                                      isActive
-                                        ? `${opt.activeBg} ${opt.color}`
-                                        : 'text-muted-foreground hover:bg-muted/50'
-                                    }`}
-                                    title={opt.label}
-                                  >
-                                    <Icon className="h-3 w-3" />
-                                    <span className="hidden sm:inline">{opt.label}</span>
-                                  </button>
-                                );
-                              })}
+                            {/* Inline status toggle + actions */}
+                            <div className="flex items-center gap-1 shrink-0 flex-wrap">
+                              <div className="inline-flex items-center rounded-md border border-border p-0.5 gap-0.5">
+                                {STATUS_OPTIONS.map((opt) => {
+                                  const Icon = opt.icon;
+                                  const isActive = status === opt.value;
+                                  return (
+                                    <button
+                                      key={opt.value}
+                                      onClick={() => handleSetStatus(task, opt.value)}
+                                      className={`inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs font-medium transition-colors ${
+                                        isActive
+                                          ? `${opt.activeBg} ${opt.color}`
+                                          : 'text-muted-foreground hover:bg-muted/50'
+                                      }`}
+                                      title={opt.label}
+                                    >
+                                      <Icon className="h-3 w-3" />
+                                      <span className="hidden sm:inline">{opt.label}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingTask(task)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                onClick={() => {
+                                  if (confirm(`Delete task "${task.task_name}"?`)) {
+                                    handleDelete(task.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
                             </div>
-
-                            {/* Edit / Delete */}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => setEditingTask(task)}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => {
-                                if (confirm(`Delete task "${task.task_name}"?`)) {
-                                  handleDelete(task.id);
-                                }
-                              }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                        );
+                      })}
+                    </div>
+                  )}
+                </TabsContent>
+              );
+            })}
+          </Tabs>
         </CardContent>
       </Card>
 
