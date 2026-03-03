@@ -44,28 +44,32 @@ const DEFAULT_PARAGRAPHS: Record<string, string[]> = {
   ],
   invitation: [
     'Hi there,',
-    '{agent_name} would love for you to join us for {event_title}!',
-    'Click the link below to RSVP and reserve your spot.',
+    "You're personally invited to {event_title} — an exclusive event hosted by {agent_name} that you won't want to miss!",
+    "Whether you're looking to connect, learn, or simply enjoy an incredible experience, this is your chance. Spots are limited, so don't wait — RSVP today to reserve yours!",
   ],
   reminder_7day: [
     'Hi there,',
-    'This is a friendly reminder that {event_title} is coming up in 7 days!',
-    "We're looking forward to seeing you there! If you have any questions, feel free to reply to this email.",
+    "{event_title} is just one week away, and we're getting everything ready for an amazing experience!",
+    "You reserved your spot for a reason — great connections, valuable insights, and an event you'll be glad you attended. Mark your calendar and get ready!",
+    "Have any questions before the big day? Just reply to this email.",
   ],
   reminder_1day: [
     'Hi there,',
-    'Just a quick reminder that {event_title} is tomorrow!',
-    "We can't wait to see you! If you need directions or have any last-minute questions, just reply to this email.",
+    "Tomorrow is the day! {event_title} is almost here, and we've saved your spot.",
+    "Here's what you need to know: check the event details below for time, location, and everything else. We can't wait to welcome you!",
+    "If anything comes up, just reply to this email — we're here to help.",
   ],
   thank_you: [
     'Hi there,',
-    'Thank you for attending {event_title}! We hope you had a wonderful time.',
-    "Your presence made the event truly special. If you have any feedback or questions, don't hesitate to reach out.",
+    "Thank you so much for attending {event_title}! It was a pleasure having you, and we hope you walked away inspired.",
+    "We'd love to continue the conversation — if there's anything we discussed that resonated with you, or if you'd simply like to connect, let's schedule a quick 1-on-1 chat. No pressure, just a chance to see how we can help.",
+    "Reply to this email or reach out directly to {agent_name} to set something up!",
   ],
   no_show: [
     'Hi there,',
-    "We missed you at {event_title}! We're sorry you couldn't make it.",
-    "We'd love to see you at our next event. Stay tuned for upcoming opportunities!",
+    "We missed you at {event_title}! Life happens, and we completely understand.",
+    "You missed some great conversations and insights, but the good news is — we'd still love to connect with you. How about a quick 1-on-1 chat instead? It's a great way to catch up on what was shared and see how we can help.",
+    "Just reply to this email or reach out to {agent_name} directly — we'd love to hear from you!",
   ],
 }
 
@@ -73,21 +77,23 @@ interface VisualEmailEditorProps {
   emailType: string
   htmlContent: string
   onHtmlChange: (html: string) => void
+  agentColors?: { primary: string; secondary: string }
 }
 
 export const VisualEmailEditor: React.FC<VisualEmailEditorProps> = ({
   emailType,
   htmlContent,
   onHtmlChange,
+  agentColors,
 }) => {
   const [mode, setMode] = useState<'visual' | 'html'>('visual')
   const [data, setData] = useState<VisualEditorData>(() => {
     if (htmlContent && htmlContent.trim().length > 0) {
-      const defaults = getDefaultData(emailType)
+      const defaults = getDefaultData(emailType, agentColors)
       const parsed = parseHtmlToData(htmlContent)
       return { ...defaults, ...parsed }
     }
-    return getDefaultData(emailType)
+    return getDefaultData(emailType, agentColors)
   })
   const [initializedType, setInitializedType] = useState(emailType)
   const isInitialMount = useRef(true)
@@ -98,11 +104,11 @@ export const VisualEmailEditor: React.FC<VisualEmailEditorProps> = ({
   useEffect(() => {
     if (emailType !== initializedType) {
       if (htmlContent && htmlContent.trim().length > 0) {
-        const defaults = getDefaultData(emailType)
+        const defaults = getDefaultData(emailType, agentColors)
         const parsed = parseHtmlToData(htmlContent)
         setData({ ...defaults, ...parsed })
       } else {
-        setData(getDefaultData(emailType))
+        setData(getDefaultData(emailType, agentColors))
       }
       setInitializedType(emailType)
       isInitialMount.current = true
@@ -378,7 +384,7 @@ function parseHtmlToData(html: string): Partial<VisualEditorData> {
   return result
 }
 
-function getDefaultData(emailType: string): VisualEditorData {
+function getDefaultData(emailType: string, agentColors?: { primary: string; secondary: string }): VisualEditorData {
   const showRsvp = emailType === 'invitation' || emailType === 'confirmation'
   return {
     heading: DEFAULT_HEADINGS[emailType] || "You're Invited! ✉️",
@@ -396,8 +402,8 @@ function getDefaultData(emailType: string): VisualEditorData {
     showEventDetails: emailType !== 'thank_you' && emailType !== 'no_show',
     showRsvpButton: showRsvp,
     rsvpButtonText: emailType === 'invitation' ? 'RSVP Now' : 'View Event Details',
-    primaryColor: '#2563eb',
-    secondaryColor: '#1e40af',
+    primaryColor: agentColors?.primary || '#2563eb',
+    secondaryColor: agentColors?.secondary || '#1e40af',
   }
 }
 
