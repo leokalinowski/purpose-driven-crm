@@ -100,11 +100,20 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
 
         let agentData: EventPreviewData = {}
         if (ev.agent_id) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('first_name, last_name, email, phone_number, office_number, office_address, website, brokerage, team_name, primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
-            .eq('user_id', ev.agent_id)
-            .single()
+          const [profileRes, brandingRes] = await Promise.all([
+            supabase
+              .from('profiles')
+              .select('first_name, last_name, email, phone_number, office_number, office_address, website, brokerage, team_name')
+              .eq('user_id', ev.agent_id)
+              .single(),
+            supabase
+              .from('agent_marketing_settings')
+              .select('primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
+              .eq('user_id', ev.agent_id)
+              .maybeSingle()
+          ])
+          const profile = profileRes.data
+          const branding = brandingRes.data
           if (profile) {
             agentData = {
               agent_name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || undefined,
@@ -115,11 +124,11 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
               agent_website: profile.website || undefined,
               agent_brokerage: profile.brokerage || undefined,
               agent_team_name: profile.team_name || undefined,
-              primary_color: profile.primary_color || ev.brand_color || undefined,
-              secondary_color: profile.secondary_color || undefined,
-              headshot_url: profile.headshot_url || undefined,
-              logo_colored_url: profile.logo_colored_url || undefined,
-              logo_white_url: profile.logo_white_url || undefined,
+              primary_color: branding?.primary_color || ev.brand_color || undefined,
+              secondary_color: branding?.secondary_color || undefined,
+              headshot_url: branding?.headshot_url || undefined,
+              logo_colored_url: branding?.logo_colored_url || undefined,
+              logo_white_url: branding?.logo_white_url || undefined,
             }
           }
         }
