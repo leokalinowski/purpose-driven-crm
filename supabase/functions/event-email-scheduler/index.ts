@@ -78,9 +78,9 @@ function makeReplaceVars(event: any, agentName: string, primaryColor: string, se
       .replace(/{agent_team_name}/g, event.profiles?.team_name || '')
       .replace(/{primary_color}/g, primaryColor)
       .replace(/{secondary_color}/g, secondaryColor)
-      .replace(/{headshot_url}/g, event.profiles?.headshot_url || '')
-      .replace(/{logo_colored_url}/g, event.profiles?.logo_colored_url || '')
-      .replace(/{logo_white_url}/g, event.profiles?.logo_white_url || '')
+      .replace(/{headshot_url}/g, event.profiles?.headshot_url || event._marketingBranding?.headshot_url || '')
+      .replace(/{logo_colored_url}/g, event.profiles?.logo_colored_url || event._marketingBranding?.logo_colored_url || '')
+      .replace(/{logo_white_url}/g, event.profiles?.logo_white_url || event._marketingBranding?.logo_white_url || '')
       .replace(/{rsvp_link}/g, rsvpLink)
       .replace(/\{#if ([^}]+)\}([\s\S]*?)\{\/if\}/g, (_, _varName, inner) => inner.trim() ? inner : '')
   }
@@ -236,8 +236,8 @@ Deno.serve(async (req) => {
         *,
         profiles:agent_id (
           first_name, last_name, email, phone_number, office_number,
-          office_address, website, primary_color, secondary_color,
-          logo_colored_url, logo_white_url, team_name, brokerage, headshot_url
+          office_address, website,
+          team_name, brokerage
         )
       `)
       .eq('is_published', true)
@@ -261,11 +261,22 @@ Deno.serve(async (req) => {
 
       if (emailTypesToSend.length === 0) continue
 
+      // Fetch branding from agent_marketing_settings
+      let marketingBranding: any = null
+      if (event.agent_id) {
+        const { data: mktData } = await supabase
+          .from('agent_marketing_settings')
+          .select('primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
+          .eq('user_id', event.agent_id)
+          .maybeSingle()
+        marketingBranding = mktData
+      }
+
       const agentName = event.profiles
         ? `${event.profiles.first_name || ''} ${event.profiles.last_name || ''}`.trim() || 'Event Organizer'
         : 'Event Organizer'
-      const primaryColor = event.profiles?.primary_color || event.brand_color || '#2563eb'
-      const secondaryColor = event.profiles?.secondary_color || '#1e40af'
+      const primaryColor = marketingBranding?.primary_color || event.brand_color || '#2563eb'
+      const secondaryColor = marketingBranding?.secondary_color || '#1e40af'
       const replaceVars = makeReplaceVars(event, agentName, primaryColor, secondaryColor, formattedDate, formattedTime)
       const replyTo = event.profiles?.email || 'noreply@realestateonpurpose.com'
 

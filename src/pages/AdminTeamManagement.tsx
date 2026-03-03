@@ -309,7 +309,7 @@ const AdminTeamManagement = () => {
     try {
       const { data: profileData, error } = await supabase
         .from('profiles')
-        .select('team_name, brokerage, phone_number, office_address, office_number, website, state_licenses, primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
+        .select('team_name, brokerage, phone_number, office_address, office_number, website, state_licenses')
         .eq('user_id', agent.user_id)
         .single();
 
@@ -328,24 +328,23 @@ const AdminTeamManagement = () => {
         const licenses = Array.isArray(profileData.state_licenses) ? profileData.state_licenses : [];
         setEditStateLicenses(licenses);
         setEditStateLicensesInput(licenses.join(', '));
-        // Branding fields
-        setEditPrimaryColor(profileData.primary_color || '#667eea');
-        setEditSecondaryColor(profileData.secondary_color || '#764ba2');
-        setEditHeadshotUrl(profileData.headshot_url || '');
-        setEditLogoColoredUrl(profileData.logo_colored_url || '');
-        setEditLogoWhiteUrl(profileData.logo_white_url || '');
+      }
+
+      // Load branding from agent_marketing_settings
+      const { data: mktData } = await supabase
+        .from('agent_marketing_settings')
+        .select('primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
+        .eq('user_id', agent.user_id)
+        .maybeSingle();
+
+      if (mktData) {
+        setEditPrimaryColor(mktData.primary_color || '#667eea');
+        setEditSecondaryColor(mktData.secondary_color || '#764ba2');
+        setEditHeadshotUrl(mktData.headshot_url || '');
+        setEditLogoColoredUrl(mktData.logo_colored_url || '');
+        setEditLogoWhiteUrl(mktData.logo_white_url || '');
       } else {
-        console.warn('No profile data returned for user_id:', agent.user_id);
-        // Set defaults
-        setEditTeamName('');
-        setEditBrokerage('');
-        setEditPhoneNumber('');
-        setEditOfficeAddress('');
-        setEditOfficeNumber('');
-      setEditWebsite('');
-      setEditStateLicenses([]);
-      setEditStateLicensesInput('');
-      setEditPrimaryColor('#667eea');
+        setEditPrimaryColor('#667eea');
         setEditSecondaryColor('#764ba2');
         setEditHeadshotUrl('');
         setEditLogoColoredUrl('');
@@ -444,7 +443,7 @@ const AdminTeamManagement = () => {
         }
       }
 
-      // Update profile with all fields including branding
+      // Update profile with contact/business fields (NOT branding - that's in agent_marketing_settings)
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -458,17 +457,34 @@ const AdminTeamManagement = () => {
           office_number: editOfficeNumber.trim() || null,
           website: editWebsite.trim() || null,
           state_licenses: editStateLicenses.length > 0 ? editStateLicenses : null,
-          primary_color: editPrimaryColor.trim() || null,
-          secondary_color: editSecondaryColor.trim() || null,
-          headshot_url: finalHeadshotUrl.trim() || null,
-          logo_colored_url: finalLogoColoredUrl.trim() || null,
-          logo_white_url: finalLogoWhiteUrl.trim() || null,
         })
         .eq('user_id', editingAgent.user_id);
 
       if (profileError) {
         console.error('Profile update error:', profileError);
         throw profileError;
+      }
+
+      // Sync branding to agent_marketing_settings (single source of truth)
+      const { error: brandingError } = await supabase
+        .from('agent_marketing_settings')
+        .upsert({
+          user_id: editingAgent.user_id,
+          primary_color: editPrimaryColor.trim() || null,
+          secondary_color: editSecondaryColor.trim() || null,
+          headshot_url: finalHeadshotUrl.trim() || null,
+          logo_colored_url: finalLogoColoredUrl.trim() || null,
+          logo_white_url: finalLogoWhiteUrl.trim() || null,
+        }, { onConflict: 'user_id' });
+
+      if (brandingError) {
+        console.error('Branding sync error:', brandingError);
+        // Don't throw - profile was already saved successfully
+        toast({
+          title: 'Warning',
+          description: 'Profile saved but branding sync to marketing settings failed.',
+          variant: 'default',
+        });
       }
 
       // Update role if changed

@@ -77,16 +77,24 @@ serve(async (req) => {
       throw new Error(`Event not found: ${eventError?.message}`);
     }
 
-    // Fetch agent profile separately with all branding fields
+    // Fetch agent profile separately with contact fields
     let agent: any = null;
+    let marketingBranding: any = null;
     if (event.agent_id) {
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('first_name, last_name, email, team_name, brokerage, phone_number, office_number, office_address, website, state_licenses, primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
+        .select('first_name, last_name, email, team_name, brokerage, phone_number, office_number, office_address, website, state_licenses')
         .eq('user_id', event.agent_id)
         .single();
-      
       agent = profileData;
+
+      // Fetch branding from agent_marketing_settings (single source of truth)
+      const { data: mktData } = await supabase
+        .from('agent_marketing_settings')
+        .select('primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
+        .eq('user_id', event.agent_id)
+        .maybeSingle();
+      marketingBranding = mktData;
     }
     const agentName = agent
       ? `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || 'Your Real Estate Agent'
@@ -112,12 +120,11 @@ serve(async (req) => {
         (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
     }
     
-    // Use agent branding colors (from profiles) or event brand color, or default
-    const primaryColor = agent?.primary_color || event.brand_color || '#667eea';
-    const secondaryColor = agent?.secondary_color || (event.brand_color ? adjustBrightness(event.brand_color, -20) : '#764ba2');
-    // Use agent logo (colored) or event logo, prefer agent branding
-    const logoUrl = agent?.logo_colored_url || event.logo_url || '';
-    const headshotUrl = agent?.headshot_url || '';
+    // Use branding from agent_marketing_settings, fallback to event brand color
+    const primaryColor = marketingBranding?.primary_color || event.brand_color || '#667eea';
+    const secondaryColor = marketingBranding?.secondary_color || (event.brand_color ? adjustBrightness(event.brand_color, -20) : '#764ba2');
+    const logoUrl = marketingBranding?.logo_colored_url || event.logo_url || '';
+    const headshotUrl = marketingBranding?.headshot_url || '';
 
     // Parse date/time directly from the stored string to avoid timezone shifts
     const dateTimeParts = event.event_date.split('T');
@@ -161,7 +168,7 @@ serve(async (req) => {
         .replace(/{secondary_color}/g, secondaryColor)
         .replace(/{headshot_url}/g, headshotUrl)
         .replace(/{logo_colored_url}/g, logoUrl)
-        .replace(/{logo_white_url}/g, agent?.logo_white_url || '')
+        .replace(/{logo_white_url}/g, marketingBranding?.logo_white_url || '')
         .replace(/\{#if ([^}]+)\}([\s\S]*?)\{\/if\}/g, (_, varName, inner) => {
           const val = inner.trim()
           return val ? inner : ''

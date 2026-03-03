@@ -134,20 +134,18 @@ export const useEvents = () => {
       };
 
       try {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('primary_color, logo_colored_url, headshot_url')
+        const { data: marketingData } = await supabase
+          .from('agent_marketing_settings')
+          .select('primary_color, logo_colored_url')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
-        if (profileData) {
-          // Use agent branding if not explicitly provided
-          if (!eventData.brand_color && profileData.primary_color) {
-            agentBranding.primary_color = profileData.primary_color;
+        if (marketingData) {
+          if (!eventData.brand_color && marketingData.primary_color) {
+            agentBranding.primary_color = marketingData.primary_color;
           }
-          // Use agent logo as event logo if not provided
-          if (!eventData.header_image_url && profileData.logo_colored_url) {
-            agentBranding.logo_url = profileData.logo_colored_url;
+          if (!eventData.header_image_url && marketingData.logo_colored_url) {
+            agentBranding.logo_url = marketingData.logo_colored_url;
           }
         }
       } catch (error) {
@@ -292,20 +290,18 @@ export const useEvents = () => {
       };
 
       try {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('primary_color, logo_colored_url, headshot_url')
+        const { data: marketingData } = await supabase
+          .from('agent_marketing_settings')
+          .select('primary_color, logo_colored_url')
           .eq('user_id', agentId)
-          .single();
+          .maybeSingle();
 
-        if (profileData) {
-          // Use agent branding if not explicitly provided
-          if (!eventData.brand_color && profileData.primary_color) {
-            agentBranding.primary_color = profileData.primary_color;
+        if (marketingData) {
+          if (!eventData.brand_color && marketingData.primary_color) {
+            agentBranding.primary_color = marketingData.primary_color;
           }
-          // Use agent logo as event logo if not provided
-          if (!eventData.header_image_url && profileData.logo_colored_url) {
-            agentBranding.logo_url = profileData.logo_colored_url;
+          if (!eventData.header_image_url && marketingData.logo_colored_url) {
+            agentBranding.logo_url = marketingData.logo_colored_url;
           }
         }
       } catch (error) {

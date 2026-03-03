@@ -75,10 +75,6 @@ serve(async (req) => {
           office_number,
           office_address,
           website,
-          primary_color,
-          secondary_color,
-          logo_colored_url,
-          logo_white_url,
           team_name,
           brokerage
         )
@@ -88,6 +84,17 @@ serve(async (req) => {
 
     if (eventError || !event) {
       throw new Error('Event not found')
+    }
+
+    // Fetch branding from agent_marketing_settings (single source of truth)
+    let marketingBranding: any = null
+    if (event.agent_id) {
+      const { data: mktData } = await supabaseClient
+        .from('agent_marketing_settings')
+        .select('primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
+        .eq('user_id', event.agent_id)
+        .maybeSingle()
+      marketingBranding = mktData
     }
 
     // Get confirmed RSVPs
@@ -122,8 +129,8 @@ serve(async (req) => {
     const hour12 = h % 12 || 12
     const formattedTime = `${hour12}:${String(mi).padStart(2, '0')} ${ampm}`
 
-    const primaryColor = event.profiles?.primary_color || event.brand_color || '#2563eb'
-    const secondaryColor = event.profiles?.secondary_color || '#1e40af'
+    const primaryColor = marketingBranding?.primary_color || event.brand_color || '#2563eb'
+    const secondaryColor = marketingBranding?.secondary_color || '#1e40af'
 
     function replaceVars(content: string): string {
       return content
@@ -142,9 +149,9 @@ serve(async (req) => {
         .replace(/{agent_team_name}/g, event.profiles?.team_name || '')
         .replace(/{primary_color}/g, primaryColor)
         .replace(/{secondary_color}/g, secondaryColor)
-        .replace(/{headshot_url}/g, event.profiles?.headshot_url || '')
-        .replace(/{logo_colored_url}/g, event.profiles?.logo_colored_url || '')
-        .replace(/{logo_white_url}/g, event.profiles?.logo_white_url || '')
+        .replace(/{headshot_url}/g, marketingBranding?.headshot_url || '')
+        .replace(/{logo_colored_url}/g, marketingBranding?.logo_colored_url || '')
+        .replace(/{logo_white_url}/g, marketingBranding?.logo_white_url || '')
         .replace(/\{#if ([^}]+)\}([\s\S]*?)\{\/if\}/g, (_, _varName, inner) => inner.trim() ? inner : '')
     }
 
