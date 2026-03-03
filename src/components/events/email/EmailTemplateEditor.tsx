@@ -97,9 +97,8 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
       setIsActive(true)
     } else if (!templatesLoading && !globalLoading) {
       // Use built-in default template only after loading is complete
-      const defaultTemplate = getDefaultEmailTemplate(emailType)
       setSubject(DEFAULT_SUBJECTS[emailType] || "You're Invited to {event_title}")
-      setHtmlContent(defaultTemplate)
+      setHtmlContent('')
       setTextContent('')
       setIsActive(true)
     }
