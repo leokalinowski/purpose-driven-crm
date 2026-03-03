@@ -78,9 +78,9 @@ function makeReplaceVars(event: any, agentName: string, primaryColor: string, se
       .replace(/{agent_team_name}/g, event.profiles?.team_name || '')
       .replace(/{primary_color}/g, primaryColor)
       .replace(/{secondary_color}/g, secondaryColor)
-      .replace(/{headshot_url}/g, event.profiles?.headshot_url || event._marketingBranding?.headshot_url || '')
-      .replace(/{logo_colored_url}/g, event.profiles?.logo_colored_url || event._marketingBranding?.logo_colored_url || '')
-      .replace(/{logo_white_url}/g, event.profiles?.logo_white_url || event._marketingBranding?.logo_white_url || '')
+      .replace(/{headshot_url}/g, event._marketingBranding?.headshot_url || event.profiles?.headshot_url || '')
+      .replace(/{logo_colored_url}/g, event._marketingBranding?.logo_colored_url || event.profiles?.logo_colored_url || '')
+      .replace(/{logo_white_url}/g, event._marketingBranding?.logo_white_url || event.profiles?.logo_white_url || '')
       .replace(/{rsvp_link}/g, rsvpLink)
       .replace(/\{#if ([^}]+)\}([\s\S]*?)\{\/if\}/g, (_, _varName, inner) => inner.trim() ? inner : '')
   }

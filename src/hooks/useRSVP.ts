@@ -208,21 +208,30 @@ export const useRSVP = () => {
         throw eventError || new Error('Event not found');
       }
 
-      // Then fetch the agent profile separately if agent_id exists (including branding)
+      // Then fetch the agent profile separately if agent_id exists (contact info only)
       let profile = null;
+      let branding = null;
       if (event.agent_id) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('first_name, last_name, team_name, brokerage, phone_number, office_number, office_address, website, state_licenses, primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
-          .eq('user_id', event.agent_id)
-          .single();
+        const [profileRes, brandingRes] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('first_name, last_name, team_name, brokerage, phone_number, office_number, office_address, website, state_licenses')
+            .eq('user_id', event.agent_id)
+            .single(),
+          supabase
+            .from('agent_marketing_settings')
+            .select('primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
+            .eq('user_id', event.agent_id)
+            .maybeSingle()
+        ]);
         
-        profile = profileData;
+        profile = profileRes.data;
+        branding = brandingRes.data;
       }
 
       return {
         ...event,
-        profiles: profile
+        profiles: profile ? { ...profile, ...branding } : null
       };
     } catch (err) {
       console.error('Error fetching event by slug:', err);

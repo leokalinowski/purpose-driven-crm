@@ -1,15 +1,114 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Palette, FileText, Link2, Image as ImageIcon, Wallpaper } from 'lucide-react';
+import { Loader2, Palette, FileText, Link2, Image as ImageIcon, Wallpaper, Upload, X } from 'lucide-react';
 import { AgentImagesGallery } from './AgentImagesGallery';
 import { ThumbnailGenerator } from './ThumbnailGenerator';
 import { AgentBackgroundsSelector } from './AgentBackgroundsSelector';
 import { useAgentMarketingSettings, AgentMarketingSettings, AgentMarketingSettingsInput } from '@/hooks/useAgentMarketingSettings';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
+
+interface ImageUploadFieldProps {
+  label: string;
+  value: string;
+  onChange: (url: string) => void;
+  userId: string;
+  fileKey: string;
+}
+
+const ImageUploadField = ({ label, value, onChange, userId, fileKey }: ImageUploadFieldProps) => {
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop() || 'png';
+      const filePath = `${userId}/${fileKey}.${ext}`;
+
+      // Remove existing file first (ignore errors if doesn't exist)
+      await supabase.storage.from('agent-assets').remove([filePath]);
+
+      const { error: uploadError } = await supabase.storage
+        .from('agent-assets')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('agent-assets')
+        .getPublicUrl(filePath);
+
+      onChange(publicUrl);
+      toast({ title: `${label} uploaded`, description: 'Image uploaded successfully.' });
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleClear = () => {
+    onChange('');
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      {value && (
+        <div className="relative inline-block">
+          <img
+            src={value}
+            alt={label}
+            className="h-20 w-20 object-cover rounded-md border border-border"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+          <button
+            type="button"
+            onClick={handleClear}
+            className="absolute -top-2 -right-2 rounded-full bg-destructive text-destructive-foreground h-5 w-5 flex items-center justify-center text-xs"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="https://... or upload below"
+          className="flex-1"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={uploading}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleUpload}
+          className="hidden"
+        />
+      </div>
+    </div>
+  );
+};
 
 interface AgentMarketingSettingsFormProps {
   userId: string;
@@ -174,36 +273,30 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose, isAdmin
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Assets</CardTitle>
-              <CardDescription>Logo and headshot URLs</CardDescription>
+              <CardDescription>Upload or paste URLs for your headshot and logos</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="headshot_url">Headshot URL</Label>
-                <Input
-                  id="headshot_url"
-                  value={formData.headshot_url || ''}
-                  onChange={(e) => handleChange('headshot_url', e.target.value)}
-                  placeholder="https://..."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="logo_colored_url">Colored Logo URL</Label>
-                <Input
-                  id="logo_colored_url"
-                  value={formData.logo_colored_url || ''}
-                  onChange={(e) => handleChange('logo_colored_url', e.target.value)}
-                  placeholder="https://..."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="logo_white_url">White Logo URL</Label>
-                <Input
-                  id="logo_white_url"
-                  value={formData.logo_white_url || ''}
-                  onChange={(e) => handleChange('logo_white_url', e.target.value)}
-                  placeholder="https://..."
-                />
-              </div>
+            <CardContent className="space-y-6">
+              <ImageUploadField
+                label="Headshot"
+                value={formData.headshot_url || ''}
+                onChange={(url) => handleChange('headshot_url', url)}
+                userId={userId}
+                fileKey="headshot"
+              />
+              <ImageUploadField
+                label="Colored Logo"
+                value={formData.logo_colored_url || ''}
+                onChange={(url) => handleChange('logo_colored_url', url)}
+                userId={userId}
+                fileKey="logo-colored"
+              />
+              <ImageUploadField
+                label="White Logo"
+                value={formData.logo_white_url || ''}
+                onChange={(url) => handleChange('logo_white_url', url)}
+                userId={userId}
+                fileKey="logo-white"
+              />
             </CardContent>
           </Card>
         </TabsContent>
