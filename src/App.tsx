@@ -38,6 +38,7 @@ import PipelineSurvey from "./pages/PipelineSurvey";
 import AdminSurveyResults from "./pages/AdminSurveyResults";
 import NewsletterBuilderPage from "./pages/NewsletterBuilder";
 import AdminAnnouncements from "./pages/AdminAnnouncements";
+import Settings from "./pages/Settings";
 
 const queryClient = new QueryClient();
 
@@ -77,6 +78,7 @@ const AppContent = () => {
         <Route path="/survey/pipeline" element={<PipelineSurvey />} />
         <Route path="/newsletter-builder/:templateId?" element={<NewsletterBuilderPage />} />
         <Route path="/admin/announcements" element={<AdminAnnouncements />} />
+        <Route path="/settings" element={<Settings />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>

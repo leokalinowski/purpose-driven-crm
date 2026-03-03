@@ -49,13 +49,22 @@ serve(async (req) => {
 
     // Fetch agent profile separately (no FK required)
     let agentProfile: any = null
+    let marketingBranding: any = null
     if (event.agent_id) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('first_name, last_name, email, phone_number, office_number, office_address, website, primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url, team_name, brokerage')
+        .select('first_name, last_name, email, phone_number, office_number, office_address, website, team_name, brokerage')
         .eq('user_id', event.agent_id)
         .single()
       agentProfile = profile
+
+      // Fetch branding from agent_marketing_settings (single source of truth)
+      const { data: mktData } = await supabase
+        .from('agent_marketing_settings')
+        .select('primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
+        .eq('user_id', event.agent_id)
+        .maybeSingle()
+      marketingBranding = mktData
     }
     // Attach as event.profiles for downstream compatibility
     ;(event as any).profiles = agentProfile
@@ -138,8 +147,8 @@ serve(async (req) => {
     const hour12 = h % 12 || 12
     const formattedTime = `${hour12}:${String(mi).padStart(2, '0')} ${ampm}`
 
-    const primaryColor = event.profiles?.primary_color || event.brand_color || '#2563eb'
-    const secondaryColor = event.profiles?.secondary_color || '#1e40af'
+    const primaryColor = marketingBranding?.primary_color || event.brand_color || '#2563eb'
+    const secondaryColor = marketingBranding?.secondary_color || '#1e40af'
     const rsvpLink = `https://hub.realestateonpurpose.com/event/${event.public_slug}`
 
     function replaceVars(content: string): string {
@@ -159,9 +168,9 @@ serve(async (req) => {
         .replace(/{agent_team_name}/g, event.profiles?.team_name || '')
         .replace(/{primary_color}/g, primaryColor)
         .replace(/{secondary_color}/g, secondaryColor)
-        .replace(/{headshot_url}/g, event.profiles?.headshot_url || '')
-        .replace(/{logo_colored_url}/g, event.profiles?.logo_colored_url || '')
-        .replace(/{logo_white_url}/g, event.profiles?.logo_white_url || '')
+        .replace(/{headshot_url}/g, marketingBranding?.headshot_url || '')
+        .replace(/{logo_colored_url}/g, marketingBranding?.logo_colored_url || '')
+        .replace(/{logo_white_url}/g, marketingBranding?.logo_white_url || '')
         .replace(/{rsvp_link}/g, rsvpLink)
         .replace(/\{#if ([^}]+)\}([\s\S]*?)\{\/if\}/g, (_, _varName, inner) => inner.trim() ? inner : '')
     }

@@ -15,9 +15,10 @@ interface AgentMarketingSettingsFormProps {
   userId: string;
   agentName: string;
   onClose?: () => void;
+  isAdmin?: boolean;
 }
 
-export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: AgentMarketingSettingsFormProps) => {
+export const AgentMarketingSettingsForm = ({ userId, agentName, onClose, isAdmin = true }: AgentMarketingSettingsFormProps) => {
   const { loading, fetchSettings, upsertSettings } = useAgentMarketingSettings();
   const [settings, setSettings] = useState<AgentMarketingSettings | null>(null);
   const [formData, setFormData] = useState<AgentMarketingSettingsInput>({});
@@ -88,14 +89,14 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: Agent
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="mb-4">
-        <h3 className="text-lg font-semibold">Marketing Settings for {agentName}</h3>
+        <h3 className="text-lg font-semibold">{isAdmin ? `Marketing Settings for ${agentName}` : 'My Branding & Content'}</h3>
         <p className="text-sm text-muted-foreground">
-          Configure branding, content guidelines, and integration IDs
+          {isAdmin ? 'Configure branding, content guidelines, and integration IDs' : 'Configure your branding colors, logos, and content guidelines'}
         </p>
       </div>
 
       <Tabs defaultValue="branding" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-2'}`}>
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Branding</span>
@@ -104,18 +105,24 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: Agent
             <FileText className="h-4 w-4" />
             <span className="hidden sm:inline">Content</span>
           </TabsTrigger>
-          <TabsTrigger value="integrations" className="flex items-center gap-2">
-            <Link2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Integrations</span>
-          </TabsTrigger>
-          <TabsTrigger value="images" className="flex items-center gap-2">
-            <ImageIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">Images</span>
-          </TabsTrigger>
-          <TabsTrigger value="backgrounds" className="flex items-center gap-2">
-            <Wallpaper className="h-4 w-4" />
-            <span className="hidden sm:inline">Backgrounds</span>
-          </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="integrations" className="flex items-center gap-2">
+              <Link2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Integrations</span>
+            </TabsTrigger>
+          )}
+          {isAdmin && (
+            <TabsTrigger value="images" className="flex items-center gap-2">
+              <ImageIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">Images</span>
+            </TabsTrigger>
+          )}
+          {isAdmin && (
+            <TabsTrigger value="backgrounds" className="flex items-center gap-2">
+              <Wallpaper className="h-4 w-4" />
+              <span className="hidden sm:inline">Backgrounds</span>
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="branding" className="space-y-4 mt-4">
@@ -282,7 +289,7 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: Agent
           </Card>
         </TabsContent>
 
-        <TabsContent value="integrations" className="space-y-4 mt-4">
+        {isAdmin && <TabsContent value="integrations" className="space-y-4 mt-4">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">ClickUp Integration</CardTitle>
@@ -447,9 +454,9 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: Agent
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent>}
 
-        <TabsContent value="images" className="space-y-4 mt-4">
+        {isAdmin && <TabsContent value="images" className="space-y-4 mt-4">
           <ThumbnailGenerator userId={userId} agentName={agentName} />
           <Card>
             <CardHeader className="pb-3">
@@ -460,9 +467,9 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: Agent
               <AgentImagesGallery userId={userId} />
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent>}
 
-        <TabsContent value="backgrounds" className="space-y-4 mt-4">
+        {isAdmin && <TabsContent value="backgrounds" className="space-y-4 mt-4">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Linked Backgrounds</CardTitle>
@@ -472,7 +479,7 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose }: Agent
               <AgentBackgroundsSelector userId={userId} />
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
 
       <div className="flex justify-end gap-2 pt-4 border-t">
