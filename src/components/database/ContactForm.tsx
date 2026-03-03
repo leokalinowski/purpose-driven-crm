@@ -185,6 +185,9 @@ export const ContactForm = ({
       await onSubmit(contactInput);
       
       // If contact has a phone number, trigger DNC check automatically in background
+      // For new contacts, contact?.id won't exist yet, but the onSubmit handler
+      // returns the created contact - so we fire DNC check for edits here,
+      // and for new contacts it's handled by the parent (CSV upload / add handler)
       if (contactInput.phone && contact?.id) {
         supabase.functions.invoke('dnc-single-check', {
           body: { phone: contactInput.phone, contactId: contact.id }

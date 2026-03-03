@@ -85,10 +85,10 @@ export const standardizeAddress = (
   if (address1) {
     result.address_1 = address1.trim()
       .replace(/\s+/g, ' ') // Multiple spaces to single
-      .replace(/\bst\b/gi, 'Street')
+      .replace(/(?<!\d)\bst\b/gi, 'Street')
       .replace(/\bave\b/gi, 'Avenue')
-      .replace(/\brd\b/gi, 'Road')
-      .replace(/\bdr\b/gi, 'Drive')
+      .replace(/(?<!\d)\brd\b/gi, 'Road')
+      .replace(/(?<!\d)\bdr\b/gi, 'Drive')
       .replace(/\bln\b/gi, 'Lane');
   }
 

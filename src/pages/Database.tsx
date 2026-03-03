@@ -357,8 +357,7 @@ const Database = () => {
         variant: 'destructive',
       });
     } finally {
-      // Ensure the CSV upload dialog closes even if there's an error
-      setShowCSVUpload(false);
+      // Don't close dialog on error - user keeps their file selection and mapping
     }
   };
 
@@ -478,41 +477,35 @@ const Database = () => {
                 </AlertDescription>
               </Alert>
             )}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex gap-2">
-                    <DNCCheckButton 
-                      variant="default" 
-                      size="default" 
-                      onRun={handleDNCCheck}
-                      checking={dncChecking}
-                    />
-                    <DNCCheckButton 
-                      variant="destructive" 
-                      size="default" 
-                      forceRecheck={true}
-                      onRun={handleDNCCheck}
-                      checking={dncChecking}
-                    />
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <DNCStatsCard 
-                  stats={stats || {
-                    totalContacts: 0,
-                    dncContacts: 0,
-                    nonDncContacts: 0,
-                    neverChecked: 0,
-                    missingPhone: 0,
-                    needsRecheck: 0,
-                    lastChecked: null,
-                  }} 
-                  loading={dncLoading} 
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <DNCCheckButton 
+                  variant="default" 
+                  size="default" 
+                  onRun={handleDNCCheck}
+                  checking={dncChecking}
                 />
-              </CardContent>
-            </Card>
+                <DNCCheckButton 
+                  variant="destructive" 
+                  size="default" 
+                  forceRecheck={true}
+                  onRun={handleDNCCheck}
+                  checking={dncChecking}
+                />
+              </div>
+              <DNCStatsCard 
+                stats={stats || {
+                  totalContacts: 0,
+                  dncContacts: 0,
+                  nonDncContacts: 0,
+                  neverChecked: 0,
+                  missingPhone: 0,
+                  needsRecheck: 0,
+                  lastChecked: null,
+                }} 
+                loading={dncLoading} 
+              />
+            </div>
           </>
         )}
         
@@ -568,7 +561,7 @@ const Database = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => goToPage(currentPage - 1)}
+                        onClick={() => { goToPage(currentPage - 1); setSelectedContacts([]); }}
                         disabled={currentPage === 1}
                         className="flex-shrink-0"
                       >
@@ -583,7 +576,7 @@ const Database = () => {
                           key={page}
                           variant={page === currentPage ? "default" : "outline"}
                           size="sm"
-                          onClick={() => goToPage(page)}
+                          onClick={() => { goToPage(page); setSelectedContacts([]); }}
                           className="min-w-[2.5rem]"
                         >
                           {page}
@@ -601,7 +594,7 @@ const Database = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => goToPage(currentPage + 1)}
+                        onClick={() => { goToPage(currentPage + 1); setSelectedContacts([]); }}
                         disabled={currentPage === totalPages}
                         className="flex-shrink-0"
                       >

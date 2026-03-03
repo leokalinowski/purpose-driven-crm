@@ -123,22 +123,25 @@ export const BulkContactEditor = ({
     const tags = tagInput.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
     if (tags.length === 0) return;
 
-    setUpdates(prev => {
-      const currentTags = prev.tags || [];
-      let newTags: string[];
-
-      if (operation === 'add') {
-        // Add new tags, avoiding duplicates
-        newTags = [...new Set([...currentTags, ...tags])];
-        setTagsToAdd('');
-      } else {
-        // Remove specified tags
-        newTags = currentTags.filter(tag => !tags.includes(tag));
-        setTagsToRemove('');
-      }
-
-      return { ...prev, tags: newTags };
-    });
+    if (operation === 'add') {
+      // Collect all existing tags from selected contacts, then merge with new tags
+      const allExistingTags = new Set(selectedContacts.flatMap(c => c.tags || []));
+      // Also include any previously staged tags
+      const stagedTags = updates.tags || [];
+      stagedTags.forEach(t => allExistingTags.add(t));
+      tags.forEach(t => allExistingTags.add(t));
+      setUpdates(prev => ({ ...prev, tags: Array.from(allExistingTags) }));
+      setTagsToAdd('');
+    } else {
+      // Remove specified tags from all selected contacts' existing tags
+      const allExistingTags = new Set(selectedContacts.flatMap(c => c.tags || []));
+      // Also include any previously staged tags
+      const stagedTags = updates.tags || [];
+      stagedTags.forEach(t => allExistingTags.add(t));
+      tags.forEach(t => allExistingTags.delete(t));
+      setUpdates(prev => ({ ...prev, tags: Array.from(allExistingTags) }));
+      setTagsToRemove('');
+    }
   };
 
   const fieldsChanged = Object.keys(updates).length;

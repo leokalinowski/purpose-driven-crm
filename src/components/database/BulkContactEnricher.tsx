@@ -5,7 +5,7 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Sparkles, CheckCircle, AlertTriangle, XCircle, Loader2 } from 'lucide-react';
 import { Contact } from '@/hooks/useContacts';
-import { enrichContact, EnrichedContact } from '@/utils/dataEnrichment';
+import { enrichContact, EnrichedContact, calculateDataQualityScore } from '@/utils/dataEnrichment';
 import { toast } from '@/components/ui/use-toast';
 
 interface BulkContactEnricherProps {
@@ -56,26 +56,11 @@ export const BulkContactEnricher = ({
 
       for (const contact of batch) {
         try {
-          const originalQuality = Math.round(((() => {
-            let score = 0;
-            const totalFields = 3;
-            if (contact.first_name && contact.last_name) score += 1;
-            if (contact.phone || contact.email) score += 1;
-            if (contact.address_1 || contact.city || contact.state || contact.zip_code) score += 1;
-            return (score / totalFields) * 100;
-          })()));
+          const originalQuality = calculateDataQualityScore(contact);
 
           const result = enrichContact(contact);
 
-          // Calculate new quality score
-          const newQuality = Math.round(((() => {
-            let score = 0;
-            const totalFields = 3;
-            if (result.contact.first_name && result.contact.last_name) score += 1;
-            if (result.contact.phone || result.contact.email) score += 1;
-            if (result.contact.address_1 || result.contact.city || result.contact.state || result.contact.zip_code) score += 1;
-            return (score / totalFields) * 100;
-          })()));
+          const newQuality = calculateDataQualityScore(result.contact as Contact);
 
           // Count as enriched if there were changes made or quality improved
           if (result.changes_made.length > 0 || newQuality > originalQuality) {
