@@ -1,12 +1,14 @@
-import { CheckCircle2, Clock, AlertTriangle, CalendarClock } from 'lucide-react';
+import { CheckCircle2, Clock, AlertTriangle, CalendarClock, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import type { ClickUpTaskStats } from '@/hooks/useClickUpTasks';
 
 interface EventProgressStatsProps {
-  stats: ClickUpTaskStats;
+  stats: ClickUpTaskStats & { inProgress?: number };
 }
 
 export function EventProgressStats({ stats }: EventProgressStatsProps) {
+  const inProgress = (stats as any).inProgress ?? (stats.total - stats.completed - stats.overdue);
+
   const items = [
     {
       label: 'Completed',
@@ -17,10 +19,10 @@ export function EventProgressStats({ stats }: EventProgressStatsProps) {
     },
     {
       label: 'In Progress',
-      value: stats.total - stats.completed - stats.overdue,
-      icon: Clock,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50 dark:bg-blue-950/30',
+      value: inProgress,
+      icon: Loader2,
+      color: inProgress > 0 ? 'text-blue-600' : 'text-muted-foreground',
+      bgColor: inProgress > 0 ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-muted/50',
     },
     {
       label: 'Overdue',
