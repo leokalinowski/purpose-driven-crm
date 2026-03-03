@@ -31,25 +31,25 @@ const getActivityIcon = (type: ContactActivity['activity_type'], isSystemGenerat
   return <Icon className="h-4 w-4" />;
 };
 
-const getActivityColor = (type: ContactActivity['activity_type'], isSystemGenerated?: boolean, systemSource?: string) => {
+const getActivityColorClasses = (type: ContactActivity['activity_type'], isSystemGenerated?: boolean, systemSource?: string) => {
   if (isSystemGenerated) {
     if (systemSource === 'spheresync') {
-      return 'bg-primary';
+      return { bg: 'bg-primary', borderL: 'border-l-primary' };
     }
     if (systemSource === 'newsletter') {
-      return 'bg-secondary';
+      return { bg: 'bg-secondary', borderL: 'border-l-secondary' };
     }
-    return 'bg-muted-foreground';
+    return { bg: 'bg-muted-foreground', borderL: 'border-l-muted-foreground' };
   }
   
   switch (type) {
-    case 'call': return 'bg-blue-500';
-    case 'text': return 'bg-green-500';
-    case 'email': return 'bg-purple-500';
-    case 'meeting': return 'bg-orange-500';
-    case 'note': return 'bg-gray-500';
-    case 'task': return 'bg-yellow-500';
-    default: return 'bg-gray-500';
+    case 'call': return { bg: 'bg-blue-500', borderL: 'border-l-blue-500' };
+    case 'text': return { bg: 'bg-green-500', borderL: 'border-l-green-500' };
+    case 'email': return { bg: 'bg-purple-500', borderL: 'border-l-purple-500' };
+    case 'meeting': return { bg: 'bg-orange-500', borderL: 'border-l-orange-500' };
+    case 'note': return { bg: 'bg-gray-500', borderL: 'border-l-gray-500' };
+    case 'task': return { bg: 'bg-yellow-500', borderL: 'border-l-yellow-500' };
+    default: return { bg: 'bg-gray-500', borderL: 'border-l-gray-500' };
   }
 };
 
@@ -136,17 +136,17 @@ export const ContactActivitiesDialog = ({
               activities.map((activity) => {
                 const isSystemGenerated = activity.is_system_generated;
                 const systemSource = activity.system_source;
+                const colorClasses = getActivityColorClasses(activity.activity_type, isSystemGenerated, systemSource);
                 
                 return (
                   <Card 
                     key={activity.id} 
-                    className={`border-l-4 ${isSystemGenerated ? 'bg-muted/20' : ''}`} 
-                    style={{ borderLeftColor: getActivityColor(activity.activity_type, isSystemGenerated, systemSource).replace('bg-', '') }}
+                    className={`border-l-4 ${colorClasses.borderL} ${isSystemGenerated ? 'bg-muted/20' : ''}`}
                   >
                     <CardContent className="pt-4">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-full text-white ${getActivityColor(activity.activity_type, isSystemGenerated, systemSource)}`}>
+                          <div className={`p-2 rounded-full text-white ${colorClasses.bg}`}>
                             {getActivityIcon(activity.activity_type, isSystemGenerated)}
                           </div>
                           <div className="space-y-1">

@@ -131,9 +131,11 @@ export const useContacts = () => {
       setTotalContacts(total);
       setTotalPages(Math.max(1, Math.ceil(total / ITEMS_PER_PAGE)));
 
-      // Also fetch all contacts for dashboard/enrichment functions
-      const all = await fetchAllContacts();
-      setAllContacts(all);
+      // Only fetch all contacts on initial load or explicit refresh, not on every page change
+      if (allContacts.length === 0 || currentPage === 1) {
+        const all = await fetchAllContacts();
+        setAllContacts(all);
+      }
     } catch (error) {
       console.error('[useContacts] Error fetching contacts:', error);
     } finally {
