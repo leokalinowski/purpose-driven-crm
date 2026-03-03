@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEvents } from '@/hooks/useEvents';
@@ -16,18 +16,21 @@ import { Plus, Calendar, ExternalLink, Edit, Trash2, Mail } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { buildAuthRedirectPath } from '@/utils/authRedirect';
+import { format } from 'date-fns';
 
 const Events = () => {
   const { hasAccess, currentTier, getRequiredTier } = useFeatureAccess();
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('my-event');
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { 
     events, 
     loading, 
     getNextEvent,
+    getPreviousQuarterEvent,
     deleteEvent
   } = useEvents();
 
@@ -38,6 +41,14 @@ const Events = () => {
       document.title = 'Events | Real Estate on Purpose';
     }
   }, [user, authLoading, navigate]);
+
+  // Determine the active event: user-selected > next upcoming > most recent past
+  const activeEvent = useMemo(() => {
+    if (selectedEventId) {
+      return events.find(e => e.id === selectedEventId) || null;
+    }
+    return getNextEvent() || getPreviousQuarterEvent() || null;
+  }, [selectedEventId, events, getNextEvent, getPreviousQuarterEvent]);
 
   if (authLoading || loading) {
     return (
@@ -74,7 +85,22 @@ const Events = () => {
     );
   }
 
-  const nextEvent = getNextEvent();
+  const handleSelectEvent = (eventId: string) => {
+    setSelectedEventId(eventId === selectedEventId ? null : eventId);
+  };
+
+  const handleViewRSVPs = (eventId: string) => {
+    setSelectedEventId(eventId);
+    setActiveTab('rsvps');
+  };
+
+  const formatEventDate = (dateStr: string) => {
+    try {
+      return format(new Date(dateStr), 'MMM d, yyyy');
+    } catch {
+      return new Date(dateStr).toLocaleDateString();
+    }
+  };
 
   return (
     <Layout>
@@ -92,7 +118,7 @@ const Events = () => {
           </Button>
         </div>
 
-        <Tabs defaultValue="my-event" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="w-full sm:w-auto overflow-x-auto">
             <TabsTrigger value="my-event">My Event</TabsTrigger>
             <TabsTrigger value="emails">Emails</TabsTrigger>
@@ -102,13 +128,13 @@ const Events = () => {
 
           {/* My Event Tab - Progress Dashboard */}
           <TabsContent value="my-event" className="mt-4">
-            {nextEvent ? (
-              <EventProgressDashboard event={nextEvent} />
+            {activeEvent ? (
+              <EventProgressDashboard event={activeEvent} />
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Upcoming Events</h3>
+                  <h3 className="text-lg font-semibold mb-2">No Events Yet</h3>
                   <p className="text-muted-foreground text-center mb-4">
                     Create an event to start tracking your preparation progress.
                   </p>
@@ -123,10 +149,10 @@ const Events = () => {
 
           {/* Emails Tab */}
           <TabsContent value="emails" className="mt-4">
-            {(selectedEventId || nextEvent?.id) ? (
+            {activeEvent ? (
               <EmailManagement
-                eventId={selectedEventId || nextEvent?.id || ''}
-                eventTitle={events.find(e => e.id === (selectedEventId || nextEvent?.id))?.title || ''}
+                eventId={activeEvent.id}
+                eventTitle={activeEvent.title}
               />
             ) : (
               <Card>
@@ -147,10 +173,10 @@ const Events = () => {
 
           {/* RSVPs Tab */}
           <TabsContent value="rsvps" className="mt-4">
-            {(selectedEventId || nextEvent?.id) ? (
+            {activeEvent ? (
               <RSVPManagement 
-                eventId={selectedEventId || nextEvent?.id || ''}
-                publicSlug={events.find(e => e.id === (selectedEventId || nextEvent?.id))?.public_slug}
+                eventId={activeEvent.id}
+                publicSlug={activeEvent.public_slug}
               />
             ) : (
               <Card>
@@ -173,12 +199,15 @@ const Events = () => {
                     {events.map((event) => (
                       <div 
                         key={event.id} 
-                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border rounded-lg hover:bg-muted/50"
+                        className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors ${
+                          selectedEventId === event.id ? 'ring-2 ring-primary bg-muted/30' : ''
+                        }`}
+                        onClick={() => handleSelectEvent(event.id)}
                       >
                         <div className="flex-1 min-w-0">
                           <h4 className="font-medium truncate">{event.title}</h4>
                           <p className="text-sm text-muted-foreground">
-                            {new Date(event.event_date).toLocaleDateString()}
+                            {formatEventDate(event.event_date)}
                           </p>
                           {event.location && (
                             <p className="text-sm text-muted-foreground">{event.location}</p>
@@ -233,6 +262,9 @@ const Events = () => {
                               if (confirm(`Are you sure you want to delete "${event.title}"?`)) {
                                 try {
                                   await deleteEvent(event.id);
+                                  if (selectedEventId === event.id) {
+                                    setSelectedEventId(null);
+                                  }
                                 } catch (error: any) {
                                   alert('Failed to delete event: ' + error.message);
                                 }
@@ -246,10 +278,10 @@ const Events = () => {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedEventId(event.id === selectedEventId ? null : event.id);
+                              handleViewRSVPs(event.id);
                             }}
                           >
-                            {selectedEventId === event.id ? 'Hide RSVPs' : 'View RSVPs'}
+                            View RSVPs
                           </Button>
                         </div>
                       </div>

@@ -15,12 +15,8 @@ export const useUserRole = () => {
     setRefreshIndex((v) => v + 1);
   }, []);
 
-  const fetchUserRole = useCallback(async () => {
-    // While auth is still loading, keep role in loading state too
-    // so downstream guards don't redirect prematurely.
-    if (authLoading) {
-      return;
-    }
+  const fetchUserRole = useCallback(async (retryCount = 0) => {
+    if (authLoading) return;
 
     if (!user) {
       setRole(null);
@@ -29,25 +25,36 @@ export const useUserRole = () => {
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    if (retryCount === 0) {
+      setLoading(true);
+      setError(null);
+    }
 
     try {
-      // Source of truth: SECURITY DEFINER DB function based on user_roles table.
       const { data, error } = await supabase.rpc('get_current_user_role');
       if (error) throw error;
-
-      // If no role row exists, treat as unknown (do not assume 'agent' here).
       setRole(data ?? null);
-    } catch (err) {
-      // Don't default to 'agent' on failure; let callers decide UX (retry vs deny).
+      setLoading(false);
+    } catch (err: any) {
+      const isAbortError =
+        err?.name === 'AbortError' ||
+        err?.message?.includes('AbortError') ||
+        err?.message?.includes('signal') ||
+        err?.code === 'PGRST301';
+
+      if (isAbortError && retryCount < 3) {
+        const delay = Math.min(500 * Math.pow(2, retryCount), 4000);
+        console.warn(`[useUserRole] RPC aborted, retrying (${retryCount + 1}/3) in ${delay}ms`);
+        setTimeout(() => fetchUserRole(retryCount + 1), delay);
+        return;
+      }
+
       console.error('[useUserRole] RPC get_current_user_role failed', {
         userId: user.id,
         err,
       });
       setRole(null);
       setError(err);
-    } finally {
       setLoading(false);
     }
   }, [user, authLoading]);
