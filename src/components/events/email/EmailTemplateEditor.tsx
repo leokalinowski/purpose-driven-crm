@@ -49,6 +49,15 @@ const EMAIL_TYPE_LABELS: Record<string, string> = {
   invitation: 'Event Invitation'
 }
 
+const DEFAULT_SUBJECTS: Record<string, string> = {
+  invitation: "You're Invited to {event_title}",
+  confirmation: "You're confirmed for {event_title}",
+  reminder_7day: "Reminder: {event_title} is in 7 days",
+  reminder_1day: "Reminder: {event_title} is tomorrow!",
+  thank_you: "Thank you for attending {event_title}",
+  no_show: "We missed you at {event_title}",
+}
+
 export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
   eventId,
   emailType,
@@ -89,7 +98,7 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
     } else if (!templatesLoading && !globalLoading) {
       // Use built-in default template only after loading is complete
       const defaultTemplate = getDefaultEmailTemplate(emailType)
-      setSubject(`You're confirmed for {event_title}`)
+      setSubject(DEFAULT_SUBJECTS[emailType] || "You're Invited to {event_title}")
       setHtmlContent(defaultTemplate)
       setTextContent('')
       setIsActive(true)

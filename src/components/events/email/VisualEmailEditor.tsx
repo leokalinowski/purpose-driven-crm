@@ -368,11 +368,12 @@ function parseHtmlToData(html: string): Partial<VisualEditorData> {
     }
   }
 
-  // Extract colors from inline styles
+  // Extract colors from inline styles — support both raw hex and {primary_color} placeholders
   const gradientMatch = html.match(/linear-gradient\(135deg,\s*(#[0-9a-fA-F]{6})/)
   if (gradientMatch) result.primaryColor = gradientMatch[1]
   const secondaryMatch = html.match(/linear-gradient\(135deg,\s*#[0-9a-fA-F]{6}\s+0%,\s*(#[0-9a-fA-F]{6})/)
   if (secondaryMatch) result.secondaryColor = secondaryMatch[1]
+  // If placeholders are used, keep defaults (color pickers are for preview only)
 
   return result
 }
@@ -401,8 +402,9 @@ function getDefaultData(emailType: string): VisualEditorData {
 }
 
 function dataToHtml(data: VisualEditorData): string {
-  const pc = data.primaryColor
-  const sc = data.secondaryColor
+  // Use template placeholders so edge functions can inject agent's actual branding colors
+  const pc = '{primary_color}'
+  const sc = '{secondary_color}'
 
   const headerImages = [
     data.showHeadshot ? `{#if headshot_url}<img src="{headshot_url}" alt="{agent_name}" style="width: 100px; height: 100px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.3); object-fit: cover; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;">{/if}` : '',
