@@ -2,21 +2,19 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEvents } from '@/hooks/useEvents';
-import { useContacts } from '@/hooks/useContacts';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { Layout } from '@/components/layout/Layout';
 import { UpgradePrompt } from '@/components/ui/UpgradePrompt';
 import { EventProgressDashboard } from '@/components/events/EventProgressDashboard';
 import { EventForm } from '@/components/events/EventForm';
 import { RSVPManagement } from '@/components/events/RSVPManagement';
+import { EmailManagement } from '@/components/events/email/EmailManagement';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Calendar, ExternalLink, Edit, Trash2, Users, Loader2 } from 'lucide-react';
+import { Plus, Calendar, ExternalLink, Edit, Trash2, Mail } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
 import { buildAuthRedirectPath } from '@/utils/authRedirect';
 
 const Events = () => {
@@ -24,17 +22,14 @@ const Events = () => {
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [sendingInvites, setSendingInvites] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { 
     events, 
     loading, 
     getNextEvent,
     deleteEvent
   } = useEvents();
-  const { contacts } = useContacts();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -80,27 +75,6 @@ const Events = () => {
   }
 
   const nextEvent = getNextEvent();
-  const eligibleContactCount = contacts.filter(c => !c.dnc && c.email).length;
-
-  const handleSendInvitations = async (eventId: string) => {
-    const event = events.find(e => e.id === eventId);
-    if (!event?.public_slug) {
-      toast({ title: 'Event not published', description: 'Publish the event first to create a public RSVP page.', variant: 'destructive' });
-      return;
-    }
-    if (!confirm(`Send invitation emails to ${eligibleContactCount} contacts in your database?\n\nContacts on the DNC list or without email will be skipped. Already-invited contacts won't receive duplicates.`)) return;
-
-    setSendingInvites(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('send-event-invitation', { body: { eventId } });
-      if (error) throw error;
-      toast({ title: 'Invitations sent!', description: data?.message || `Sent ${data?.sent} emails.` });
-    } catch (err: any) {
-      toast({ title: 'Error sending invitations', description: err.message, variant: 'destructive' });
-    } finally {
-      setSendingInvites(false);
-    }
-  };
 
   return (
     <Layout>
@@ -121,6 +95,7 @@ const Events = () => {
         <Tabs defaultValue="my-event" className="w-full">
           <TabsList className="w-full sm:w-auto overflow-x-auto">
             <TabsTrigger value="my-event">My Event</TabsTrigger>
+            <TabsTrigger value="emails">Emails</TabsTrigger>
             <TabsTrigger value="rsvps">RSVPs</TabsTrigger>
             <TabsTrigger value="all-events">All Events</TabsTrigger>
           </TabsList>
@@ -128,28 +103,7 @@ const Events = () => {
           {/* My Event Tab - Progress Dashboard */}
           <TabsContent value="my-event" className="mt-4">
             {nextEvent ? (
-              <div className="space-y-4">
-                {nextEvent.public_slug && (
-                  <Card>
-                    <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-4">
-                      <div>
-                        <h4 className="font-medium">Invite Your Database</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Send invitation emails to {eligibleContactCount} eligible contacts
-                        </p>
-                      </div>
-                      <Button
-                        onClick={() => handleSendInvitations(nextEvent.id)}
-                        disabled={sendingInvites || eligibleContactCount === 0}
-                      >
-                        {sendingInvites ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Users className="h-4 w-4 mr-2" />}
-                        {sendingInvites ? 'Sending...' : 'Invite Database'}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )}
-                <EventProgressDashboard event={nextEvent} />
-              </div>
+              <EventProgressDashboard event={nextEvent} />
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
@@ -157,6 +111,30 @@ const Events = () => {
                   <h3 className="text-lg font-semibold mb-2">No Upcoming Events</h3>
                   <p className="text-muted-foreground text-center mb-4">
                     Create an event to start tracking your preparation progress.
+                  </p>
+                  <Button onClick={() => setShowEventForm(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Event
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Emails Tab */}
+          <TabsContent value="emails" className="mt-4">
+            {(selectedEventId || nextEvent?.id) ? (
+              <EmailManagement
+                eventId={selectedEventId || nextEvent?.id || ''}
+                eventTitle={events.find(e => e.id === (selectedEventId || nextEvent?.id))?.title || ''}
+              />
+            ) : (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Mail className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Events Yet</h3>
+                  <p className="text-muted-foreground text-center mb-4">
+                    Create an event to manage email templates and send invitations.
                   </p>
                   <Button onClick={() => setShowEventForm(true)}>
                     <Plus className="h-4 w-4 mr-2" />
@@ -231,9 +209,9 @@ const Events = () => {
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="mr-2">
                             {new Date(event.event_date) < new Date() ? (
-                              <span className="text-sm text-green-600">Completed</span>
+                              <Badge variant="secondary">Completed</Badge>
                             ) : (
-                              <span className="text-sm text-blue-600">Upcoming</span>
+                              <Badge>Upcoming</Badge>
                             )}
                           </div>
                           <Button
