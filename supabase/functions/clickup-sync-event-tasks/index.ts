@@ -1,37 +1,66 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
+import { corsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Auth guard: require admin
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: userRole, error: roleError } = await supabaseAuth.rpc("get_current_user_role");
+    if (roleError || userRole !== "admin") {
+      return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const CLICKUP_API_TOKEN = Deno.env.get("CLICKUP_API_TOKEN");
 
-    if (!CLICKUP_API_TOKEN) {
-      throw new Error("Missing CLICKUP_API_TOKEN");
-    }
+    if (!CLICKUP_API_TOKEN) throw new Error("Missing CLICKUP_API_TOKEN");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false },
     });
 
-    // Get all events — prefer the 3-list columns, fall back to clickup_list_id
+    // Only sync events from the last 90 days or future events
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const cutoffDate = ninetyDaysAgo.toISOString().slice(0, 10);
+
     const { data: events, error: eventsErr } = await supabase
       .from("events")
-      .select("id, agent_id, clickup_list_id, clickup_pre_event_list_id, clickup_event_day_list_id, clickup_post_event_list_id");
+      .select("id, agent_id, clickup_list_id, clickup_pre_event_list_id, clickup_event_day_list_id, clickup_post_event_list_id")
+      .gte("event_date", cutoffDate);
 
     if (eventsErr) throw eventsErr;
 
-    // Filter to events that have at least one list ID
     const eventsWithLists = (events || []).filter((e: any) =>
       e.clickup_pre_event_list_id || e.clickup_event_day_list_id || e.clickup_post_event_list_id || e.clickup_list_id
     );
@@ -42,34 +71,46 @@ serve(async (req) => {
       });
     }
 
-    // No need for profiles lookup — agent_id always comes from the event
-
     let totalSynced = 0;
     const errors: string[] = [];
 
-    const fetchAndSyncList = async (
+    // Paginated task fetcher
+    async function fetchAllTasks(listId: string): Promise<any[]> {
+      const tasks: any[] = [];
+      let page = 0;
+      const limit = 100;
+      while (true) {
+        const url = new URL(`https://api.clickup.com/api/v2/list/${listId}/task`);
+        url.searchParams.set("include_closed", "true");
+        url.searchParams.set("subtasks", "true");
+        url.searchParams.set("page", String(page));
+        url.searchParams.set("limit", String(limit));
+        const resp = await fetch(url.toString(), {
+          headers: { Authorization: CLICKUP_API_TOKEN!, "Content-Type": "application/json" },
+        });
+        if (!resp.ok) {
+          errors.push(`List ${listId}: HTTP ${resp.status}`);
+          break;
+        }
+        const data = await resp.json();
+        const batch = Array.isArray(data?.tasks) ? data.tasks : [];
+        tasks.push(...batch);
+        if (batch.length < limit) break;
+        page += 1;
+      }
+      return tasks;
+    }
+
+    const syncTasks = async (
       listId: string,
       eventId: string,
       eventAgentId: string | null,
       phase: string
     ) => {
-      const resp = await fetch(
-        `https://api.clickup.com/api/v2/list/${listId}/task?include_closed=true&subtasks=true`,
-        { headers: { Authorization: CLICKUP_API_TOKEN!, "Content-Type": "application/json" } }
-      );
-
-      if (!resp.ok) {
-        errors.push(`List ${listId}: HTTP ${resp.status}`);
-        return 0;
-      }
-
-      const data = await resp.json();
-      const clickupTasks = data.tasks || [];
+      const clickupTasks = await fetchAllTasks(listId);
       let synced = 0;
 
       for (const task of clickupTasks) {
-
-        // Parse dates
         let dueDate: string | null = null;
         if (task.due_date) {
           try {
@@ -126,20 +167,18 @@ serve(async (req) => {
 
     for (const event of eventsWithLists) {
       try {
-        // Sync from the 3 phase-specific lists if available
         if (event.clickup_pre_event_list_id) {
-          totalSynced += await fetchAndSyncList(event.clickup_pre_event_list_id, event.id, event.agent_id, "pre_event");
+          totalSynced += await syncTasks(event.clickup_pre_event_list_id, event.id, event.agent_id, "pre_event");
         }
         if (event.clickup_event_day_list_id) {
-          totalSynced += await fetchAndSyncList(event.clickup_event_day_list_id, event.id, event.agent_id, "event_day");
+          totalSynced += await syncTasks(event.clickup_event_day_list_id, event.id, event.agent_id, "event_day");
         }
         if (event.clickup_post_event_list_id) {
-          totalSynced += await fetchAndSyncList(event.clickup_post_event_list_id, event.id, event.agent_id, "post_event");
+          totalSynced += await syncTasks(event.clickup_post_event_list_id, event.id, event.agent_id, "post_event");
         }
 
-        // Fallback: if no phase-specific lists, use the legacy clickup_list_id
         if (!event.clickup_pre_event_list_id && !event.clickup_event_day_list_id && !event.clickup_post_event_list_id && event.clickup_list_id) {
-          totalSynced += await fetchAndSyncList(event.clickup_list_id, event.id, event.agent_id, "pre_event");
+          totalSynced += await syncTasks(event.clickup_list_id, event.id, event.agent_id, "pre_event");
         }
       } catch (err: any) {
         errors.push(`Event ${event.id}: ${err.message}`);
