@@ -4,64 +4,75 @@
 
 ### Bugs
 
-**1. Duplicate `return` statement in EventForm.tsx (line 49)**
-The time-parsing initializer has two consecutive `return time;` statements (lines 48-49). The second is dead code. Harmless but sloppy.
+**1. Realtime subscription is unfiltered — every user receives every event change**
+In `useEvents.ts` (line 471), the realtime channel listens to `postgres_changes` on the `events` table with no filter (`filter: 'agent_id=eq.${user.id}'`). Every insert/update/delete on the `events` table triggers a full `fetchEvents()` for every connected user, even if the change belongs to a different agent. Same issue for `event_tasks` (line 474). This causes unnecessary network traffic and potential UI flicker.
 
-**2. Console: "Lock was stolen by another request" errors**
-The `useUserRole` RPC call is being aborted repeatedly, causing the role to resolve as `null`. When role is `null`, `useFeatureAccess.hasAccess('/events')` returns `false` (since `getTierLevel(null)` returns 99), which triggers the **UpgradePrompt** even for users who should have access. This is visible in the session replay — a user named "Leo Kalinowski" sees the upgrade prompt despite likely having access. The root cause is that Supabase's `GoTrueClient` lock contention aborts in-flight requests during rapid re-renders (e.g., HMR or multiple tabs). The fix is to add retry logic or an `AbortController` guard in `useUserRole`.
+**2. `EventProgressStats` "In Progress" calculation is wrong for ClickUp view**
+In `EventProgressStats.tsx` (line 10), when `inProgress` is not provided, it falls back to `stats.total - stats.completed - stats.overdue`. This double-counts tasks that are both incomplete and overdue — overdue tasks are a subset of incomplete tasks, so this produces a negative or understated "In Progress" count.
 
-**3. `getNextEvent()` returns `undefined` when all events are past**
-If a user has only past events, `getNextEvent()` returns `undefined`, so the "My Event" tab shows the empty state ("No Upcoming Events") even though they have events. The Emails and RSVPs tabs then also show empty states because they depend on `nextEvent?.id` as a fallback. Users must manually select an event from "All Events" first, but there's no obvious UI cue to do so.
+**3. Console debug logs left in EventForm**
+`EventForm.tsx` lines 258-271 contain two `console.log('SAVING EVENT WITH:' ...)` and `console.log('Updating event with date/time:' ...)` statements that should be removed for production.
 
-**4. `selectedEventId` doesn't propagate to the "My Event" tab**
-When a user clicks an event in "All Events", `selectedEventId` is set, but the "My Event" tab always renders `nextEvent`, ignoring `selectedEventId`. Only the Emails and RSVPs tabs use `selectedEventId || nextEvent?.id`.
+**4. `useEvents` realtime doesn't filter by user — triggers reload for all agents' changes**
+As noted in #1, but worth emphasizing: the realtime channel on `event_tasks` has no `filter` clause, so any task update (even by admin on another agent's event) triggers a full task refetch for all connected users.
 
-**5. Email metrics RLS blocks non-admin agents**
-The `event_emails` table has a SELECT policy for agents (`Agents can view emails for their events`), but the `email_logs` table (used in admin email log views) is admin-only. The `EmailMetricsDashboard` uses `event_emails` which is correctly scoped, so this works. However, sending emails via `sendInvitationEmails` etc. invokes edge functions that run with the service role, which is fine. No blocking bug here, but worth confirming.
+**5. RSVPManagement passes `maxCapacity={undefined}` always**
+In `RSVPManagement.tsx` line 188, `maxCapacity` is hardcoded to `undefined`. The event's `max_capacity` is never passed down from the parent (`Events.tsx` doesn't pass it, and `RSVPManagement` doesn't accept it as a prop). Users never see the capacity bar in the RSVP stats even when the event has a max capacity set.
 
-**6. No delete confirmation dialog**
-Task deletion in `SelfManagedTaskDashboard` (line 378) calls `handleDelete` immediately with no confirmation — a single misclick permanently deletes a task. Event deletion uses `confirm()` (native browser dialog) which is inconsistent with the rest of the UI.
+**6. TaskEditForm `due_date` set to `null` when cleared creates a database error**
+In `TaskEditForm.tsx` line 62, `due_date: dueDate ? dueDate.toISOString().split('T')[0] : null` — if `due_date` column is NOT NULL in the DB, this will fail. Even if it allows NULL, this inconsistency with `TaskForm.tsx` (which sends `undefined`) can cause confusing behavior.
 
 ### Inconsistencies
 
-**7. Mixed toast libraries**
-`RSVPManagement` uses `sonner` (`toast.error`, `toast.success`), while `EmailManagement` and `EventForm` use `useToast` from `@/hooks/use-toast`. The entire Events module should pick one.
+**7. Mixed toast libraries (still present)**
+- `SelfManagedTaskDashboard.tsx`, `TaskEditForm.tsx`: use `sonner` (`toast.success`, `toast.error`)
+- `TaskForm.tsx`, `EventForm.tsx`, `EmailTemplateEditor.tsx`, `EmailManagement.tsx`: use `useToast` from `@/hooks/use-toast`
+- `RSVPManagement.tsx`: uses `sonner`
 
-**8. "View RSVPs" button in All Events tab is misleading**
-Clicking "View RSVPs" on an event in the All Events tab sets `selectedEventId` but doesn't navigate the user to the RSVPs tab. The button toggles text to "Hide RSVPs" but nothing visually changes on the All Events tab itself. It only affects the RSVPs/Emails tabs when you switch to them.
+This creates inconsistent toast styling across the same module.
 
-**9. Event date display inconsistency**
-- All Events tab: `toLocaleDateString()` (locale-dependent, no time)
-- EventProgressDashboard: `format(date, 'EEEE, MMMM d, yyyy')` (date-fns, no time)
-- RSVPManagement: `format(date, 'MMM d, yyyy')` or `'MMM d, yyyy h:mm a'`
-- No consistent date/time format across the module.
+**8. Duplicate hero card rendering between EventProgressDashboard and SelfManagedTaskDashboard**
+Both components render nearly identical hero progress cards (event title, date, days countdown, progress bar). The ClickUp view in `EventProgressDashboard` and the self-managed view in `SelfManagedTaskDashboard` duplicate ~40 lines of identical UI code. Should be extracted to a shared component.
 
-**10. Tab count information missing**
-The RSVPs tab in the main Events page shows no count of RSVPs. The Email tab shows no count of templates or emails sent. Only the inner RSVPManagement component shows counts.
+**9. "In Progress" stat calculation differs between ClickUp and self-managed views**
+- `SelfManagedTaskDashboard` (line 62): counts tasks with `status === 'in_progress'` explicitly
+- `EventProgressStats` (line 10): calculates as `total - completed - overdue` (incorrect, as noted in #2)
+
+These will show different numbers for the same data depending on which view is active.
+
+**10. Date formatting still inconsistent**
+- `Events.tsx` uses `format(date, 'MMM d, yyyy')` via `formatEventDate`
+- `SelfManagedTaskDashboard` uses `format(date, 'EEEE, MMMM d, yyyy')` for the hero
+- `RSVPManagement` uses `format(date, 'MMM d, yyyy')` and `'MMM d, yyyy h:mm a'`
+- Task due dates use `format(date, 'MMM d')` (no year)
+
+**11. RSVP sub-tabs `grid-cols-5` is not mobile-responsive**
+`RSVPManagement.tsx` line 203 uses `grid w-full grid-cols-5` for the inner tabs. On mobile (320-414px), five columns will be extremely cramped with truncated labels.
 
 ### Improvement Opportunities
 
-**11. "My Event" should show the most recent event when no upcoming events exist**
-Fall back to the most recent past event (using the existing `getPreviousQuarterEvent()`) instead of showing an empty state.
+**12. Pass `max_capacity` to RSVPManagement**
+The `activeEvent` object already contains `max_capacity`. Pass it as a prop to `RSVPManagement` so the capacity progress bar in `RSVPStats` actually renders.
 
-**12. Event selection should be persistent across tabs**
-Selecting an event in "All Events" should update all tabs (My Event, Emails, RSVPs) to show that event's data, not just Emails/RSVPs.
+**13. Add realtime filters to reduce unnecessary refetches**
+Add `filter: 'agent_id=eq.${user.id}'` to both realtime subscriptions in `useEvents.ts` to only react to the current user's data changes.
 
-**13. Mobile responsiveness of RSVP tabs**
-The RSVPManagement inner tabs use `grid-cols-5` which will be cramped on mobile. The main Events page tabs handle this with `overflow-x-auto` but the RSVP sub-tabs don't.
+**14. Extract shared event hero card**
+The hero progress card (title, date, countdown, progress bar) is duplicated between `EventProgressDashboard` and `SelfManagedTaskDashboard`. Extract to a `EventHeroCard` component.
 
-**14. No way to select a different event from the Emails/RSVPs tabs**
-If a user has multiple events, they must go to "All Events" to switch. An event selector dropdown at the top of Emails/RSVPs tabs would be more intuitive (the `EmailManagement` component already supports this when no `eventId` is provided, but it's overridden by the parent passing one).
+**15. Add event name to Emails/RSVPs tab headers**
+When viewing the Emails or RSVPs tab, there's no indication of which event is currently selected. Adding the event title as a subtitle would reduce confusion.
 
 ### Recommended Priority
 
 | Priority | Item | Impact |
 |---|---|---|
-| High | #2 — Role fetch abort/retry | Users locked out of features they have access to |
-| High | #3/#4 — Event fallback + selection sync | Users with past-only events see empty dashboards |
-| Medium | #6 — Delete confirmation | Data loss risk from misclicks |
-| Medium | #8 — "View RSVPs" should switch tab | Confusing UX, button does nothing visible |
-| Low | #1 — Dead code cleanup | Code quality |
-| Low | #7 — Toast library consistency | Developer experience |
-| Low | #9 — Date format consistency | Visual polish |
+| High | #1/#4 — Unfiltered realtime subscriptions | Performance: every user refetches on any change |
+| High | #2/#9 — In Progress stat calculation wrong | Displays incorrect data to ClickUp-tier users |
+| High | #5/#12 — maxCapacity never passed to RSVPStats | Capacity bar never shown despite data existing |
+| Medium | #7 — Mixed toast libraries | Inconsistent UX across the module |
+| Medium | #11 — RSVP sub-tabs not mobile-responsive | Unusable on small screens |
+| Low | #3 — Console.log left in EventForm | Code cleanliness |
+| Low | #8/#14 — Duplicate hero card code | Maintainability |
+| Low | #10 — Date format inconsistency | Visual polish |
 
