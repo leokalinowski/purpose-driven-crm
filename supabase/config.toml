@@ -149,3 +149,9 @@ verify_jwt = false
 
 [functions.generate-ai-newsletter]
 verify_jwt = false
+
+[functions.clickup-get-team-members]
+verify_jwt = false
+
+[functions.clickup-register-and-sync]
+verify_jwt = false

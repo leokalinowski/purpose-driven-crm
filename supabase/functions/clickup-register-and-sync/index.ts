@@ -1,17 +1,13 @@
 // deno-lint-ignore-file no-explicit-any
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
+import { corsHeaders } from "../_shared/cors.ts";
 
 type RegisterBody = {
   team_id: string;
   list_id: string;
-  tag?: string; // default: 'event'
-  event_id?: string; // optional; if not provided, link to the next upcoming event
+  tag?: string;
+  event_id?: string;
 };
 
 Deno.serve(async (req) => {
@@ -27,10 +23,43 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    // Auth guard: require admin
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const userId = claimsData.claims.sub as string;
+
+    const { data: userRole, error: roleError } = await supabaseAuth.rpc("get_current_user_role");
+    if (roleError || userRole !== "admin") {
+      return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const CLICKUP_API_TOKEN = Deno.env.get("CLICKUP_API_TOKEN");
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) throw new Error("Missing Supabase env");
     if (!CLICKUP_API_TOKEN) throw new Error("Missing CLICKUP_API_TOKEN secret");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
@@ -43,18 +72,8 @@ Deno.serve(async (req) => {
 
     if (!teamId || !listId) throw new Error("team_id and list_id are required");
 
-    // Find next upcoming event (for the calling agent) if not provided
+    // Find next upcoming event for the calling user if not provided
     if (!eventId) {
-      const authHeader = req.headers.get("authorization") || "";
-      const token = authHeader.replace(/Bearer\s+/i, "");
-      let userId: string | null = null;
-      if (token) {
-        try {
-          const { data: userData } = await supabase.auth.getUser(token);
-          userId = userData?.user?.id || null;
-        } catch (_) {}
-      }
-
       let query = supabase
         .from("events")
         .select("id")
@@ -81,17 +100,13 @@ Deno.serve(async (req) => {
     const webhookEndpoint = `${SUPABASE_URL}/functions/v1/clickup-webhook`;
     const createWebhookResp = await fetch(`https://api.clickup.com/api/v2/team/${teamId}/webhook`, {
       method: "POST",
-      headers: { "Authorization": CLICKUP_API_TOKEN, "Content-Type": "application/json" },
+      headers: { Authorization: CLICKUP_API_TOKEN, "Content-Type": "application/json" },
       body: JSON.stringify({
         endpoint: webhookEndpoint,
         events: [
-          "taskCreated",
-          "taskUpdated",
-          "taskDeleted",
-          "taskTimeTrackedUpdated",
-          "taskAssigneeUpdated",
-          "taskDueDateUpdated",
-          "taskMoved",
+          "taskCreated", "taskUpdated", "taskDeleted",
+          "taskTimeTrackedUpdated", "taskAssigneeUpdated",
+          "taskDueDateUpdated", "taskMoved",
         ],
         status: "active",
       }),
@@ -110,7 +125,7 @@ Deno.serve(async (req) => {
       .from("clickup_webhooks")
       .upsert({ list_id: listId, team_id: String(teamId), event_id: eventId, webhook_id: webhookId || null, active: true, last_sync_at: new Date().toISOString() }, { onConflict: "list_id" });
 
-    // 4) Initial sync: fetch tasks (with subtasks) and insert those tagged with `tag`, plus their subtasks
+    // 4) Initial sync: fetch tasks with pagination
     async function fetchListTasks(list: string): Promise<any[]> {
       const tasks: any[] = [];
       let page = 0;
@@ -121,7 +136,7 @@ Deno.serve(async (req) => {
         url.searchParams.set("include_closed", "true");
         url.searchParams.set("page", String(page));
         url.searchParams.set("limit", String(limit));
-        const resp = await fetch(url.toString(), { headers: { Authorization: CLICKUP_API_TOKEN } });
+        const resp = await fetch(url.toString(), { headers: { Authorization: CLICKUP_API_TOKEN! } });
         if (!resp.ok) {
           console.warn("Task list fetch failed", resp.status);
           break;
@@ -136,7 +151,6 @@ Deno.serve(async (req) => {
     }
 
     const allTasks = await fetchListTasks(listId);
-    const tagSet = new Set<string>([tag]);
 
     const lower = (s: any) => (typeof s === "string" ? s.toLowerCase() : "");
     const hasTag = (t: any, tname: string) => Array.isArray(t?.tags) && t.tags.some((tg: any) => lower(tg?.name) === tname);
@@ -148,13 +162,11 @@ Deno.serve(async (req) => {
     for (const t of allTasks) {
       if (hasTag(t, tag)) includeSet.add(String(t.id));
     }
-    // include subtasks of included parents
     for (const t of allTasks) {
       const parent = t?.parent ? String(t.parent) : "";
       if (parent && includeSet.has(parent)) includeSet.add(String(t.id));
     }
 
-    // Collect existing tasks to avoid duplicates
     const idsToSync = Array.from(includeSet);
     let existing: Record<string, string> = {};
     if (idsToSync.length) {
@@ -170,7 +182,7 @@ Deno.serve(async (req) => {
     const doneKeywords = ["done", "closed", "complete", "completed"];
 
     for (const id of idsToSync) {
-      if (existing[id]) continue; // only insert new; updates will flow via webhook
+      if (existing[id]) continue;
       const t = byId.get(id);
       if (!t) continue;
       const status = t?.status?.status || t?.status;

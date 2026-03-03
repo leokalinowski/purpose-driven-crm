@@ -1,14 +1,7 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
+import { corsHeaders } from "../_shared/cors.ts";
 
 const CLICKUP_BASE = "https://api.clickup.com/api/v2";
-const TEAM_ID = "9011620633";
 const SPACE_ID = "90114016189";
 const EVENT_TEMPLATE_ID = "t-90117396506";
 
@@ -35,12 +28,44 @@ async function clickupFetch(
   return body;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Auth guard: require admin
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: userRole, error: roleError } = await supabaseAuth.rpc("get_current_user_role");
+    if (roleError || userRole !== "admin") {
+      return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const CLICKUP_API_TOKEN = Deno.env.get("CLICKUP_API_TOKEN");
@@ -105,7 +130,6 @@ serve(async (req) => {
       folderId = created.id;
       console.log("Manual folder created, ID:", folderId);
 
-      // Create 3 lists
       for (const listName of ["Pre-Event", "Event Day", "Post-Event"]) {
         await clickupFetch(`/folder/${folderId}/list`, CLICKUP_API_TOKEN, {
           method: "POST",
@@ -116,14 +140,10 @@ serve(async (req) => {
     }
 
     // 5. Retrieve lists from the new folder
-    const listsResp = await clickupFetch(
-      `/folder/${folderId}/list`,
-      CLICKUP_API_TOKEN
-    );
+    const listsResp = await clickupFetch(`/folder/${folderId}/list`, CLICKUP_API_TOKEN);
     const lists: any[] = listsResp.lists || [];
-    console.log("Lists in folder:", lists.map((l: any) => `${l.name} (${l.id})`));
 
-    // 6. Classify lists by name
+    // 6. Classify lists by name — check more specific terms first
     let preEventListId: string | null = null;
     let eventDayListId: string | null = null;
     let postEventListId: string | null = null;
@@ -134,19 +154,16 @@ serve(async (req) => {
         preEventListId = list.id;
       } else if (name.includes("post")) {
         postEventListId = list.id;
-      } else if (name.includes("day") || name.includes("event day")) {
+      } else if (name.includes("day") || name.includes("event")) {
         eventDayListId = list.id;
       }
     }
 
-    // If we have exactly 3 lists but couldn't classify, assign in order
     if (lists.length >= 3 && (!preEventListId || !eventDayListId || !postEventListId)) {
       if (!preEventListId) preEventListId = lists[0]?.id;
       if (!eventDayListId) eventDayListId = lists[1]?.id;
       if (!postEventListId) postEventListId = lists[2]?.id;
     }
-
-    console.log("Classified lists:", { preEventListId, eventDayListId, postEventListId });
 
     // 7. Update the Hub event record
     const { error: updateErr } = await supabase

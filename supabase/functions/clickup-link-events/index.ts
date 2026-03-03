@@ -1,24 +1,49 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
+import { corsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Auth guard: require admin
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: userRole, error: roleError } = await supabaseAuth.rpc("get_current_user_role");
+    if (roleError || userRole !== "admin") {
+      return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const CLICKUP_API_TOKEN = Deno.env.get("CLICKUP_API_TOKEN");
 
-    if (!CLICKUP_API_TOKEN) {
-      throw new Error("Missing CLICKUP_API_TOKEN");
-    }
+    if (!CLICKUP_API_TOKEN) throw new Error("Missing CLICKUP_API_TOKEN");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false },
@@ -41,32 +66,31 @@ serve(async (req) => {
     const folders = foldersData.folders || [];
     console.log(`Found ${folders.length} folders in Events space`);
 
-    // 2. Fetch all Hub events with their agent profiles
+    // 2. Fetch all Hub events — include clickup_folder_id so we can skip already-linked
     const { data: events, error: eventsErr } = await supabase
       .from("events")
-      .select("id, title, agent_id, event_date");
+      .select("id, title, agent_id, event_date, clickup_folder_id");
 
     if (eventsErr) throw eventsErr;
 
-    // 3. Fetch all profiles to resolve agent names
+    // 3. Fetch all profiles — use first_name for matching
     const { data: profiles, error: profilesErr } = await supabase
       .from("profiles")
-      .select("user_id, full_name, email");
+      .select("user_id, first_name, email");
 
     if (profilesErr) throw profilesErr;
 
-    const profilesByUserId: Record<string, { full_name: string; email: string }> = {};
+    const profilesByUserId: Record<string, { first_name: string; email: string }> = {};
     (profiles || []).forEach((p: any) => {
       if (p.user_id) {
         profilesByUserId[p.user_id] = {
-          full_name: p.full_name || "",
+          first_name: (p.first_name || "").toLowerCase(),
           email: p.email || "",
         };
       }
     });
 
     // Parse folder name: "Samir [03.14.26] The Real Estate Scholarship"
-    // or "Rashida [03.21.26] - The Real Estate Scholarship"
     const parseFolderName = (name: string) => {
       const match = name.match(/^(\w+)\s+\[[\d.]+\]\s*-?\s*(.+)$/);
       if (!match) return null;
@@ -86,10 +110,10 @@ serve(async (req) => {
         const name = (list.name || "").toLowerCase();
         if (name.includes("pre")) {
           preEventId = list.id;
-        } else if (name.includes("day")) {
-          eventDayId = list.id;
         } else if (name.includes("post")) {
           postEventId = list.id;
+        } else if (name.includes("day")) {
+          eventDayId = list.id;
         }
       }
       return { preEventId, eventDayId, postEventId };
@@ -115,8 +139,7 @@ serve(async (req) => {
 
         // Check agent first name
         if (ev.agent_id && profilesByUserId[ev.agent_id]) {
-          const fullName = profilesByUserId[ev.agent_id].full_name.toLowerCase();
-          const firstName = fullName.split(" ")[0];
+          const firstName = profilesByUserId[ev.agent_id].first_name;
           return firstName === parsed.agentFirstName;
         }
 
@@ -132,7 +155,7 @@ serve(async (req) => {
       }
 
       // Check if already linked
-      if ((matchedEvent as any).clickup_folder_id === folder.id) {
+      if (matchedEvent.clickup_folder_id === folder.id) {
         alreadyLinked.push({ folder: folder.name, event: matchedEvent.title });
         continue;
       }
@@ -149,7 +172,6 @@ serve(async (req) => {
           clickup_pre_event_list_id: classified.preEventId,
           clickup_event_day_list_id: classified.eventDayId,
           clickup_post_event_list_id: classified.postEventId,
-          // Also set the legacy field to the pre-event list as default
           clickup_list_id: classified.preEventId || classified.eventDayId || classified.postEventId,
         })
         .eq("id", matchedEvent.id);
