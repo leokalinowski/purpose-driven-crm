@@ -1,30 +1,27 @@
 
 
-## Add Event-Day and Post-Event Task Templates
+## Plan: Add Email Management Tab to the Events Page (All Tiers)
 
-**File: `src/utils/defaultEventTasks.ts`**
+### Current State
+- The `EmailManagement` component (template editor, send/schedule, metrics) is **only available in the Admin Events Management page** (`AdminEventsManagement.tsx`).
+- Regular users (agents, managed, core) on `/events` can only see tasks, RSVPs, and an "Invite Database" button that sends immediately with no preview or editing.
 
-Add the following tasks to the `DEFAULT_EVENT_TASKS` array, after the existing pre-event tasks:
+### What Changes
 
-### Event Day (days_offset: 0)
-| Task | Responsible |
+**1. Add an "Emails" tab to the Events page (`src/pages/Events.tsx`)**
+- Add a fourth tab alongside "My Event", "RSVPs", and "All Events" called "Emails".
+- Render the existing `EmailManagement` component inside it, passing the current event's `id` and `title`.
+- This gives all tiers access to: template editing, manual send for all email types (invitation, reminders, thank-you, no-show), and email metrics.
+
+**2. Remove the standalone "Invite Database" card (`src/pages/Events.tsx`)**
+- The "Invite Your Database" card with the immediate-send button (lines 132-149) becomes redundant since users can now send invitations from the Emails tab with full template preview.
+- Remove the `handleSendInvitations` function and `sendingInvites` state.
+
+### Files to Change
+
+| File | Change |
 |---|---|
-| Setup Venue | Event Coordinator |
-| Capture Photos/Videos | Marketing |
-| Collect Doorprize & Leads | Event Coordinator |
+| `src/pages/Events.tsx` | Add "Emails" tab with `EmailManagement` component; remove standalone invite card and related state |
 
-### Post-Event (days_offset: +1 to +14)
-| Task | Offset | Responsible |
-|---|---|---|
-| Send Thank-You Email | +1 | Marketing |
-| Charity Delivery | +2 | Event Coordinator |
-| Agent Follow-Up Calls | +3 | Event Coordinator |
-| Post Event Social Highlights | +3 | Marketing |
-| Sponsor Thank-Yous | +5 | Event Coordinator |
-| KPI Report & Scoreboard Entry | +7 | Event Coordinator |
-| Archive Assets | +14 | Marketing |
-
-No other files need changes. The existing `buildTaskInserts()` function already handles positive offsets correctly (days after event). New events created after this change will automatically include all three phases.
-
-Note: Existing events (like the "Test" event) will not retroactively gain these tasks. If needed, I can add a one-time backfill query.
+No access-control or edge function changes needed — the `EmailManagement` component and underlying hooks/RLS already support agents managing templates for their own events.
 
