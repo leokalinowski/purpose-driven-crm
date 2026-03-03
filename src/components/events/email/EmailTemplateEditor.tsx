@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { useEmailTemplates, EmailTemplate } from '@/hooks/useEmailTemplates'
 import { Loader2, Save, Eye } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useToast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 import { getDefaultEmailTemplate } from '@/utils/emailTemplateBuilder'
 import { useGlobalEmailTemplates } from '@/hooks/useGlobalEmailTemplates'
 import { VisualEmailEditor } from './VisualEmailEditor'
@@ -57,7 +57,7 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
 }) => {
   const { templates, loading: templatesLoading, createTemplate, updateTemplate, getTemplateByType } = useEmailTemplates(eventId)
   const { loading: globalLoading, getTemplateByType: getGlobalTemplate } = useGlobalEmailTemplates()
-  const { toast } = useToast()
+  
 
   const [subject, setSubject] = useState('')
   const [htmlContent, setHtmlContent] = useState('')
@@ -98,11 +98,7 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
 
   const handleSave = async () => {
     if (!subject.trim() || !htmlContent.trim()) {
-      toast({
-        title: "Missing content",
-        description: "Please fill in both subject and HTML content.",
-        variant: "destructive"
-      })
+      toast.error("Please fill in both subject and HTML content.")
       return
     }
 
@@ -119,26 +115,16 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
 
       if (existingTemplate) {
         await updateTemplate(existingTemplate.id, templateData)
-        toast({
-          title: "Template updated",
-          description: `${EMAIL_TYPE_LABELS[emailType]} template has been updated.`
-        })
+        toast.success(`${EMAIL_TYPE_LABELS[emailType]} template has been updated.`)
       } else {
         await createTemplate(templateData)
-        toast({
-          title: "Template created",
-          description: `${EMAIL_TYPE_LABELS[emailType]} template has been created.`
-        })
+        toast.success(`${EMAIL_TYPE_LABELS[emailType]} template has been created.`)
       }
 
       onSave?.()
     } catch (error) {
       console.error('Error saving template:', error)
-      toast({
-        title: "Error saving template",
-        description: "There was an error saving the email template.",
-        variant: "destructive"
-      })
+      toast.error("There was an error saving the email template.")
     } finally {
       setSaving(false)
     }

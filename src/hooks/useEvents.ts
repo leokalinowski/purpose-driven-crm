@@ -465,13 +465,13 @@ export const useEvents = () => {
         setLoading(false);
       });
 
-      // Realtime refresh on changes
+      // Realtime refresh on changes — filter by current user to avoid unnecessary refetches
       const channel = supabase
         .channel('events-realtime')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'events', filter: `agent_id=eq.${user.id}` }, () => {
           fetchEvents();
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'event_tasks' }, () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'event_tasks', filter: `agent_id=eq.${user.id}` }, () => {
           fetchEventTasks();
         })
         .subscribe();

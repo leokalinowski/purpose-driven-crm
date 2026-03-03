@@ -15,9 +15,10 @@ import { RSVPStats } from './rsvp/RSVPStats';
 interface RSVPManagementProps {
   eventId: string;
   publicSlug?: string;
+  maxCapacity?: number;
 }
 
-export const RSVPManagement = ({ eventId, publicSlug }: RSVPManagementProps) => {
+export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagementProps) => {
   const { getEventRSVPs, getRSVPStats, checkInRSVP } = useRSVP();
   const { getEventAnswers, getEventQuestions } = useRSVPQuestions();
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
@@ -185,7 +186,7 @@ export const RSVPManagement = ({ eventId, publicSlug }: RSVPManagementProps) => 
             confirmed={stats.confirmed}
             waitlist={stats.waitlist}
             checkedIn={stats.checked_in}
-            maxCapacity={undefined}
+            maxCapacity={maxCapacity}
           />
         )}
 
@@ -200,7 +201,7 @@ export const RSVPManagement = ({ eventId, publicSlug }: RSVPManagementProps) => 
         </div>
 
         <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="flex w-full overflow-x-auto">
             <TabsTrigger value="all">All ({rsvps.length})</TabsTrigger>
             <TabsTrigger value="confirmed">Confirmed ({rsvps.filter(r => r.status === 'confirmed').length})</TabsTrigger>
             <TabsTrigger value="waitlist">Waitlist ({rsvps.filter(r => r.status === 'waitlist').length})</TabsTrigger>

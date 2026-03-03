@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { useGlobalEmailTemplates, GlobalEmailTemplate } from '@/hooks/useGlobalEmailTemplates'
 import { Loader2, Save, Eye, Globe } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 import { getDefaultEmailTemplate } from '@/utils/emailTemplateBuilder'
 import { VisualEmailEditor } from './VisualEmailEditor'
 
@@ -29,7 +29,7 @@ export const GlobalTemplateEditor: React.FC<GlobalTemplateEditorProps> = ({
   onSave
 }) => {
   const { templates, createTemplate, updateTemplate, getTemplateByType } = useGlobalEmailTemplates()
-  const { toast } = useToast()
+  
 
   const [subject, setSubject] = useState('')
   const [htmlContent, setHtmlContent] = useState('')
@@ -58,11 +58,7 @@ export const GlobalTemplateEditor: React.FC<GlobalTemplateEditorProps> = ({
 
   const handleSave = async () => {
     if (!subject.trim() || !htmlContent.trim()) {
-      toast({
-        title: "Missing content",
-        description: "Please fill in both subject and HTML content.",
-        variant: "destructive"
-      })
+      toast.error("Please fill in both subject and HTML content.")
       return
     }
 
@@ -78,26 +74,16 @@ export const GlobalTemplateEditor: React.FC<GlobalTemplateEditorProps> = ({
 
       if (existingTemplate) {
         await updateTemplate(existingTemplate.id, templateData)
-        toast({
-          title: "Global template updated",
-          description: `${EMAIL_TYPE_LABELS[emailType]} global template has been updated.`
-        })
+        toast.success(`${EMAIL_TYPE_LABELS[emailType]} global template has been updated.`)
       } else {
         await createTemplate(templateData)
-        toast({
-          title: "Global template created",
-          description: `${EMAIL_TYPE_LABELS[emailType]} global template has been created.`
-        })
+        toast.success(`${EMAIL_TYPE_LABELS[emailType]} global template has been created.`)
       }
 
       onSave?.()
     } catch (error) {
       console.error('Error saving global template:', error)
-      toast({
-        title: "Error saving template",
-        description: "There was an error saving the global email template.",
-        variant: "destructive"
-      })
+      toast.error("There was an error saving the global email template.")
     } finally {
       setSaving(false)
     }

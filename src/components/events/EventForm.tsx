@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useEvents, Event } from '@/hooks/useEvents';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useAgents } from '@/hooks/useAgents';
 import { supabase } from '@/integrations/supabase/client';
@@ -65,7 +65,7 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
   const [loadingBranding, setLoadingBranding] = useState(false);
   
   const { addEvent, updateEvent, addEventAsAdmin, updateEventAsAdmin } = useEvents();
-  const { toast } = useToast();
+  
 
   // Fetch agents list if in admin mode
   useEffect(() => {
@@ -188,11 +188,7 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      toast({
-        title: "Invalid file type",
-        description: "Please select an image file",
-        variant: "destructive",
-      });
+      toast.error("Please select an image file");
       return;
     }
 
@@ -203,16 +199,9 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
     try {
       const uploadedUrl = await uploadHeaderImage(file);
       setHeaderImageUrl(uploadedUrl);
-      toast({
-        title: "Image uploaded",
-        description: "Header image uploaded successfully",
-      });
+      toast.success("Header image uploaded successfully");
     } catch (error: any) {
-      toast({
-        title: "Upload failed",
-        description: error.message || "Failed to upload image",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to upload image");
       setHeaderImageFile(null);
     } finally {
       setUploadingImage(false);
@@ -222,20 +211,12 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !eventDate) {
-      toast({
-        title: "Validation Error",
-        description: "Please fill in the event title and date.",
-        variant: "destructive",
-      });
+      toast.error("Please fill in the event title and date.");
       return;
     }
 
     if (isAdminMode && !selectedAgentId) {
-      toast({
-        title: "Validation Error",
-        description: "Please select an agent for this event.",
-        variant: "destructive",
-      });
+      toast.error("Please select an agent for this event.");
       return;
     }
 
@@ -243,32 +224,13 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
     try {
       // Combine date and time into a single datetime string
       if (!eventDate || !eventTime) {
-        toast({
-          title: "Validation Error",
-          description: "Please fill in both event date and time.",
-          variant: "destructive",
-        });
+        toast.error("Please fill in both event date and time.");
         return;
       }
 
       const [hours, minutes] = eventTime.split(':');
       // Store as unqualified local time - no Z suffix to avoid UTC interpretation
       const eventDateTime = `${eventDate}T${hours}:${minutes}:00`;
-
-      console.log('SAVING EVENT WITH:', {
-        title: title.trim(),
-        eventDate,
-        eventTime,
-        eventDateTime,
-        isEditing
-      });
-      
-      console.log('Updating event with date/time:', {
-        eventDate,
-        eventTime,
-        eventDateTime,
-        isEditing
-      });
 
       // When editing, only include fields that should be updated
       // Don't reset attendance_count and leads_generated
@@ -307,10 +269,7 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
           await updateEvent(event.id, eventData);
         }
 
-        toast({
-          title: "Event updated",
-          description: "Event has been updated successfully.",
-        });
+        toast.success("Event has been updated successfully.");
       } else {
         if (isAdminMode) {
           await addEventAsAdmin(eventData, selectedAgentId);
@@ -318,19 +277,12 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
           await addEvent(eventData);
         }
 
-        toast({
-          title: "Event created",
-          description: "Event and preparation tasks have been created successfully.",
-        });
+        toast.success("Event and preparation tasks have been created successfully.");
       }
       
       onClose();
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || `Failed to ${isEditing ? 'update' : 'create'} event. Please try again.`,
-        variant: "destructive",
-      });
+      toast.error(error.message || `Failed to ${isEditing ? 'update' : 'create'} event. Please try again.`);
     } finally {
       setLoading(false);
     }
