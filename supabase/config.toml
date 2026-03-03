@@ -1,7 +1,16 @@
 project_id = "cguoaokqwgqvzkqqezcq"
 
 [functions.admin-contacts-import]
-verify_jwt = true
+verify_jwt = false
+
+[functions.admin-contacts-cleanup]
+verify_jwt = false
+
+[functions.admin-delete-user]
+verify_jwt = false
+
+[functions.admin-update-user-metadata]
+verify_jwt = false
 
 [functions.upload-csv]
 verify_jwt = true

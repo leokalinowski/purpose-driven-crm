@@ -27,10 +27,7 @@ export const DuplicateCleanupButton: React.FC<DuplicateCleanupButtonProps> = ({
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('admin-contacts-cleanup', {
-        body: {
-          agentId,
-          adminUserId: user.id
-        }
+        body: { agentId }
       });
 
       if (error) throw error;
