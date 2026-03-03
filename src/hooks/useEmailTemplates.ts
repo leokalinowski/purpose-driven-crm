@@ -189,13 +189,14 @@ export const useEmailMetrics = (eventId?: string) => {
       const records = (data || []) as unknown as EmailRecord[]
       setEmails(records)
 
+      const successStatuses = ['sent', 'delivered', 'opened', 'clicked']
       setMetrics({
-        total_sent: records.filter(e => e.status === 'sent').length,
-        delivered: records.filter(e => e.delivered_at).length,
-        opened: records.filter(e => e.opened_at).length,
-        clicked: records.filter(e => e.clicked_at).length,
-        replied: records.filter(e => e.replied_at).length,
-        bounced: records.filter(e => e.bounced_at).length,
+        total_sent: records.filter(e => successStatuses.includes(e.status)).length,
+        delivered: records.filter(e => ['delivered', 'opened', 'clicked'].includes(e.status) || !!e.delivered_at).length,
+        opened: records.filter(e => ['opened', 'clicked'].includes(e.status) || !!e.opened_at).length,
+        clicked: records.filter(e => !!e.clicked_at).length,
+        replied: records.filter(e => !!e.replied_at).length,
+        bounced: records.filter(e => !!e.bounced_at || e.status === 'bounced').length,
         failed: records.filter(e => e.status === 'failed').length
       })
     } catch (error) {
