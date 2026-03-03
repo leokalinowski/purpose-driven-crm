@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "lucide-react";
@@ -18,6 +19,7 @@ interface EventTask {
   responsible_person: string;
   due_date: string;
   notes?: string;
+  phase?: string;
   event_id?: string;
   agent_id: string;
   completed_at?: string;
@@ -39,6 +41,7 @@ export function TaskEditForm({ task, onClose }: TaskEditFormProps) {
     task.due_date ? new Date(task.due_date) : undefined
   );
   const [notes, setNotes] = useState(task.notes || "");
+  const [phase, setPhase] = useState(task.phase || "");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,7 +59,8 @@ export function TaskEditForm({ task, onClose }: TaskEditFormProps) {
         responsible_person: responsiblePerson.trim(),
         due_date: dueDate ? dueDate.toISOString().split('T')[0] : null,
         notes: notes.trim() || null,
-      });
+        phase: phase || null,
+      } as any);
       
       toast.success("Task updated successfully");
       onClose();
@@ -137,6 +141,20 @@ export function TaskEditForm({ task, onClose }: TaskEditFormProps) {
             <div className="text-xs text-muted-foreground text-right">
               {notes.length}/500 characters
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Phase</Label>
+            <Select value={phase} onValueChange={setPhase}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select phase (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pre_event">Pre-Event</SelectItem>
+                <SelectItem value="event_day">Event Day</SelectItem>
+                <SelectItem value="post_event">Post-Event</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           
           <DialogFooter>

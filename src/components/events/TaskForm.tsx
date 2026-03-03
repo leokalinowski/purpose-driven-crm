@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useEvents } from '@/hooks/useEvents';
 import { useToast } from '@/hooks/use-toast';
 
@@ -15,6 +16,7 @@ export const TaskForm = ({ eventId, onClose }: TaskFormProps) => {
   const [taskName, setTaskName] = useState('');
   const [responsiblePerson, setResponsiblePerson] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [phase, setPhase] = useState<string>('');
   const [loading, setLoading] = useState(false);
   
   const { addTask } = useEvents();
@@ -38,8 +40,9 @@ export const TaskForm = ({ eventId, onClose }: TaskFormProps) => {
         task_name: taskName.trim(),
         responsible_person: responsiblePerson.trim(),
         due_date: dueDate || undefined,
+        phase: phase || undefined,
         status: 'pending'
-      });
+      } as any);
 
       toast({
         title: "Task added",
@@ -96,6 +99,20 @@ export const TaskForm = ({ eventId, onClose }: TaskFormProps) => {
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Phase</Label>
+            <Select value={phase} onValueChange={setPhase}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select phase (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pre_event">Pre-Event</SelectItem>
+                <SelectItem value="event_day">Event Day</SelectItem>
+                <SelectItem value="post_event">Post-Event</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">

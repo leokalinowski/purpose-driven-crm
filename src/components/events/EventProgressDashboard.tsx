@@ -6,7 +6,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { EventProgressStats } from './EventProgressStats';
 import { EventTaskList } from './EventTaskList';
+import { SelfManagedTaskDashboard } from './SelfManagedTaskDashboard';
 import { useClickUpTasks } from '@/hooks/useClickUpTasks';
+import { useUserRole } from '@/hooks/useUserRole';
 import type { Event } from '@/hooks/useEvents';
 
 interface EventProgressDashboardProps {
@@ -14,6 +16,12 @@ interface EventProgressDashboardProps {
 }
 
 export function EventProgressDashboard({ event }: EventProgressDashboardProps) {
+  const { role, isAdmin, isAgent, isEditor, loading: roleLoading } = useUserRole();
+
+  // Agent/Admin/Editor tiers use the ClickUp-based read-only view
+  const useClickUp = isAdmin || isAgent || isEditor;
+
+  // Always call the hook but only use its data for ClickUp tiers
   const { tasks, stats, tasksByResponsible, tasksByPhase, loading } = useClickUpTasks(event.id);
 
   const eventDate = new Date(event.event_date);
@@ -21,7 +29,7 @@ export function EventProgressDashboard({ event }: EventProgressDashboardProps) {
   const daysUntil = differenceInDays(eventDate, today);
   const isPast = daysUntil < 0;
 
-  if (loading) {
+  if (roleLoading || loading) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-40 w-full" />
@@ -33,6 +41,12 @@ export function EventProgressDashboard({ event }: EventProgressDashboardProps) {
     );
   }
 
+  // ── Managed / Core tiers → self-managed task dashboard ──
+  if (!useClickUp) {
+    return <SelfManagedTaskDashboard event={event} />;
+  }
+
+  // ── Agent / Admin / Editor → existing ClickUp read-only view ──
   if (tasks.length === 0) {
     return (
       <Card>
