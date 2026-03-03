@@ -74,6 +74,10 @@ export const useContacts = () => {
             `last_name.ilike.%${trimmed}%`,
             `email.ilike.%${trimmed}%`,
             `phone.ilike.%${trimmed}%`,
+            `city.ilike.%${trimmed}%`,
+            `state.ilike.%${trimmed}%`,
+            `address_1.ilike.%${trimmed}%`,
+            `tags.cs.{${trimmed}}`,
           ].join(','),
         );
       }
@@ -119,6 +123,10 @@ export const useContacts = () => {
             `last_name.ilike.%${trimmed}%`,
             `email.ilike.%${trimmed}%`,
             `phone.ilike.%${trimmed}%`,
+            `city.ilike.%${trimmed}%`,
+            `state.ilike.%${trimmed}%`,
+            `address_1.ilike.%${trimmed}%`,
+            `tags.cs.{${trimmed}}`,
           ].join(','),
         );
       }

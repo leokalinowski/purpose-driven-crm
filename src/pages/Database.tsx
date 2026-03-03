@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Upload, Search, ChevronLeft, ChevronRight, Users, RefreshCw } from 'lucide-react';
+import { Plus, Upload, Search, ChevronLeft, ChevronRight, Users, RefreshCw, Download } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { ContactTable } from '@/components/database/ContactTable';
 import { ContactForm } from '@/components/database/ContactForm';
@@ -112,7 +113,27 @@ const Database = () => {
   const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
   const [showBulkEditor, setShowBulkEditor] = useState(false);
 
-
+  const handleExportCSV = useCallback(() => {
+    if (!allContacts || allContacts.length === 0) {
+      toast({ title: 'No contacts to export', variant: 'destructive' });
+      return;
+    }
+    const headers = ['First Name', 'Last Name', 'Email', 'Phone', 'Address', 'City', 'State', 'Zip Code', 'Tags', 'DNC', 'Notes'];
+    const rows = allContacts.map(c => [
+      c.first_name || '', c.last_name, c.email || '', c.phone || '',
+      c.address_1 || '', c.city || '', c.state || '', c.zip_code || '',
+      (c.tags || []).join('; '), c.dnc ? 'Yes' : 'No', (c.notes || '').replace(/"/g, '""'),
+    ].map(v => `"${v}"`).join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `contacts-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Export Complete', description: `Exported ${allContacts.length} contacts.` });
+  }, [allContacts, toast]);
 
   const handleAddContact = async (contactData: ContactInput) => {
     try {
@@ -461,6 +482,16 @@ const Database = () => {
                 <span className="hidden xs:inline">Bulk Edit ({selectedContacts.length})</span>
                 <span className="xs:hidden">Bulk ({selectedContacts.length})</span>
             </Button>
+            <Button
+              onClick={handleExportCSV}
+              variant="outline"
+              className="sm:w-auto"
+              title="Download all contacts as CSV"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              <span className="hidden xs:inline">Export CSV</span>
+              <span className="xs:hidden">Export</span>
+            </Button>
             </div>
           </div>
         </div>
@@ -526,7 +557,7 @@ const Database = () => {
             <div className="flex items-center space-x-2 w-full sm:w-auto">
               <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <Input
-                placeholder="Search contacts by name, email, or phone..."
+                placeholder="Search by name, email, phone, city, state, address, or tag..."
                 value={searchTerm}
                 onChange={(e) => handleSearchNoScroll(e.target.value)}
                 className="flex-1 sm:max-w-sm"
@@ -624,24 +655,14 @@ const Database = () => {
         )}
         
         {/* Duplicate Cleanup Dialog */}
-        {showDuplicateCleanup && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-background rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-2xl font-bold">Duplicate Contact Cleanup</h2>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowDuplicateCleanup(false)}
-                  >
-                    Close
-                  </Button>
-                </div>
-                <DuplicateCleanup />
-              </div>
-            </div>
-          </div>
-        )}
+        <Dialog open={showDuplicateCleanup} onOpenChange={setShowDuplicateCleanup}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Duplicate Contact Cleanup</DialogTitle>
+            </DialogHeader>
+            <DuplicateCleanup onComplete={() => { fetchContacts(); setShowDuplicateCleanup(false); }} />
+          </DialogContent>
+        </Dialog>
         
         {/* Contact Touchpoints Dialog */}
         {viewingTouchpointsContact && (

@@ -2,20 +2,9 @@
  * Contact utilities for data normalization, validation, and duplicate detection
  */
 
-export interface ContactInput {
-  first_name?: string;
-  last_name: string;
-  phone?: string;
-  email?: string;
-  address_1?: string;
-  address_2?: string;
-  city?: string;
-  state?: string;
-  zip_code?: string;
-  tags?: string[] | null;
-  dnc?: boolean;
-  notes?: string;
-}
+// Re-export the canonical ContactInput type from useContacts
+export type { ContactInput } from '@/hooks/useContacts';
+import type { ContactInput } from '@/hooks/useContacts';
 
 export interface NormalizedContact extends ContactInput {
   normalized_phone?: string;
