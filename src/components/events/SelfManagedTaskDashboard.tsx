@@ -51,9 +51,10 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
   const isPast = daysUntil < 0;
 
   // ── Stats ──────────────────────────────────────────────
-  const stats: ClickUpTaskStats = useMemo(() => {
+  const stats = useMemo(() => {
     const total = eventTasks.length;
     const completed = eventTasks.filter((t) => t.status === 'completed').length;
+    const inProgress = eventTasks.filter((t) => t.status === 'in_progress').length;
     const overdue = eventTasks.filter(
       (t) => t.status !== 'completed' && t.due_date && isBefore(new Date(t.due_date), today),
     ).length;
@@ -65,7 +66,7 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
         isBefore(new Date(t.due_date), addDays(today, 7)),
     ).length;
     const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
-    return { total, completed, overdue, dueSoon, progressPct };
+    return { total, completed, inProgress, overdue, dueSoon, progressPct };
   }, [eventTasks]);
 
   // ── Phase grouping ────────────────────────────────────
@@ -93,12 +94,22 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
   }, [eventTasks]);
 
   // ── Handlers ──────────────────────────────────────────
-  const handleToggleComplete = async (task: EventTask) => {
+  const handleCycleStatus = async (task: EventTask) => {
+    const nextStatus: Record<string, string> = {
+      pending: 'in_progress',
+      in_progress: 'completed',
+      completed: 'pending',
+    };
+    const current = task.status || 'pending';
+    const next = nextStatus[current] || 'pending';
     try {
-      if (task.status === 'completed') {
-        await updateTask(task.id, { status: 'pending', completed_at: null } as any);
-      } else {
+      if (next === 'completed') {
         await markTaskComplete(task.id);
+      } else {
+        await updateTask(task.id, {
+          status: next,
+          completed_at: null,
+        } as any);
       }
     } catch {
       toast.error('Failed to update task');
@@ -274,7 +285,9 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
                 {!isCollapsed && (
                   <div className="space-y-1 ml-6">
                     {group.tasks.map((task) => {
-                      const isComplete = task.status === 'completed';
+                      const status = task.status || 'pending';
+                      const isComplete = status === 'completed';
+                      const isInProgress = status === 'in_progress';
                       const isOverdue =
                         !isComplete && task.due_date && isBefore(new Date(task.due_date), today);
                       return (
@@ -285,12 +298,20 @@ export function SelfManagedTaskDashboard({ event }: SelfManagedTaskDashboardProp
                               ? 'bg-muted/40 border-muted'
                               : isOverdue
                                 ? 'border-destructive/30 bg-destructive/5'
-                                : 'border-border hover:bg-muted/30'
+                                : isInProgress
+                                  ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/30'
+                                  : 'border-border hover:bg-muted/30'
                           }`}
                         >
-                          <button onClick={() => handleToggleComplete(task)} className="shrink-0">
+                          <button
+                            onClick={() => handleCycleStatus(task)}
+                            className="shrink-0"
+                            title={`Status: ${status === 'pending' ? 'To Do' : status === 'in_progress' ? 'In Progress' : 'Done'} — click to change`}
+                          >
                             {isComplete ? (
                               <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            ) : isInProgress ? (
+                              <Clock className="h-5 w-5 text-blue-600" />
                             ) : (
                               <Circle className="h-5 w-5 text-muted-foreground hover:text-primary" />
                             )}

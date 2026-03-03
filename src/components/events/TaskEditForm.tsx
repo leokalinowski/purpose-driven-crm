@@ -42,6 +42,7 @@ export function TaskEditForm({ task, onClose }: TaskEditFormProps) {
   );
   const [notes, setNotes] = useState(task.notes || "");
   const [phase, setPhase] = useState(task.phase || "");
+  const [status, setStatus] = useState(task.status || "pending");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -60,6 +61,8 @@ export function TaskEditForm({ task, onClose }: TaskEditFormProps) {
         due_date: dueDate ? dueDate.toISOString().split('T')[0] : null,
         notes: notes.trim() || null,
         phase: phase || null,
+        status,
+        completed_at: status === 'completed' ? new Date().toISOString() : null,
       } as any);
       
       toast.success("Task updated successfully");
@@ -141,6 +144,20 @@ export function TaskEditForm({ task, onClose }: TaskEditFormProps) {
             <div className="text-xs text-muted-foreground text-right">
               {notes.length}/500 characters
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Status</Label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">To Do</SelectItem>
+                <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="completed">Done</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
