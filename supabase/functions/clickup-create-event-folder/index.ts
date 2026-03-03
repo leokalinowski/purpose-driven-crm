@@ -58,10 +58,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(token);
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
+    const { data: userRole, error: roleError } = await supabaseAuth.rpc("get_current_user_role");
+    if (roleError || userRole !== "admin") {
+      return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
