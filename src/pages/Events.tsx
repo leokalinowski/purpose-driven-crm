@@ -105,7 +105,7 @@ const Events = () => {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Events</h1>
             <p className="text-muted-foreground">
@@ -119,7 +119,7 @@ const Events = () => {
         </div>
 
         <Tabs defaultValue="my-event" className="w-full">
-          <TabsList>
+          <TabsList className="w-full sm:w-auto overflow-x-auto">
             <TabsTrigger value="my-event">My Event</TabsTrigger>
             <TabsTrigger value="rsvps">RSVPs</TabsTrigger>
             <TabsTrigger value="all-events">All Events</TabsTrigger>
@@ -131,7 +131,7 @@ const Events = () => {
               <div className="space-y-4">
                 {nextEvent.public_slug && (
                   <Card>
-                    <CardContent className="flex items-center justify-between py-4">
+                    <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-4">
                       <div>
                         <h4 className="font-medium">Invite Your Database</h4>
                         <p className="text-sm text-muted-foreground">
@@ -195,10 +195,10 @@ const Events = () => {
                     {events.map((event) => (
                       <div 
                         key={event.id} 
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border rounded-lg hover:bg-muted/50"
                       >
-                        <div className="flex-1">
-                          <h4 className="font-medium">{event.title}</h4>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium truncate">{event.title}</h4>
                           <p className="text-sm text-muted-foreground">
                             {new Date(event.event_date).toLocaleDateString()}
                           </p>
@@ -228,8 +228,8 @@ const Events = () => {
                             </p>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="text-right mr-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="mr-2">
                             {new Date(event.event_date) < new Date() ? (
                               <span className="text-sm text-green-600">Completed</span>
                             ) : (
