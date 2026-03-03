@@ -1,56 +1,90 @@
 
 
-## Plan: Tier-Based Event Task Management
+## Plan: Self-Service Account Settings + Unified Branding
 
-### Current State
-- **Agent/Admin tier**: Events use ClickUp-synced tasks (`clickup_tasks` table) displayed via `EventProgressDashboard` → `useClickUpTasks` → `EventTaskList`. These are read-only in the Hub (managed by the REOP team in ClickUp).
-- **All tiers**: A separate self-managed task system already exists using the `event_tasks` table with full CRUD (`useEvents.addTask/updateTask/markTaskComplete/deleteTask`) and UI components (`TaskManagement`, `TaskForm`, `TaskEditForm`). However, this is **not connected** to the `EventProgressDashboard`.
-- **Managed/Core tiers**: Currently see the ClickUp-based dashboard, which shows "No Checklist Items Yet" since they have no ClickUp tasks.
+### Problem
 
-### What to Build
+There are **two separate copies of branding colors** being maintained:
+1. **`profiles` table** -- written by the Admin "Edit" button in Team Management (lines 448-466 of AdminTeamManagement.tsx)
+2. **`agent_marketing_settings` table** -- written by the Admin "Marketing" button
 
-Make `EventProgressDashboard` tier-aware: Agent/Admin tiers see the existing ClickUp task view; Managed/Core tiers see a self-service task management experience using the `event_tasks` table, pre-populated with a default checklist template.
+Most edge functions (event emails, RSVP confirmation, invitation emails) read branding from `profiles`. The EventForm was recently updated to read from `agent_marketing_settings`. These two sources frequently disagree.
 
-### Implementation
+Additionally, there is **no Settings page** for non-admin users. They cannot edit their own name, brokerage, phone, branding, logos, etc.
 
-**1. Default Task Template for New Events**
+### Solution
 
-When a Managed or Core user creates an event, auto-generate a starter task list in `event_tasks` based on the same three-phase structure (Pre-Event, Event Day, Post-Event). This will be a utility function that creates ~15-20 common event preparation tasks with relative due dates calculated from the event date.
+1. **Make `agent_marketing_settings` the single source of truth for branding** (colors, headshot, logos). Remove branding fields from the `profiles` update flow in Admin Team Management -- instead sync them to `agent_marketing_settings`.
 
-Example tasks: "Finalize guest list" (Pre-Event, -14 days), "Confirm venue" (Pre-Event, -7 days), "Print name tags" (Event Day, -1 day), "Send thank you emails" (Post-Event, +2 days), etc.
+2. **Create a `/settings` page** available to ALL tiers where users can edit their own profile info and branding.
 
-**2. Modify `EventProgressDashboard` to be tier-aware**
+3. **Update edge functions** to read branding from `agent_marketing_settings` instead of `profiles`.
 
-- Import `useUserRole` to check the current user's tier
-- **Agent/Admin**: Continue using `useClickUpTasks` (existing behavior, read-only view)
-- **Managed/Core**: Use `event_tasks` from `useEvents` instead, showing the same progress stats UI but with full inline editing capabilities (mark complete, edit, delete, add new tasks)
+4. **Restrict admin-only tabs** (Integrations, Images, Backgrounds) when rendered in self-service mode.
 
-**3. Enhance the self-managed task UI**
+### Implementation Details
 
-Integrate the existing `TaskManagement` capabilities directly into the progress dashboard for lower tiers:
-- Add inline task completion toggle (click to mark done/undo)
-- Add inline due date editing
-- Add notes/comments field per task
-- Show the same progress stats cards (total, completed, overdue, progress %)
-- Show phase grouping using a `phase` column -- add this to the `event_tasks` table schema
+**1. New RLS policies on `agent_marketing_settings`**
 
-**4. Schema Change: Add `phase` column to `event_tasks`**
+Migration to add INSERT and UPDATE policies so users can manage their own row:
+- `Users can insert their own marketing settings` (INSERT, `user_id = auth.uid()`)
+- `Users can update their own marketing settings` (UPDATE, `user_id = auth.uid()`)
 
-Add a `phase` text column (values: `pre_event`, `event_day`, `post_event`) to `event_tasks` so self-managed tasks can use the same phase-based progress breakdown that ClickUp tasks show.
+**2. Create `/settings` page (`src/pages/Settings.tsx`)**
 
-**5. Wire into Events page**
+A new page that:
+- Loads profile data from `profiles` (name, email, brokerage, team, phone, office, website, licenses)
+- Loads branding data from `agent_marketing_settings` (colors, headshot, logos, content guidelines)
+- Saves profile info to `profiles`, branding to `agent_marketing_settings` (via upsert)
+- Reuses `AgentMarketingSettingsForm` internally but with a new `isAdmin` prop that hides the Integrations, Images, and Backgrounds tabs for non-admin users
+- Includes file upload for headshot and logos (reusing existing `uploadFile` pattern from AdminTeamManagement)
 
-No changes needed to the `Events.tsx` page itself -- it already renders `EventProgressDashboard` for the next event. The dashboard component will internally switch behavior based on tier.
+**3. Update `AgentMarketingSettingsForm` to support self-service mode**
+
+Add an `isAdmin?: boolean` prop (default `true` for backward compatibility). When `false`:
+- Hide the Integrations, Images, and Backgrounds tabs (show only Branding + Content)
+- Change header text from "Marketing Settings for {name}" to "My Branding & Content"
+
+**4. Consolidate branding in Admin Team Management**
+
+In `handleSaveAgentChanges` (AdminTeamManagement.tsx), after saving profile fields to `profiles`, also upsert the branding fields (colors, headshot, logos) to `agent_marketing_settings`. Remove the duplicate branding color fields from the Edit dialog entirely -- branding is now managed via the Marketing button or the user's own Settings page.
+
+**5. Update edge functions to read from `agent_marketing_settings`**
+
+These 4 edge functions currently read `primary_color`, `secondary_color`, `headshot_url`, `logo_colored_url` from `profiles`:
+- `event-reminder-email`
+- `event-email-scheduler`  
+- `rsvp-confirmation-email`
+- `send-event-invitation`
+
+Update each to JOIN or separately query `agent_marketing_settings` for branding, falling back to `profiles` values (for backward compat during migration).
+
+**6. Update `useEvents.ts` to read from `agent_marketing_settings`**
+
+Lines 137-141 currently query `profiles` for `primary_color`. Change to query `agent_marketing_settings`.
+
+**7. Add Settings link to sidebar**
+
+Add a "Settings" item to the main navigation in `AppSidebar.tsx` (below Support Hub, above admin section), available to all roles.
+
+**8. Add route to `App.tsx`**
+
+Add `<Route path="/settings" element={<Settings />} />`.
 
 ### Files to Create/Modify
 
 | File | Action |
 |---|---|
-| `src/utils/defaultEventTasks.ts` | **Create** -- default task template with phase + relative due dates |
-| `src/components/events/EventProgressDashboard.tsx` | **Modify** -- add tier check, branch between ClickUp and self-managed views |
-| `src/components/events/SelfManagedTaskDashboard.tsx` | **Create** -- new component for Managed/Core task management with inline editing, progress stats, and phase grouping |
-| `src/hooks/useEvents.ts` | **Modify** -- add `generateDefaultTasks(eventId, eventDate)` function that creates starter tasks |
-| `src/components/events/TaskForm.tsx` | **Modify** -- add phase selector dropdown |
-| `src/components/events/TaskEditForm.tsx` | **Modify** -- add phase selector dropdown |
-| Migration | **Create** -- add `phase` column to `event_tasks` table |
+| Migration | **Create** -- add INSERT/UPDATE RLS for `agent_marketing_settings` |
+| `src/pages/Settings.tsx` | **Create** -- self-service settings page |
+| `src/components/admin/AgentMarketingSettingsForm.tsx` | **Modify** -- add `isAdmin` prop to hide admin-only tabs |
+| `src/pages/AdminTeamManagement.tsx` | **Modify** -- remove duplicate branding from Edit dialog, sync to `agent_marketing_settings` on save |
+| `src/components/layout/AppSidebar.tsx` | **Modify** -- add Settings nav item |
+| `src/App.tsx` | **Modify** -- add `/settings` route |
+| `src/hooks/useEvents.ts` | **Modify** -- read branding from `agent_marketing_settings` |
+| `src/components/events/EventForm.tsx` | Already reads from `agent_marketing_settings` (done) |
+| `supabase/functions/event-reminder-email/index.ts` | **Modify** -- read branding from `agent_marketing_settings` |
+| `supabase/functions/event-email-scheduler/index.ts` | **Modify** -- read branding from `agent_marketing_settings` |
+| `supabase/functions/rsvp-confirmation-email/index.ts` | **Modify** -- read branding from `agent_marketing_settings` |
+| `supabase/functions/send-event-invitation/index.ts` | **Modify** -- read branding from `agent_marketing_settings` |
 
