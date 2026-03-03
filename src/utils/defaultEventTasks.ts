@@ -41,7 +41,21 @@ export const DEFAULT_EVENT_TASKS: DefaultTaskTemplate[] = [
   { task_name: 'Confirm Venue',                            phase: 'pre_event', days_offset: -3,  responsible_person: 'Event Coordinator' },
   { task_name: 'Gate check: Venue + Owner confirmed',      phase: 'pre_event', days_offset: -2,  responsible_person: 'Event Coordinator' },
   { task_name: 'Send Check-in list to print',              phase: 'pre_event', days_offset: -2,  responsible_person: 'Event Coordinator' },
-  { task_name: 'Remind Sponsors',                          phase: 'pre_event', days_offset: -1,  responsible_person: 'Event Coordinator' },
+  { task_name: 'Remind Sponsors',                          phase: 'pre_event',  days_offset: -1,  responsible_person: 'Event Coordinator' },
+
+  // ── Event Day ──────────────────────────────────────────
+  { task_name: 'Setup Venue',                              phase: 'event_day', days_offset: 0,   responsible_person: 'Event Coordinator' },
+  { task_name: 'Capture Photos/Videos',                    phase: 'event_day', days_offset: 0,   responsible_person: 'Marketing' },
+  { task_name: 'Collect Doorprize & Leads',                phase: 'event_day', days_offset: 0,   responsible_person: 'Event Coordinator' },
+
+  // ── Post-Event ─────────────────────────────────────────
+  { task_name: 'Send Thank-You Email',                     phase: 'post_event', days_offset: 1,  responsible_person: 'Marketing' },
+  { task_name: 'Charity Delivery',                         phase: 'post_event', days_offset: 2,  responsible_person: 'Event Coordinator' },
+  { task_name: 'Agent Follow-Up Calls',                    phase: 'post_event', days_offset: 3,  responsible_person: 'Event Coordinator' },
+  { task_name: 'Post Event Social Highlights',             phase: 'post_event', days_offset: 3,  responsible_person: 'Marketing' },
+  { task_name: 'Sponsor Thank-Yous',                       phase: 'post_event', days_offset: 5,  responsible_person: 'Event Coordinator' },
+  { task_name: 'KPI Report & Scoreboard Entry',            phase: 'post_event', days_offset: 7,  responsible_person: 'Event Coordinator' },
+  { task_name: 'Archive Assets',                           phase: 'post_event', days_offset: 14, responsible_person: 'Marketing' },
 ];
 
 /**
