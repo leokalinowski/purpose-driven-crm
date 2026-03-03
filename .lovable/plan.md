@@ -1,30 +1,28 @@
 
 
-## Plan: Fix task status constraint + improve status UX
+## Plan: Make Events page responsive
 
-### Root Cause
-The `event_tasks` table has a CHECK constraint:
-```
-CHECK (status = ANY (ARRAY['pending', 'completed', 'overdue']))
-```
-The code sends `'in_progress'` which violates this constraint, causing the 403-like error on every status toggle.
+Several areas have fixed layouts that break on smaller screens.
 
-### Fix
+### Changes
 
-**1. Database migration** -- Update the check constraint to include `'in_progress'`:
-```sql
-ALTER TABLE public.event_tasks DROP CONSTRAINT event_tasks_status_check;
-ALTER TABLE public.event_tasks ADD CONSTRAINT event_tasks_status_check
-  CHECK (status = ANY (ARRAY['pending'::text, 'in_progress'::text, 'completed'::text, 'overdue'::text]));
-```
+**1. `src/pages/Events.tsx`**
+- Header: Change `flex items-center justify-between` to stack vertically on mobile (`flex-col sm:flex-row`)
+- All Events list items: Stack the event info and action buttons vertically on mobile; wrap action buttons
+- Tab triggers: Allow horizontal scrolling on mobile if needed
+- Invite Database card: Stack text and button vertically on small screens
 
-**2. No frontend changes needed** -- The status cycling UI (click icon to toggle To Do → In Progress → Done) already works in `SelfManagedTaskDashboard.tsx`. The `TaskEditForm` already has a Status dropdown. Once the constraint is fixed, everything will work.
+**2. `src/components/events/SelfManagedTaskDashboard.tsx`**
+- Loading skeleton grid: Change `grid-cols-4` to `grid-cols-2 md:grid-cols-4`
+- Task row action buttons (edit/delete): On small screens, make them visible via a more compact layout
+- Task content: Ensure `min-w-0` and truncation work properly with flex wrapping
 
-### Files
+**3. `src/components/events/EventProgressStats.tsx`**
+- Already uses `grid-cols-2 md:grid-cols-4` -- no change needed
 
-| File | Action |
-|---|---|
-| Migration | **Create** -- alter check constraint to allow `in_progress` |
+**4. `src/components/events/EventProgressDashboard.tsx`**
+- Loading skeleton grid: Change `grid-cols-4` to `grid-cols-2 md:grid-cols-4`
 
-One migration, zero frontend changes.
+### Summary
+~4 files, mostly changing flex/grid classes to stack on mobile. No logic changes.
 
