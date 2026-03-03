@@ -34,10 +34,8 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
     if (event?.event_date) {
       // Extract date part directly from ISO string
       const dateStr = event.event_date.split('T')[0];
-      console.log('Initializing eventDate with:', dateStr);
       return dateStr;
     }
-    console.log('Initializing eventDate as empty');
     return '';
   });
 
@@ -46,13 +44,12 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
       // Extract time part from ISO string
       const timeStr = event.event_date.split('T')[1];
       if (timeStr) {
-        const time = timeStr.substring(0, 5); // HH:mm
-        console.log('Initializing eventTime with:', time);
+        const time = timeStr.substring(0, 5);
+        return time;
         return time;
       }
     }
-    console.log('Initializing eventTime as 09:00');
-    return '09:00'; // Default to 9 AM
+    return '09:00';
   });
   const [location, setLocation] = useState(event?.location || '');
   const [description, setDescription] = useState(event?.description || '');
@@ -113,18 +110,15 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
     
     try {
       setLoadingBranding(true);
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('headshot_url')
+      // Pull primary_color from agent_marketing_settings
+      const { data: marketingData } = await supabase
+        .from('agent_marketing_settings')
+        .select('primary_color')
         .eq('user_id', agentId)
         .single();
 
-      // Note: primary_color and logo_colored_url columns don't exist in profiles table
-      // Using default brand color and no default header image
-      if (profileData) {
-        // Could set headshot as header image if desired
-        // For now, just log that branding was loaded
-        console.log('Agent branding loaded for:', agentId);
+      if (marketingData?.primary_color && !isEditing) {
+        setBrandColor(marketingData.primary_color);
       }
     } catch (error) {
       console.warn('Could not load agent branding:', error);
@@ -135,14 +129,11 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
 
   useEffect(() => {
     if (event) {
-      console.log('Event data received:', event);
       setTitle(event.title || '');
 
       if (event.event_date) {
         const dateStr = event.event_date.split('T')[0];
         const timeStr = event.event_date.split('T')[1];
-        console.log('Setting eventDate to:', dateStr);
-        console.log('Setting eventTime to:', timeStr ? timeStr.substring(0, 5) : '09:00');
         setEventDate(dateStr);
         setEventTime(timeStr ? timeStr.substring(0, 5) : '09:00');
       }
@@ -351,15 +342,6 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Event' : 'Create New Event'}</DialogTitle>
-          {/* Debug info */}
-          <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded space-y-1">
-            <div>Debug Info:</div>
-            <div>Date: {eventDate || 'empty'}</div>
-            <div>Time: {eventTime || 'empty'}</div>
-            <div>Editing: {isEditing ? 'Yes' : 'No'}</div>
-            <div>Event exists: {event ? 'Yes' : 'No'}</div>
-            {event?.event_date && <div>Original: {event.event_date}</div>}
-          </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -405,10 +387,7 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
                 id="eventDate"
                 type="date"
                 value={eventDate}
-                onChange={(e) => {
-                  console.log('Date changed to:', e.target.value);
-                  setEventDate(e.target.value);
-                }}
+                onChange={(e) => setEventDate(e.target.value)}
                 required
               />
             </div>
@@ -419,10 +398,7 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
                 id="eventTime"
                 type="time"
                 value={eventTime}
-                onChange={(e) => {
-                  console.log('Time changed to:', e.target.value);
-                  setEventTime(e.target.value);
-                }}
+                onChange={(e) => setEventTime(e.target.value)}
                 required
               />
             </div>
