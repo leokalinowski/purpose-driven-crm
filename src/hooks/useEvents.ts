@@ -72,6 +72,7 @@ export interface EventTask {
   completed_at?: string;
   status?: string;
   notes?: string;
+  phase?: string;
   created_at: string;
   updated_at: string;
 }

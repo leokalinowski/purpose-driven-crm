@@ -1309,6 +1309,7 @@ export type Database = {
           event_id: string | null
           id: string
           notes: string | null
+          phase: string | null
           responsible_person: string
           status: string | null
           task_name: string
@@ -1322,6 +1323,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           notes?: string | null
+          phase?: string | null
           responsible_person: string
           status?: string | null
           task_name: string
@@ -1335,6 +1337,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           notes?: string | null
+          phase?: string | null
           responsible_person?: string
           status?: string | null
           task_name?: string
