@@ -41,7 +41,7 @@ interface CleanupStats {
   finalContactCount: number;
 }
 
-export const DuplicateCleanup = () => {
+export const DuplicateCleanup = ({ onComplete }: { onComplete?: () => void }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -221,9 +221,10 @@ export const DuplicateCleanup = () => {
         description: `Successfully cleaned up ${stats.contactsToDelete} duplicate contacts`
       });
       
-      // Reset state
+      // Reset state and notify parent
       setDuplicateGroups([]);
       setStats(null);
+      onComplete?.();
       
     } catch (error) {
       console.error('Cleanup error:', error);

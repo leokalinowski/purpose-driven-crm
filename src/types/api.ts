@@ -57,20 +57,9 @@ export interface Contact {
   updated_at: string;
 }
 
-export interface ContactInput {
-  first_name?: string | null;
-  last_name: string;
-  phone?: string | null;
-  email?: string | null;
-  address_1?: string | null;
-  address_2?: string | null;
-  zip_code?: string | null;
-  state?: string | null;
-  city?: string | null;
-  tags?: string[] | null;
-  dnc?: boolean;
-  notes?: string | null;
-}
+// ContactInput is canonically defined in src/hooks/useContacts.ts
+// Re-export it from there for consumers using this file
+export type { ContactInput } from '@/hooks/useContacts';
 
 // Dashboard Types
 export interface KPIData {

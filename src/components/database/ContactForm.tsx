@@ -16,14 +16,14 @@ const contactSchema = z.object({
   first_name: z.string()
     .trim()
     .max(100, "First name must be less than 100 characters")
-    .regex(/^[a-zA-Z\s'-]*$/, "First name can only contain letters, spaces, hyphens, and apostrophes")
+    .regex(/^[\p{L}\s'.\-]*$/u, "First name contains invalid characters")
     .optional()
     .or(z.literal("")),
   last_name: z.string()
     .trim()
     .min(1, "Last name is required")
     .max(100, "Last name must be less than 100 characters")
-    .regex(/^[a-zA-Z\s'-]+$/, "Last name can only contain letters, spaces, hyphens, and apostrophes"),
+    .regex(/^[\p{L}\s'.\-]+$/u, "Last name contains invalid characters"),
   email: z.string()
     .trim()
     .email("Invalid email address")
@@ -49,7 +49,7 @@ const contactSchema = z.object({
   city: z.string()
     .trim()
     .max(100, "City must be less than 100 characters")
-    .regex(/^[a-zA-Z\s'-]*$/, "City can only contain letters, spaces, hyphens, and apostrophes")
+    .regex(/^[\p{L}\s'.\-]*$/u, "City contains invalid characters")
     .optional()
     .or(z.literal("")),
   state: z.string()
