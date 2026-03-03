@@ -1,55 +1,28 @@
 
 
-## Plan: Fix Color Pickers + Rewrite Default Email Copy
+## Plan: Fix Event Creation Not Refreshing UI
 
-### Issue 1: Color pickers show default blue instead of agent's branding
+### Root Cause
 
-**Root cause**: `EmailTemplateEditor` has `eventData` with `primary_color` and `secondary_color` from the agent's marketing settings, but it never passes them to `VisualEmailEditor`. The `VisualEmailEditor` component has no prop for agent colors, so `getDefaultData()` always returns `#2563eb` / `#1e40af`.
+`EventForm` (line 67) calls `useEvents()` independently, creating a **separate state instance** from the one in `Events.tsx`. When the form's `addEvent()` succeeds, it updates only the form's internal state — the parent page never sees the new event. The realtime subscription *should* catch it, but both instances register on the same channel name (`events-realtime`), which Supabase can deduplicate.
 
-**Fix**:
-- Add an optional `agentColors` prop (`{ primary: string, secondary: string }`) to `VisualEmailEditor`
-- Pass `eventData.primary_color` and `eventData.secondary_color` from `EmailTemplateEditor` into this new prop
-- In `getDefaultData()`, use the agent colors when provided instead of the hardcoded defaults
-- The color pickers will then initialize with the agent's actual branding colors
+### Fix
 
-**Files**: `VisualEmailEditor.tsx` (add prop, update defaults), `EmailTemplateEditor.tsx` (pass colors)
+Pass the parent's mutation functions and an `onSuccess` callback from `Events.tsx` into `EventForm` as props, so both components share the same state.
 
----
+**File: `src/components/events/EventForm.tsx`**
+- Add optional props: `addEventFn`, `updateEventFn`, `addEventAsAdminFn`, `updateEventAsAdminFn`, `onSuccess`
+- When provided, use the parent's functions instead of the form's own `useEvents()` mutations
+- After successful create/update, call `onSuccess(newEventId)` so the parent can auto-select the new event
 
-### Issue 2: Rewrite default email copy for all types
+**File: `src/pages/Events.tsx`**
+- Pass the parent's `addEvent`, `updateEvent`, `addEventAsAdmin`, `updateEventAsAdmin` into `EventForm`
+- Pass an `onSuccess` callback that calls `setSelectedEventId(newEventId)` to immediately show the new event and its tasks
 
-Update `DEFAULT_HEADINGS` and `DEFAULT_PARAGRAPHS` in `VisualEmailEditor.tsx`:
-
-**Invitation** — more enticing, clear RSVP ask:
-- Heading: "You're Invited! ✉️"
-- Copy: Warm opening, sell the event value, clear call to RSVP with urgency ("Spots are limited")
-
-**Confirmation** — keep as-is (user confirmed it's good)
-
-**7-Day Reminder** — motivate attendance:
-- Heading: "Just One Week Away! 📅"
-- Copy: Build excitement, remind them why they RSVP'd, mention what they'd miss
-
-**1-Day Reminder** — urgency + logistics:
-- Heading: "See You Tomorrow! ⏰"
-- Copy: Excitement, quick logistics reminder, "we saved your spot"
-
-**Thank You** — invite to 1-on-1:
-- Heading: "Thank You for Joining Us! 🙏"
-- Copy: Gratitude, mention highlights, invite them to schedule a personal conversation
-
-**No-Show** — warm re-engagement + 1-on-1 invite:
-- Heading: "We Missed You! 💌"
-- Copy: No guilt, share what they missed briefly, invite to connect 1-on-1 instead
-
-**Files**: `VisualEmailEditor.tsx` (update `DEFAULT_PARAGRAPHS` and some `DEFAULT_HEADINGS`)
-
----
-
-### Summary
+### Changes
 
 | File | Change |
 |---|---|
-| `src/components/events/email/VisualEmailEditor.tsx` | Add `agentColors` prop; update `getDefaultData` to use them; rewrite all default email copy |
-| `src/components/events/email/EmailTemplateEditor.tsx` | Pass `eventData.primary_color` / `secondary_color` to `VisualEmailEditor` |
+| `src/components/events/EventForm.tsx` | Accept optional parent mutation functions + `onSuccess` callback; use them when provided |
+| `src/pages/Events.tsx` | Pass mutation functions and `onSuccess` handler to `EventForm` |
 
