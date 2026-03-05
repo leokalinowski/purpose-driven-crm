@@ -1,47 +1,95 @@
 
-## Accountability Center: Better Messaging + Contact Names + Remove Old Tasks
 
-### Changes
+## Plan: SphereSync Contact Names + Event Task Fixes + Newsletter Recurring Tasks
 
-**1. Pull contact names for SphereSync tasks**
+Three changes across the "Tasks This Week" block and the Newsletter system.
 
-The `spheresync_tasks` query already fetches `lead_id`. Add a follow-up query to fetch contact names for the overdue task lead IDs:
+---
+
+### 1. Add Contact Names to SphereSync Tasks (Block Two)
+
+**Problem**: The SphereSync section shows "Make a Call" / "Send a Text" with no indication of *who*. The `lead_id` is stored on each task but never resolved to a name.
+
+**Fix**: After building the `sphereTasks` array, collect all `lead_id` values, batch-fetch contact names from the `contacts` table (same pattern already used in Block Five for overdue tasks), then update each task's title to include the contact name: "Call Sarah Johnson" / "Text Mike Rivera". If no contact found, fall back to the current generic title.
+
+Also add `contactPhone` from the `contacts.phone` column so the UI can optionally display it.
+
+**File**: `src/hooks/useDashboardBlocks.ts` — add contact lookup after line 220, update sphere task titles.
+
+**UI File**: `src/components/dashboard/WeeklyTasksBySystem.tsx` — show contact name as the task title and phone as subtitle (replacing the current `notes` subtitle).
+
+---
+
+### 2. Fix Event Tasks in Block Two
+
+**Problem**: The event task list at line 223 filters by `!t.completed_at` but does NOT apply the born-overdue guard (`created_at <= due_date`). Template tasks with retroactive due dates that happen to fall in the current week appear as pending tasks even though they were just auto-generated.
+
+**Fix**: Apply the same `created_at <= due_date` filter to the Block Two event tasks list, consistent with what Block Four already does:
 
 ```typescript
-const leadIds = overdueSphereTasks.map(t => t.lead_id).filter(Boolean);
-const { data: contacts } = await supabase.from('contacts')
-  .select('id, first_name, last_name').in('id', leadIds);
+const incompleteEventTasks = (eventTasksWeekAll.data || []).filter(t => {
+  const created = new Date(t.created_at);
+  const due = new Date(t.due_date);
+  return !t.completed_at && created <= due;
+});
 ```
 
-Then update the task title from `"Call task from W8"` to `"Call Sarah Johnson (W8)"` — much more actionable.
+**File**: `src/hooks/useDashboardBlocks.ts` — update line 223.
 
-Add `contactName` to the `OverdueTask` type.
+---
 
-**2. Only show tasks from last 2 weeks (remove older tasks entirely)**
+### 3. Newsletter Recurring Task System
 
-Change the SphereSync overdue filter: only include tasks where `weeksDiff <= 2` (current week minus 1 and minus 2). Drop the cleanup section entirely — no more "398 older tasks need attention." Those are gone.
+**Problem**: Newsletter currently shows "0" tasks because it only checks `newsletter_campaigns` created this week. There's no recurring task mechanism to remind agents to write/schedule their newsletter.
 
-For coaching, limit to 2 past weeks instead of 4.
+**Approach**: Create a new `newsletter_task_settings` table to store each agent's preferred frequency and day-of-month, then compute newsletter tasks client-side in the dashboard hook (no cron needed).
 
-Remove `cleanupSummary` and `allTasks` from the `BlockFiveOverdue` type since they're no longer needed.
+**New table** (`newsletter_task_settings`):
+| Column | Type | Default |
+|--------|------|---------|
+| id | uuid | gen_random_uuid() |
+| agent_id | uuid (FK auth.users) | |
+| frequency | text | 'monthly' |
+| day_of_month | integer | 15 |
+| enabled | boolean | true |
+| created_at | timestamptz | now() |
+| updated_at | timestamptz | now() |
 
-**3. Rewrite nudge messaging to be clearer and more actionable**
+`frequency` accepts: `'weekly'`, `'biweekly'`, `'monthly'`.
 
-Replace the generic nudge text with specific, action-oriented messages:
+**Dashboard logic** (`useDashboardBlocks.ts`):
+- Fetch the agent's `newsletter_task_settings` row (or use defaults: monthly on the 15th).
+- Based on frequency, determine if a newsletter task is "due" this week:
+  - **Monthly**: Check if the `day_of_month` falls within the current week's date range.
+  - **Biweekly**: Check if it's an odd or even ISO week (alternating).
+  - **Weekly**: Always due.
+- Check if a `newsletter_campaigns` was created/sent this period. If not, generate a virtual task: "Write & schedule your newsletter" with the due date set to the target day.
+- This replaces the current `newsletterTasks` logic that only looks at existing campaigns.
 
-- Score ≥ 95: "All caught up — your consistency is paying off!"
-- Score ≥ 80, no overdue: "Great momentum this week. Keep showing up for your sphere."
-- Score ≥ 80, some overdue: "You're close — knock out these {n} tasks to stay on track."
-- Score ≥ 50: "You have {n} people waiting to hear from you. A quick call today can make the difference."
-- Score < 50: "Your sphere needs you — start with just one call to build momentum."
+**Newsletter page settings** (`src/pages/Newsletter.tsx`):
+- Add a small "Schedule Settings" card or section (gear icon) in the E-Newsletter page header area.
+- Simple form: frequency dropdown (Weekly / Biweekly / Monthly) + day-of-month picker (only shown for monthly).
+- Saves to `newsletter_task_settings` via upsert.
 
-Add a subtitle under the score explaining what it means: "Based on your last 4 weeks of task completion across SphereSync, Events, and Scoreboard."
+**New files**:
+- `src/hooks/useNewsletterTaskSettings.ts` — CRUD hook for the settings table
+- `src/components/newsletter/NewsletterScheduleSettings.tsx` — settings UI component
 
-**4. Group overdue tasks by week instead of flat list**
+**Modified files**:
+- `src/hooks/useDashboardBlocks.ts` — replace newsletter task logic with virtual task generation
+- `src/pages/Newsletter.tsx` — add settings component
+- Migration for the new table + RLS policies
 
-Instead of listing each task individually, group by week: "Week 8 — 23 tasks" and "Week 9 — 23 tasks" with expand/collapse per week. When expanded, show contact names.
+---
 
-### Files Changed
+### Summary of Files
 
-1. **`src/hooks/useDashboardBlocks.ts`** — Add contact name lookup, limit overdue to 2 weeks, remove cleanup, update type
-2. **`src/components/dashboard/OverdueTasks.tsx`** — Rewrite messaging, group by week, show contact names, remove cleanup section
+| File | Change |
+|------|--------|
+| `src/hooks/useDashboardBlocks.ts` | Contact name lookup for sphere tasks, born-overdue guard on event tasks in Block Two, virtual newsletter task logic |
+| `src/components/dashboard/WeeklyTasksBySystem.tsx` | Display contact names and phone for SphereSync tasks |
+| `src/hooks/useNewsletterTaskSettings.ts` | New — CRUD hook for newsletter frequency settings |
+| `src/components/newsletter/NewsletterScheduleSettings.tsx` | New — frequency/day settings UI |
+| `src/pages/Newsletter.tsx` | Add schedule settings section |
+| New migration | `newsletter_task_settings` table + RLS |
+
