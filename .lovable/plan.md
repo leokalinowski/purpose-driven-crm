@@ -1,104 +1,52 @@
-## Dashboard Rework Plan
 
-### Overview
 
-Replace the current "Agent Dashboard" with a new "Dashboard" that has 5 focused blocks pulling real data from SphereSync, Events, Newsletter, Social, and Coaching systems.
+## Dashboard Data Bugs and Fixes
 
-### Rename
+### Critical Bug: Events touchpoints pulling ALL agents' data
 
-- `AppSidebar.tsx` line 87: `'Agent Dashboard'` → `'Dashboard'`
-- `Index.tsx` page title: `'Agent Dashboard'` → `'Dashboard'`
+**Line 162-163** — The `event_emails` query has **no agent scoping**. It fetches every event email sent this week across the entire platform, not just the current user's events. This is why you see 118 Events touchpoints — those are emails from all agents combined.
 
----
-
-### Block One: Weekly Touchpoints + Contacts Touched
-
-A prominent hero card showing:
-
-- **Total Touchpoints This Week**: Sum of completed SphereSync tasks (calls + texts) + newsletter sends (from `newsletter_campaigns`) + event invitations (from `event_emails`) + social posts published (from `social_posts`)
-- **Unique Contacts Touched**: Deduplicated count of contacts reached across all channels
-- Visual breakdown bar showing contribution per channel (calls, texts, emails, social, events)
-
-**Data sources**: `spheresync_tasks` (completed this week), `event_emails` (sent this week), `social_posts` (published this week), `newsletter_campaigns` (sent this week)
+**Fix**: Join through the `events` table to scope by `agent_id`:
+```
+supabase.from('event_emails').select('id, recipient_email, event_id')
+  .gte('sent_at', weekStart).lte('sent_at', weekEnd)
+```
+Then filter client-side by fetching the user's event IDs first, OR use a sub-select. Since `event_emails` doesn't have an `agent_id` column directly, the simplest reliable approach is to first fetch the user's event IDs, then filter `event_emails` with `.in('event_id', userEventIds)`.
 
 ---
 
-### Block Two: Tasks for the Week (Grouped by System)
+### Other Bugs Found
 
-Separate cards/sections for each system, each showing pending tasks:
+**Bug 2: Block Four "Events completed" is hardcoded to 0** (line 271)
+- `completedEventCount = 0` with comment "these are filtered to non-completed". The query only fetches incomplete event tasks, so completed ones are never counted. This makes the performance % inaccurate.
+- **Fix**: Fetch all event tasks for the week (remove `.is('completed_at', null)` from the week query), then split into completed vs pending.
 
+**Bug 3: Block Four trend only uses SphereSync data** (lines 278-291)
+- The 8-week trend chart ignores Events and Coaching entirely, giving an incomplete performance picture.
+- **Fix**: Include event tasks and coaching in the weekly trend calculation.
 
-| System       | Data Source                                            | What to show                                             |
-| ------------ | ------------------------------------------------------ | -------------------------------------------------------- |
-| SphereSync   | `spheresync_tasks` (current week, not completed)       | Call/text tasks with contact name, phone, action buttons |
-| Events       | `event_tasks` (due this week, not completed)           | Task name, event name, due date, status                  |
-| Newsletter   | `newsletter_campaigns` (drafts or scheduled this week) | Campaign name, status, scheduled date                    |
-| Social Media | `social_posts` (scheduled this week, not posted)       | Post preview, platform, scheduled time                   |
-| Scoreboard   | `coaching_submissions` (current week missing?)         | Whether this week's submission is done, link to submit   |
+**Bug 4: `closedTransactions` variable is computed but never used** (line 245)
+- Dead code — `yearTransactions` counts all transactions regardless of status, but `closedTransactions` is calculated and discarded.
 
+**Bug 5: Social touchpoints query logic is inverted** (line 148-149)
+- The social query filters `.neq('status', 'posted')` — this fetches posts that are NOT posted (for the tasks list). But the touchpoints calculation on line 177 then filters for `status === 'posted'`, which will always be 0 since posted ones were excluded from the query.
+- **Fix**: Run a separate social query for touchpoints that fetches `.eq('status', 'posted')`, OR combine both and split client-side.
 
-Each section shows a count badge and collapses if empty. Only show systems the user has access to (via `useFeatureAccess`).
-
----
-
-### Block Three: Transaction Opportunity Calculator
-
-Based on the industry benchmark: 1 transaction per 6 contacts per year.
-
-Display:
-
-- **Database size** (from `contacts` count)
-- **Annual target**: contacts ÷ 6
-- **Monthly target**: annual ÷ 12
-- **Potential Yearly Dollar amount**: Annual Target × average GCI (calculated from a fallback of $8,000 average)
-- Visual progress bar: Monthly target growing along the year
+**Bug 6: Unique contacts count mixes IDs with email addresses** (lines 180-182)
+- SphereSync adds `lead_id` (a UUID) while event emails add `recipient_email` (an email string). These are different identifier types, so the deduplication doesn't actually work — a contact could be counted twice.
+- **Fix**: For event emails, resolve the recipient email to a contact ID, or accept this as an approximation and document it.
 
 ---
 
-### Block Four: Task Execution Performance
+### Implementation Plan
 
-- **Current week completion %**: tasks completed ÷ total tasks across all systems this week
-- **Trend chart** (last 6-8 weeks): line chart showing weekly completion rate over time
-- Breakdown by system (small badges showing per-system completion)
+**File**: `src/hooks/useDashboardBlocks.ts`
 
-**Data sources**: `spheresync_tasks` historical stats, `event_tasks` completion, `coaching_submissions` streak
+1. **Add a preliminary query** to fetch the user's event IDs, then use `.in('event_id', eventIds)` on the `event_emails` touchpoint query.
+2. **Split event tasks query** into two: one for all tasks this week (for performance), one for incomplete only (for the task list). Or fetch all and filter client-side.
+3. **Add a separate social touchpoints query** with `.eq('status', 'posted')` for Block One.
+4. **Include event tasks in the trend** calculation for Block Four.
+5. **Remove dead `closedTransactions` variable**.
 
----
+These are all changes to a single file. No new components or UI changes needed — the display components are correct, they're just receiving wrong data.
 
-### Block Five: Overdue Tasks (Actionable)
-
-Red-highlighted section listing all overdue tasks across systems:
-
-- SphereSync tasks from previous weeks still not completed
-- Event tasks past due date and not completed
-- Coaching submissions for past weeks not submitted
-
-Each overdue item shows: task description, how many days overdue, and action buttons (call/text for SphereSync, navigate for events/coaching). Items sorted by most overdue first.
-
----
-
-### Technical Approach
-
-**New hook**: `src/hooks/useDashboardBlocks.ts` — single hook that fetches all 5 blocks' data in parallel from Supabase. Replaces the current scattered data fetching.
-
-**New components** (all in `src/components/dashboard/`):
-
-- `WeeklyTouchpoints.tsx` — Block One
-- `WeeklyTasksBySystem.tsx` — Block Two
-- `TransactionOpportunity.tsx` — Block Three
-- `TaskPerformance.tsx` — Block Four
-- `OverdueTasks.tsx` — Block Five
-
-**Modified files**:
-
-- `src/pages/Index.tsx` — Replace current layout with 5 new blocks
-- `src/components/layout/AppSidebar.tsx` — Rename to "Dashboard"
-
-**Removed from Index.tsx** (components no longer needed on dashboard):
-
-- `AgentMetricsCards` (replaced by Blocks One + Three)
-- `AgentActivityWidget` (replaced by Block Two)
-- `AgentPerformanceCharts` (replaced by Block Four)
-- `SupportWidget` and `EventsWidget` (integrated into Blocks Two + Five)
-
-The existing components won't be deleted — they're still used on other pages — they'll just no longer be rendered on the main dashboard.
