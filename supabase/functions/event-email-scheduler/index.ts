@@ -259,6 +259,106 @@ Deno.serve(async (req) => {
         emailTypesToSend.push('no_show')
       }
 
+      // === Automated follow-up logic ===
+      if (event.auto_followup_enabled && diffDays > 0) {
+        // Event is in the future — check if follow-ups are due
+        // Find the earliest invitation sent_at for this event
+        const { data: firstInvitation } = await supabase
+          .from('event_emails')
+          .select('sent_at')
+          .eq('event_id', event.id)
+          .eq('email_type', 'invitation')
+          .in('status', ['sent', 'delivered', 'opened', 'clicked'])
+          .order('sent_at', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+
+        if (firstInvitation?.sent_at) {
+          const initialSentDate = new Date(firstInvitation.sent_at.split('T')[0])
+          const daysSinceInitial = Math.round((today.getTime() - initialSentDate.getTime()) / (1000 * 60 * 60 * 24))
+
+          // Check Follow-Up #1
+          if (daysSinceInitial >= (event.followup_1_days || 3)) {
+            const { data: fu1Exists } = await supabase
+              .from('event_emails')
+              .select('id')
+              .eq('event_id', event.id)
+              .eq('email_type', 'invitation_followup_1')
+              .in('status', ['sent', 'delivered', 'opened', 'clicked'])
+              .limit(1)
+              .maybeSingle()
+
+            if (!fu1Exists) {
+              console.log(`[${event.title}] Auto follow-up #1 triggered (${daysSinceInitial} days since initial)`)
+              try {
+                const fuResponse = await fetch(
+                  `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-event-invitation`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                    },
+                    body: JSON.stringify({ eventId: event.id, followupNumber: 1 }),
+                  }
+                )
+                const fuData = await fuResponse.json()
+                summary.push({ event: event.title, emailType: 'auto_followup_1', ...fuData })
+              } catch (err: any) {
+                console.error(`[${event.title}] Auto follow-up #1 failed:`, err)
+                summary.push({ event: event.title, emailType: 'auto_followup_1', error: err.message })
+              }
+            }
+          }
+
+          // Check Follow-Up #2
+          if (daysSinceInitial >= (event.followup_2_days || 7)) {
+            // Only send #2 if #1 was already sent
+            const { data: fu1Sent } = await supabase
+              .from('event_emails')
+              .select('id')
+              .eq('event_id', event.id)
+              .eq('email_type', 'invitation_followup_1')
+              .in('status', ['sent', 'delivered', 'opened', 'clicked'])
+              .limit(1)
+              .maybeSingle()
+
+            if (fu1Sent) {
+              const { data: fu2Exists } = await supabase
+                .from('event_emails')
+                .select('id')
+                .eq('event_id', event.id)
+                .eq('email_type', 'invitation_followup_2')
+                .in('status', ['sent', 'delivered', 'opened', 'clicked'])
+                .limit(1)
+                .maybeSingle()
+
+              if (!fu2Exists) {
+                console.log(`[${event.title}] Auto follow-up #2 triggered (${daysSinceInitial} days since initial)`)
+                try {
+                  const fuResponse = await fetch(
+                    `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-event-invitation`,
+                    {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                      },
+                      body: JSON.stringify({ eventId: event.id, followupNumber: 2 }),
+                    }
+                  )
+                  const fuData = await fuResponse.json()
+                  summary.push({ event: event.title, emailType: 'auto_followup_2', ...fuData })
+                } catch (err: any) {
+                  console.error(`[${event.title}] Auto follow-up #2 failed:`, err)
+                  summary.push({ event: event.title, emailType: 'auto_followup_2', error: err.message })
+                }
+              }
+            }
+          }
+        }
+      }
+
       if (emailTypesToSend.length === 0) continue
 
       // Fetch branding from agent_marketing_settings

@@ -1357,6 +1357,7 @@ export type Database = {
         Row: {
           agent_id: string | null
           attendance_count: number | null
+          auto_followup_enabled: boolean
           brand_color: string | null
           clickup_event_day_list_id: string | null
           clickup_folder_id: string | null
@@ -1371,6 +1372,8 @@ export type Database = {
           event_type: string | null
           feedback_score: number | null
           feedback_summary: string | null
+          followup_1_days: number
+          followup_2_days: number
           header_image_url: string | null
           id: string
           invited_count: number | null
@@ -1390,6 +1393,7 @@ export type Database = {
         Insert: {
           agent_id?: string | null
           attendance_count?: number | null
+          auto_followup_enabled?: boolean
           brand_color?: string | null
           clickup_event_day_list_id?: string | null
           clickup_folder_id?: string | null
@@ -1404,6 +1408,8 @@ export type Database = {
           event_type?: string | null
           feedback_score?: number | null
           feedback_summary?: string | null
+          followup_1_days?: number
+          followup_2_days?: number
           header_image_url?: string | null
           id?: string
           invited_count?: number | null
@@ -1423,6 +1429,7 @@ export type Database = {
         Update: {
           agent_id?: string | null
           attendance_count?: number | null
+          auto_followup_enabled?: boolean
           brand_color?: string | null
           clickup_event_day_list_id?: string | null
           clickup_folder_id?: string | null
@@ -1437,6 +1444,8 @@ export type Database = {
           event_type?: string | null
           feedback_score?: number | null
           feedback_summary?: string | null
+          followup_1_days?: number
+          followup_2_days?: number
           header_image_url?: string | null
           id?: string
           invited_count?: number | null
