@@ -26,7 +26,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     const resend = new Resend(resendApiKey)
 
-    const { eventId }: { eventId: string } = await req.json()
+    const { eventId, followupNumber }: { eventId: string; followupNumber?: number } = await req.json()
 
     if (!eventId) {
       return new Response(
@@ -34,6 +34,11 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    // Determine the email type based on followup number
+    let emailType = 'invitation'
+    if (followupNumber === 1) emailType = 'invitation_followup_1'
+    else if (followupNumber === 2) emailType = 'invitation_followup_2'
 
     // Fetch event
     const { data: event, error: eventError } = await supabase
@@ -84,49 +89,153 @@ serve(async (req) => {
       )
     }
 
-    // Fetch all eligible contacts for this agent
-    const { data: contacts, error: contactsError } = await supabase
-      .from('contacts')
-      .select('id, first_name, last_name, email')
-      .eq('agent_id', agentId)
-      .eq('dnc', false)
-      .not('email', 'is', null)
+    // For follow-ups, validate prerequisites
+    if (followupNumber) {
+      // Check that the initial invitation was sent
+      const { data: initialSent } = await supabase
+        .from('event_emails')
+        .select('id')
+        .eq('event_id', eventId)
+        .eq('email_type', 'invitation')
+        .in('status', ['sent', 'delivered', 'opened', 'clicked'])
+        .limit(1)
 
-    if (contactsError) {
-      throw new Error('Failed to fetch contacts: ' + contactsError.message)
+      if (!initialSent || initialSent.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'Initial invitation must be sent before sending follow-ups' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // For follow-up #2, check that follow-up #1 was sent
+      if (followupNumber === 2) {
+        const { data: followup1Sent } = await supabase
+          .from('event_emails')
+          .select('id')
+          .eq('event_id', eventId)
+          .eq('email_type', 'invitation_followup_1')
+          .in('status', ['sent', 'delivered', 'opened', 'clicked'])
+          .limit(1)
+
+        if (!followup1Sent || followup1Sent.length === 0) {
+          return new Response(
+            JSON.stringify({ error: 'Follow-Up #1 must be sent before sending Follow-Up #2' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      }
     }
 
-    if (!contacts || contacts.length === 0) {
-      return new Response(
-        JSON.stringify({ sent: 0, skipped: 0, failed: 0, message: 'No eligible contacts found' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // Build recipients list based on whether this is initial or follow-up
+    let eligibleContacts: any[] = []
+    let skipped = 0
+
+    if (!followupNumber) {
+      // --- INITIAL INVITATION LOGIC (unchanged) ---
+      const { data: contacts, error: contactsError } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, email')
+        .eq('agent_id', agentId)
+        .eq('dnc', false)
+        .not('email', 'is', null)
+
+      if (contactsError) throw new Error('Failed to fetch contacts: ' + contactsError.message)
+
+      if (!contacts || contacts.length === 0) {
+        return new Response(
+          JSON.stringify({ sent: 0, skipped: 0, failed: 0, message: 'No eligible contacts found' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Check which contacts already received an invitation
+      const { data: alreadySent } = await supabase
+        .from('event_emails')
+        .select('recipient_email')
+        .eq('event_id', eventId)
+        .eq('email_type', 'invitation')
+        .in('status', ['sent', 'delivered', 'opened', 'clicked'])
+
+      const alreadySentEmails = new Set(
+        (alreadySent || []).map(e => e.recipient_email.toLowerCase())
       )
-    }
 
-    // Check which contacts already received an invitation for this event
-    const { data: alreadySent } = await supabase
-      .from('event_emails')
-      .select('recipient_email')
-      .eq('event_id', eventId)
-      .eq('email_type', 'invitation')
-      .in('status', ['sent', 'delivered', 'opened', 'clicked'])
-
-    const alreadySentEmails = new Set(
-      (alreadySent || []).map(e => e.recipient_email.toLowerCase())
-    )
-
-    const eligibleContacts = contacts.filter(
-      c => c.email && !alreadySentEmails.has(c.email.toLowerCase())
-    )
-
-    if (eligibleContacts.length === 0) {
-      return new Response(
-        JSON.stringify({ sent: 0, skipped: contacts.length, failed: 0, message: 'All contacts have already been invited' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      eligibleContacts = contacts.filter(
+        c => c.email && !alreadySentEmails.has(c.email.toLowerCase())
       )
+      skipped = alreadySentEmails.size
+
+      if (eligibleContacts.length === 0) {
+        return new Response(
+          JSON.stringify({ sent: 0, skipped: contacts.length, failed: 0, message: 'All contacts have already been invited' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    } else {
+      // --- FOLLOW-UP LOGIC ---
+      // 1. Get all contacts who received the initial invitation (any success status)
+      const { data: invitedEmails } = await supabase
+        .from('event_emails')
+        .select('recipient_email')
+        .eq('event_id', eventId)
+        .eq('email_type', 'invitation')
+        .in('status', ['sent', 'delivered', 'opened', 'clicked'])
+
+      if (!invitedEmails || invitedEmails.length === 0) {
+        return new Response(
+          JSON.stringify({ sent: 0, skipped: 0, failed: 0, message: 'No contacts were invited yet' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const invitedSet = new Set(invitedEmails.map(e => e.recipient_email.toLowerCase()))
+
+      // 2. Get all confirmed RSVPs for this event
+      const { data: rsvps } = await supabase
+        .from('event_rsvps')
+        .select('email')
+        .eq('event_id', eventId)
+        .eq('status', 'confirmed')
+
+      const rsvpEmails = new Set((rsvps || []).map(r => r.email.toLowerCase()))
+
+      // 3. Get contacts who already received THIS follow-up
+      const { data: alreadySentFollowup } = await supabase
+        .from('event_emails')
+        .select('recipient_email')
+        .eq('event_id', eventId)
+        .eq('email_type', emailType)
+        .in('status', ['sent', 'delivered', 'opened', 'clicked'])
+
+      const alreadySentSet = new Set(
+        (alreadySentFollowup || []).map(e => e.recipient_email.toLowerCase())
+      )
+
+      // 4. Filter: invited - RSVP'd - already received this follow-up
+      const targetEmails = [...invitedSet].filter(
+        email => !rsvpEmails.has(email) && !alreadySentSet.has(email)
+      )
+
+      if (targetEmails.length === 0) {
+        return new Response(
+          JSON.stringify({ sent: 0, skipped: invitedSet.size, failed: 0, message: 'All invited contacts have either RSVP\'d or already received this follow-up' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // 5. Fetch contact details for the target emails
+      const { data: contacts } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, email')
+        .eq('agent_id', agentId)
+        .eq('dnc', false)
+        .in('email', targetEmails)
+
+      eligibleContacts = contacts || []
+      skipped = invitedSet.size - eligibleContacts.length
     }
 
-    // Resolve template: event-specific → global → hardcoded
+    // Resolve template
     const agentName = event.profiles
       ? `${event.profiles.first_name || ''} ${event.profiles.last_name || ''}`.trim() || 'Event Organizer'
       : 'Event Organizer'
@@ -177,12 +286,12 @@ serve(async (req) => {
 
     let template: { subject: string; html_content: string; text_content: string | null }
 
-    // 1. Event-specific template
+    // Event-specific template for the current email type
     const { data: eventTemplate } = await supabase
       .from('event_email_templates')
       .select('*')
       .eq('event_id', eventId)
-      .eq('email_type', 'invitation')
+      .eq('email_type', emailType)
       .eq('is_active', true)
       .single()
 
@@ -193,16 +302,17 @@ serve(async (req) => {
         text_content: eventTemplate.text_content ? replaceVars(eventTemplate.text_content) : null
       }
     } else {
+      const typeLabel = followupNumber ? `Follow-Up #${followupNumber}` : 'invitation'
       return new Response(
-        JSON.stringify({ error: 'No invitation template found for this event. Please create one in the Email Templates editor.' }),
+        JSON.stringify({ error: `No ${typeLabel} template found for this event. Please create one in the Email Templates editor.` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
     // Send emails with rate limiting
     let sent = 0
-    let skipped = alreadySentEmails.size
     let failed = 0
+    const emailLogType = followupNumber ? `event_invitation_followup_${followupNumber}` : 'event_invitation'
 
     for (const contact of eligibleContacts) {
       try {
@@ -213,7 +323,7 @@ serve(async (req) => {
           .from('event_emails')
           .delete()
           .eq('event_id', eventId)
-          .eq('email_type', 'invitation')
+          .eq('email_type', emailType)
           .eq('recipient_email', contact.email!)
           .in('status', ['failed', 'bounced'])
 
@@ -225,11 +335,11 @@ serve(async (req) => {
           text: template.text_content || undefined,
           reply_to: event.profiles?.email || undefined,
           headers: {
-            'X-Entity-Ref-ID': `invitation-${eventId}-${contact.id}`,
+            'X-Entity-Ref-ID': `${emailType}-${eventId}-${contact.id}`,
           },
           tags: [
             { name: 'event_id', value: eventId },
-            { name: 'email_type', value: 'invitation' },
+            { name: 'email_type', value: emailType },
             { name: 'contact_id', value: contact.id }
           ]
         })
@@ -243,7 +353,7 @@ serve(async (req) => {
           .from('event_emails')
           .insert({
             event_id: eventId,
-            email_type: 'invitation',
+            email_type: emailType,
             recipient_email: contact.email!,
             subject: template.subject,
             status: 'sent',
@@ -256,7 +366,7 @@ serve(async (req) => {
         const { error: logError } = await supabase
           .from('email_logs')
           .insert({
-            email_type: 'event_invitation',
+            email_type: emailLogType,
             recipient_email: contact.email!,
             recipient_name: contactName || null,
             agent_id: agentId,
@@ -264,20 +374,19 @@ serve(async (req) => {
             status: 'sent',
             resend_email_id: resendData?.id || null,
             sent_at: new Date().toISOString(),
-            metadata: { event_id: eventId, event_title: event.title, contact_id: contact.id }
+            metadata: { event_id: eventId, event_title: event.title, contact_id: contact.id, followup_number: followupNumber || 0 }
           })
         if (logError) console.error('Failed to log email_log:', logError)
 
         sent++
       } catch (error) {
-        console.error(`Failed to send invitation to ${contact.email}:`, error)
+        console.error(`Failed to send ${emailType} to ${contact.email}:`, error)
 
-        // Log failure to event_emails
         const { error: insertError } = await supabase
           .from('event_emails')
           .insert({
             event_id: eventId,
-            email_type: 'invitation',
+            email_type: emailType,
             recipient_email: contact.email!,
             subject: template.subject,
             status: 'failed',
@@ -285,18 +394,17 @@ serve(async (req) => {
           })
         if (insertError) console.error('Failed to log failed event_email:', insertError)
 
-        // Log failure to email_logs
         const { error: logError } = await supabase
           .from('email_logs')
           .insert({
-            email_type: 'event_invitation',
+            email_type: emailLogType,
             recipient_email: contact.email!,
             recipient_name: `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || null,
             agent_id: agentId,
             subject: template.subject,
             status: 'failed',
             error_message: error.message,
-            metadata: { event_id: eventId, event_title: event.title, contact_id: contact.id }
+            metadata: { event_id: eventId, event_title: event.title, contact_id: contact.id, followup_number: followupNumber || 0 }
           })
         if (logError) console.error('Failed to log failed email_log:', logError)
 
@@ -307,20 +415,23 @@ serve(async (req) => {
       await delay(600)
     }
 
-    // Update event invited_count
-    const { error: updateError } = await supabase
-      .from('events')
-      .update({ invited_count: (event.invited_count || 0) + sent })
-      .eq('id', eventId)
-    if (updateError) console.error('Failed to update invited_count:', updateError)
+    // Update event invited_count only for initial invitations
+    if (!followupNumber) {
+      const { error: updateError } = await supabase
+        .from('events')
+        .update({ invited_count: (event.invited_count || 0) + sent })
+        .eq('id', eventId)
+      if (updateError) console.error('Failed to update invited_count:', updateError)
+    }
 
+    const typeLabel = followupNumber ? `Follow-Up #${followupNumber}` : 'invitation'
     return new Response(
       JSON.stringify({
         success: true,
         sent,
         skipped,
         failed,
-        message: `Sent ${sent} invitation emails, skipped ${skipped} (already invited), ${failed} failed`
+        message: `Sent ${sent} ${typeLabel} emails, skipped ${skipped}, ${failed} failed`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
