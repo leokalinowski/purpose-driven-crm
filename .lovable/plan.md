@@ -1,71 +1,124 @@
 
 
-## Plan: Update Pre-Event Task List
+## Plan: Stripe Integration for Subscription Billing
 
-Replace the current 32 pre-event tasks with 31 updated tasks in `src/utils/defaultEventTasks.ts`.
+This plan connects Stripe to the Hub so you can charge new clients for Core ($149/mo) and Managed ($449/mo) plans, with optional annual pricing at a discount.
 
-### Summary of Changes
+### Architecture Overview
 
-**Removed** (4 tasks):
-- "Test hub RSVP" (-45)
-- "Export Database from Hub" (-45)
-- "Confirm Event Type" (-3)
-- "Gate check: Venue + Owner confirmed" (-2)
+```text
+┌─────────────────────────────────────────────────┐
+│  Stripe Dashboard                                │
+│  Products: Core ($149/mo, $1,490/yr)             │
+│            Managed ($449/mo, $4,490/yr)           │
+│  Webhook → stripe-webhook edge function          │
+└──────────────┬──────────────────────────────────┘
+               │
+┌──────────────▼──────────────────────────────────┐
+│  Edge Functions                                   │
+│  1. create-checkout-session (creates Stripe       │
+│     Checkout for a given price)                   │
+│  2. create-customer-portal (billing management)   │
+│  3. stripe-webhook (subscription lifecycle →      │
+│     updates user_roles + subscriptions table)     │
+└──────────────┬──────────────────────────────────┘
+               │
+┌──────────────▼──────────────────────────────────┐
+│  Supabase Tables                                  │
+│  - subscriptions (stripe_customer_id,             │
+│    stripe_subscription_id, status, plan, ...)     │
+│  - user_roles (updated on webhook events)         │
+└─────────────────────────────────────────────────┘
+```
 
-**Renamed** (2 tasks):
-- "Request Speaker & Sponsor Commitments" → "Request Sponsor Commitments"
-- "Update Promo Kit for Sponsors" → "Provide Materials to Sponsors"
-- "Confirm charity" → "Confirm charity (if applicable)"
+### Step 1: Enable Stripe
 
-**Timing Changes** (3 tasks):
-- "Draft Event Budget": -50 → -60
-- "Agent Call/Text Round #1": -10 → -30
-- "Confirm Venue": -3 → -35
+Use the Lovable Stripe tool to connect your Stripe account and store the secret key.
 
-**Added** (3 tasks):
-- "Order Event Signage & Printed Materials" at -21 (Event Coordinator)
-- "Send Day-Of Agenda to Team" at -2 (Event Coordinator)
-- "Final Walkthrough with Venue" at -1 (Event Coordinator)
+### Step 2: Create Stripe Products & Prices
 
-### File to Modify
+Create 4 prices in Stripe:
+- **Core Monthly**: $149/month
+- **Core Annual**: $1,490/year (2 months free)
+- **Managed Monthly**: $449/month
+- **Managed Annual**: $4,490/year (2 months free)
 
-`src/utils/defaultEventTasks.ts` — Replace lines 12-44 (the pre-event section) with the updated task list, sorted by `days_offset` descending.
+### Step 3: Database — `subscriptions` table
 
-### Final Pre-Event Task Order
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid PK | |
+| user_id | uuid FK → auth.users | The subscriber |
+| stripe_customer_id | text | Stripe customer ID |
+| stripe_subscription_id | text | Stripe subscription ID |
+| plan | text | 'core' or 'managed' |
+| billing_interval | text | 'monthly' or 'annual' |
+| status | text | 'active', 'past_due', 'canceled', 'trialing' |
+| current_period_end | timestamptz | When current billing period ends |
+| created_at / updated_at | timestamptz | |
 
-| # | Task | Days | Owner |
-|---|------|------|-------|
-| 1 | Confirm Event Theme & Date | -60 | EC |
-| 2 | Draft Event Budget | -60 | EC |
-| 3 | Request Sponsor Commitments | -55 | EC |
-| 4 | Confirm charity (if applicable) | -50 | EC |
-| 5 | Create Facebook & LinkedIn Events | -42 | Mktg |
-| 6 | Provide Materials to Sponsors | -40 | Mktg |
-| 7 | Send Save-the-Date Email | -38 | Mktg |
-| 8 | Post Save-the-Date on Social | -38 | Mktg |
-| 9 | Confirm Venue | -35 | EC |
-| 10 | Personalize postcard to mail | -35 | EC |
-| 11 | Finalize Vendor Selections | -30 | EC |
-| 12 | Agent Call/Text Round #1 | -30 | EC |
-| 13 | Email #1 Formal Invite | -28 | Mktg |
-| 14 | SMS Nudge #1 | -25 | Mktg |
-| 15 | Order Event Signage & Printed Materials | -21 | EC |
-| 16 | Email #2 15-Day Reminder | -15 | Mktg |
-| 17 | Mail invite to Sphere | -15 | EC |
-| 18 | Social Content Schedule | -14 | Mktg |
-| 19 | Check RSVP Progress | -12 | EC |
-| 20 | Check RSVP Progress #2 | -8 | EC |
-| 21 | Email #3 One-Week Reminder | -7 | Mktg |
-| 22 | SMS Nudge #2 | -6 | Mktg |
-| 23 | Check RSVP Progress #3 | -5 | EC |
-| 24 | Confirm Catering Headcount | -5 | EC |
-| 25 | Charity Delivery Prep | -4 | EC |
-| 26 | Confirm sponsors | -4 | EC |
-| 27 | Day-Of Kit - remind agent | -3 | EC |
-| 28 | Send Check-in list to print | -2 | EC |
-| 29 | Send Day-Of Agenda to Team | -2 | EC |
-| 30 | Remind Sponsors | -1 | EC |
-| 31 | Final Walkthrough with Venue | -1 | EC |
+RLS: Users can read their own row. Admins can read all.
 
-Event Day and Post-Event sections remain unchanged.
+### Step 4: Edge Functions
+
+**`create-checkout-session`** — Called from the pricing page. Accepts `priceId` and `userId`. Creates a Stripe Checkout Session with `success_url` and `cancel_url`. Returns the checkout URL.
+
+**`create-customer-portal`** — Called from Settings. Looks up the user's `stripe_customer_id` from the `subscriptions` table and creates a Stripe Billing Portal session.
+
+**`stripe-webhook`** — Listens for:
+- `checkout.session.completed` → Creates `subscriptions` row, updates `user_roles` to the purchased plan ('core' or 'managed')
+- `customer.subscription.updated` → Updates status, plan changes
+- `customer.subscription.deleted` → Sets status to 'canceled', downgrades `user_roles` to 'core' or removes access
+- `invoice.payment_failed` → Sets status to 'past_due'
+
+### Step 5: Pricing Page (`/pricing`)
+
+A public-facing page (accessible without auth) showing the two plans with monthly/annual toggle. Each plan card has a "Get Started" button that:
+1. If not logged in → redirects to `/auth?redirect=/pricing`
+2. If logged in → calls `create-checkout-session` edge function → redirects to Stripe Checkout
+
+### Step 6: Success Page (`/checkout/success`)
+
+After successful payment, Stripe redirects here. Shows confirmation and redirects to the dashboard.
+
+### Step 7: Settings — Subscription Tab
+
+Add a "Subscription" tab to the Settings page showing:
+- Current plan and billing interval
+- Next billing date
+- "Manage Billing" button → calls `create-customer-portal` → redirects to Stripe portal
+
+### Step 8: Auth Flow Update
+
+After signup, redirect to `/pricing` instead of `/` so new users must subscribe before accessing the platform. The existing `useFeatureAccess` hook already gates routes by role — once the webhook sets the `user_roles` entry to 'core' or 'managed', access unlocks automatically.
+
+### Step 9: Signup Flow Modification
+
+Currently, signup requires an invitation code. The flow becomes:
+1. User signs up (with invite code) → account created with no active subscription
+2. Redirected to `/pricing` → selects plan → completes Stripe Checkout
+3. Webhook fires → `subscriptions` row created, `user_roles` updated
+4. User redirected to dashboard with full access
+
+### Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `supabase/functions/create-checkout-session/index.ts` | Create |
+| `supabase/functions/create-customer-portal/index.ts` | Create |
+| `supabase/functions/stripe-webhook/index.ts` | Create |
+| `src/pages/Pricing.tsx` | Create |
+| `src/pages/CheckoutSuccess.tsx` | Create |
+| `src/pages/Settings.tsx` | Modify — add Subscription tab |
+| `src/App.tsx` | Modify — add routes |
+| `src/hooks/useSubscription.ts` | Create — fetch user's subscription data |
+| `src/hooks/useAuth.tsx` | Modify — redirect new signups to /pricing |
+| Migration | Create `subscriptions` table with RLS |
+| Secrets | `STRIPE_SECRET_KEY` (via Stripe enable tool), `STRIPE_WEBHOOK_SECRET` |
+
+### Stripe Webhook Setup
+
+After deploying `stripe-webhook`, you'll need to register the webhook URL in the Stripe Dashboard:
+- URL: `https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/stripe-webhook`
+- Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
 
