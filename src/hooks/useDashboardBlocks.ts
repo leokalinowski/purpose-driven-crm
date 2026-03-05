@@ -66,21 +66,16 @@ export type OverdueTask = {
   system: 'spheresync' | 'events' | 'coaching';
   title: string;
   daysOverdue: number;
+  contactName?: string;
   contactPhone?: string;
+  weekNumber?: number;
   navigateTo?: string;
 };
 
 export type BlockFiveOverdue = {
   accountabilityScore: number;
   priorityTasks: OverdueTask[];
-  cleanupSummary: {
-    spheresync: number;
-    events: number;
-    coaching: number;
-    total: number;
-  };
   nextMilestone: { score: number; tasksNeeded: number };
-  allTasks: OverdueTask[];
 };
 
 export type DashboardBlocks = {
@@ -359,21 +354,41 @@ export function useDashboardBlocks() {
       // ----- BLOCK FIVE: Overdue + Accountability Score -----
       const overdueItems: OverdueTask[] = [];
 
-      // SphereSync overdue: incomplete tasks from past weeks
-      (sphereTasksAll.data || []).forEach(t => {
-        if (t.week_number && t.year) {
-          const isCurrentWeek = t.week_number === currentWeekNum && t.year === currentYear;
-          if (!isCurrentWeek) {
-            const weeksDiff = (currentYear - (t.year || currentYear)) * 52 + (currentWeekNum - (t.week_number || currentWeekNum));
-            overdueItems.push({
-              id: t.id,
-              system: 'spheresync',
-              title: `${t.task_type === 'call' ? 'Call' : 'Text'} task from W${t.week_number}`,
-              daysOverdue: weeksDiff * 7,
-              navigateTo: '/spheresync-tasks',
-            });
-          }
-        }
+      // SphereSync overdue: incomplete tasks from past 2 weeks only
+      const overdueSphereTasks = (sphereTasksAll.data || []).filter(t => {
+        if (!t.week_number || !t.year) return false;
+        const isCurrentWeek = t.week_number === currentWeekNum && t.year === currentYear;
+        if (isCurrentWeek) return false;
+        const weeksDiff = (currentYear - t.year) * 52 + (currentWeekNum - t.week_number);
+        return weeksDiff <= 2; // only last 2 weeks
+      });
+
+      // Fetch contact names for overdue sphere tasks
+      const leadIds = overdueSphereTasks.map(t => t.lead_id).filter(Boolean) as string[];
+      let contactMap = new Map<string, string>();
+      if (leadIds.length > 0) {
+        const { data: contacts } = await supabase.from('contacts')
+          .select('id, first_name, last_name').in('id', leadIds);
+        (contacts || []).forEach(c => {
+          const name = [c.first_name, c.last_name].filter(Boolean).join(' ');
+          if (name) contactMap.set(c.id, name);
+        });
+      }
+
+      overdueSphereTasks.forEach(t => {
+        const weeksDiff = (currentYear - (t.year || currentYear)) * 52 + (currentWeekNum - (t.week_number || currentWeekNum));
+        const name = t.lead_id ? contactMap.get(t.lead_id) : undefined;
+        overdueItems.push({
+          id: t.id,
+          system: 'spheresync',
+          title: name
+            ? `${t.task_type === 'call' ? 'Call' : 'Text'} ${name}`
+            : `${t.task_type === 'call' ? 'Call' : 'Text'} task`,
+          contactName: name,
+          weekNumber: t.week_number,
+          daysOverdue: weeksDiff * 7,
+          navigateTo: '/spheresync-tasks',
+        });
       });
 
       // Event tasks overdue
@@ -391,9 +406,9 @@ export function useDashboardBlocks() {
         });
       });
 
-      // Coaching: missing past weeks
+      // Coaching: missing past 2 weeks only
       const submittedWeeks = new Set((coachingMissing.data || []).map(s => `${s.year}-${s.week_number}`));
-      for (let i = 1; i <= 4; i++) {
+      for (let i = 1; i <= 2; i++) {
         const pastWeek = currentWeekNum - i;
         if (pastWeek > 0 && !submittedWeeks.has(`${currentYear}-${pastWeek}`)) {
           overdueItems.push({
@@ -414,16 +429,6 @@ export function useDashboardBlocks() {
         ? Math.round(last4WeeksTrend.reduce((sum, w) => sum + w.rate, 0) / last4WeeksTrend.length)
         : 100;
 
-      // Split into priority (≤14 days) and cleanup (>14 days)
-      const priorityTasks = overdueItems.filter(t => t.daysOverdue <= 14);
-      const cleanupTasks = overdueItems.filter(t => t.daysOverdue > 14);
-      const cleanupSummary = {
-        spheresync: cleanupTasks.filter(t => t.system === 'spheresync').length,
-        events: cleanupTasks.filter(t => t.system === 'events').length,
-        coaching: cleanupTasks.filter(t => t.system === 'coaching').length,
-        total: cleanupTasks.length,
-      };
-
       // Next milestone: how many priority tasks to bump score by ~5 points
       const totalExpectedLast4 = last4WeeksTrend.length > 0 ? last4WeeksTrend.length : 1;
       const nextScore = Math.min(100, Math.ceil((accountabilityScore + 5) / 5) * 5);
@@ -431,10 +436,8 @@ export function useDashboardBlocks() {
 
       const blockFive: BlockFiveOverdue = {
         accountabilityScore,
-        priorityTasks,
-        cleanupSummary,
+        priorityTasks: overdueItems,
         nextMilestone: { score: nextScore, tasksNeeded },
-        allTasks: overdueItems,
       };
 
       setData({ blockOne, blockTwo, blockThree, blockFour, blockFive });
