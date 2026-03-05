@@ -1,52 +1,8 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 import { Resend } from "https://esm.sh/resend@4.0.0";
+import { corsHeaders } from "../_shared/cors.ts";
+import { SPHERESYNC_CALLS, SPHERESYNC_TEXTS, getISOWeekNumber } from "../_shared/spheresync-config.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-/**
- * Calculate ISO 8601 week number and year
- * Handles year boundaries correctly (e.g., Dec 29, 2025 = Week 1 of 2026)
- */
-function getISOWeekNumber(date: Date = new Date()): { week: number; year: number } {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7; // Make Sunday = 7
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum); // Set to nearest Thursday
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNumber = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  return { week: weekNumber, year: d.getUTCFullYear() };
-}
-
-// Balanced weekly call categories mapping (2 categories per week)
-const SPHERESYNC_CALLS: Record<number, string[]> = {
-  1: ['S', 'Q'], 2: ['M', 'X'], 3: ['B', 'Y'], 4: ['C', 'Z'], 5: ['H', 'U'], 
-  6: ['W', 'E'], 7: ['L', 'I'], 8: ['R', 'O'], 9: ['T', 'V'], 10: ['P', 'J'],
-  11: ['A', 'K'], 12: ['D', 'N'], 13: ['F', 'G'],
-  14: ['S', 'X'], 15: ['M', 'Y'], 16: ['B', 'Z'], 17: ['C', 'U'], 18: ['H', 'E'],
-  19: ['W', 'I'], 20: ['L', 'O'], 21: ['R', 'V'], 22: ['T', 'J'], 23: ['P', 'K'],
-  24: ['A', 'N'], 25: ['D', 'G'], 26: ['F', 'Q'],
-  27: ['S', 'Y'], 28: ['M', 'Z'], 29: ['B', 'U'], 30: ['C', 'E'], 31: ['H', 'I'],
-  32: ['W', 'O'], 33: ['L', 'V'], 34: ['R', 'J'], 35: ['T', 'K'], 36: ['P', 'N'],
-  37: ['A', 'G'], 38: ['D', 'Q'], 39: ['F', 'X'],
-  40: ['S', 'Z'], 41: ['M', 'U'], 42: ['B', 'E'], 43: ['C', 'I'], 44: ['H', 'O'],
-  45: ['W', 'V'], 46: ['L', 'J'], 47: ['R', 'K'], 48: ['T', 'N'], 49: ['P', 'G'],
-  50: ['A', 'Q'], 51: ['D', 'X'], 52: ['F', 'Y']
-};
-
-// Balanced weekly text categories (1 category per week)
-const SPHERESYNC_TEXTS: Record<number, string> = {
-  1: 'M', 2: 'B', 3: 'C', 4: 'H', 5: 'W', 6: 'L', 7: 'R', 8: 'T', 9: 'P',
-  10: 'A', 11: 'D', 12: 'F', 13: 'G',
-  14: 'S', 15: 'K', 16: 'N', 17: 'V', 18: 'J', 19: 'E', 20: 'I', 21: 'O',
-  22: 'U', 23: 'M', 24: 'B', 25: 'C', 26: 'H',
-  27: 'W', 28: 'L', 29: 'R', 30: 'T', 31: 'P', 32: 'A', 33: 'D', 34: 'F',
-  35: 'G', 36: 'S', 37: 'K', 38: 'N', 39: 'V',
-  40: 'J', 41: 'E', 42: 'I', 43: 'O', 44: 'U', 45: 'Q', 46: 'X', 47: 'Y', 
-  48: 'Z', 49: 'M', 50: 'B', 51: 'C', 52: 'H'
-};
 
 /**
  * Get formatted letters display for this week
@@ -895,4 +851,4 @@ const handler = async (req: Request): Promise<Response> => {
   }
 };
 
-serve(handler);
+Deno.serve(handler);

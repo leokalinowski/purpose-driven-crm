@@ -3,14 +3,12 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 function parseXMLResponse(xmlText: string): DNCApiResponse {
   try {
-    // Helper function to extract XML tag content using regex
     const getTagContent = (tagName: string): string | null => {
       const regex = new RegExp(`<${tagName}[^>]*>([^<]*)<\/${tagName}>`, 'i');
       const match = xmlText.match(regex);
       return match ? match[1].trim() : null;
     };
 
-    // Log the raw response for debugging
     console.log('DNC API Response:', xmlText);
 
     const responseCode = getTagContent('RESPONSECODE');
@@ -25,7 +23,6 @@ function parseXMLResponse(xmlText: string): DNCApiResponse {
       };
     }
 
-    // Check DNC flags - flag as DNC if ANY of these are "Y"
     const nationalDNC = getTagContent('national_dnc') === 'Y';
     const stateDNC = getTagContent('state_dnc') === 'Y';
     const dma = getTagContent('dma') === 'Y';
@@ -70,16 +67,6 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Authentication check for admin access
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.error('[DNC Check] No authorization header provided');
-    return new Response(
-      JSON.stringify({ error: "Authentication required" }),
-      { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
-  }
-
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -91,34 +78,64 @@ Deno.serve(async (req) => {
     );
   }
 
-  // Create Supabase client for authentication check
-  const supabaseAuth = createClient(supabaseUrl, supabaseServiceKey, {
-    global: { headers: { Authorization: authHeader } }
-  });
+  // Check for cron job source
+  const cronJobHeader = req.headers.get('X-Cron-Job');
+  const sourceHeader = req.headers.get('source');
+  const isCronJob = cronJobHeader === 'true' || sourceHeader === 'pg_cron';
 
-  // Verify user is authenticated and is admin
-  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
-  if (authError || !user) {
-    console.error('[DNC Check] Authentication failed:', authError?.message);
-    return new Response(
-      JSON.stringify({ error: "Invalid authentication" }),
-      { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
+  // Authentication check
+  const authHeader = req.headers.get('Authorization');
+  
+  let callerUserId: string | null = null;
+  let callerRole: string | null = null;
+
+  if (isCronJob) {
+    console.log('[DNC Check] Cron job detected, skipping auth');
+    callerRole = 'admin'; // Cron jobs run as admin
+  } else {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('[DNC Check] No authorization header provided');
+      return new Response(
+        JSON.stringify({ error: "Authentication required" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Verify user via getClaims
+    const supabaseAuth = createClient(supabaseUrl, supabaseServiceKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      console.error('[DNC Check] Authentication failed:', claimsError?.message);
+      return new Response(
+        JSON.stringify({ error: "Invalid authentication" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    callerUserId = claimsData.claims.sub as string;
+
+    // Get user role from user_roles table (authoritative source)
+    const { data: roleData, error: roleError } = await supabaseAuth
+      .rpc('get_current_user_role');
+
+    if (roleError) {
+      console.error('[DNC Check] Role check failed:', roleError.message);
+      return new Response(
+        JSON.stringify({ error: "Failed to verify user role" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    callerRole = roleData;
+    console.log(`[DNC Check] Authenticated user: ${callerUserId}, role: ${callerRole}`);
   }
 
-  // Check if user is admin
-  const { data: userRole, error: roleError } = await supabaseAuth
-    .rpc('get_current_user_role');
-
-  if (roleError || userRole !== 'admin') {
-    console.error('[DNC Check] Admin access required. User role:', userRole, 'Error:', roleError?.message);
-    return new Response(
-      JSON.stringify({ error: "Admin access required" }),
-      { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
-  }
-
-  // Parse request body to check for force recheck
+  // Parse request body
   let requestData: Record<string, unknown> = {};
   try {
     const body = await req.text();
@@ -131,6 +148,29 @@ Deno.serve(async (req) => {
 
   const forceRecheck = requestData?.forceRecheck || false;
   const specificAgentId = requestData?.agentId as string | null || null;
+
+  // Authorization logic:
+  // - Admins can check any agent or all agents
+  // - Non-admins can only check their own contacts (agentId must match their user ID)
+  if (callerRole !== 'admin') {
+    if (!specificAgentId) {
+      // Non-admin trying to run global batch - not allowed
+      console.error(`[DNC Check] Non-admin user ${callerUserId} tried to run global batch`);
+      return new Response(
+        JSON.stringify({ error: "Admin access required for global DNC check. Agents can only check their own contacts." }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+    if (specificAgentId !== callerUserId) {
+      // Non-admin trying to check another agent's contacts
+      console.error(`[DNC Check] User ${callerUserId} tried to check agent ${specificAgentId}'s contacts`);
+      return new Response(
+        JSON.stringify({ error: "You can only run DNC checks on your own contacts" }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+  }
+
   console.log(`[DNC Check] Starting automation... Force recheck: ${forceRecheck}, Specific agent: ${specificAgentId || 'all'}`);
 
   try {
@@ -144,28 +184,6 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[DNC Check] Using DNC API Key: ${dncApiKey.substring(0, 8)}...${dncApiKey.substring(dncApiKey.length - 4)}`);
-    
-    // Test API with the provided phone number
-    console.log('[DNC Check] Testing API with phone 4432201181...');
-    try {
-      const testResponse = await fetch(`https://api.realvalidation.com/rpvWebService/DNCLookup.php?phone=4432201181&token=${dncApiKey}`, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Real Estate DNC Checker/1.0'
-        }
-      });
-      
-      if (testResponse.ok) {
-        const testXml = await testResponse.text();
-        console.log('[DNC Check] Test API Response:', testXml);
-        const testResult = parseXMLResponse(testXml);
-        console.log('[DNC Check] Test API Parsed Result:', testResult);
-      } else {
-        console.error(`[DNC Check] Test API call failed: ${testResponse.status} ${testResponse.statusText}`);
-      }
-    } catch (testError) {
-      console.error('[DNC Check] Test API call error:', testError);
-    }
 
     // Get cutoff date (30 days ago) - only used if not forcing recheck
     const thirtyDaysAgo = new Date();
@@ -178,45 +196,55 @@ Deno.serve(async (req) => {
       console.log(`[DNC Check] Checking contacts not checked since: ${cutoffDate}`);
     }
 
-    // Get agents to process
-    let agents;
-    let agentsError;
+    // Get agents to process - use user_roles table (authoritative source)
+    let agentUserIds: string[] = [];
     
     if (specificAgentId) {
-      // Process only the specified agent
-      const result = await supabase
-        .from('profiles')
+      // Process only the specified agent - verify they exist in user_roles
+      const { data: roleCheck, error: roleCheckError } = await supabase
+        .from('user_roles')
         .select('user_id')
         .eq('user_id', specificAgentId)
-        .in('role', ['agent', 'admin']);
-      agents = result.data;
-      agentsError = result.error;
+        .in('role', ['agent', 'admin', 'editor', 'managed', 'core'])
+        .limit(1);
+
+      if (roleCheckError) {
+        console.error('[DNC Check] Failed to verify agent role:', roleCheckError.message);
+        throw new Error(`Failed to verify agent: ${roleCheckError.message}`);
+      }
+
+      if (!roleCheck || roleCheck.length === 0) {
+        console.error(`[DNC Check] Agent ${specificAgentId} not found in user_roles`);
+        throw new Error(`Agent not found or has no role assigned`);
+      }
+
+      agentUserIds = [specificAgentId];
       console.log(`[DNC Check] Processing specific agent: ${specificAgentId}`);
     } else {
-      // Process all agents and admins
-      const result = await supabase
-        .from('profiles')
+      // Process all agents - get from user_roles table
+      const { data: allRoles, error: rolesError } = await supabase
+        .from('user_roles')
         .select('user_id')
         .in('role', ['agent', 'admin']);
-      agents = result.data;
-      agentsError = result.error;
-      console.log('[DNC Check] Processing all agents and admins');
+
+      if (rolesError) {
+        console.error('[DNC Check] Failed to fetch agents from user_roles:', rolesError.message);
+        throw new Error(`Failed to fetch agents: ${rolesError.message}`);
+      }
+
+      agentUserIds = [...new Set(allRoles?.map(r => r.user_id) || [])];
+      console.log(`[DNC Check] Processing all agents and admins: ${agentUserIds.length} found`);
     }
 
-    if (agentsError) {
-      console.error('[DNC Check] Failed to fetch agents:', agentsError.message);
-      throw new Error(`Failed to fetch agents: ${agentsError.message}`);
-    }
-
-    console.log(`[DNC Check] Found ${agents?.length || 0} agent(s) to process`);
+    console.log(`[DNC Check] Found ${agentUserIds.length} agent(s) to process`);
 
     let totalChecked = 0;
     let totalFlagged = 0;
     let totalErrors = 0;
 
     // Process each agent
-    for (const agent of agents || []) {
-      console.log(`[DNC Check] Processing agent: ${agent.user_id}`);
+    for (const agentId of agentUserIds) {
+      console.log(`[DNC Check] Processing agent: ${agentId}`);
       
       let agentChecked = 0;
       let agentFlagged = 0;
@@ -227,45 +255,42 @@ Deno.serve(async (req) => {
         let contacts, contactsError;
         
         if (forceRecheck) {
-          // Force recheck: get ALL contacts with phone numbers that are NOT already marked as DNC
           const result = await supabase
             .from('contacts')
             .select('id, phone, agent_id, dnc, dnc_last_checked')
-            .eq('agent_id', agent.user_id)
-            .eq('dnc', false) // Only check contacts that are NOT already marked as DNC
+            .eq('agent_id', agentId)
+            .eq('dnc', false)
             .not('phone', 'is', null)
             .not('phone', 'eq', '');
           contacts = result.data;
           contactsError = result.error;
-          console.log(`[DNC Check] Query: ALL non-DNC contacts for agent ${agent.user_id} WHERE dnc = false AND phone IS NOT NULL AND phone != '' (FORCE RECHECK)`);
+          console.log(`[DNC Check] Query: ALL non-DNC contacts for agent ${agentId} (FORCE RECHECK)`);
         } else {
-          // Normal check: only contacts that haven't been checked or are older than 30 days AND are NOT already marked as DNC
           const result = await supabase
             .from('contacts')
             .select('id, phone, agent_id, dnc, dnc_last_checked')
-            .eq('agent_id', agent.user_id)
-            .eq('dnc', false) // Only check contacts that are NOT already marked as DNC
+            .eq('agent_id', agentId)
+            .eq('dnc', false)
             .or(`dnc_last_checked.is.null,dnc_last_checked.lt.${cutoffDate}`)
             .not('phone', 'is', null)
             .not('phone', 'eq', '');
           contacts = result.data;
           contactsError = result.error;
-          console.log(`[DNC Check] Query: non-DNC contacts for agent ${agent.user_id} WHERE dnc = false AND (dnc_last_checked IS NULL OR dnc_last_checked < '${cutoffDate}') AND phone IS NOT NULL AND phone != ''`);
+          console.log(`[DNC Check] Query: non-DNC contacts for agent ${agentId} needing check`);
         }
 
         if (contactsError) {
-          const errorMsg = `Failed to fetch contacts for agent ${agent.user_id}: ${contactsError.message}`;
+          const errorMsg = `Failed to fetch contacts for agent ${agentId}: ${contactsError.message}`;
           console.error(`[DNC Check] ${errorMsg}`);
           agentErrors.push(errorMsg);
           continue;
         }
 
-        console.log(`[DNC Check] Found ${contacts?.length || 0} contacts to check for agent ${agent.user_id}`);
+        console.log(`[DNC Check] Found ${contacts?.length || 0} contacts to check for agent ${agentId}`);
 
         if (!contacts || contacts.length === 0) {
-          // Log empty run for this agent
           await supabase.from('dnc_logs').insert({
-            agent_id: agent.user_id,
+            agent_id: agentId,
             checked_count: 0,
             flagged_count: 0,
             errors: null
@@ -273,31 +298,27 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Process contacts in batches of 50 to avoid overwhelming the API and timeout
+        // Process contacts in batches of 50
         const batchSize = 50;
         for (let i = 0; i < contacts.length; i += batchSize) {
           const batch = contacts.slice(i, i + batchSize);
-          console.log(`[DNC Check] Processing batch ${Math.floor(i/batchSize) + 1} for agent ${agent.user_id} (${batch.length} contacts)`);
+          console.log(`[DNC Check] Processing batch ${Math.floor(i/batchSize) + 1} for agent ${agentId} (${batch.length} contacts)`);
 
-          // Process each contact in the batch
           for (const contact of batch) {
             try {
-              // Add small delay to avoid rate limiting
               await new Promise(resolve => setTimeout(resolve, 50));
 
-              // Normalize phone number (handle both 10 and 11 digit formats)
               const phoneDigits = contact.phone.replace(/\D/g, '');
               let normalizedPhone = phoneDigits;
               
               if (phoneDigits.length === 11 && phoneDigits.startsWith('1')) {
-                normalizedPhone = phoneDigits.substring(1); // Remove US country code
+                normalizedPhone = phoneDigits.substring(1);
               }
               
               if (normalizedPhone.length !== 10) {
                 throw new Error(`Invalid phone format: ${contact.phone} (normalized to ${normalizedPhone})`);
               }
 
-              // Call RealValidation DNC API with normalized phone
               const response = await fetch(`https://api.realvalidation.com/rpvWebService/DNCLookup.php?phone=${normalizedPhone}&token=${dncApiKey}`, {
                 method: 'GET',
                 headers: {
@@ -318,7 +339,7 @@ Deno.serve(async (req) => {
 
               const isDNC = result.isDNC;
 
-              // Update contact record
+              // Only update dnc_last_checked on SUCCESSFUL API response
               const { error: updateError } = await supabase
                 .from('contacts')
                 .update({
@@ -349,15 +370,9 @@ Deno.serve(async (req) => {
               agentErrors.push(errorMsg);
               totalErrors++;
 
-              // Still update the last_checked date even if API call failed
-              try {
-                await supabase
-                  .from('contacts')
-                  .update({ dnc_last_checked: new Date().toISOString() })
-                  .eq('id', contact.id);
-              } catch (updateError) {
-                console.error(`[DNC Check] Failed to update last_checked for contact ${contact.id}: ${(updateError as Error).message}`);
-              }
+              // FIX: Do NOT update dnc_last_checked on API failure
+              // This ensures the contact will be rechecked on the next run
+              console.log(`[DNC Check] Skipping dnc_last_checked update for contact ${contact.id} due to API failure - will retry on next run`);
             }
           }
 
@@ -366,24 +381,24 @@ Deno.serve(async (req) => {
         }
 
       } catch (error) {
-        const errorMsg = `Error processing agent ${agent.user_id}: ${(error as Error).message}`;
+        const errorMsg = `Error processing agent ${agentId}: ${(error as Error).message}`;
         console.error(`[DNC Check] ${errorMsg}`);
         agentErrors.push(errorMsg);
       }
 
       // Log results for this agent
       const { error: logError } = await supabase.from('dnc_logs').insert({
-        agent_id: agent.user_id,
+        agent_id: agentId,
         checked_count: agentChecked,
         flagged_count: agentFlagged,
         errors: agentErrors.length > 0 ? agentErrors.join('; ') : null
       });
 
       if (logError) {
-        console.error(`[DNC Check] Failed to log results for agent ${agent.user_id}: ${logError.message}`);
+        console.error(`[DNC Check] Failed to log results for agent ${agentId}: ${logError.message}`);
       }
 
-      console.log(`[DNC Check] Agent ${agent.user_id} completed: ${agentChecked} checked, ${agentFlagged} flagged, ${agentErrors.length} errors`);
+      console.log(`[DNC Check] Agent ${agentId} completed: ${agentChecked} checked, ${agentFlagged} flagged, ${agentErrors.length} errors`);
     }
 
     const summary = `DNC check completed: ${totalChecked} contacts checked, ${totalFlagged} flagged as DNC, ${totalErrors} errors`;
@@ -396,7 +411,7 @@ Deno.serve(async (req) => {
         totalChecked,
         totalFlagged,
         totalErrors,
-        agentsProcessed: agents?.length || 0
+        agentsProcessed: agentUserIds.length
       }
     }), {
       status: 200,
