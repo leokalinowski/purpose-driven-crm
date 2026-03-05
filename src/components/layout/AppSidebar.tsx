@@ -128,33 +128,20 @@ export function AppSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => {
-                const accessible = hasAccess(item.url);
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton 
-                      asChild={accessible}
-                      isActive={location.pathname === item.url}
-                      aria-label={accessible ? `Navigate to ${item.title}` : `${item.title} — upgrade required`}
-                      className={!accessible ? 'opacity-50 cursor-not-allowed' : ''}
-                      onClick={!accessible ? (e: React.MouseEvent) => e.preventDefault() : undefined}
-                    >
-                      {accessible ? (
-                        <Link to={item.url}>
-                          <item.icon aria-hidden="true" />
-                          <span>{item.title}</span>
-                        </Link>
-                      ) : (
-                        <span className="flex items-center gap-2 w-full">
-                          <item.icon aria-hidden="true" className="h-4 w-4" />
-                          <span className="flex-1">{item.title}</span>
-                          <Lock className="h-3 w-3 text-muted-foreground" />
-                        </span>
-                      )}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+              {menuItems.filter((item) => hasAccess(item.url)).map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton 
+                    asChild
+                    isActive={location.pathname === item.url}
+                    aria-label={`Navigate to ${item.title}`}
+                  >
+                    <Link to={item.url}>
+                      <item.icon aria-hidden="true" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
