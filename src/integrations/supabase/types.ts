@@ -3550,6 +3550,19 @@ export type Database = {
       mask_phone: { Args: { phone_number: string }; Returns: string }
       mask_phone_field: { Args: { phone_value: string }; Returns: string }
       normalize_phone: { Args: { phone_input: string }; Returns: string }
+      submit_public_rsvp: {
+        Args: {
+          p_email: string
+          p_event_id: string
+          p_guest_count?: number
+          p_name: string
+          p_phone?: string
+        }
+        Returns: {
+          id: string
+          status: string
+        }[]
+      }
       submit_rsvp_answers: {
         Args: { p_answers: Json; p_rsvp_id: string }
         Returns: undefined
