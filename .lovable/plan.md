@@ -1,48 +1,66 @@
 
 
-## Newsletter Analytics Tab — Critical RLS Bug
+## Plan: Event Invitation Follow-Up Emails
 
-The analytics dashboard has a **data access problem for non-admin users**. It will appear to work (no errors) but will show **empty data** for regular agents.
+### Concept
 
-### The Problem
+Add the ability to send follow-up invitations to contacts who were invited but haven't RSVP'd. The existing `send-event-invitation` function already tracks who was sent an invite — a follow-up system filters those recipients against the RSVP list and re-sends with a different template.
 
-The `email_logs` table has RLS policies that **only allow admins** to SELECT:
+### Approach
 
-```
-Policy: "Admins can view all email logs"
-Command: SELECT
-Using: (get_current_user_role() = 'admin'::text)
-```
+**New email types**: Add `invitation_followup_1` and `invitation_followup_2` to the system, giving agents up to 3 total invitation touches (initial + 2 follow-ups).
 
-There is no policy allowing agents to view their own email logs. So when a non-admin user loads the Analytics tab, the `useNewsletterAnalytics` hook queries `email_logs` filtered by `agent_id`, but RLS silently returns zero rows. The result: all KPI cards show 0/—, charts say "No data available yet", and the campaign table has no drill-down data.
+**How it works**:
+1. Agent sends initial invitation (existing flow)
+2. Agent clicks "Send Follow-Up #1" — system identifies contacts who received the invite but have NOT RSVP'd, sends them a follow-up email using a dedicated template
+3. Agent clicks "Send Follow-Up #2" — same logic, different template, only targets contacts not yet RSVP'd
 
-The `newsletter_campaigns` table likely has the same issue — need to verify its RLS policies allow agent-scoped reads.
+Each follow-up has its own template so the messaging can escalate urgency (e.g., "Just a reminder..." → "Last chance to RSVP!").
 
-### The Fix
+### Changes
 
-**Migration** — Add an RLS policy to `email_logs` so agents can view their own newsletter email logs:
-
-```sql
-CREATE POLICY "Agents can view their own email logs"
-ON public.email_logs
-FOR SELECT
-TO authenticated
-USING (
-  agent_id = auth.uid()
-  OR get_current_user_role() = 'admin'::text
-);
-```
-
-Also need to check and fix `newsletter_campaigns` RLS — agents should be able to read campaigns they created (`created_by = auth.uid()`).
-
-### Secondary Issues
-
-None found in the component logic itself — the hook, chart rendering, CSV export, date filtering, and campaign drill-downs are all correctly implemented. The only issue is the data layer (RLS).
-
-### Files
-
-| File | Change |
+| Area | Change |
 |------|--------|
-| Migration SQL | Add SELECT policy on `email_logs` for agents to see their own rows |
-| Migration SQL | Add SELECT policy on `newsletter_campaigns` for agents to see their own campaigns |
+| **Email type enum** | Add `invitation_followup_1` and `invitation_followup_2` to the `email_type` values accepted by templates and email logs |
+| **Edge function** | Create `send-event-invitation-followup` (or extend existing function with a `followup_number` parameter) that queries contacts who were invited but haven't RSVP'd |
+| **EmailTemplateEditor UI** | Add the two new follow-up types to the template type dropdown so agents can create/customize follow-up templates |
+| **EmailManagement UI** | Add "Send Follow-Up #1" and "Send Follow-Up #2" buttons that appear after the initial invitation has been sent, with recipient count preview showing how many non-RSVP'd contacts will receive it |
+| **VisualEmailEditor defaults** | Provide conversion-optimized default content for follow-ups (e.g., "We saved you a spot!" / "Last chance to RSVP!") |
+| **useEmailTemplates hook** | Add `sendFollowUpEmails(eventId, followupNumber)` method |
+
+### Follow-Up Logic (Edge Function)
+
+```text
+1. Fetch all contacts who received invitation email (status: sent/delivered/opened/clicked)
+2. Fetch all confirmed RSVPs for this event
+3. Subtract RSVP'd contacts → remaining = follow-up targets
+4. Also subtract contacts who already received THIS specific follow-up
+5. Send follow-up template to remaining contacts
+```
+
+### UI Flow
+
+In the Emails tab, the invitation section would show:
+
+```text
+┌─────────────────────────────────────┐
+│ Invitations                         │
+│ ✅ Initial: 150 sent                │
+│ 📧 Follow-Up #1: Send (132 pending)│
+│ 📧 Follow-Up #2: Not yet available │
+│    (available after Follow-Up #1)   │
+└─────────────────────────────────────┘
+```
+
+Follow-Up #2 only unlocks after #1 has been sent, preventing agents from accidentally blasting all three at once.
+
+### Files to Create/Modify
+
+- `supabase/functions/send-event-invitation/index.ts` — add `followup_number` parameter support
+- `src/hooks/useEmailTemplates.ts` — add follow-up send method
+- `src/components/events/email/EmailTemplateEditor.tsx` — add follow-up types to dropdown
+- `src/components/events/email/EmailManagement.tsx` — add follow-up send buttons with recipient counts
+- `src/components/events/email/VisualEmailEditor.tsx` — add default content for follow-up types
+
+No database migration needed — the `email_type` columns are text fields, not enums, so new type values work without schema changes.
 
