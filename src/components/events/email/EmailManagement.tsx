@@ -4,10 +4,13 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { EmailTemplateEditor, EventPreviewData } from './EmailTemplateEditor'
 import { EmailMetricsDashboard } from './EmailMetricsDashboard'
 import { useEmailTemplates, useEmailMetrics } from '@/hooks/useEmailTemplates'
-import { Send, Mail, Calendar, Heart, UserX, Users, RefreshCw } from 'lucide-react'
+import { Send, Mail, Calendar, Heart, UserX, Users, RefreshCw, Clock, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/integrations/supabase/client'
 
@@ -73,6 +76,110 @@ const EMAIL_TYPES = [
     description: 'Sent after the event to no-shows'
   }
 ]
+
+const AutoFollowUpSettings: React.FC<{ eventId: string }> = ({ eventId }) => {
+  const [enabled, setEnabled] = useState(false)
+  const [followup1Days, setFollowup1Days] = useState(3)
+  const [followup2Days, setFollowup2Days] = useState(7)
+  const [saving, setSaving] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const [followup1Sent, setFollowup1Sent] = useState(false)
+  const [followup2Sent, setFollowup2Sent] = useState(false)
+
+  useEffect(() => {
+    const load = async () => {
+      const [{ data: ev }, { data: fu1 }, { data: fu2 }] = await Promise.all([
+        supabase.from('events').select('auto_followup_enabled, followup_1_days, followup_2_days').eq('id', eventId).single(),
+        supabase.from('event_emails').select('id').eq('event_id', eventId).eq('email_type', 'invitation_followup_1').in('status', ['sent', 'delivered', 'opened', 'clicked']).limit(1).maybeSingle(),
+        supabase.from('event_emails').select('id').eq('event_id', eventId).eq('email_type', 'invitation_followup_2').in('status', ['sent', 'delivered', 'opened', 'clicked']).limit(1).maybeSingle(),
+      ])
+      if (ev) {
+        setEnabled(ev.auto_followup_enabled ?? false)
+        setFollowup1Days(ev.followup_1_days ?? 3)
+        setFollowup2Days(ev.followup_2_days ?? 7)
+      }
+      setFollowup1Sent(!!fu1)
+      setFollowup2Sent(!!fu2)
+      setLoaded(true)
+    }
+    load()
+  }, [eventId])
+
+  const handleSave = async () => {
+    if (followup2Days <= followup1Days) {
+      toast.error('Follow-Up #2 days must be greater than Follow-Up #1 days')
+      return
+    }
+    setSaving(true)
+    try {
+      const { error } = await supabase.from('events').update({
+        auto_followup_enabled: enabled,
+        followup_1_days: followup1Days,
+        followup_2_days: followup2Days,
+      }).eq('id', eventId)
+      if (error) throw error
+      toast.success('Auto follow-up settings saved')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save settings')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!loaded) return null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Clock className="h-5 w-5" />
+          Automatic Follow-Up Scheduling
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <Label htmlFor="auto-followup-toggle" className="font-medium">Enable Automatic Follow-Ups</Label>
+            <p className="text-sm text-muted-foreground">Automatically send follow-up invitations to contacts who haven't RSVP'd</p>
+          </div>
+          <Switch id="auto-followup-toggle" checked={enabled} onCheckedChange={setEnabled} />
+        </div>
+
+        {enabled && (
+          <div className="space-y-4 pt-2 border-t">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="fu1-days">Follow-Up #1 after (days)</Label>
+                <div className="flex items-center gap-2">
+                  <Input id="fu1-days" type="number" min={1} max={30} value={followup1Days} onChange={(e) => setFollowup1Days(Number(e.target.value))} className="w-20" />
+                  <span className="text-sm text-muted-foreground">days after initial invitation</span>
+                </div>
+                {followup1Sent && <Badge variant="secondary" className="text-xs">✅ Already sent</Badge>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fu2-days">Follow-Up #2 after (days)</Label>
+                <div className="flex items-center gap-2">
+                  <Input id="fu2-days" type="number" min={2} max={60} value={followup2Days} onChange={(e) => setFollowup2Days(Number(e.target.value))} className="w-20" />
+                  <span className="text-sm text-muted-foreground">days after initial invitation</span>
+                </div>
+                {followup2Sent && <Badge variant="secondary" className="text-xs">✅ Already sent</Badge>}
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              ⚠️ Templates for "Follow-Up #1" and "Follow-Up #2" must exist before the scheduler will send them. The scheduler runs daily at 10 AM ET.
+            </p>
+
+            <Button onClick={handleSave} disabled={saving} size="sm">
+              <Save className="h-4 w-4 mr-2" />
+              {saving ? 'Saving...' : 'Save Settings'}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initialEventId, eventTitle: initialEventTitle }) => {
   const [selectedType, setSelectedType] = useState<'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show' | 'invitation' | 'invitation_followup_1' | 'invitation_followup_2'>('invitation')
@@ -364,6 +471,8 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
           </Tabs>
         </CardContent>
       </Card>
+
+      <AutoFollowUpSettings eventId={currentEventId} />
 
       <EmailMetricsDashboard eventId={currentEventId} />
 
