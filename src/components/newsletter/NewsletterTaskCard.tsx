@@ -54,13 +54,13 @@ export function NewsletterTaskCard({ hasCampaignThisWeek }: { hasCampaignThisWee
   const isComplete = hasCampaignThisWeek === true;
 
   return (
-    <Card className={`border-l-4 ${isDue && !isComplete ? 'border-l-orange-500 bg-orange-50/50 dark:bg-orange-950/20' : isComplete ? 'border-l-green-500 bg-green-50/50 dark:bg-green-950/20' : 'border-l-muted'}`}>
+    <Card className={`border-l-4 ${isDue && !isComplete ? 'border-l-primary bg-primary/5' : isComplete ? 'border-l-green-500 bg-green-50/50 dark:bg-green-950/20' : 'border-l-muted'}`}>
       <CardContent className="flex items-center gap-4 py-4">
-        <div className={`rounded-full p-2 ${isComplete ? 'bg-green-100 dark:bg-green-900' : isDue ? 'bg-orange-100 dark:bg-orange-900' : 'bg-muted'}`}>
+        <div className={`rounded-full p-2 ${isComplete ? 'bg-green-100 dark:bg-green-900' : isDue ? 'bg-primary/10' : 'bg-muted'}`}>
           {isComplete ? (
             <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
           ) : (
-            <Mail className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+            <Mail className="h-5 w-5 text-primary" />
           )}
         </div>
         <div className="flex-1 min-w-0">
@@ -69,7 +69,7 @@ export function NewsletterTaskCard({ hasCampaignThisWeek }: { hasCampaignThisWee
               {isComplete ? 'Newsletter sent this period ✓' : 'Write & schedule your newsletter'}
             </span>
             {isDue && !isComplete && (
-              <Badge variant="outline" className="text-orange-700 border-orange-300 bg-orange-100/50 dark:text-orange-300 dark:border-orange-700 text-xs">
+              <Badge variant="outline" className="text-primary border-primary/30 bg-primary/10 text-xs">
                 Due Now
               </Badge>
             )}
