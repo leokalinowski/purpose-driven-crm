@@ -3,6 +3,7 @@ import { Helmet } from "react-helmet-async";
 import { Layout } from "@/components/layout/Layout";
 import { TemplateList } from "@/components/newsletter/builder/TemplateList";
 import { NewsletterAnalyticsDashboard } from "@/components/newsletter/analytics/NewsletterAnalyticsDashboard";
+import { NewsletterScheduleSettings } from "@/components/newsletter/NewsletterScheduleSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Newsletter() {
@@ -15,11 +16,14 @@ export default function Newsletter() {
       </Helmet>
 
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">E-Newsletter</h1>
-          <p className="text-muted-foreground text-sm sm:text-base">
-            Build templates and track campaign performance
-          </p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">E-Newsletter</h1>
+            <p className="text-muted-foreground text-sm sm:text-base">
+              Build templates and track campaign performance
+            </p>
+          </div>
+          <NewsletterScheduleSettings />
         </div>
 
         <Tabs defaultValue="builder" className="w-full">

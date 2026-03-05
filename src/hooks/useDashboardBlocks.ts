@@ -211,16 +211,41 @@ export function useDashboardBlocks() {
       };
 
       // ----- BLOCK TWO: Tasks by System -----
-      const sphereTasks: SystemTask[] = (sphereTasksWeek.data || []).filter(t => !t.completed).map(t => ({
-        id: t.id,
-        title: t.task_type === 'call' ? 'Make a Call' : 'Send a Text',
-        taskType: t.task_type,
-        contactName: t.lead_id || undefined,
-        subtitle: t.notes || undefined,
-      }));
 
-      // For task list, only show incomplete event tasks
-      const incompleteEventTasks = (eventTasksWeekAll.data || []).filter(t => !t.completed_at);
+      // Fetch contact names for this week's sphere tasks
+      const incompleteSphere = (sphereTasksWeek.data || []).filter(t => !t.completed);
+      const weekLeadIds = incompleteSphere.map(t => t.lead_id).filter(Boolean) as string[];
+      let weekContactMap = new Map<string, { name: string; phone?: string }>();
+      if (weekLeadIds.length > 0) {
+        const { data: weekContacts } = await supabase.from('contacts')
+          .select('id, first_name, last_name, phone').in('id', weekLeadIds);
+        (weekContacts || []).forEach(c => {
+          const name = [c.first_name, c.last_name].filter(Boolean).join(' ');
+          if (name) weekContactMap.set(c.id, { name, phone: c.phone || undefined });
+        });
+      }
+
+      const sphereTasks: SystemTask[] = incompleteSphere.map(t => {
+        const contact = t.lead_id ? weekContactMap.get(t.lead_id) : undefined;
+        return {
+          id: t.id,
+          title: contact?.name
+            ? `${t.task_type === 'call' ? 'Call' : 'Text'} ${contact.name}`
+            : (t.task_type === 'call' ? 'Make a Call' : 'Send a Text'),
+          taskType: t.task_type,
+          contactName: contact?.name,
+          contactPhone: contact?.phone,
+          subtitle: contact?.phone || t.notes || undefined,
+        };
+      });
+
+      // For task list, only show incomplete event tasks with born-overdue guard
+      const incompleteEventTasks = (eventTasksWeekAll.data || []).filter(t => {
+        if (t.completed_at) return false;
+        const created = new Date(t.created_at);
+        const due = new Date(t.due_date);
+        return created <= due; // exclude born-overdue template tasks
+      });
       const eventTasks: SystemTask[] = incompleteEventTasks.map(t => ({
         id: t.id,
         title: t.task_name,
@@ -229,13 +254,46 @@ export function useDashboardBlocks() {
         navigateTo: '/events',
       }));
 
-      const newsletterTasks: SystemTask[] = (newsletterWeek.data || []).filter((n: any) => n.status !== 'sent').map((n: any) => ({
-        id: n.id,
-        title: n.campaign_name || 'Untitled Campaign',
-        status: n.status || 'draft',
-        dueDate: n.send_date || undefined,
-        navigateTo: '/newsletter',
-      }));
+      // Newsletter: compute virtual tasks based on frequency settings
+      const { data: nlSettings } = await (supabase as any)
+        .from('newsletter_task_settings')
+        .select('*')
+        .eq('agent_id', user.id)
+        .maybeSingle();
+
+      const nlFrequency = nlSettings?.frequency || 'monthly';
+      const nlDayOfMonth = nlSettings?.day_of_month || 15;
+      const nlEnabled = nlSettings?.enabled !== false;
+
+      let newsletterTasks: SystemTask[] = [];
+      if (nlEnabled) {
+        const weekStartDate = startOfWeek(now, { weekStartsOn: 1 });
+        const weekEndDate = endOfWeek(now, { weekStartsOn: 1 });
+        let isDue = false;
+
+        if (nlFrequency === 'weekly') {
+          isDue = true;
+        } else if (nlFrequency === 'biweekly') {
+          isDue = currentWeekNum % 2 === 1; // odd weeks
+        } else {
+          // monthly: check if day_of_month falls within this week
+          const targetDate = new Date(now.getFullYear(), now.getMonth(), nlDayOfMonth);
+          isDue = targetDate >= weekStartDate && targetDate <= weekEndDate;
+        }
+
+        if (isDue) {
+          // Check if a campaign was already created/sent this period
+          const existingSent = (newsletterWeek.data || []).length > 0;
+          if (!existingSent) {
+            newsletterTasks.push({
+              id: `newsletter-virtual-${currentWeekNum}`,
+              title: 'Write & schedule your newsletter',
+              status: 'pending',
+              navigateTo: '/newsletter',
+            });
+          }
+        }
+      }
 
       // For task list, only show non-posted social posts
       const socialTasks: SystemTask[] = (socialWeekAll.data || []).filter(s => s.status !== 'posted').map(s => ({

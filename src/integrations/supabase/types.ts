@@ -1978,6 +1978,36 @@ export type Database = {
         }
         Relationships: []
       }
+      newsletter_task_settings: {
+        Row: {
+          agent_id: string
+          created_at: string
+          day_of_month: number
+          enabled: boolean
+          frequency: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          day_of_month?: number
+          enabled?: boolean
+          frequency?: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          day_of_month?: number
+          enabled?: boolean
+          frequency?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       newsletter_templates: {
         Row: {
           agent_id: string
