@@ -1,9 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import { corsHeaders } from "../_shared/cors.ts";
 
 interface DNCApiResponse {
   nationalDNC: boolean;
@@ -33,7 +29,7 @@ function parseXMLResponse(xmlText: string): DNCApiResponse {
   };
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -95,7 +91,7 @@ serve(async (req) => {
 
     console.log(`Checking DNC status for contact ${contactId}, phone: ${phone} (normalized: ${normalizedPhone})`);
 
-    // Call the DNC API with normalized phone (corrected endpoint)
+    // Call the DNC API with normalized phone
     const dncApiUrl = `https://api.realvalidation.com/rpvWebService/DNCLookup.php?phone=${normalizedPhone}&token=${dncApiKey}`;
     
     console.log(`Calling DNC API: ${dncApiUrl.replace(dncApiKey, 'REDACTED')}`);
@@ -130,7 +126,6 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const authHeader = req.headers.get('Authorization');
     
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: {
         headers: authHeader ? { Authorization: authHeader } : undefined,
@@ -191,7 +186,7 @@ serve(async (req) => {
     console.error('DNC check error:', error);
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'Internal server error',
+        error: (error as Error).message || 'Internal server error',
         success: false 
       }),
       { 

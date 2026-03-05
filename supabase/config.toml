@@ -49,10 +49,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.dnc-monthly-check]
-verify_jwt = true
+verify_jwt = false
 
 [functions.dnc-single-check]
-verify_jwt = true
+verify_jwt = false
 
 [functions.social-oauth]
 verify_jwt = true
