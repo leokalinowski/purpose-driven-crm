@@ -52,11 +52,11 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName, age
     (async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('first_name, last_name')
+        .select('first_name, last_name, full_name')
         .eq('user_id', effectiveAgentId)
         .single();
       if (data) {
-        setSenderName(`${data.first_name || ''} ${data.last_name || ''}`.trim());
+        setSenderName((data as any).full_name || `${data.first_name || ''} ${data.last_name || ''}`.trim());
       }
     })();
   }, [effectiveAgentId]);

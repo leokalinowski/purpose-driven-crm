@@ -2,10 +2,11 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Eye, EyeOff, Send, Check, Loader2, Sparkles, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Save, Eye, EyeOff, Send, Check, Loader2, Sparkles, CheckCircle, PanelLeft, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { BlockPalette } from './BlockPalette';
 import { BuilderCanvas } from './BuilderCanvas';
 import { BlockSettings, BrandColors } from './BlockSettings';
@@ -81,7 +82,6 @@ export function NewsletterBuilder() {
   const brandOwnerId = templateAgentId || user?.id;
   useEffect(() => {
     if (!brandOwnerId) return;
-    // Fetch marketing settings
     supabase.from('agent_marketing_settings').select('primary_color, secondary_color, headshot_url, logo_colored_url').eq('user_id', brandOwnerId).maybeSingle()
       .then(({ data }) => {
         if (data) {
@@ -93,7 +93,6 @@ export function NewsletterBuilder() {
           }));
         }
       });
-    // Fetch profile
     supabase.from('profiles').select('first_name, last_name, full_name, email, phone_number, office_number, office_address, brokerage, license_number, website').eq('user_id', brandOwnerId).maybeSingle()
       .then(({ data }) => {
         if (data) {
@@ -113,7 +112,7 @@ export function NewsletterBuilder() {
       });
   }, [brandOwnerId]);
 
-  // Derive selected block - either top-level or nested child
+  // Derive selected block
   const selectedBlock = (() => {
     if (selectedChildPath) {
       const parent = blocks.find(b => b.id === selectedChildPath.parentId);
@@ -135,7 +134,6 @@ export function NewsletterBuilder() {
 
   const handleUpdateBlockProps = useCallback((props: Record<string, any>) => {
     if (selectedChildPath) {
-      // Update a nested child block
       setBlocks(prev => prev.map(b => {
         if (b.id !== selectedChildPath.parentId) return b;
         const newChildren = (b.children || []).map((col, i) =>
@@ -149,7 +147,6 @@ export function NewsletterBuilder() {
       setBlocks(prev => prev.map(b => {
         if (b.id !== selectedBlockId) return b;
         const updated = { ...b, props: { ...b.props, ...props } };
-        // Sync children array when column count changes
         if (b.type === 'columns' && props._syncChildren) {
           const newCount = props.columns || 2;
           const currentChildren = b.children || [];
@@ -201,7 +198,7 @@ export function NewsletterBuilder() {
     setSaveStatus('idle');
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      handleSave(true); // silent autosave
+      handleSave(true);
     }, 2000);
 
     return () => {
@@ -215,6 +212,24 @@ export function NewsletterBuilder() {
     setReviewStatus('approved');
   };
 
+  // Settings panel content — shared between desktop sidebar and mobile sheet
+  const settingsContent = selectedBlock ? (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
+        {selectedBlock.type.replace('_', ' ')} Settings
+      </h3>
+      <BlockSettings block={selectedBlock} onUpdate={handleUpdateBlockProps} brandColors={brandColors} />
+    </div>
+  ) : (
+    <BlockSettings
+      block={null}
+      onUpdate={() => {}}
+      globalStyles={globalStyles}
+      onUpdateGlobalStyles={handleUpdateGlobalStyles}
+      brandColors={brandColors}
+    />
+  );
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="h-screen flex flex-col bg-background">
@@ -222,7 +237,7 @@ export function NewsletterBuilder() {
         {aiGenerated && reviewStatus === 'pending_review' && (
           <Alert className="rounded-none border-x-0 border-t-0 bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
             <Sparkles className="h-4 w-4 text-amber-600" />
-            <AlertDescription className="flex items-center justify-between">
+            <AlertDescription className="flex items-center justify-between flex-wrap gap-2">
               <span className="text-amber-800 dark:text-amber-200">
                 <strong>AI-Generated Draft</strong> — Review and edit this newsletter before sending.
               </span>
@@ -240,32 +255,60 @@ export function NewsletterBuilder() {
             </AlertDescription>
           </Alert>
         )}
+
         {/* Toolbar */}
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-card shadow-sm">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 border-b bg-card shadow-sm overflow-x-auto">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="shrink-0">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <Input
             value={templateName}
             onChange={(e) => setTemplateName(e.target.value)}
-            className="max-w-[260px] h-8 text-sm font-medium"
+            className="max-w-[180px] sm:max-w-[260px] h-8 text-sm font-medium"
           />
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground">
             {saveStatus === 'saving' && <><Loader2 className="h-3 w-3 animate-spin" /> Saving...</>}
             {saveStatus === 'saved' && <><Check className="h-3 w-3 text-green-500" /> Saved</>}
           </div>
           <div className="flex-1" />
-          <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)}>
-            {showPreview ? <EyeOff className="h-4 w-4 mr-1.5" /> : <Eye className="h-4 w-4 mr-1.5" />}
-            {showPreview ? 'Editor' : 'Preview'}
+
+          {/* Mobile: Block Palette & Settings drawers */}
+          <div className="flex md:hidden items-center gap-1.5 shrink-0">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="h-8 w-8">
+                  <PanelLeft className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[260px] p-4">
+                <h3 className="text-sm font-semibold mb-3">Add Blocks</h3>
+                <BlockPalette />
+              </SheetContent>
+            </Sheet>
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="h-8 w-8">
+                  <Settings2 className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[300px] p-4 overflow-y-auto">
+                <h3 className="text-sm font-semibold mb-3">Settings</h3>
+                {settingsContent}
+              </SheetContent>
+            </Sheet>
+          </div>
+
+          <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)} className="shrink-0">
+            {showPreview ? <EyeOff className="h-4 w-4 sm:mr-1.5" /> : <Eye className="h-4 w-4 sm:mr-1.5" />}
+            <span className="hidden sm:inline">{showPreview ? 'Editor' : 'Preview'}</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowSendPanel(true)}>
-            <Send className="h-4 w-4 mr-1.5" />
-            Send
+          <Button variant="outline" size="sm" onClick={() => setShowSendPanel(true)} className="shrink-0">
+            <Send className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">Send</span>
           </Button>
-          <Button size="sm" onClick={() => handleSave(false)} disabled={isSaving}>
-            <Save className="h-4 w-4 mr-1.5" />
-            {isSaving ? 'Saving...' : 'Save'}
+          <Button size="sm" onClick={() => handleSave(false)} disabled={isSaving} className="shrink-0">
+            <Save className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save'}</span>
           </Button>
         </div>
 
@@ -276,16 +319,16 @@ export function NewsletterBuilder() {
           </div>
         ) : (
           <div className="flex-1 flex overflow-hidden">
-            {/* Left: Block Palette */}
-            <ScrollArea className="w-[220px] border-r bg-card/50 p-3">
+            {/* Left: Block Palette — hidden on mobile */}
+            <ScrollArea className="hidden md:block w-[220px] border-r bg-card/50 p-3">
               <BlockPalette />
             </ScrollArea>
 
             {/* Center: Canvas */}
-            <ScrollArea className="flex-1 p-6">
+            <ScrollArea className="flex-1 p-4 sm:p-6">
               <div className="max-w-[640px] mx-auto" onClick={handleClearSelection}>
                 <div className="rounded-xl shadow-sm min-h-[600px]" style={{ backgroundColor: globalStyles.backgroundColor, padding: '24px 16px' }}>
-                  <div className="mx-auto rounded-lg border p-6" style={{ maxWidth: globalStyles.contentWidth || 640, backgroundColor: '#ffffff', fontFamily: globalStyles.fontFamily, color: globalStyles.bodyColor }}>
+                  <div className="mx-auto rounded-lg border p-4 sm:p-6" style={{ maxWidth: globalStyles.contentWidth || 640, backgroundColor: '#ffffff', fontFamily: globalStyles.fontFamily, color: globalStyles.bodyColor }}>
                     <BuilderCanvas
                       blocks={blocks}
                       selectedBlockId={selectedBlockId}
@@ -300,24 +343,9 @@ export function NewsletterBuilder() {
               </div>
             </ScrollArea>
 
-            {/* Right: Settings */}
-            <ScrollArea className="w-[280px] border-l bg-card/50 p-4">
-              {selectedBlock ? (
-                <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
-                    {selectedBlock.type.replace('_', ' ')} Settings
-                  </h3>
-                  <BlockSettings block={selectedBlock} onUpdate={handleUpdateBlockProps} brandColors={brandColors} />
-                </div>
-              ) : (
-                <BlockSettings
-                  block={null}
-                  onUpdate={() => {}}
-                  globalStyles={globalStyles}
-                  onUpdateGlobalStyles={handleUpdateGlobalStyles}
-                  brandColors={brandColors}
-                />
-              )}
+            {/* Right: Settings — hidden on mobile */}
+            <ScrollArea className="hidden md:block w-[280px] border-l bg-card/50 p-4">
+              {settingsContent}
             </ScrollArea>
           </div>
         )}
