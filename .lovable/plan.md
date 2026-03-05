@@ -1,51 +1,52 @@
 
 
-## Plan: Automated Follow-Up Scheduling
+## Plan: Replace Automated Post-Event Emails with Task-Based Reminders
 
-### Concept
+### Problem
 
-Add a per-event setting that lets agents enable automatic follow-up invitations. When enabled, the existing `event-email-scheduler` cron job (runs daily at 10 AM ET) will check if X days have passed since the initial invitation was sent and automatically trigger follow-ups to non-RSVP'd contacts.
+Thank-you and no-show emails depend on check-in status being confirmed by the agent first. If the scheduler fires automatically at `diffDays === -1`, the agent may not have updated check-in statuses yet, leading to wrong recipients getting the wrong email.
 
-### Database Changes
+### Solution
 
-**Migration**: Add columns to `events` table for follow-up scheduling settings:
+Instead of the scheduler automatically sending `thank_you` and `no_show` emails, it will create `event_tasks` entries reminding the agent to:
+1. Confirm check-in attendance
+2. Send thank-you emails (manually via the Emails tab)
+3. Send no-show follow-up emails (manually via the Emails tab)
 
-```sql
-ALTER TABLE public.events
-  ADD COLUMN auto_followup_enabled boolean NOT NULL DEFAULT false,
-  ADD COLUMN followup_1_days integer NOT NULL DEFAULT 3,
-  ADD COLUMN followup_2_days integer NOT NULL DEFAULT 7;
-```
+The manual send buttons for thank-you and no-show already exist in the EmailManagement UI, so the agent just needs to be prompted to use them after confirming attendance.
 
-No new tables needed — the existing `event_emails` table already tracks which follow-up emails have been sent, and the `send-event-invitation` function already handles the follow-up filtering logic.
-
-### Edge Function Changes
-
-**`event-email-scheduler/index.ts`** — Add automated follow-up logic alongside the existing reminder/thank-you/no-show scheduling:
-
-1. For each published event with `auto_followup_enabled = true`:
-   - Find the earliest `invitation` email `sent_at` date for that event
-   - If today is `followup_1_days` days after initial send AND `invitation_followup_1` hasn't been sent yet → invoke `send-event-invitation` with `followupNumber: 1`
-   - If today is `followup_2_days` days after initial send AND `invitation_followup_2` hasn't been sent yet → invoke `send-event-invitation` with `followupNumber: 2`
-   - Only send if the event date is still in the future (no follow-ups after the event)
-
-The scheduler will call `send-event-invitation` internally via `fetch()` to reuse all existing follow-up filtering logic (dedup, RSVP exclusion, template resolution).
-
-### UI Changes
-
-**`EmailManagement.tsx`** — Add an "Auto Follow-Up Settings" card in the invitation section:
-
-- Toggle: "Enable Automatic Follow-Ups"
-- Two number inputs: "Follow-Up #1 after X days" (default 3) and "Follow-Up #2 after X days" (default 7)
-- Save button that updates the `events` table
-- Status indicators showing if each follow-up has already been sent automatically
-- Note: templates must exist for the follow-up types before enabling
-
-### Files to Modify
+### Changes
 
 | File | Change |
 |------|--------|
-| Migration SQL | Add `auto_followup_enabled`, `followup_1_days`, `followup_2_days` to `events` |
-| `supabase/functions/event-email-scheduler/index.ts` | Add follow-up scheduling logic after existing reminder logic |
-| `src/components/events/email/EmailManagement.tsx` | Add auto follow-up settings UI card |
+| `supabase/functions/event-email-scheduler/index.ts` | Remove `thank_you` and `no_show` from `emailTypesToSend`. Instead, when `diffDays === -1`, insert 3 `event_tasks` for the agent: "Confirm Event Attendance", "Send Thank-You Emails", "Send No-Show Follow-Up Emails" (with dedup check to avoid duplicate tasks) |
+| `src/utils/defaultEventTasks.ts` | Update the existing "Send Thank-You Email" task (day +1) to have a note clarifying the workflow. Add a "Confirm Event Attendance" task at day +1 and a "Send No-Show Follow-Up Emails" task at day +2 |
+
+### Scheduler Logic Change
+
+```text
+// BEFORE (diffDays === -1):
+emailTypesToSend.push('thank_you')
+emailTypesToSend.push('no_show')
+
+// AFTER (diffDays === -1):
+// Create tasks instead of sending emails
+INSERT INTO event_tasks:
+  1. "Confirm Event Attendance" (due: event_date + 1 day)
+  2. "Send Thank-You Emails via Emails Tab" (due: event_date + 1 day)  
+  3. "Send No-Show Follow-Up Emails via Emails Tab" (due: event_date + 2 days)
+// Dedup: skip if tasks with these names already exist for this event
+```
+
+### Default Tasks Update
+
+Replace the single "Send Thank-You Email" post-event task with a clearer 3-step sequence:
+- Day +1: "Confirm Event Attendance" (responsible: Event Coordinator)
+- Day +1: "Send Thank-You Emails" (responsible: Marketing) — already exists, keep as-is
+- Day +2: "Send No-Show Follow-Up Emails" (responsible: Marketing) — new
+
+### Files to Modify
+
+- `supabase/functions/event-email-scheduler/index.ts` — remove auto-send of post-event emails, add task creation logic
+- `src/utils/defaultEventTasks.ts` — add "Confirm Event Attendance" and "Send No-Show Follow-Up Emails" tasks
 
