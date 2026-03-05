@@ -254,9 +254,46 @@ Deno.serve(async (req) => {
       const emailTypesToSend: string[] = []
       if (diffDays === 7) emailTypesToSend.push('reminder_7day')
       if (diffDays === 1) emailTypesToSend.push('reminder_1day')
-      if (diffDays === -1) {
-        emailTypesToSend.push('thank_you')
-        emailTypesToSend.push('no_show')
+      // Post-event: create tasks instead of sending emails automatically
+      if (diffDays === -1 && event.agent_id) {
+        const postEventTasks = [
+          { task_name: 'Confirm Event Attendance', due_offset: 1, responsible_person: 'Event Coordinator', notes: 'Review the RSVP list and mark who attended vs. who was a no-show before sending follow-up emails.' },
+          { task_name: 'Send Thank-You Emails via Emails Tab', due_offset: 1, responsible_person: 'Marketing', notes: 'Go to Events → Emails tab → click "Send Thank You" after confirming attendance.' },
+          { task_name: 'Send No-Show Follow-Up Emails via Emails Tab', due_offset: 2, responsible_person: 'Marketing', notes: 'Go to Events → Emails tab → click "Send No-Show" after confirming attendance.' },
+        ]
+
+        for (const task of postEventTasks) {
+          // Dedup: skip if task with this name already exists for this event
+          const { data: existingTask } = await supabase
+            .from('event_tasks')
+            .select('id')
+            .eq('event_id', event.id)
+            .eq('task_name', task.task_name)
+            .maybeSingle()
+
+          if (!existingTask) {
+            const dueDate = new Date(eventDate)
+            dueDate.setDate(dueDate.getDate() + task.due_offset)
+
+            const { error: taskError } = await supabase.from('event_tasks').insert({
+              event_id: event.id,
+              agent_id: event.agent_id,
+              task_name: task.task_name,
+              phase: 'post_event',
+              responsible_person: task.responsible_person,
+              due_date: dueDate.toISOString().split('T')[0],
+              status: 'pending',
+              notes: task.notes,
+            })
+            if (taskError) {
+              console.error(`[${event.title}] Failed to create task "${task.task_name}":`, taskError)
+            } else {
+              console.log(`[${event.title}] Created post-event task: ${task.task_name}`)
+            }
+          }
+        }
+
+        summary.push({ event: event.title, emailType: 'post_event_tasks', tasksCreated: true })
       }
 
       // === Automated follow-up logic ===
