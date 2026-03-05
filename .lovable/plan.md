@@ -1,74 +1,47 @@
 
+## Accountability Center: Better Messaging + Contact Names + Remove Old Tasks
 
-## Event Data Not Pulling Correctly — Root Cause and Fix
+### Changes
 
-### Problem
+**1. Pull contact names for SphereSync tasks**
 
-When you created an event (March 31, 2026), the 42-task template auto-generated tasks with due dates backdated relative to the event — some as early as January 31. This causes three cascading problems:
-
-**Bug 1: Historical trend is corrupted.** The 8-week trend chart assigns event tasks to past weeks by `due_date`. Tasks created *today* with due dates in W5–W9 now appear as "expected but not completed" for those weeks, tanking historical completion percentages from real numbers down to near-zero. A task shouldn't pollute a past week's stats if it didn't exist during that week.
-
-**Bug 2: Instant overdue flood.** All 6 event tasks with due dates before today immediately appear as overdue in the Accountability Center — even though you just created the event seconds ago. The user shouldn't be punished for template-generated tasks that were born past-due.
-
-**Bug 3: Performance % is deflated.** Block Four counts 3 event tasks as "expected this week" (due 3/2, 3/4, 3/7). Two of those are already past-due and uncompleted, dragging the completion % down artificially on the same day the event was created.
-
-### Root Cause
-
-All three bugs share one root cause: **no `created_at` guard**. The code assumes a task's `due_date` reflects when it was "active," but template-generated tasks are created in bulk with retroactive due dates.
-
-### Fix — `src/hooks/useDashboardBlocks.ts`
-
-**Fix 1: Historical trend — filter by `created_at`**
-
-In the trend loop (lines 320-326), when filtering event tasks for a historical week, add a guard: only include a task if it was created *before* the end of that historical week. If `created_at > weekEnd`, skip it.
+The `spheresync_tasks` query already fetches `lead_id`. Add a follow-up query to fetch contact names for the overdue task lead IDs:
 
 ```typescript
-const weekEventTasks = (eventTasksHistory.data || []).filter(t => {
-  if (!t.due_date) return false;
-  const d = new Date(t.due_date);
-  const created = new Date(t.created_at);
-  return d >= wStart && d <= wEnd && created <= wEnd; // ← new guard
-});
+const leadIds = overdueSphereTasks.map(t => t.lead_id).filter(Boolean);
+const { data: contacts } = await supabase.from('contacts')
+  .select('id, first_name, last_name').in('id', leadIds);
 ```
 
-**Fix 2: Overdue tasks — exclude born-overdue tasks**
+Then update the task title from `"Call task from W8"` to `"Call Sarah Johnson (W8)"` — much more actionable.
 
-In the event tasks overdue section (lines 375-384), skip tasks where `created_at > due_date` (task was created after its own due date — it was born overdue from a template). These aren't genuine misses; they're template artifacts.
+Add `contactName` to the `OverdueTask` type.
 
-This requires adding `created_at` to the overdue event tasks query (line 158):
-```
-.select('id, task_name, due_date, status, completed_at, event_id, created_at')
-```
+**2. Only show tasks from last 2 weeks (remove older tasks entirely)**
 
-Then filter:
-```typescript
-(eventTasksOverdue.data || []).forEach(t => {
-  const created = new Date(t.created_at);
-  const due = new Date(t.due_date!);
-  if (created > due) return; // born overdue — skip
-  // ... existing push logic
-});
-```
+Change the SphereSync overdue filter: only include tasks where `weeksDiff <= 2` (current week minus 1 and minus 2). Drop the cleanup section entirely — no more "398 older tasks need attention." Those are gone.
 
-**Fix 3: Performance current week — same `created_at` guard**
+For coaching, limit to 2 past weeks instead of 4.
 
-For Block Four's current week event task count (line 294-296), apply the same filter: exclude tasks where `created_at` is after the due date. Add `created_at` to the week query select (line 155):
-```
-.select('id, task_name, due_date, status, completed_at, event_id, phase, created_at')
-```
+Remove `cleanupSummary` and `allTasks` from the `BlockFiveOverdue` type since they're no longer needed.
 
-Then filter the `allEventWeek` array before counting:
-```typescript
-const allEventWeek = (eventTasksWeekAll.data || []).filter(t => {
-  const created = new Date(t.created_at);
-  const due = new Date(t.due_date);
-  return created <= due; // only count tasks that existed before their due date
-});
-```
+**3. Rewrite nudge messaging to be clearer and more actionable**
+
+Replace the generic nudge text with specific, action-oriented messages:
+
+- Score ≥ 95: "All caught up — your consistency is paying off!"
+- Score ≥ 80, no overdue: "Great momentum this week. Keep showing up for your sphere."
+- Score ≥ 80, some overdue: "You're close — knock out these {n} tasks to stay on track."
+- Score ≥ 50: "You have {n} people waiting to hear from you. A quick call today can make the difference."
+- Score < 50: "Your sphere needs you — start with just one call to build momentum."
+
+Add a subtitle under the score explaining what it means: "Based on your last 4 weeks of task completion across SphereSync, Events, and Scoreboard."
+
+**4. Group overdue tasks by week instead of flat list**
+
+Instead of listing each task individually, group by week: "Week 8 — 23 tasks" and "Week 9 — 23 tasks" with expand/collapse per week. When expanded, show contact names.
 
 ### Files Changed
 
-- `src/hooks/useDashboardBlocks.ts` — Add `created_at` to two event task queries' select fields, add born-overdue guards in three places (trend, overdue, performance)
-
-No UI component changes needed.
-
+1. **`src/hooks/useDashboardBlocks.ts`** — Add contact name lookup, limit overdue to 2 weeks, remove cleanup, update type
+2. **`src/components/dashboard/OverdueTasks.tsx`** — Rewrite messaging, group by week, show contact names, remove cleanup section
