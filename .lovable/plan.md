@@ -1,52 +1,71 @@
 
 
-## Plan: Replace Automated Post-Event Emails with Task-Based Reminders
+## Plan: Update Pre-Event Task List
 
-### Problem
+Replace the current 32 pre-event tasks with 31 updated tasks in `src/utils/defaultEventTasks.ts`.
 
-Thank-you and no-show emails depend on check-in status being confirmed by the agent first. If the scheduler fires automatically at `diffDays === -1`, the agent may not have updated check-in statuses yet, leading to wrong recipients getting the wrong email.
+### Summary of Changes
 
-### Solution
+**Removed** (4 tasks):
+- "Test hub RSVP" (-45)
+- "Export Database from Hub" (-45)
+- "Confirm Event Type" (-3)
+- "Gate check: Venue + Owner confirmed" (-2)
 
-Instead of the scheduler automatically sending `thank_you` and `no_show` emails, it will create `event_tasks` entries reminding the agent to:
-1. Confirm check-in attendance
-2. Send thank-you emails (manually via the Emails tab)
-3. Send no-show follow-up emails (manually via the Emails tab)
+**Renamed** (2 tasks):
+- "Request Speaker & Sponsor Commitments" → "Request Sponsor Commitments"
+- "Update Promo Kit for Sponsors" → "Provide Materials to Sponsors"
+- "Confirm charity" → "Confirm charity (if applicable)"
 
-The manual send buttons for thank-you and no-show already exist in the EmailManagement UI, so the agent just needs to be prompted to use them after confirming attendance.
+**Timing Changes** (3 tasks):
+- "Draft Event Budget": -50 → -60
+- "Agent Call/Text Round #1": -10 → -30
+- "Confirm Venue": -3 → -35
 
-### Changes
+**Added** (3 tasks):
+- "Order Event Signage & Printed Materials" at -21 (Event Coordinator)
+- "Send Day-Of Agenda to Team" at -2 (Event Coordinator)
+- "Final Walkthrough with Venue" at -1 (Event Coordinator)
 
-| File | Change |
-|------|--------|
-| `supabase/functions/event-email-scheduler/index.ts` | Remove `thank_you` and `no_show` from `emailTypesToSend`. Instead, when `diffDays === -1`, insert 3 `event_tasks` for the agent: "Confirm Event Attendance", "Send Thank-You Emails", "Send No-Show Follow-Up Emails" (with dedup check to avoid duplicate tasks) |
-| `src/utils/defaultEventTasks.ts` | Update the existing "Send Thank-You Email" task (day +1) to have a note clarifying the workflow. Add a "Confirm Event Attendance" task at day +1 and a "Send No-Show Follow-Up Emails" task at day +2 |
+### File to Modify
 
-### Scheduler Logic Change
+`src/utils/defaultEventTasks.ts` — Replace lines 12-44 (the pre-event section) with the updated task list, sorted by `days_offset` descending.
 
-```text
-// BEFORE (diffDays === -1):
-emailTypesToSend.push('thank_you')
-emailTypesToSend.push('no_show')
+### Final Pre-Event Task Order
 
-// AFTER (diffDays === -1):
-// Create tasks instead of sending emails
-INSERT INTO event_tasks:
-  1. "Confirm Event Attendance" (due: event_date + 1 day)
-  2. "Send Thank-You Emails via Emails Tab" (due: event_date + 1 day)  
-  3. "Send No-Show Follow-Up Emails via Emails Tab" (due: event_date + 2 days)
-// Dedup: skip if tasks with these names already exist for this event
-```
+| # | Task | Days | Owner |
+|---|------|------|-------|
+| 1 | Confirm Event Theme & Date | -60 | EC |
+| 2 | Draft Event Budget | -60 | EC |
+| 3 | Request Sponsor Commitments | -55 | EC |
+| 4 | Confirm charity (if applicable) | -50 | EC |
+| 5 | Create Facebook & LinkedIn Events | -42 | Mktg |
+| 6 | Provide Materials to Sponsors | -40 | Mktg |
+| 7 | Send Save-the-Date Email | -38 | Mktg |
+| 8 | Post Save-the-Date on Social | -38 | Mktg |
+| 9 | Confirm Venue | -35 | EC |
+| 10 | Personalize postcard to mail | -35 | EC |
+| 11 | Finalize Vendor Selections | -30 | EC |
+| 12 | Agent Call/Text Round #1 | -30 | EC |
+| 13 | Email #1 Formal Invite | -28 | Mktg |
+| 14 | SMS Nudge #1 | -25 | Mktg |
+| 15 | Order Event Signage & Printed Materials | -21 | EC |
+| 16 | Email #2 15-Day Reminder | -15 | Mktg |
+| 17 | Mail invite to Sphere | -15 | EC |
+| 18 | Social Content Schedule | -14 | Mktg |
+| 19 | Check RSVP Progress | -12 | EC |
+| 20 | Check RSVP Progress #2 | -8 | EC |
+| 21 | Email #3 One-Week Reminder | -7 | Mktg |
+| 22 | SMS Nudge #2 | -6 | Mktg |
+| 23 | Check RSVP Progress #3 | -5 | EC |
+| 24 | Confirm Catering Headcount | -5 | EC |
+| 25 | Charity Delivery Prep | -4 | EC |
+| 26 | Confirm sponsors | -4 | EC |
+| 27 | Day-Of Kit - remind agent | -3 | EC |
+| 28 | Send Check-in list to print | -2 | EC |
+| 29 | Send Day-Of Agenda to Team | -2 | EC |
+| 30 | Remind Sponsors | -1 | EC |
+| 31 | Final Walkthrough with Venue | -1 | EC |
 
-### Default Tasks Update
-
-Replace the single "Send Thank-You Email" post-event task with a clearer 3-step sequence:
-- Day +1: "Confirm Event Attendance" (responsible: Event Coordinator)
-- Day +1: "Send Thank-You Emails" (responsible: Marketing) — already exists, keep as-is
-- Day +2: "Send No-Show Follow-Up Emails" (responsible: Marketing) — new
-
-### Files to Modify
-
-- `supabase/functions/event-email-scheduler/index.ts` — remove auto-send of post-event emails, add task creation logic
-- `src/utils/defaultEventTasks.ts` — add "Confirm Event Attendance" and "Send No-Show Follow-Up Emails" tasks
+Event Day and Post-Event sections remain unchanged.
 
