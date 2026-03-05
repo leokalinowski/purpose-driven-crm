@@ -14,7 +14,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Send, TestTube, Loader2, Users } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Send, TestTube, Loader2, Users, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -39,6 +40,9 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName, age
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('09:00');
+  const [scheduling, setScheduling] = useState(false);
 
   const effectiveAgentId = agentId || user?.id;
 
@@ -155,6 +159,113 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName, age
     }
   };
 
+  const handleSchedule = async () => {
+    if (!user || !templateId || !effectiveAgentId) {
+      toast({ title: 'Please save the template first', variant: 'destructive' });
+      return;
+    }
+    if (!subject.trim()) {
+      toast({ title: 'Subject line is required', variant: 'destructive' });
+      return;
+    }
+    if (!scheduleDate) {
+      toast({ title: 'Please select a date', variant: 'destructive' });
+      return;
+    }
+
+    const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`);
+    if (scheduledAt <= new Date()) {
+      toast({ title: 'Schedule time must be in the future', variant: 'destructive' });
+      return;
+    }
+
+    setScheduling(true);
+    try {
+      const filter = recipientFilter === 'tag' && selectedTag
+        ? { type: 'tag', tag: selectedTag }
+        : { type: 'all' };
+
+      const { error } = await supabase.from('newsletter_campaigns').insert({
+        campaign_name: `Scheduled: ${subject}`,
+        created_by: effectiveAgentId,
+        status: 'scheduled',
+        scheduled_at: scheduledAt.toISOString(),
+        template_id: templateId,
+        subject,
+        metadata: {
+          agent_id: effectiveAgentId,
+          subject,
+          sender_name: senderName,
+          recipient_filter: filter,
+        },
+      } as any);
+
+      if (error) throw error;
+      toast({ title: 'Newsletter scheduled!', description: `Will be sent on ${scheduledAt.toLocaleString()}` });
+      onClose();
+    } catch (err: any) {
+      toast({ title: 'Failed to schedule', description: err.message, variant: 'destructive' });
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  const isBusy = saving || scheduling;
+
+  // Shared fields component
+  const SharedFields = () => (
+    <div className="space-y-4">
+      {/* Subject */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">Subject Line *</Label>
+        <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Your monthly market update" />
+      </div>
+
+      {/* Sender */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">Sender Name</Label>
+        <Input value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="Your Name" />
+        <p className="text-xs text-muted-foreground">Sent from news.realestateonpurpose.com</p>
+      </div>
+
+      {/* Recipients */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">Recipients</Label>
+        <Select value={recipientFilter} onValueChange={(v: 'all' | 'tag') => setRecipientFilter(v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All contacts (with email)</SelectItem>
+            <SelectItem value="tag">Filter by tag</SelectItem>
+          </SelectContent>
+        </Select>
+        {recipientFilter === 'tag' && (
+          <Select value={selectedTag} onValueChange={setSelectedTag}>
+            <SelectTrigger><SelectValue placeholder="Select a tag..." /></SelectTrigger>
+            <SelectContent>
+              {availableTags.map(tag => (
+                <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+          <Users className="h-3 w-3" />
+          {recipientCount === null ? (
+            <span>Counting recipients…</span>
+          ) : (
+            <span>{recipientCount.toLocaleString()} recipient{recipientCount !== 1 ? 's' : ''} will receive this email</span>
+          )}
+        </div>
+      </div>
+
+      {/* Test send */}
+      <Button variant="outline" size="sm" onClick={handleSendTest} disabled={sendingTest || !templateId} className="w-full">
+        {sendingTest ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <TestTube className="h-4 w-4 mr-1" />}
+        Send Test to {user?.email}
+      </Button>
+    </div>
+  );
+
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -166,73 +277,60 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName, age
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 mt-2">
-            {/* Subject */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Subject Line *</Label>
-              <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Your monthly market update" />
-            </div>
+          <Tabs defaultValue="now" className="mt-2">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="now"><Send className="h-3.5 w-3.5 mr-1.5" /> Send Now</TabsTrigger>
+              <TabsTrigger value="schedule"><Clock className="h-3.5 w-3.5 mr-1.5" /> Schedule</TabsTrigger>
+            </TabsList>
 
-            {/* Sender */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Sender Name</Label>
-              <Input value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="Your Name" />
-              <p className="text-xs text-muted-foreground">Sent from news.realestateonpurpose.com</p>
-            </div>
-
-            {/* Recipients */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Recipients</Label>
-              <Select value={recipientFilter} onValueChange={(v: 'all' | 'tag') => setRecipientFilter(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All contacts (with email)</SelectItem>
-                  <SelectItem value="tag">Filter by tag</SelectItem>
-                </SelectContent>
-              </Select>
-              {recipientFilter === 'tag' && (
-                <Select value={selectedTag} onValueChange={setSelectedTag}>
-                  <SelectTrigger><SelectValue placeholder="Select a tag..." /></SelectTrigger>
-                  <SelectContent>
-                    {availableTags.map(tag => (
-                      <SelectItem key={tag} value={tag}>{tag}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {/* Recipient count preview */}
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
-                <Users className="h-3 w-3" />
-                {recipientCount === null ? (
-                  <span>Counting recipients…</span>
-                ) : (
-                  <span>{recipientCount.toLocaleString()} recipient{recipientCount !== 1 ? 's' : ''} will receive this email</span>
-                )}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={handleSendTest} disabled={sendingTest || !templateId} className="flex-1">
-                {sendingTest ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <TestTube className="h-4 w-4 mr-1" />}
-                Send Test
-              </Button>
+            <TabsContent value="now" className="space-y-4 mt-4">
+              <SharedFields />
               <Button
-                size="sm"
+                className="w-full"
                 onClick={() => setShowConfirm(true)}
-                disabled={saving || !subject.trim() || recipientCount === 0}
-                className="flex-1"
+                disabled={isBusy || !subject.trim() || recipientCount === 0}
               >
                 {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
                 Send Now
               </Button>
-            </div>
-          </div>
+            </TabsContent>
+
+            <TabsContent value="schedule" className="space-y-4 mt-4">
+              <SharedFields />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Date *</Label>
+                  <Input
+                    type="date"
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Time *</Label>
+                  <Input
+                    type="time"
+                    value={scheduleTime}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                  />
+                </div>
+              </div>
+              <Button
+                className="w-full"
+                onClick={handleSchedule}
+                disabled={isBusy || !subject.trim() || !scheduleDate || recipientCount === 0}
+              >
+                {scheduling ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Clock className="h-4 w-4 mr-1" />}
+                Schedule Send
+              </Button>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
 
       {/* Confirmation dialog */}
-      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+      <AlertDialog open={showConfirm && !saving} onOpenChange={setShowConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Newsletter Send</AlertDialogTitle>

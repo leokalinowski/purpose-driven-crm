@@ -105,33 +105,37 @@ function renderListings(props: Record<string, any>): string {
     html += `<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`;
     listings.forEach((l: any, i: number) => {
       if (i > 0 && i % 2 === 0) html += `</tr><tr>`;
-      html += `<td style="width:50%;vertical-align:top;padding:6px;">
-        <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#ffffff;">
+      const cardContent = `<div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#ffffff;">
           ${l.image_url ? `<img src="${l.image_url}" alt="${escapeHtml(l.address)}" style="width:100%;height:140px;object-fit:cover;display:block;" />` : `<div style="height:140px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;text-align:center;color:#9ca3af;font-size:14px;">No Image</div>`}
           <div style="padding:12px;">
             <p style="margin:0;font-weight:700;font-size:16px;">${escapeHtml(l.price)}</p>
              <p style="margin:4px 0 0;font-size:13px;">${escapeHtml(l.address)}</p>
              ${l.city ? `<p style="margin:2px 0 0;font-size:12px;opacity:0.7;">${escapeHtml(l.city)}</p>` : ''}
              <p style="margin:6px 0 0;font-size:12px;opacity:0.5;">${l.beds} bed · ${l.baths} bath · ${escapeHtml(l.sqft)} sqft</p>
+             ${l.url ? `<p style="margin:8px 0 0;"><a href="${l.url}" target="_blank" style="color:#2563eb;font-size:13px;font-weight:600;text-decoration:none;">View Listing →</a></p>` : ''}
           </div>
-        </div>
+        </div>`;
+      html += `<td style="width:50%;vertical-align:top;padding:6px;">
+        ${l.url ? `<a href="${l.url}" target="_blank" style="text-decoration:none;color:inherit;">${cardContent}</a>` : cardContent}
       </td>`;
     });
     if (listings.length % 2 !== 0) html += `<td style="width:50%;"></td>`;
     html += `</tr></table>`;
   } else {
     listings.forEach((l: any) => {
-      html += `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:12px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#ffffff;">
-        <tr>
+      const cardInner = `<tr>
           ${l.image_url ? `<td style="width:120px;"><img src="${l.image_url}" alt="${escapeHtml(l.address)}" style="width:120px;height:90px;object-fit:cover;display:block;" /></td>` : `<td style="width:120px;background:#f3f4f6;text-align:center;font-size:13px;color:#9ca3af;vertical-align:middle;">No Image</td>`}
           <td style="padding:12px;vertical-align:top;">
             <p style="margin:0;font-weight:700;font-size:16px;">${escapeHtml(l.price)}</p>
              <p style="margin:4px 0 0;font-size:13px;">${escapeHtml(l.address)}</p>
              ${l.city ? `<p style="margin:2px 0 0;font-size:12px;opacity:0.7;">${escapeHtml(l.city)}</p>` : ''}
              <p style="margin:6px 0 0;font-size:12px;opacity:0.5;">${l.beds} bed · ${l.baths} bath · ${escapeHtml(l.sqft)} sqft</p>
+             ${l.url ? `<p style="margin:8px 0 0;"><a href="${l.url}" target="_blank" style="color:#2563eb;font-size:13px;font-weight:600;text-decoration:none;">View Listing →</a></p>` : ''}
           </td>
-        </tr>
-      </table>`;
+        </tr>`;
+      html += l.url
+        ? `<a href="${l.url}" target="_blank" style="text-decoration:none;color:inherit;display:block;"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:12px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#ffffff;">${cardInner}</table></a>`
+        : `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:12px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#ffffff;">${cardInner}</table>`;
     });
   }
 

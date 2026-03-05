@@ -1770,14 +1770,17 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          metadata: Json | null
           name: string | null
           open_rate: number | null
           recipient_count: number | null
+          scheduled_at: string | null
           send_date: string | null
           sender_id: string | null
           status: string | null
           subject: string | null
           template_content: string | null
+          template_id: string | null
           updated_at: string
         }
         Insert: {
@@ -1787,14 +1790,17 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          metadata?: Json | null
           name?: string | null
           open_rate?: number | null
           recipient_count?: number | null
+          scheduled_at?: string | null
           send_date?: string | null
           sender_id?: string | null
           status?: string | null
           subject?: string | null
           template_content?: string | null
+          template_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -1804,14 +1810,17 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          metadata?: Json | null
           name?: string | null
           open_rate?: number | null
           recipient_count?: number | null
+          scheduled_at?: string | null
           send_date?: string | null
           sender_id?: string | null
           status?: string | null
           subject?: string | null
           template_content?: string | null
+          template_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1821,6 +1830,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "newsletter_campaigns_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "newsletter_templates"
+            referencedColumns: ["id"]
           },
         ]
       }

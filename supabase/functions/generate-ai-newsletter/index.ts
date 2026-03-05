@@ -21,25 +21,27 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await anonClient.auth.getUser(authHeader.replace('Bearer ', ''));
     if (authError || !user) throw new Error('Unauthorized');
 
-    // Verify admin role
-    const { data: roleData } = await supabase.rpc('get_current_user_role');
-    // Use service role to check directly
+    // Check if user is admin
     const { data: userRole } = await supabase
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
       .eq('role', 'admin')
       .maybeSingle();
-    if (!userRole) throw new Error('Admin access required');
+    const isAdmin = !!userRole;
 
     const { agent_id, topic_hint, include_listings } = await req.json();
-    if (!agent_id) throw new Error('agent_id is required');
+    // Non-admins can only generate for themselves
+    const effectiveAgentId = isAdmin ? (agent_id || user.id) : user.id;
+    if (agent_id && agent_id !== user.id && !isAdmin) {
+      throw new Error('You can only generate newsletters for yourself');
+    }
 
     // 1. Fetch agent profile
     const { data: profile } = await supabase
       .from('profiles')
       .select('first_name, last_name, full_name, email, phone_number, brokerage, office_address, website, license_number')
-      .eq('user_id', agent_id)
+      .eq('user_id', effectiveAgentId)
       .maybeSingle();
 
     const agentName = profile?.full_name || [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Agent';
@@ -48,14 +50,14 @@ Deno.serve(async (req) => {
     const { data: marketing } = await supabase
       .from('agent_marketing_settings')
       .select('brand_guidelines, tone_guidelines, gpt_prompt, target_audience, what_not_to_say, example_copy, primary_color, secondary_color, headshot_url, logo_colored_url')
-      .eq('user_id', agent_id)
+      .eq('user_id', effectiveAgentId)
       .maybeSingle();
 
     // 3. Fetch contact count
     const { count: contactCount } = await supabase
       .from('contacts')
       .select('id', { count: 'exact', head: true })
-      .eq('agent_id', agent_id)
+      .eq('agent_id', effectiveAgentId)
       .not('email', 'is', null)
       .neq('email', '');
 
@@ -228,7 +230,7 @@ The newsletter should feel personal and valuable, not salesy. Focus on providing
     const { data: template, error: insertError } = await supabase
       .from('newsletter_templates')
       .insert({
-        agent_id,
+        agent_id: effectiveAgentId,
         name: `AI Draft: ${subject}`,
         blocks_json: blocksWithIds,
         global_styles: globalStyles,

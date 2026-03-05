@@ -136,16 +136,18 @@ function renderListings(p: BlockProps): string {
     html += `<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`;
     listings.forEach((l: any, i: number) => {
       if (i > 0 && i % 2 === 0) html += `</tr><tr>`;
-      html += `<td style="width:50%;vertical-align:top;padding:6px;">
-        <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#ffffff;">
+      const cardContent = `<div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#ffffff;">
           ${l.image_url ? `<img src="${l.image_url}" alt="${escapeHtml(l.address)}" style="width:100%;height:140px;object-fit:cover;display:block;" />` : ''}
           <div style="padding:12px;">
             <p style="margin:0;font-weight:700;font-size:16px;">${escapeHtml(l.price)}</p>
             <p style="margin:4px 0 0;font-size:13px;">${escapeHtml(l.address)}</p>
             ${l.city ? `<p style="margin:2px 0 0;font-size:12px;opacity:0.7;">${escapeHtml(l.city)}</p>` : ''}
             <p style="margin:6px 0 0;font-size:12px;opacity:0.5;">${l.beds} bed · ${l.baths} bath · ${escapeHtml(String(l.sqft))} sqft</p>
+            ${l.url ? `<p style="margin:8px 0 0;"><a href="${l.url}" target="_blank" style="color:#2563eb;font-size:13px;font-weight:600;text-decoration:none;">View Listing →</a></p>` : ''}
           </div>
-        </div>
+        </div>`;
+      html += `<td style="width:50%;vertical-align:top;padding:6px;">
+        ${l.url ? `<a href="${l.url}" target="_blank" style="text-decoration:none;color:inherit;">${cardContent}</a>` : cardContent}
       </td>`;
     });
     if (listings.length % 2 !== 0) html += `<td style="width:50%;"></td>`;
@@ -158,7 +160,9 @@ function renderListings(p: BlockProps): string {
           <td style="padding:12px;vertical-align:top;">
             <p style="margin:0;font-weight:700;font-size:16px;">${escapeHtml(l.price)}</p>
             <p style="margin:4px 0 0;font-size:13px;">${escapeHtml(l.address)}</p>
+            ${l.city ? `<p style="margin:2px 0 0;font-size:12px;opacity:0.7;">${escapeHtml(l.city)}</p>` : ''}
             <p style="margin:6px 0 0;font-size:12px;opacity:0.5;">${l.beds} bed · ${l.baths} bath · ${escapeHtml(String(l.sqft))} sqft</p>
+            ${l.url ? `<p style="margin:8px 0 0;"><a href="${l.url}" target="_blank" style="color:#2563eb;font-size:13px;font-weight:600;text-decoration:none;">View Listing →</a></p>` : ''}
           </td>
         </tr>
       </table>`;
@@ -336,11 +340,11 @@ serve(async (req) => {
     );
 
     const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: { user: callerUser }, error: userError } = await supabaseAuth.auth.getUser(token);
+    if (userError || !callerUser) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-    const callerId = claimsData.claims.sub as string;
+    const callerId = callerUser.id;
 
     const body = await req.json();
     const { template_id, agent_id, subject, sender_name, recipient_filter, test_mode, test_email } = body;
@@ -386,7 +390,7 @@ serve(async (req) => {
     // 2. Fetch agent profile
     const { data: agent, error: agentErr } = await supabase
       .from('profiles')
-      .select('user_id, first_name, last_name, email, phone_number, office_number, office_address, brokerage, license_number, website, team_name')
+      .select('user_id, first_name, last_name, full_name, email, phone_number, office_number, office_address, brokerage, license_number, website, team_name')
       .eq('user_id', agent_id)
       .single();
 
@@ -405,7 +409,7 @@ serve(async (req) => {
     let emailHtml = renderBlocksToHtml(blocks, globalStyles);
     emailHtml = replaceAgentPlaceholders(emailHtml, agent, marketing);
 
-    const agentName = [agent.first_name, agent.last_name].filter(Boolean).join(' ') || 'Your Agent';
+    const agentName = agent.full_name || [agent.first_name, agent.last_name].filter(Boolean).join(' ') || 'Your Agent';
     const companyAddress = Deno.env.get('COMPANY_PHYSICAL_ADDRESS') || agent.office_address || '';
     const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || '';
     const fromName = sender_name || agentName;

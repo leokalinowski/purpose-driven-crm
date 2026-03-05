@@ -279,6 +279,7 @@ function BlockPreview({
                   <p className="text-xs opacity-70 truncate mt-1">{l.address}</p>
                   {l.city && <p className="text-xs opacity-60 truncate">{l.city}</p>}
                   <p className="text-xs opacity-50 mt-1">{l.beds} bed · {l.baths} bath · {l.sqft} sqft</p>
+                  {l.url && <a href={l.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary font-semibold mt-1 inline-block" onClick={(e) => e.stopPropagation()}>View Listing →</a>}
                 </div>
               </div>
             ))}

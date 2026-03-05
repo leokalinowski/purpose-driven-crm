@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Pencil, Copy, Trash2, FileText, Send, Sparkles } from 'lucide-react';
+import { AIGenerateDialog } from '@/components/newsletter/AIGenerateDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -52,6 +53,7 @@ export function TemplateList() {
   const { templates, isLoading, saveTemplate, deleteTemplate, isSaving } = useNewsletterTemplates();
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [sendTemplate, setSendTemplate] = useState<{ id: string; name: string } | null>(null);
+  const [showAIDialog, setShowAIDialog] = useState(false);
 
   const handleCreate = async () => {
     if (!user) {
@@ -118,10 +120,16 @@ export function TemplateList() {
           <CardTitle>Email Templates</CardTitle>
           <CardDescription>Create and manage your newsletter templates</CardDescription>
         </div>
-        <Button onClick={handleCreate} disabled={isSaving}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Template
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setShowAIDialog(true)}>
+            <Sparkles className="h-4 w-4 mr-2" />
+            AI Generate
+          </Button>
+          <Button onClick={handleCreate} disabled={isSaving}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Template
+          </Button>
+        </div>
       </CardHeader>
 
       <CardContent>
@@ -202,6 +210,8 @@ export function TemplateList() {
           templateName={sendTemplate.name}
         />
       )}
+
+      <AIGenerateDialog open={showAIDialog} onClose={() => setShowAIDialog(false)} />
     </Card>
   );
 }
