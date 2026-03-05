@@ -1,52 +1,64 @@
 
 
-## Dashboard Data Bugs and Fixes
+## Plan: Accountability Score + Time-Based Triage (B + C Blend)
 
-### Critical Bug: Events touchpoints pulling ALL agents' data
+### Overview
 
-**Line 162-163** — The `event_emails` query has **no agent scoping**. It fetches every event email sent this week across the entire platform, not just the current user's events. This is why you see 118 Events touchpoints — those are emails from all agents combined.
+Redesign Block Five from a flat list of 400+ tasks into a smart "Action Center" with three layers: an Accountability Score (0-100), a priority section for recent overdue items, and a collapsed cleanup summary for ancient tasks.
 
-**Fix**: Join through the `events` table to scope by `agent_id`:
+### Data Changes — `src/hooks/useDashboardBlocks.ts`
+
+Update the `BlockFiveOverdue` type to include computed fields:
+
+```typescript
+export type BlockFiveOverdue = {
+  accountabilityScore: number;       // 0-100
+  priorityTasks: OverdueTask[];      // overdue ≤14 days
+  cleanupSummary: {                  // overdue >14 days, grouped
+    spheresync: number;
+    events: number;
+    coaching: number;
+    total: number;
+  };
+  nextMilestone: { score: number; tasksNeeded: number }; // e.g. "Complete 3 tasks to reach 80"
+  allTasks: OverdueTask[];           // full list for "view all"
+};
 ```
-supabase.from('event_emails').select('id, recipient_email, event_id')
-  .gte('sent_at', weekStart).lte('sent_at', weekEnd)
-```
-Then filter client-side by fetching the user's event IDs first, OR use a sub-select. Since `event_emails` doesn't have an `agent_id` column directly, the simplest reliable approach is to first fetch the user's event IDs, then filter `event_emails` with `.in('event_id', userEventIds)`.
 
----
+**Accountability Score formula**: Based on the ratio of on-time completions vs total expected tasks across the last 4 weeks. Score = `Math.round((completedOnTime / totalExpected) * 100)`. Uses existing Block Four data (spheresync + events + coaching completions) so no new queries needed.
 
-### Other Bugs Found
+**Split tasks**: After building `overdueItems`, partition into `priorityTasks` (daysOverdue ≤ 14) and `cleanupSummary` (count by system for daysOverdue > 14).
 
-**Bug 2: Block Four "Events completed" is hardcoded to 0** (line 271)
-- `completedEventCount = 0` with comment "these are filtered to non-completed". The query only fetches incomplete event tasks, so completed ones are never counted. This makes the performance % inaccurate.
-- **Fix**: Fetch all event tasks for the week (remove `.is('completed_at', null)` from the week query), then split into completed vs pending.
+**Next milestone**: Calculate how many priority tasks need completing to bump the score by 5-10 points.
 
-**Bug 3: Block Four trend only uses SphereSync data** (lines 278-291)
-- The 8-week trend chart ignores Events and Coaching entirely, giving an incomplete performance picture.
-- **Fix**: Include event tasks and coaching in the weekly trend calculation.
+### UI Redesign — `src/components/dashboard/OverdueTasks.tsx`
 
-**Bug 4: `closedTransactions` variable is computed but never used** (line 245)
-- Dead code — `yearTransactions` counts all transactions regardless of status, but `closedTransactions` is calculated and discarded.
+Replace the current flat list with a 3-section layout:
 
-**Bug 5: Social touchpoints query logic is inverted** (line 148-149)
-- The social query filters `.neq('status', 'posted')` — this fetches posts that are NOT posted (for the tasks list). But the touchpoints calculation on line 177 then filters for `status === 'posted'`, which will always be 0 since posted ones were excluded from the query.
-- **Fix**: Run a separate social query for touchpoints that fetches `.eq('status', 'posted')`, OR combine both and split client-side.
+**Section 1 — Accountability Score (always visible)**
+- Large circular or semicircular score gauge (0-100) with color coding (green ≥80, amber 50-79, red <50)
+- Motivational nudge text: "Complete 3 more tasks to reach 85!" or "You're crushing it at 92!"
+- Score label: "Your Accountability Score"
 
-**Bug 6: Unique contacts count mixes IDs with email addresses** (lines 180-182)
-- SphereSync adds `lead_id` (a UUID) while event emails add `recipient_email` (an email string). These are different identifier types, so the deduplication doesn't actually work — a contact could be counted twice.
-- **Fix**: For event emails, resolve the recipient email to a contact ID, or accept this as an approximation and document it.
+**Section 2 — This Week's Priority (expanded by default)**
+- Only tasks overdue by ≤14 days (the ones that actually matter right now)
+- Each item shows: system badge, task title, days overdue, action button
+- If empty: "No recent overdue tasks — nice work!" message
+- Capped at 5 visible items with "show more" if needed
 
----
+**Section 3 — Needs Cleanup (collapsed by default)**
+- A single collapsible row showing: "23 older tasks need attention" with per-system counts (SphereSync: 444, Events: 2, Scoreboard: 1)
+- Each system gets a "Go to page" button to navigate and bulk-handle
+- Uses the Collapsible component from the existing UI library
 
-### Implementation Plan
+**Visual treatment**: The card border color adapts to the score (green/amber/red instead of always destructive red). When score is high and no priority tasks exist, the section feels celebratory rather than alarming.
 
-**File**: `src/hooks/useDashboardBlocks.ts`
+### Files Changed
 
-1. **Add a preliminary query** to fetch the user's event IDs, then use `.in('event_id', eventIds)` on the `event_emails` touchpoint query.
-2. **Split event tasks query** into two: one for all tasks this week (for performance), one for incomplete only (for the task list). Or fetch all and filter client-side.
-3. **Add a separate social touchpoints query** with `.eq('status', 'posted')` for Block One.
-4. **Include event tasks in the trend** calculation for Block Four.
-5. **Remove dead `closedTransactions` variable**.
+1. **`src/hooks/useDashboardBlocks.ts`** — Update `BlockFiveOverdue` type, add score calculation, split overdue into priority vs cleanup
+2. **`src/components/dashboard/OverdueTasks.tsx`** — Full UI rewrite with score gauge + priority list + collapsed cleanup
 
-These are all changes to a single file. No new components or UI changes needed — the display components are correct, they're just receiving wrong data.
+### Also: Transaction Source Change
+
+In the same hook file, replace the `transaction_coordination` query with a sum of `closings` from `coaching_submissions` for the current year, as requested.
 
