@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Edit, Trash2, ChevronUp, ChevronDown, Activity, MapPin, Tag, Phone, Mail, User } from 'lucide-react';
+import { Edit, Trash2, ChevronUp, ChevronDown, Activity, MapPin, Tag, Phone, Mail, User, Shield } from 'lucide-react';
 import { Contact } from '@/hooks/useContacts';
 import { ContactEnricher } from './ContactEnricher';
 import { EnrichedContact } from '@/utils/dataEnrichment';
@@ -18,10 +18,11 @@ interface ContactTableProps {
   onDelete: (contact: Contact) => void;
   onViewActivities: (contact: Contact) => void;
   onEnriched?: (enrichedContact: EnrichedContact) => void;
-  // Selection props
   selectedContacts?: Contact[];
   onSelectionChange?: (selectedContacts: Contact[]) => void;
   showSelection?: boolean;
+  isAdmin?: boolean;
+  onRecheckDNC?: (contact: Contact) => void;
 }
 
 export const ContactTable = ({
@@ -36,6 +37,8 @@ export const ContactTable = ({
   selectedContacts = [],
   onSelectionChange,
   showSelection = false,
+  isAdmin = false,
+  onRecheckDNC,
 }: ContactTableProps) => {
   // Ensure contacts is always an array
   const safeContacts = Array.isArray(contacts) ? contacts : [];
@@ -105,6 +108,17 @@ export const ContactTable = ({
             </div>
           </div>
           <div className="flex gap-1">
+            {isAdmin && onRecheckDNC && contact.phone && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onRecheckDNC(contact)}
+                className="h-8 w-8 p-0"
+                title="Recheck DNC"
+              >
+                <Shield className="h-3 w-3" />
+              </Button>
+            )}
             {onEnriched && (
               <ContactEnricher
                 contact={contact}
@@ -344,6 +358,17 @@ export const ContactTable = ({
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <div className="flex space-x-1">
+                      {isAdmin && onRecheckDNC && contact.phone && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onRecheckDNC(contact)}
+                          className="h-8 w-8 p-0"
+                          title="Recheck DNC"
+                        >
+                          <Shield className="h-4 w-4" />
+                        </Button>
+                      )}
                       {onEnriched && (
                         <ContactEnricher
                           contact={contact}
