@@ -71,7 +71,16 @@ export type OverdueTask = {
 };
 
 export type BlockFiveOverdue = {
-  tasks: OverdueTask[];
+  accountabilityScore: number;
+  priorityTasks: OverdueTask[];
+  cleanupSummary: {
+    spheresync: number;
+    events: number;
+    coaching: number;
+    total: number;
+  };
+  nextMilestone: { score: number; tasksNeeded: number };
+  allTasks: OverdueTask[];
 };
 
 export type DashboardBlocks = {
@@ -162,9 +171,9 @@ export function useDashboardBlocks() {
           .eq('agent_id', user.id).eq('year', currentYear).gte('week_number', currentWeekNum - 4),
         // Contacts count
         supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('agent_id', user.id),
-        // Transactions this year
-        supabase.from('transaction_coordination').select('id, gci, status, created_at')
-          .eq('responsible_agent', user.id).gte('created_at', yearStart),
+        // Closings this year (self-reported from coaching submissions)
+        supabase.from('coaching_submissions').select('closings')
+          .eq('agent_id', user.id).eq('year', currentYear),
         // Event emails: SCOPED to user's events only
         ...(userEventIds.length > 0
           ? [supabase.from('event_emails').select('id, recipient_email, event_id')
@@ -258,10 +267,8 @@ export function useDashboardBlocks() {
       const dbSize = contactsCount.count || 0;
       const annualTarget = Math.round(dbSize / 6);
       const monthlyTarget = Math.round(annualTarget / 12);
-      const yearTransactions = transactionsYear.data?.length || 0;
-      const avgGCI = transactionsYear.data && transactionsYear.data.length > 0
-        ? transactionsYear.data.reduce((sum, t) => sum + (t.gci || 0), 0) / transactionsYear.data.length
-        : 8000;
+      const yearTransactions = (transactionsYear.data || []).reduce((sum, s) => sum + (s.closings || 0), 0);
+      const avgGCI = 8000; // default average since self-reported data doesn't include per-transaction GCI
       const gap = Math.max(0, annualTarget - yearTransactions);
       const potentialGCI = Math.round(gap * avgGCI);
       const monthsElapsed = now.getMonth() + 1;
@@ -344,7 +351,7 @@ export function useDashboardBlocks() {
         ],
       };
 
-      // ----- BLOCK FIVE: Overdue -----
+      // ----- BLOCK FIVE: Overdue + Accountability Score -----
       const overdueItems: OverdueTask[] = [];
 
       // SphereSync overdue: incomplete tasks from past weeks
@@ -393,7 +400,34 @@ export function useDashboardBlocks() {
 
       overdueItems.sort((a, b) => b.daysOverdue - a.daysOverdue);
 
-      const blockFive: BlockFiveOverdue = { tasks: overdueItems };
+      // Accountability Score: ratio of completed vs expected across last 4 weeks
+      const last4WeeksTrend = trend.slice(-4);
+      const accountabilityScore = last4WeeksTrend.length > 0
+        ? Math.round(last4WeeksTrend.reduce((sum, w) => sum + w.rate, 0) / last4WeeksTrend.length)
+        : 100;
+
+      // Split into priority (≤14 days) and cleanup (>14 days)
+      const priorityTasks = overdueItems.filter(t => t.daysOverdue <= 14);
+      const cleanupTasks = overdueItems.filter(t => t.daysOverdue > 14);
+      const cleanupSummary = {
+        spheresync: cleanupTasks.filter(t => t.system === 'spheresync').length,
+        events: cleanupTasks.filter(t => t.system === 'events').length,
+        coaching: cleanupTasks.filter(t => t.system === 'coaching').length,
+        total: cleanupTasks.length,
+      };
+
+      // Next milestone: how many priority tasks to bump score by ~5 points
+      const totalExpectedLast4 = last4WeeksTrend.length > 0 ? last4WeeksTrend.length : 1;
+      const nextScore = Math.min(100, Math.ceil((accountabilityScore + 5) / 5) * 5);
+      const tasksNeeded = Math.max(1, Math.ceil(((nextScore - accountabilityScore) / 100) * totalExpectedLast4 * (totalThisWeek || 5)));
+
+      const blockFive: BlockFiveOverdue = {
+        accountabilityScore,
+        priorityTasks,
+        cleanupSummary,
+        nextMilestone: { score: nextScore, tasksNeeded },
+        allTasks: overdueItems,
+      };
 
       setData({ blockOne, blockTwo, blockThree, blockFour, blockFive });
     } catch (err) {
