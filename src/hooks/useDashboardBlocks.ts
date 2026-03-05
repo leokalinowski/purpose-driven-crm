@@ -152,10 +152,10 @@ export function useDashboardBlocks() {
         supabase.from('spheresync_tasks').select('id, task_type, completed, completed_at, created_at, week_number, year, lead_id, notes')
           .eq('agent_id', user.id).eq('week_number', currentWeekNum).eq('year', currentYear),
         // Event tasks: ALL for this week (completed + incomplete) for accurate performance tracking
-        supabase.from('event_tasks').select('id, task_name, due_date, status, completed_at, event_id, phase')
+        supabase.from('event_tasks').select('id, task_name, due_date, status, completed_at, event_id, phase, created_at')
           .eq('agent_id', user.id).gte('due_date', weekStart.split('T')[0]).lte('due_date', weekEnd.split('T')[0]),
         // Event tasks: overdue
-        supabase.from('event_tasks').select('id, task_name, due_date, status, completed_at, event_id')
+        supabase.from('event_tasks').select('id, task_name, due_date, status, completed_at, event_id, created_at')
           .eq('agent_id', user.id).lt('due_date', now.toISOString().split('T')[0]).is('completed_at', null),
         // Newsletter: drafts or scheduled this week
         supabase.from('newsletter_campaigns').select('id, campaign_name, status, send_date, created_at')
@@ -291,7 +291,11 @@ export function useDashboardBlocks() {
       const totalSphereCount = allSphereWeek.length;
 
       // Fix Bug 2: count completed event tasks from the full week query
-      const allEventWeek = eventTasksWeekAll.data || [];
+      const allEventWeek = (eventTasksWeekAll.data || []).filter(t => {
+        const created = new Date(t.created_at);
+        const due = new Date(t.due_date);
+        return created <= due; // exclude born-overdue template tasks
+      });
       const completedEventCount = allEventWeek.filter(t => t.completed_at !== null).length;
       const totalEventCount = allEventWeek.length;
 
@@ -320,7 +324,8 @@ export function useDashboardBlocks() {
         const weekEventTasks = (eventTasksHistory.data || []).filter(t => {
           if (!t.due_date) return false;
           const d = new Date(t.due_date);
-          return d >= wStart && d <= wEnd;
+          const created = new Date(t.created_at);
+          return d >= wStart && d <= wEnd && created <= wEnd; // exclude tasks that didn't exist yet
         });
         const weekEventCompleted = weekEventTasks.filter(t => t.completed_at !== null).length;
         const weekEventTotal = weekEventTasks.length;
@@ -373,7 +378,10 @@ export function useDashboardBlocks() {
 
       // Event tasks overdue
       (eventTasksOverdue.data || []).forEach(t => {
-        const days = differenceInDays(now, new Date(t.due_date!));
+        const created = new Date(t.created_at);
+        const due = new Date(t.due_date!);
+        if (created > due) return; // born overdue from template — skip
+        const days = differenceInDays(now, due);
         overdueItems.push({
           id: t.id,
           system: 'events',
