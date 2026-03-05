@@ -10,6 +10,14 @@ const TIER_LEVEL: Record<Tier, number> = {
   core: 5,
 };
 
+const CONTACT_LIMITS: Record<Tier, number | null> = {
+  admin: null,
+  editor: null,
+  agent: null,
+  managed: 1000,
+  core: 500,
+};
+
 /**
  * Maps each route to the minimum tier required.
  * Routes not listed here are accessible to everyone.
@@ -53,9 +61,16 @@ export function useFeatureAccess() {
     return ROUTE_MIN_TIER[route] ?? null;
   };
 
+  /** Get the contact limit for the current user's tier (null = unlimited) */
+  const getContactLimit = (): number | null => {
+    if (!role) return 500; // Default to most restrictive
+    return CONTACT_LIMITS[role as Tier] ?? 500;
+  };
+
   return {
     hasAccess,
     getRequiredTier,
+    getContactLimit,
     currentTier: role,
     loading,
   };

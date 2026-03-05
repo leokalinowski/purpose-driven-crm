@@ -159,7 +159,7 @@ export const useContacts = () => {
     fetchAllContacts,
   ]);
 
-  const addContact = async (contactData: ContactInput) => {
+  const addContact = async (contactData: ContactInput, contactLimit?: number | null) => {
     // Validate session before attempting insert
     if (!user || !effectiveAgentId) {
       console.error('[addContact] No user authenticated', { 
@@ -167,6 +167,17 @@ export const useContacts = () => {
         effectiveAgentId 
       });
       throw new Error('User not authenticated. Please refresh and try again.');
+    }
+
+    // Enforce contact limit
+    if (contactLimit != null) {
+      const { count } = await supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', effectiveAgentId);
+      if ((count || 0) >= contactLimit) {
+        throw new Error(`Contact limit reached (${contactLimit}). Upgrade your plan for more contacts.`);
+      }
     }
 
     console.log('[addContact] Inserting contact:', {
@@ -231,8 +242,24 @@ export const useContacts = () => {
     if (error) throw error;
   };
 
-  const uploadCSV = async (csvData: ContactInput[]) => {
+  const uploadCSV = async (csvData: ContactInput[], contactLimit?: number | null) => {
     if (!user || !effectiveAgentId) throw new Error('User not authenticated');
+
+    // Enforce contact limit before uploading
+    if (contactLimit != null) {
+      const { count } = await supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', effectiveAgentId);
+      const currentCount = count || 0;
+      const remaining = contactLimit - currentCount;
+      if (remaining <= 0) {
+        throw new Error(`Contact limit reached (${contactLimit}). Upgrade your plan for more contacts.`);
+      }
+      if (csvData.length > remaining) {
+        throw new Error(`Upload would exceed your contact limit. You have ${remaining} slots remaining out of ${contactLimit}. Reduce your CSV to ${remaining} contacts or fewer.`);
+      }
+    }
 
     console.log(`Processing ${csvData.length} contacts for upload`);
 

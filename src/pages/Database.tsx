@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Upload, Search, ChevronLeft, ChevronRight, Users, RefreshCw, Download } from 'lucide-react';
+import { Plus, Upload, Search, ChevronLeft, ChevronRight, Users, RefreshCw, Download, AlertTriangle } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { ContactTable } from '@/components/database/ContactTable';
 import { ContactForm } from '@/components/database/ContactForm';
@@ -23,6 +23,7 @@ import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
 import { useDNCStats } from '@/hooks/useDNCStats';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { useToast } from '@/components/ui/use-toast';
 import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,7 +31,9 @@ import { supabase } from '@/integrations/supabase/client';
 const Database = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
-  // All hooks must be called unconditionally (Rules of Hooks)
+  const { getContactLimit } = useFeatureAccess();
+  const contactLimit = getContactLimit();
+
   const {
     contacts,
     allContacts,
@@ -68,10 +71,7 @@ const Database = () => {
           ? 'Rechecking all contacts against DNC lists. This may take a few minutes.'
           : 'Checking new contacts against DNC lists. This may take a few minutes.',
       });
-      // Refresh stats after a delay to show updated counts
-      setTimeout(() => {
-        fetchDNCStats();
-      }, 5000);
+      setTimeout(() => { fetchDNCStats(); }, 5000);
     } catch (error: any) {
       console.error('DNC check failed:', error);
       toast({
@@ -85,7 +85,6 @@ const Database = () => {
   const { toast } = useToast();
   const { generateTasksForNewContacts } = useSphereSyncTasks();
 
-  // Prevent scrolling to top when search changes
   const scrollPositionRef = useRef<number>(0);
 
   const handleSearchNoScroll = useCallback((term: string) => {
@@ -93,7 +92,6 @@ const Database = () => {
     handleSearch(term);
   }, [handleSearch]);
 
-  // Restore scroll position after search results load
   useEffect(() => {
     if (!loading && scrollPositionRef.current > 0) {
       const timeoutId = setTimeout(() => {
@@ -112,6 +110,8 @@ const Database = () => {
   const [showDuplicateCleanup, setShowDuplicateCleanup] = useState(false);
   const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
   const [showBulkEditor, setShowBulkEditor] = useState(false);
+
+  const isAtLimit = contactLimit != null && totalContacts >= contactLimit;
 
   const handleExportCSV = useCallback(() => {
     if (!allContacts || allContacts.length === 0) {
@@ -137,18 +137,30 @@ const Database = () => {
 
   const handleAddContact = async (contactData: ContactInput) => {
     try {
-      await addContact(contactData);
+      const newContact = await addContact(contactData, contactLimit);
       toast({
         title: "Success",
         description: "Contact added successfully",
       });
       setShowContactForm(false);
-      // Refresh DNC stats after adding contact
+
+      // Fire DNC check for the new contact if it has a valid phone
+      if (newContact && contactData.phone && contactData.phone.replace(/\D/g, '').length >= 10) {
+        supabase.functions.invoke('dnc-single-check', {
+          body: { phone: contactData.phone, contactId: newContact.id }
+        }).then(() => {
+          console.log('[DNC] Single check completed for new contact');
+          fetchDNCStats();
+        }).catch(error => {
+          console.error('[DNC] Single check failed for new contact:', error);
+        });
+      }
+
       await fetchDNCStats();
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to add contact",
+        description: error?.message || "Failed to add contact",
         variant: "destructive",
       });
     }
@@ -159,13 +171,12 @@ const Database = () => {
    
     try {
       await updateContact(editingContact.id, contactData);
-      await fetchContacts(); // Refresh UI to show updated data
+      await fetchContacts();
       toast({
         title: "Success",
         description: "Contact updated successfully",
       });
       closeContactForm();
-      // Refresh DNC stats after updating contact
       await fetchDNCStats();
     } catch (error) {
       toast({
@@ -182,24 +193,15 @@ const Database = () => {
     try {
       await deleteContact(deletingContact.id);
       setDeletingContact(null);
-      toast({
-        title: "Success",
-        description: "Contact deleted successfully",
-      });
-      // Refresh DNC stats after deleting contact
+      toast({ title: "Success", description: "Contact deleted successfully" });
       await fetchDNCStats();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete contact",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to delete contact", variant: "destructive" });
     }
   };
 
   const handleContactEnriched = async (enrichedContact: EnrichedContact) => {
     try {
-      // Convert enriched contact back to ContactInput format
       const contactInput: ContactInput = {
         first_name: enrichedContact.first_name,
         last_name: enrichedContact.last_name,
@@ -216,8 +218,6 @@ const Database = () => {
       };
 
       await updateContact(enrichedContact.id, contactInput);
-
-      // Refresh contacts list to show updated data
       await fetchContacts();
 
       toast({
@@ -251,13 +251,10 @@ const Database = () => {
           dnc: enrichedContact.dnc,
           notes: enrichedContact.notes,
         };
-
         return updateContact(enrichedContact.id, contactInput);
       });
 
       await Promise.all(updatePromises);
-
-      // Refresh contacts list to show updated data
       await fetchContacts();
 
       toast({
@@ -276,16 +273,11 @@ const Database = () => {
 
   const handleBulkUpdate = async (updates: Partial<Contact>, contactIds: string[]) => {
     try {
-      // Update all selected contacts with the same changes
-      const updatePromises = contactIds.map(contactId =>
-        updateContact(contactId, updates)
-      );
-
+      const updatePromises = contactIds.map(contactId => updateContact(contactId, updates));
       await Promise.all(updatePromises);
       await fetchContacts();
       await fetchDNCStats();
-
-      setSelectedContacts([]); // Clear selection after update
+      setSelectedContacts([]);
     } catch (error) {
       console.error('Bulk update error:', error);
       throw error;
@@ -294,16 +286,11 @@ const Database = () => {
 
   const handleBulkDelete = async (contactIds: string[]) => {
     try {
-      // Delete all selected contacts
-      const deletePromises = contactIds.map(contactId =>
-        deleteContact(contactId)
-      );
-
+      const deletePromises = contactIds.map(contactId => deleteContact(contactId));
       await Promise.all(deletePromises);
       await fetchContacts();
       await fetchDNCStats();
-
-      setSelectedContacts([]); // Clear selection after delete
+      setSelectedContacts([]);
       toast({
         title: "Bulk Delete Complete",
         description: `Successfully deleted ${contactIds.length} contacts.`,
@@ -321,28 +308,22 @@ const Database = () => {
 
   const handleCSVUpload = async (csvData: ContactInput[]) => {
     try {
-      // Step 1: Upload contacts first (NO DNC checks during upload)
-      const insertedContacts = await uploadCSV(csvData);
+      const insertedContacts = await uploadCSV(csvData, contactLimit);
 
       toast({
         title: 'Success',
         description: `${insertedContacts.length} contacts uploaded successfully. DNC checks will run separately.`,
       });
 
-      // Step 2: Refresh the list
       await fetchContacts();
-
-      // Step 3: Generate tasks for new contacts if they match current week's categories
       await generateTasksForNewContacts(insertedContacts);
       
       setShowCSVUpload(false);
       goToPage(1);
       
-      // Step 4: Refresh DNC stats after upload
       await fetchDNCStats();
 
-      // Step 5: Trigger DNC check separately AFTER upload completes
-      // Use the proper triggerDNCCheck function to ensure it works correctly
+      // Trigger DNC check after bulk upload
       if (user?.id) {
         try {
           await triggerDNCCheck(false);
@@ -352,22 +333,19 @@ const Database = () => {
           });
         } catch (dncError: any) {
           console.error('DNC check failed:', dncError);
-          toast({
-            title: 'DNC Check Failed',
-            description: dncError?.message || 'Failed to start DNC check. You can run it manually using the button above.',
-            variant: 'destructive',
-          });
+          // Non-admins won't be able to trigger, which is expected - the monthly cron handles it
         }
       }
     } catch (error: any) {
       console.error('CSV Upload error:', error);
       
-      // Provide more specific error messages for common issues
       let errorMessage = 'Failed to upload contacts';
       if (error?.message?.includes('Duplicate contacts found')) {
         errorMessage = error.message;
       } else if (error?.message?.includes('duplicate key value')) {
         errorMessage = 'Some contacts already exist in the database. Please check for duplicates and try again.';
+      } else if (error?.message?.includes('Contact limit') || error?.message?.includes('contact limit')) {
+        errorMessage = error.message;
       } else if (error?.message) {
         errorMessage = error.message;
       }
@@ -377,8 +355,29 @@ const Database = () => {
         description: errorMessage,
         variant: 'destructive',
       });
-    } finally {
-      // Don't close dialog on error - user keeps their file selection and mapping
+    }
+  };
+
+  const handleRecheckContactDNC = async (contact: Contact) => {
+    if (!contact.phone) {
+      toast({ title: 'No Phone', description: 'Contact has no phone number to check.', variant: 'destructive' });
+      return;
+    }
+    try {
+      toast({ title: 'Checking DNC...', description: `Rechecking ${contact.first_name} ${contact.last_name}` });
+      const { data, error } = await supabase.functions.invoke('dnc-single-check', {
+        body: { phone: contact.phone, contactId: contact.id }
+      });
+      if (error) throw error;
+      await fetchContacts();
+      await fetchDNCStats();
+      toast({
+        title: data?.isDNC ? '⚠️ DNC Flagged' : '✅ Safe to Call',
+        description: `${contact.first_name} ${contact.last_name} has been rechecked.`,
+      });
+    } catch (error: any) {
+      console.error('DNC recheck failed:', error);
+      toast({ title: 'Recheck Failed', description: error?.message || 'Failed to recheck contact.', variant: 'destructive' });
     }
   };
 
@@ -409,7 +408,6 @@ const Database = () => {
     return pages;
   };
 
-  // Show loading state while auth is being checked
   if (authLoading) {
     return (
       <Layout>
@@ -425,7 +423,6 @@ const Database = () => {
     );
   }
 
-  // Redirect to auth if not logged in
   if (!user) {
     return null;
   }
@@ -439,6 +436,20 @@ const Database = () => {
             <p className="text-muted-foreground text-sm sm:text-base">
               Manage your contacts and leads
             </p>
+            {/* Contact capacity indicator */}
+            {contactLimit != null && (
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant={isAtLimit ? "destructive" : "secondary"} className="text-xs">
+                  {totalContacts} / {contactLimit} contacts
+                </Badge>
+                {isAtLimit && (
+                  <span className="text-xs text-destructive flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Limit reached
+                  </span>
+                )}
+              </div>
+            )}
           </div>
          
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 self-start sm:self-auto">
@@ -446,6 +457,8 @@ const Database = () => {
             <Button
                 onClick={() => setShowContactForm(true)}
                 className="sm:w-auto"
+                disabled={isAtLimit}
+                title={isAtLimit ? `Contact limit reached (${contactLimit})` : undefined}
             >
                 <Plus className="h-4 w-4 mr-2" />
                 <span className="hidden xs:inline">Add Contact</span>
@@ -455,6 +468,8 @@ const Database = () => {
               onClick={() => setShowCSVUpload(true)}
               variant="outline"
                 className="sm:w-auto"
+                disabled={isAtLimit}
+                title={isAtLimit ? `Contact limit reached (${contactLimit})` : undefined}
             >
               <Upload className="h-4 w-4 mr-2" />
                 <span className="hidden xs:inline">Upload CSV</span>
@@ -499,7 +514,6 @@ const Database = () => {
         {/* DNC Statistics Dashboard - Admin Only */}
         {isAdmin && (
           <>
-            {/* DNC Check Progress Indicator */}
             {dncChecking && (
               <Alert className="border-primary/50 bg-primary/10">
                 <RefreshCw className="h-4 w-4 animate-spin" />
@@ -540,7 +554,22 @@ const Database = () => {
           </>
         )}
         
-        {/* Data Quality Dashboard */}
+        {/* DNC Stats (read-only) for non-admins */}
+        {!isAdmin && (
+          <DNCStatsCard 
+            stats={stats || {
+              totalContacts: 0,
+              dncContacts: 0,
+              nonDncContacts: 0,
+              neverChecked: 0,
+              missingPhone: 0,
+              needsRecheck: 0,
+              lastChecked: null,
+            }} 
+            loading={dncLoading} 
+          />
+        )}
+        
         <DataQualityDashboard
           contacts={allContacts || []}
           onBulkEnriched={handleBulkContactsEnriched}
@@ -580,6 +609,8 @@ const Database = () => {
                         showSelection={true}
                         selectedContacts={selectedContacts || []}
                         onSelectionChange={setSelectedContacts}
+                        isAdmin={isAdmin}
+                        onRecheckDNC={isAdmin ? handleRecheckContactDNC : undefined}
                       />
                 </div>
                 {totalPages > 1 && (
@@ -600,7 +631,6 @@ const Database = () => {
                         <span className="hidden sm:inline ml-1">Previous</span>
                       </Button>
                      
-                      {/* Mobile: Show fewer page numbers */}
                       <div className="hidden sm:flex items-center space-x-1">
                       {generatePageNumbers().map((page) => (
                         <Button
@@ -615,7 +645,6 @@ const Database = () => {
                       ))}
                       </div>
 
-                      {/* Mobile: Simple current page indicator */}
                       <div className="sm:hidden flex items-center space-x-2">
                         <span className="text-sm font-medium px-3 py-1 bg-muted rounded">
                           {currentPage}
@@ -654,7 +683,6 @@ const Database = () => {
           />
         )}
         
-        {/* Duplicate Cleanup Dialog */}
         <Dialog open={showDuplicateCleanup} onOpenChange={setShowDuplicateCleanup}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -664,7 +692,6 @@ const Database = () => {
           </DialogContent>
         </Dialog>
         
-        {/* Contact Touchpoints Dialog */}
         {viewingTouchpointsContact && (
           <ContactActivitiesDialog
             open={!!viewingTouchpointsContact}

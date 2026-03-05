@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 
 export interface DNCStats {
   totalContacts: number;
@@ -14,6 +15,7 @@ export interface DNCStats {
 
 export const useDNCStats = () => {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const [stats, setStats] = useState<DNCStats>({
     totalContacts: 0,
     dncContacts: 0,
@@ -109,6 +111,9 @@ export const useDNCStats = () => {
   }, [user, effectiveAgentId]);
 
   const triggerDNCCheck = useCallback(async (forceRecheck: boolean = false) => {
+    if (!isAdmin) {
+      throw new Error('Only admins can manually trigger DNC checks');
+    }
     if (!user || !effectiveAgentId) {
       throw new Error('User not authenticated');
     }
@@ -152,7 +157,7 @@ export const useDNCStats = () => {
     } finally {
       setChecking(false);
     }
-  }, [user, effectiveAgentId, fetchDNCStats]);
+  }, [user, effectiveAgentId, fetchDNCStats, isAdmin]);
 
   // Auto-fetch stats when agent changes or on mount
   useEffect(() => {
