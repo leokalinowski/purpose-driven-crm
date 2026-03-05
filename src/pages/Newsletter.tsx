@@ -4,6 +4,7 @@ import { Layout } from "@/components/layout/Layout";
 import { TemplateList } from "@/components/newsletter/builder/TemplateList";
 import { NewsletterAnalyticsDashboard } from "@/components/newsletter/analytics/NewsletterAnalyticsDashboard";
 import { NewsletterScheduleSettings } from "@/components/newsletter/NewsletterScheduleSettings";
+import { NewsletterTaskCard } from "@/components/newsletter/NewsletterTaskCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Newsletter() {
@@ -25,6 +26,8 @@ export default function Newsletter() {
           </div>
           <NewsletterScheduleSettings />
         </div>
+
+        <NewsletterTaskCard />
 
         <Tabs defaultValue="builder" className="w-full">
           <TabsList>
