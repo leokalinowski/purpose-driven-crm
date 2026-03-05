@@ -96,7 +96,7 @@ export function AIGenerateDialog({ open, onClose }: AIGenerateDialogProps) {
                 value={prompts[key]}
                 onChange={(e) => setPrompts(prev => ({ ...prev, [key]: e.target.value }))}
                 disabled={isGenerating || selectedPrompt !== key}
-                className="min-h-[80px] text-sm"
+                className={`min-h-[80px] text-sm transition-opacity ${selectedPrompt !== key ? 'opacity-40' : ''}`}
                 rows={3}
               />
             </div>

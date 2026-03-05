@@ -1,10 +1,9 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { Resend } from 'https://esm.sh/resend@4.0.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-service-key',
 };
 
 const DELAY_BETWEEN_EMAILS_MS = 200;
@@ -32,6 +31,7 @@ interface AgentProfile {
   user_id: string;
   first_name: string | null;
   last_name: string | null;
+  full_name: string | null;
   email: string | null;
   phone_number: string | null;
   office_number: string | null;
@@ -249,7 +249,7 @@ function renderBlocksToHtml(blocks: Block[], styles: Partial<GlobalStyles>): str
 }
 
 function replaceAgentPlaceholders(html: string, agent: AgentProfile, marketing: MarketingSettings | null): string {
-  const name = [agent.first_name, agent.last_name].filter(Boolean).join(' ') || '';
+  const name = agent.full_name || [agent.first_name, agent.last_name].filter(Boolean).join(' ') || '';
 
   const replacements: Record<string, string | undefined> = {
     '{{agent_name}}': name,
@@ -321,30 +321,40 @@ function generatePlainText(html: string): string {
 
 // ─── Main handler ────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // ── Auth: validate caller's JWT and role ──
+    // ── Auth: validate caller's JWT, service-key bypass, or cron ──
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
+    const xServiceKey = req.headers.get('x-service-key');
+    const isServiceCall = xServiceKey === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    const supabaseAuth = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    let callerId: string | null = null;
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user: callerUser }, error: userError } = await supabaseAuth.auth.getUser(token);
-    if (userError || !callerUser) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    if (isServiceCall) {
+      // Trusted internal call from newsletter-scheduled-send — skip JWT check
+      callerId = null; // will be set from body.agent_id
+    } else {
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const supabaseAuth = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader } } }
+      );
+
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user: callerUser }, error: userError } = await supabaseAuth.auth.getUser(token);
+      if (userError || !callerUser) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      callerId = callerUser.id;
     }
-    const callerId = callerUser.id;
 
     const body = await req.json();
     const { template_id, agent_id, subject, sender_name, recipient_filter, test_mode, test_email } = body;
@@ -353,13 +363,13 @@ serve(async (req) => {
       throw new Error('template_id and agent_id are required');
     }
 
-    // Verify caller is either the agent themselves or an admin
+    // Verify caller is either the agent themselves, an admin, or a service call
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    if (callerId !== agent_id) {
+    if (callerId && callerId !== agent_id) {
       // Check if caller is admin
       const { data: roleData } = await supabase
         .from('user_roles')

@@ -115,17 +115,17 @@ export function TemplateList() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0">
         <div>
           <CardTitle>Email Templates</CardTitle>
           <CardDescription>Create and manage your newsletter templates</CardDescription>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setShowAIDialog(true)}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => setShowAIDialog(true)}>
             <Sparkles className="h-4 w-4 mr-2" />
             AI Generate
           </Button>
-          <Button onClick={handleCreate} disabled={isSaving}>
+          <Button size="sm" onClick={handleCreate} disabled={isSaving}>
             <Plus className="h-4 w-4 mr-2" />
             New Template
           </Button>
@@ -167,11 +167,11 @@ export function TemplateList() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 px-4 py-3 border-t border-border">
+                <div className="flex items-center gap-1 px-4 py-3 border-t border-border flex-wrap">
                   <Button size="sm" variant="outline" onClick={() => navigate(`/newsletter-builder/${t.id}`)}>
                     <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
                   </Button>
-                  <Button size="sm" variant="default" className="flex-1" onClick={() => setSendTemplate({ id: t.id, name: t.name })}>
+                  <Button size="sm" variant="default" className="flex-1 min-w-[80px]" onClick={() => setSendTemplate({ id: t.id, name: t.name })}>
                     <Send className="h-3.5 w-3.5 mr-1.5" /> Send
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => handleDuplicate(t)} disabled={isSaving}>

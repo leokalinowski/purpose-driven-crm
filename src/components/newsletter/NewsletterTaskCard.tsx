@@ -1,8 +1,10 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Mail, CheckCircle2, Clock, CalendarDays } from 'lucide-react';
 import { useNewsletterTaskSettings } from '@/hooks/useNewsletterTaskSettings';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { startOfWeek, endOfWeek } from 'date-fns';
 
 function getISOWeekNumber(d: Date): number {
@@ -12,8 +14,29 @@ function getISOWeekNumber(d: Date): number {
   return Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
-export function NewsletterTaskCard({ hasCampaignThisWeek }: { hasCampaignThisWeek?: boolean }) {
+export function NewsletterTaskCard() {
+  const { user } = useAuth();
   const { settings, loading } = useNewsletterTaskSettings();
+  const [hasCampaignThisPeriod, setHasCampaignThisPeriod] = useState(false);
+
+  // Self-query newsletter_campaigns for completion state
+  useEffect(() => {
+    if (!user) return;
+    const now = new Date();
+    const ws = startOfWeek(now, { weekStartsOn: 1 });
+    const we = endOfWeek(now, { weekStartsOn: 1 });
+
+    supabase
+      .from('newsletter_campaigns')
+      .select('id', { count: 'exact', head: true })
+      .eq('created_by', user.id)
+      .eq('status', 'sent')
+      .gte('send_date', ws.toISOString().split('T')[0])
+      .lte('send_date', we.toISOString().split('T')[0])
+      .then(({ count }) => {
+        setHasCampaignThisPeriod((count ?? 0) > 0);
+      });
+  }, [user]);
 
   if (loading) return null;
 
@@ -51,7 +74,7 @@ export function NewsletterTaskCard({ hasCampaignThisWeek }: { hasCampaignThisWee
     }
   }
 
-  const isComplete = hasCampaignThisWeek === true;
+  const isComplete = hasCampaignThisPeriod;
 
   return (
     <Card className={`border-l-4 ${isDue && !isComplete ? 'border-l-primary bg-primary/5' : isComplete ? 'border-l-green-500 bg-green-50/50 dark:bg-green-950/20' : 'border-l-muted'}`}>

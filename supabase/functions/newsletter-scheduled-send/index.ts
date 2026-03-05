@@ -7,11 +7,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Only allow cron jobs or admin
-    const isCron = req.headers.get('X-Cron-Job') === 'true';
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Allow cron jobs or authenticated admins
+    const isCron = req.headers.get('X-Cron-Job') === 'true';
 
     if (!isCron) {
       const authHeader = req.headers.get('Authorization');
@@ -57,12 +58,13 @@ Deno.serve(async (req) => {
         // Mark as sending
         await supabase.from('newsletter_campaigns').update({ status: 'sending' }).eq('id', campaign.id);
 
-        // Call newsletter-template-send internally
+        // Call newsletter-template-send with X-Service-Key for auth bypass
         const sendResponse = await fetch(`${supabaseUrl}/functions/v1/newsletter-template-send`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
+            'x-service-key': supabaseServiceKey,
           },
           body: JSON.stringify({
             template_id: campaign.template_id,
@@ -78,7 +80,6 @@ Deno.serve(async (req) => {
           console.error(`Campaign ${campaign.id} send failed:`, result.error);
           await supabase.from('newsletter_campaigns').update({ status: 'failed' }).eq('id', campaign.id);
         } else {
-          // The newsletter-template-send creates its own campaign record, so update this one
           await supabase.from('newsletter_campaigns').update({
             status: 'sent',
             recipient_count: result.emails_sent,
