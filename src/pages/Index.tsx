@@ -2,109 +2,95 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Layout } from '@/components/layout/Layout';
-import { AgentMetricsCards } from '@/components/agent/AgentMetricsCards';
-import { AgentActivityWidget } from '@/components/agent/AgentActivityWidget';
-import { AgentPerformanceCharts } from '@/components/agent/AgentPerformanceCharts';
-import { ExportButtons } from '@/components/dashboard/ExportButtons';
-import { DashboardRefreshButton } from '@/components/dashboard/DashboardRefreshButton';
-import { SupportWidget } from '@/components/support/SupportWidget';
-import { EventsWidget } from '@/components/events/EventsWidget';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { buildAuthRedirectPath } from '@/utils/authRedirect';
+import { useDashboardBlocks } from '@/hooks/useDashboardBlocks';
+import { WeeklyTouchpoints } from '@/components/dashboard/WeeklyTouchpoints';
+import { WeeklyTasksBySystem } from '@/components/dashboard/WeeklyTasksBySystem';
+import { TransactionOpportunity } from '@/components/dashboard/TransactionOpportunity';
+import { TaskPerformance } from '@/components/dashboard/TaskPerformance';
+import { OverdueTasks } from '@/components/dashboard/OverdueTasks';
+import { DashboardRefreshButton } from '@/components/dashboard/DashboardRefreshButton';
+import { Button } from '@/components/ui/button';
+import { RefreshCw } from 'lucide-react';
 
 const Index = () => {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const { data, loading, error, refresh } = useDashboardBlocks();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       navigate(buildAuthRedirectPath(), { replace: true });
-    } else if (user && !loading) {
-      document.title = 'Agent Dashboard | Real Estate on Purpose';
+    } else if (user && !authLoading) {
+      document.title = 'Dashboard | Real Estate on Purpose';
     }
-  }, [user, loading, navigate]);
+  }, [user, authLoading, navigate]);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <Layout>
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="flex items-center justify-between">
             <div className="space-y-2">
-              <Skeleton className="h-9 w-64" />
-              <Skeleton className="h-5 w-96" />
+              <Skeleton className="h-9 w-48" />
+              <Skeleton className="h-5 w-72" />
             </div>
-            <div className="flex items-center gap-2 sm:gap-4">
-              <Skeleton className="h-10 w-32" />
-              <Skeleton className="h-10 w-32" />
-            </div>
+            <Skeleton className="h-10 w-24" />
           </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Card key={i}>
-                <CardHeader>
-                  <Skeleton className="h-4 w-24" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-16 mb-2" />
-                  <Skeleton className="h-3 w-32" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-48" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-64 w-full" />
-            </CardContent>
-          </Card>
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardHeader><Skeleton className="h-6 w-48" /></CardHeader>
+              <CardContent><Skeleton className="h-32 w-full" /></CardContent>
+            </Card>
+          ))}
         </div>
       </Layout>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <Layout>
-      <div id="agent-dashboard-root" className="space-y-6">
+      <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Agent Task Performance</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
-              Focus on what matters most - your daily tasks, SphereSync progress, and conversion metrics.
+              Your week at a glance — touchpoints, tasks, and opportunities.
             </p>
           </div>
-          <div className="flex items-center gap-2 sm:gap-4 self-start sm:self-auto">
-            <DashboardRefreshButton />
-            <ExportButtons />
-          </div>
+          <Button variant="outline" size="sm" onClick={refresh} className="self-start">
+            <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+          </Button>
         </div>
 
-        {/* Personal KPI Cards */}
-        <div>
-          <AgentMetricsCards />
-        </div>
+        {error && (
+          <Card className="border-destructive/40 bg-destructive/5 p-4">
+            <p className="text-sm text-destructive">{error}</p>
+          </Card>
+        )}
 
-        {/* Support & Action Items Widget + Events Widget */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <SupportWidget />
-          <EventsWidget />
-        </div>
+        {data && (
+          <>
+            {/* Block 1: Weekly Touchpoints */}
+            <WeeklyTouchpoints data={data.blockOne} />
 
-        {/* Today's Focus & Priority Tasks */}
-        <div>
-          <AgentActivityWidget />
-        </div>
+            {/* Block 2 + Block 3 side by side on large screens */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <WeeklyTasksBySystem data={data.blockTwo} />
+              <TransactionOpportunity data={data.blockThree} />
+            </div>
 
-        {/* Performance Charts */}
-        <div>
-          <AgentPerformanceCharts />
-        </div>
+            {/* Block 4: Performance */}
+            <TaskPerformance data={data.blockFour} />
+
+            {/* Block 5: Overdue */}
+            <OverdueTasks data={data.blockFive} />
+          </>
+        )}
       </div>
     </Layout>
   );

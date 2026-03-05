@@ -84,7 +84,7 @@ function AdminSubGroup({ label, icon: Icon, items, pathname }: {
 }
 
 const menuItems = [
-  { title: 'Agent Dashboard', url: '/', icon: Home },
+  { title: 'Dashboard', url: '/', icon: Home },
   { title: 'SphereSync', url: '/spheresync-tasks', icon: Phone },
   { title: 'Database', url: '/database', icon: Users },
   { title: 'Events', url: '/events', icon: Calendar },
