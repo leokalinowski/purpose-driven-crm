@@ -35,7 +35,7 @@ export interface EventPreviewData {
 
 interface EmailTemplateEditorProps {
   eventId: string
-  emailType: 'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show' | 'invitation'
+  emailType: 'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show' | 'invitation' | 'invitation_followup_1' | 'invitation_followup_2'
   onSave?: () => void
   eventData?: EventPreviewData
 }
@@ -46,11 +46,15 @@ const EMAIL_TYPE_LABELS: Record<string, string> = {
   reminder_1day: '1-Day Reminder',
   thank_you: 'Thank You (Post-Event)',
   no_show: 'No-Show Follow-up',
-  invitation: 'Event Invitation'
+  invitation: 'Event Invitation',
+  invitation_followup_1: 'Invitation Follow-Up #1',
+  invitation_followup_2: 'Invitation Follow-Up #2'
 }
 
 const DEFAULT_SUBJECTS: Record<string, string> = {
   invitation: "You're Invited to {event_title}",
+  invitation_followup_1: "Reminder: You're Invited to {event_title}",
+  invitation_followup_2: "Last Chance to RSVP for {event_title}!",
   confirmation: "You're confirmed for {event_title}",
   reminder_7day: "Reminder: {event_title} is in 7 days",
   reminder_1day: "Reminder: {event_title} is tomorrow!",

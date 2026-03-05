@@ -30,6 +30,8 @@ export interface VisualEditorData {
 const DEFAULT_HEADINGS: Record<string, string> = {
   confirmation: 'RSVP Confirmed! 🎉',
   invitation: "You're Invited! ✉️",
+  invitation_followup_1: 'We Saved You a Spot! 🎟️',
+  invitation_followup_2: 'Last Chance to RSVP! ⏳',
   reminder_7day: 'Event Reminder 📅',
   reminder_1day: 'Event Tomorrow! ⏰',
   thank_you: 'Thank You for Attending! 🙏',
@@ -46,6 +48,18 @@ const DEFAULT_PARAGRAPHS: Record<string, string[]> = {
     'Hi there,',
     "You're personally invited to {event_title} — an exclusive event hosted by {agent_name} that you won't want to miss!",
     "Whether you're looking to connect, learn, or simply enjoy an incredible experience, this is your chance. Spots are limited, so don't wait — RSVP today to reserve yours!",
+  ],
+  invitation_followup_1: [
+    'Hi there,',
+    "Just a friendly reminder — you're invited to {event_title} and we'd love to see you there!",
+    "We noticed you haven't RSVP'd yet. Spots are filling up fast, and we don't want you to miss out on an incredible experience with great networking, insights, and more.",
+    "It only takes a moment to reserve your spot — click below before it's too late!",
+  ],
+  invitation_followup_2: [
+    'Hi there,',
+    "This is your final reminder — {event_title} is right around the corner and we have a spot waiting for you!",
+    "This is your last chance to join us. Don't miss out on what's shaping up to be an unforgettable event. Once spots are gone, they're gone!",
+    "RSVP now and we'll see you there!",
   ],
   reminder_7day: [
     'Hi there,',
@@ -385,7 +399,9 @@ function parseHtmlToData(html: string): Partial<VisualEditorData> {
 }
 
 function getDefaultData(emailType: string, agentColors?: { primary: string; secondary: string }): VisualEditorData {
-  const showRsvp = emailType === 'invitation' || emailType === 'confirmation'
+  const isInvitationType = emailType === 'invitation' || emailType === 'invitation_followup_1' || emailType === 'invitation_followup_2'
+  const showRsvp = isInvitationType || emailType === 'confirmation'
+  const rsvpText = isInvitationType ? 'RSVP Now' : 'View Event Details'
   return {
     heading: DEFAULT_HEADINGS[emailType] || "You're Invited! ✉️",
     paragraphs: DEFAULT_PARAGRAPHS[emailType] || ['Hi there,', 'Thank you for your interest in {event_title}.'],
@@ -401,7 +417,7 @@ function getDefaultData(emailType: string, agentColors?: { primary: string; seco
     showWebsite: true,
     showEventDetails: emailType !== 'thank_you' && emailType !== 'no_show',
     showRsvpButton: showRsvp,
-    rsvpButtonText: emailType === 'invitation' ? 'RSVP Now' : 'View Event Details',
+    rsvpButtonText: rsvpText,
     primaryColor: agentColors?.primary || '#2563eb',
     secondaryColor: agentColors?.secondary || '#1e40af',
   }

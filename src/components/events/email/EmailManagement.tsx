@@ -6,8 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { EmailTemplateEditor, EventPreviewData } from './EmailTemplateEditor'
 import { EmailMetricsDashboard } from './EmailMetricsDashboard'
-import { useEmailTemplates } from '@/hooks/useEmailTemplates'
-import { Send, Mail, Calendar, Heart, UserX, Users } from 'lucide-react'
+import { useEmailTemplates, useEmailMetrics } from '@/hooks/useEmailTemplates'
+import { Send, Mail, Calendar, Heart, UserX, Users, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/integrations/supabase/client'
 
@@ -26,25 +26,37 @@ interface EventOption {
 const EMAIL_TYPES = [
   {
     key: 'invitation' as const,
-    label: 'Event Invitation',
+    label: 'Invitation',
     icon: Users,
     description: 'Invite contacts from the agent database to RSVP'
   },
   {
+    key: 'invitation_followup_1' as const,
+    label: 'Follow-Up #1',
+    icon: RefreshCw,
+    description: 'Re-invite contacts who haven\'t RSVP\'d yet'
+  },
+  {
+    key: 'invitation_followup_2' as const,
+    label: 'Follow-Up #2',
+    icon: RefreshCw,
+    description: 'Final reminder for contacts who still haven\'t RSVP\'d'
+  },
+  {
     key: 'confirmation' as const,
-    label: 'RSVP Confirmation',
+    label: 'Confirmation',
     icon: Mail,
     description: 'Sent immediately when someone RSVPs'
   },
   {
     key: 'reminder_7day' as const,
-    label: '7-Day Reminder',
+    label: '7-Day',
     icon: Calendar,
     description: 'Sent 7 days before the event'
   },
   {
     key: 'reminder_1day' as const,
-    label: '1-Day Reminder',
+    label: '1-Day',
     icon: Calendar,
     description: 'Sent 1 day before the event'
   },
@@ -56,14 +68,14 @@ const EMAIL_TYPES = [
   },
   {
     key: 'no_show' as const,
-    label: 'No-Show Follow-up',
+    label: 'No-Show',
     icon: UserX,
     description: 'Sent after the event to no-shows'
   }
 ]
 
 export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initialEventId, eventTitle: initialEventTitle }) => {
-  const [selectedType, setSelectedType] = useState<'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show' | 'invitation'>('invitation')
+  const [selectedType, setSelectedType] = useState<'confirmation' | 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show' | 'invitation' | 'invitation_followup_1' | 'invitation_followup_2'>('invitation')
   const [sending, setSending] = useState(false)
   const [events, setEvents] = useState<EventOption[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>(initialEventId || '')
@@ -76,7 +88,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
   const currentEventId = selectedEventId || initialEventId
   const currentEventTitle = selectedEventTitle || initialEventTitle
 
-  const { sendReminderEmails, sendThankYouEmails, sendNoShowEmails, sendInvitationEmails, getTemplateByType } = useEmailTemplates(currentEventId)
+  const { sendReminderEmails, sendThankYouEmails, sendNoShowEmails, sendInvitationEmails, sendFollowUpEmails, getTemplateByType } = useEmailTemplates(currentEventId)
   
 
   // Load available events if no eventId provided
@@ -225,6 +237,12 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
         case 'invitation':
           result = await sendInvitationEmails(currentEventId)
           break
+        case 'invitation_followup_1':
+          result = await sendFollowUpEmails(currentEventId, 1)
+          break
+        case 'invitation_followup_2':
+          result = await sendFollowUpEmails(currentEventId, 2)
+          break
         case 'reminder_7day':
         case 'reminder_1day':
           result = await sendReminderEmails(currentEventId, selectedType)
@@ -248,7 +266,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
     }
   }
 
-  const canSendManually = ['invitation', 'reminder_7day', 'reminder_1day', 'thank_you', 'no_show'].includes(selectedType)
+  const canSendManually = ['invitation', 'invitation_followup_1', 'invitation_followup_2', 'reminder_7day', 'reminder_1day', 'thank_you', 'no_show'].includes(selectedType)
 
   if (!currentEventId) {
     return (
@@ -313,7 +331,7 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
         </CardHeader>
         <CardContent>
           <Tabs value={selectedType} onValueChange={(value) => setSelectedType(value as any)}>
-            <TabsList className="grid w-full grid-cols-6">
+            <TabsList className="grid w-full grid-cols-8">
               {EMAIL_TYPES.map((type) => (
                 <TabsTrigger key={type.key} value={type.key} className="flex items-center gap-2">
                   <type.icon className="h-4 w-4" />
