@@ -3,9 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Target, ExternalLink, ChevronDown, ChevronUp, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Target, ExternalLink, ChevronDown, ChevronUp, Sparkles, CheckCircle2, AlertTriangle, Phone, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { BlockFiveOverdue } from '@/hooks/useDashboardBlocks';
+import type { BlockFiveOverdue, OverdueTask } from '@/hooks/useDashboardBlocks';
 
 interface Props {
   data: BlockFiveOverdue;
@@ -17,24 +17,18 @@ const systemLabels: Record<string, string> = {
   coaching: 'Scoreboard',
 };
 
-const systemRoutes: Record<string, string> = {
-  spheresync: '/spheresync-tasks',
-  events: '/events',
-  coaching: '/coaching',
-};
-
 function getScoreColor(score: number) {
   if (score >= 80) return { border: 'border-emerald-500/30', bg: 'bg-emerald-500/5', ring: 'text-emerald-500', track: 'text-emerald-500/20' };
   if (score >= 50) return { border: 'border-amber-500/30', bg: 'bg-amber-500/5', ring: 'text-amber-500', track: 'text-amber-500/20' };
   return { border: 'border-destructive/30', bg: 'bg-destructive/5', ring: 'text-destructive', track: 'text-destructive/20' };
 }
 
-function getNudgeText(score: number, milestone: { score: number; tasksNeeded: number }, priorityCount: number) {
-  if (score >= 95) return "You're crushing it! 🔥";
-  if (score >= 80 && priorityCount === 0) return "Strong week — keep the momentum! 💪";
-  if (score >= 80) return `Complete ${milestone.tasksNeeded} more task${milestone.tasksNeeded !== 1 ? 's' : ''} to hit ${milestone.score}!`;
-  if (score >= 50) return `${milestone.tasksNeeded} task${milestone.tasksNeeded !== 1 ? 's' : ''} away from ${milestone.score} — you've got this!`;
-  return `Let's turn this around — start with ${milestone.tasksNeeded} task${milestone.tasksNeeded !== 1 ? 's' : ''} to reach ${milestone.score}.`;
+function getNudgeText(score: number, overdueCount: number) {
+  if (score >= 95) return "All caught up — your consistency is paying off!";
+  if (score >= 80 && overdueCount === 0) return "Great momentum this week. Keep showing up for your sphere.";
+  if (score >= 80) return `You're close — knock out these ${overdueCount} task${overdueCount !== 1 ? 's' : ''} to stay on track.`;
+  if (score >= 50) return `You have ${overdueCount} people waiting to hear from you. A quick call today can make the difference.`;
+  return "Your sphere needs you — start with just one call to build momentum.";
 }
 
 function ScoreGauge({ score }: { score: number }) {
@@ -64,20 +58,83 @@ function ScoreGauge({ score }: { score: number }) {
   );
 }
 
-export function OverdueTasks({ data }: Props) {
-  const navigate = useNavigate();
-  const [showAll, setShowAll] = useState(false);
-  const [cleanupOpen, setCleanupOpen] = useState(false);
+type WeekGroup = {
+  weekNumber: number;
+  system: string;
+  tasks: OverdueTask[];
+};
 
-  const { accountabilityScore, priorityTasks, cleanupSummary, nextMilestone } = data;
+function groupByWeek(tasks: OverdueTask[]): WeekGroup[] {
+  const map = new Map<string, WeekGroup>();
+  tasks.forEach(t => {
+    const wk = t.weekNumber || 0;
+    const key = `${t.system}-${wk}`;
+    if (!map.has(key)) {
+      map.set(key, { weekNumber: wk, system: t.system, tasks: [] });
+    }
+    map.get(key)!.tasks.push(t);
+  });
+  return Array.from(map.values()).sort((a, b) => a.weekNumber - b.weekNumber);
+}
+
+function WeekGroupRow({ group }: { group: WeekGroup }) {
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+  const label = systemLabels[group.system] || group.system;
+  const weekLabel = group.weekNumber ? `W${group.weekNumber}` : '';
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button className="flex items-center justify-between w-full p-2.5 rounded-md bg-background border text-sm hover:bg-muted/50 transition-colors">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs shrink-0">{label}</Badge>
+            {weekLabel && <span className="text-muted-foreground text-xs">{weekLabel}</span>}
+            <span className="font-medium">{group.tasks.length} task{group.tasks.length !== 1 ? 's' : ''}</span>
+          </div>
+          {open ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pt-1 space-y-1 pl-3">
+        {group.tasks.map(task => (
+          <div key={task.id} className="flex items-center justify-between p-2 rounded-md bg-muted/30 border text-sm">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              {task.title.startsWith('Call') ? (
+                <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              ) : task.title.startsWith('Text') ? (
+                <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              ) : null}
+              <span className="truncate">{task.title}</span>
+            </div>
+            {task.navigateTo && (
+              <Button variant="ghost" size="sm" className="shrink-0 h-7" onClick={() => navigate(task.navigateTo!)}>
+                <ExternalLink className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+export function OverdueTasks({ data }: Props) {
+  const { accountabilityScore, priorityTasks } = data;
   const colors = getScoreColor(accountabilityScore);
-  const nudge = getNudgeText(accountabilityScore, nextMilestone, priorityTasks.length);
-  const visiblePriority = showAll ? priorityTasks : priorityTasks.slice(0, 5);
+  const nudge = getNudgeText(accountabilityScore, priorityTasks.length);
 
   // Don't render if perfect score and nothing overdue
-  if (accountabilityScore >= 100 && priorityTasks.length === 0 && cleanupSummary.total === 0) {
+  if (accountabilityScore >= 100 && priorityTasks.length === 0) {
     return null;
   }
+
+  // Group sphere tasks by week, keep events/coaching as-is
+  const sphereTasks = priorityTasks.filter(t => t.system === 'spheresync');
+  const otherTasks = priorityTasks.filter(t => t.system !== 'spheresync');
+  const weekGroups = groupByWeek(sphereTasks);
+
+  // Group other tasks too (events, coaching)
+  const otherGroups = groupByWeek(otherTasks);
 
   return (
     <Card className={`${colors.border} ${colors.bg}`}>
@@ -88,19 +145,22 @@ export function OverdueTasks({ data }: Props) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
-        {/* Section 1: Score */}
+        {/* Score */}
         <div className="text-center space-y-2">
           <ScoreGauge score={accountabilityScore} />
           <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
             {accountabilityScore >= 80 ? <Sparkles className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
             {nudge}
           </p>
+          <p className="text-[11px] text-muted-foreground/70">
+            Based on your last 4 weeks of task completion across SphereSync, Events, and Scoreboard.
+          </p>
         </div>
 
-        {/* Section 2: Priority Tasks */}
+        {/* Priority Tasks grouped by week */}
         <div>
           <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-            This Week's Priority
+            Recent Overdue
             {priorityTasks.length > 0 && (
               <Badge variant="secondary" className="text-xs">{priorityTasks.length}</Badge>
             )}
@@ -111,64 +171,16 @@ export function OverdueTasks({ data }: Props) {
               No recent overdue tasks — nice work!
             </div>
           ) : (
-            <ul className="space-y-1.5">
-              {visiblePriority.map(task => (
-                <li key={task.id} className="flex items-center justify-between p-2 rounded-md bg-background border">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs shrink-0">
-                        {systemLabels[task.system] || task.system}
-                      </Badge>
-                      <span className="text-sm truncate">{task.title}</span>
-                    </div>
-                    <p className="text-xs text-destructive mt-0.5">
-                      {task.daysOverdue} day{task.daysOverdue !== 1 ? 's' : ''} overdue
-                    </p>
-                  </div>
-                  {task.navigateTo && (
-                    <Button variant="ghost" size="sm" className="shrink-0 h-7" onClick={() => navigate(task.navigateTo!)}>
-                      <ExternalLink className="h-3 w-3" />
-                    </Button>
-                  )}
-                </li>
+            <div className="space-y-1.5">
+              {weekGroups.map(g => (
+                <WeekGroupRow key={`${g.system}-${g.weekNumber}`} group={g} />
               ))}
-            </ul>
-          )}
-          {priorityTasks.length > 5 && (
-            <Button variant="ghost" size="sm" className="w-full mt-1 text-xs" onClick={() => setShowAll(!showAll)}>
-              {showAll ? 'Show less' : `Show ${priorityTasks.length - 5} more`}
-            </Button>
+              {otherGroups.map(g => (
+                <WeekGroupRow key={`${g.system}-${g.weekNumber}`} group={g} />
+              ))}
+            </div>
           )}
         </div>
-
-        {/* Section 3: Cleanup Summary */}
-        {cleanupSummary.total > 0 && (
-          <Collapsible open={cleanupOpen} onOpenChange={setCleanupOpen}>
-            <CollapsibleTrigger asChild>
-              <Button variant="outline" size="sm" className="w-full justify-between text-xs h-8">
-                <span>{cleanupSummary.total} older task{cleanupSummary.total !== 1 ? 's' : ''} need attention</span>
-                {cleanupOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-2 space-y-1.5">
-              {(['spheresync', 'events', 'coaching'] as const).map(sys => {
-                const count = cleanupSummary[sys];
-                if (count === 0) return null;
-                return (
-                  <div key={sys} className="flex items-center justify-between p-2 rounded-md bg-background border text-sm">
-                    <span>
-                      <span className="font-medium">{systemLabels[sys]}</span>
-                      <span className="text-muted-foreground ml-1.5">({count})</span>
-                    </span>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate(systemRoutes[sys])}>
-                      Go to page <ExternalLink className="h-3 w-3 ml-1" />
-                    </Button>
-                  </div>
-                );
-              })}
-            </CollapsibleContent>
-          </Collapsible>
-        )}
       </CardContent>
     </Card>
   );
