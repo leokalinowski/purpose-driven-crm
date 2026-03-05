@@ -155,3 +155,6 @@ verify_jwt = false
 
 [functions.clickup-register-and-sync]
 verify_jwt = false
+
+[functions.newsletter-scheduled-send]
+verify_jwt = false

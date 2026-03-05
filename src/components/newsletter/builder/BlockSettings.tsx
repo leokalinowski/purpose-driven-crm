@@ -358,18 +358,34 @@ function ListingsSettings({ props: p, onUpdate }: { props: Record<string, any>; 
         <SettingGroup label={`Listings (${listings.length}/6)`}>
           <div className="space-y-2">
             {listings.map((listing) => (
-              <div key={listing.id} className="flex items-start gap-2 p-2 border rounded-md bg-muted/50">
-                {listing.image_url && (
-                  <img src={listing.image_url} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold truncate">{listing.price}</p>
-                  <p className="text-xs text-muted-foreground truncate">{listing.address}</p>
-                  <p className="text-xs text-muted-foreground">{listing.beds}bd · {listing.baths}ba · {listing.sqft} sqft</p>
+              <div key={listing.id} className="flex flex-col gap-1 p-2 border rounded-md bg-muted/50">
+                <div className="flex items-start gap-2">
+                  {listing.image_url && (
+                    <img src={listing.image_url} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold truncate">{listing.price}</p>
+                    <p className="text-xs text-muted-foreground truncate">{listing.address}</p>
+                    <p className="text-xs text-muted-foreground">{listing.beds}bd · {listing.baths}ba · {listing.sqft} sqft</p>
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => removeListing(listing.id)}>
+                    <Trash2 className="h-3 w-3 text-destructive" />
+                  </Button>
                 </div>
-                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => removeListing(listing.id)}>
-                  <Trash2 className="h-3 w-3 text-destructive" />
-                </Button>
+                {listing.url && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <Link className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <Input
+                      value={listing.url}
+                      onChange={(e) => {
+                        const updated = listings.map(l => l.id === listing.id ? { ...l, url: e.target.value } : l);
+                        onUpdate({ listings: updated });
+                      }}
+                      className="h-6 text-xs"
+                      placeholder="Listing URL"
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>
