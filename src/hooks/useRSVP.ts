@@ -45,96 +45,45 @@ export const useRSVP = () => {
     setError(null);
 
     try {
-      // Check if event exists and is published
-      const { data: event, error: eventError } = await supabase
-        .from('events')
-        .select('id, max_capacity, current_rsvp_count, is_published')
-        .eq('id', eventId)
-        .eq('is_published', true)
-        .single();
-
-      if (eventError || !event) {
-        throw new Error('Event not found or not published');
-      }
-
-      // Check capacity if max_capacity is set
-      if (event.max_capacity && event.current_rsvp_count >= event.max_capacity) {
-        // Check if there's already a confirmed RSVP for this email using secure RPC
-        const { data: isDuplicate, error: dupError } = await supabase
-          .rpc('check_duplicate_rsvp', {
-            p_event_id: eventId,
-            p_email: formData.email.toLowerCase()
-          });
-
-        if (dupError) {
-          console.error('Error checking duplicate RSVP:', dupError);
-        }
-
-        if (isDuplicate) {
-          throw new Error('You have already RSVPed for this event');
-        }
-
-        // Add to waitlist
-        const { data: rsvp, error: rsvpError } = await supabase
-          .from('event_rsvps')
-          .insert([{
-            event_id: eventId,
-            email: formData.email.toLowerCase(),
-            name: formData.name,
-            phone: formData.phone || null,
-            guest_count: formData.guest_count || 1,
-            status: 'waitlist'
-          }])
-          .select()
-          .single();
-
-        if (rsvpError) {
-          if (rsvpError.code === '23505') {
-            throw new Error('You have already RSVPed for this event');
-          }
-          throw rsvpError;
-        }
-
-        return rsvp as RSVP;
-      }
-
-      // Check for duplicate RSVP using secure RPC
-      const { data: isDuplicate, error: dupError } = await supabase
-        .rpc('check_duplicate_rsvp', {
+      // Use SECURITY DEFINER RPC to bypass RLS for anonymous submissions
+      const { data, error: rpcError } = await supabase
+        .rpc('submit_public_rsvp', {
           p_event_id: eventId,
-          p_email: formData.email.toLowerCase()
+          p_email: formData.email.toLowerCase(),
+          p_name: formData.name,
+          p_phone: formData.phone || null,
+          p_guest_count: formData.guest_count || 1,
         });
 
-      if (dupError) {
-        console.error('Error checking duplicate RSVP:', dupError);
-      }
-
-      if (isDuplicate) {
-        throw new Error('You have already RSVPed for this event');
-      }
-
-      // Create RSVP
-      const { data: rsvp, error: rsvpError } = await supabase
-        .from('event_rsvps')
-        .insert([{
-          event_id: eventId,
-          email: formData.email.toLowerCase(),
-          name: formData.name,
-          phone: formData.phone || null,
-          guest_count: formData.guest_count || 1,
-          status: 'confirmed'
-        }])
-        .select()
-        .single();
-
-      if (rsvpError) {
-        if (rsvpError.code === '23505') {
+      if (rpcError) {
+        if (rpcError.message?.includes('already RSVPed')) {
           throw new Error('You have already RSVPed for this event');
         }
-        throw rsvpError;
+        if (rpcError.message?.includes('not published')) {
+          throw new Error('Event not found or not published');
+        }
+        throw rpcError;
       }
 
-      // Trigger email confirmation (fire and forget - don't block RSVP)
+      if (!data || data.length === 0) {
+        throw new Error('Failed to create RSVP');
+      }
+
+      const rsvp = {
+        id: data[0].id,
+        status: data[0].status,
+        event_id: eventId,
+        email: formData.email.toLowerCase(),
+        name: formData.name,
+        phone: formData.phone || null,
+        guest_count: formData.guest_count || 1,
+        rsvp_date: new Date().toISOString(),
+        check_in_status: 'not_checked_in' as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as RSVP;
+
+      // Trigger email confirmation (fire and forget)
       supabase.functions.invoke('rsvp-confirmation-email', {
         body: {
           rsvp_id: rsvp.id,
@@ -148,10 +97,9 @@ export const useRSVP = () => {
         }
       }).catch((emailError) => {
         console.error('Failed to send confirmation email:', emailError);
-        // Don't fail the RSVP if email fails
       });
 
-      return rsvp as RSVP;
+      return rsvp;
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to submit RSVP';
       setError(errorMessage);
