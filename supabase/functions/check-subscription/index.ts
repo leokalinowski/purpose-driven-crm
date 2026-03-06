@@ -71,9 +71,16 @@ serve(async (req) => {
 
     if (hasActiveSub) {
       const subscription = subscriptions.data[0];
-      subscriptionEnd = new Date(
-        subscription.current_period_end * 1000
-      ).toISOString();
+      try {
+        const endTimestamp = subscription.current_period_end;
+        if (endTimestamp && typeof endTimestamp === "number") {
+          subscriptionEnd = new Date(endTimestamp * 1000).toISOString();
+        } else if (endTimestamp) {
+          subscriptionEnd = String(endTimestamp);
+        }
+      } catch (dateErr) {
+        logStep("WARNING: Could not parse current_period_end", { raw: subscription.current_period_end });
+      }
       priceId = subscription.items.data[0].price.id;
       productId = subscription.items.data[0].price.product;
       logStep("Active subscription found", {
