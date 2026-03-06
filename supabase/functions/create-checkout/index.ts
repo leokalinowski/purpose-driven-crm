@@ -13,6 +13,64 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
 };
 
+/**
+ * Founder plan configuration.
+ * Maps the "placeholder" monthly price IDs to the product + amounts
+ * so we can find-or-create a proper 6-month interval price.
+ */
+const FOUNDER_PLANS: Record<
+  string,
+  { tier: string; productId: string; amountCents: number; monthlyPriceId: string }
+> = {
+  // Core Founder
+  "price_1T82T9QGA8aVyaHSx4NYVQCl": {
+    tier: "core",
+    productId: "prod_U6Ex7tgKBZtZc5",
+    amountCents: 99700,
+    monthlyPriceId: "price_1T809vQGA8aVyaHSqHxPGZVH",
+  },
+  // Managed Founder
+  "price_1T82UbQGA8aVyaHSwPJgIqXm": {
+    tier: "managed",
+    productId: "prod_U6Eyw4OBAEIm9V",
+    amountCents: 299700,
+    monthlyPriceId: "price_1T80CiQGA8aVyaHSTcBId8Ss",
+  },
+};
+
+/**
+ * Find or create a Stripe Price with interval_count = 6 months
+ * so the customer is charged once for a 6-month period.
+ */
+async function getOrCreateSixMonthPrice(
+  stripe: Stripe,
+  productId: string,
+  amountCents: number
+): Promise<string> {
+  // Look for existing 6-month price on this product
+  const existing = await stripe.prices.list({ product: productId, active: true, limit: 20 });
+  const match = existing.data.find(
+    (p: any) =>
+      p.recurring?.interval === "month" &&
+      p.recurring?.interval_count === 6 &&
+      p.unit_amount === amountCents
+  );
+  if (match) {
+    logStep("Found existing 6-month price", { priceId: match.id });
+    return match.id;
+  }
+
+  // Create a new 6-month recurring price
+  const newPrice = await stripe.prices.create({
+    product: productId,
+    unit_amount: amountCents,
+    currency: "usd",
+    recurring: { interval: "month", interval_count: 6 },
+  });
+  logStep("Created new 6-month price", { priceId: newPrice.id });
+  return newPrice.id;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -43,10 +101,7 @@ serve(async (req) => {
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
     // Check for existing Stripe customer
-    const customers = await stripe.customers.list({
-      email: user.email,
-      limit: 1,
-    });
+    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
     let customerId: string | undefined;
     if (customers.data.length > 0) {
       customerId = customers.data[0].id;
@@ -54,7 +109,45 @@ serve(async (req) => {
     }
 
     const origin = req.headers.get("origin") || "https://hub.realestateonpurpose.com";
+    const founderPlan = FOUNDER_PLANS[priceId];
 
+    if (founderPlan) {
+      // ── Founder Plan: use 6-month interval price + tag for webhook schedule conversion ──
+      logStep("Founder plan detected", { tier: founderPlan.tier });
+
+      const sixMonthPriceId = await getOrCreateSixMonthPrice(
+        stripe,
+        founderPlan.productId,
+        founderPlan.amountCents
+      );
+
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        customer_email: customerId ? undefined : user.email,
+        line_items: [{ price: sixMonthPriceId, quantity: 1 }],
+        mode: "subscription",
+        success_url: `${origin}/?checkout=success`,
+        cancel_url: `${origin}/pricing`,
+        metadata: { user_id: user.id },
+        subscription_data: {
+          metadata: {
+            user_id: user.id,
+            founder: "true",
+            tier: founderPlan.tier,
+            monthly_price_id: founderPlan.monthlyPriceId,
+          },
+        },
+      });
+
+      logStep("Founder checkout session created", { sessionId: session.id });
+
+      return new Response(
+        JSON.stringify({ url: session.url }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+
+    // ── Standard plan checkout ──
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       customer_email: customerId ? undefined : user.email,

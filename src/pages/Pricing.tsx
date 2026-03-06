@@ -5,16 +5,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Check, Loader2, Sparkles } from 'lucide-react';
+import { Check, Loader2, Sparkles, Flame, Clock } from 'lucide-react';
 import { STRIPE_TIERS } from '@/config/stripe';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 
+type BillingPeriod = 'monthly' | 'annual' | 'founder';
+
 const Pricing = () => {
   const { user } = useAuth();
   const { subscribed, tier: currentTier, createCheckout, loading: subLoading } = useSubscription();
-  const [annual, setAnnual] = useState(false);
+  const [billing, setBilling] = useState<BillingPeriod>('monthly');
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
 
   const handleCheckout = async (tierKey: 'core' | 'managed') => {
@@ -23,7 +25,14 @@ const Pricing = () => {
       return;
     }
     const tier = STRIPE_TIERS[tierKey];
-    const priceId = annual ? tier.annual.price_id : tier.monthly.price_id;
+    let priceId: string;
+    if (billing === 'founder') {
+      priceId = tier.founder.price_id;
+    } else if (billing === 'annual') {
+      priceId = tier.annual.price_id;
+    } else {
+      priceId = tier.monthly.price_id;
+    }
     setCheckoutLoading(tierKey);
     try {
       await createCheckout(priceId);
@@ -39,6 +48,18 @@ const Pricing = () => {
     { key: 'managed' as const, ...STRIPE_TIERS.managed, popular: true },
   ];
 
+  const getPrice = (tier: typeof tiers[number]) => {
+    if (billing === 'founder') return tier.founder.amount;
+    if (billing === 'annual') return tier.annual.amount;
+    return tier.monthly.amount;
+  };
+
+  const getPeriodLabel = () => {
+    if (billing === 'founder') return ' / 6 months';
+    if (billing === 'annual') return '/year';
+    return '/month';
+  };
+
   return (
     <Layout>
       <div className="max-w-4xl mx-auto space-y-8 py-8">
@@ -50,25 +71,51 @@ const Pricing = () => {
         </div>
 
         {/* Billing toggle */}
-        <div className="flex items-center justify-center gap-3">
-          <Label htmlFor="billing-toggle" className={!annual ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
-            Monthly
-          </Label>
-          <Switch id="billing-toggle" checked={annual} onCheckedChange={setAnnual} />
-          <Label htmlFor="billing-toggle" className={annual ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
-            Annual
-          </Label>
-          {annual && (
-            <Badge variant="secondary" className="ml-2 text-xs">Save 2 months</Badge>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {(['monthly', 'annual', 'founder'] as BillingPeriod[]).map((period) => (
+            <Button
+              key={period}
+              variant={billing === period ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setBilling(period)}
+              className="relative"
+            >
+              {period === 'monthly' && 'Monthly'}
+              {period === 'annual' && 'Annual'}
+              {period === 'founder' && (
+                <span className="flex items-center gap-1">
+                  <Flame className="h-3.5 w-3.5" />
+                  Founder (6-Mo)
+                </span>
+              )}
+            </Button>
+          ))}
+          {billing === 'annual' && (
+            <Badge variant="secondary" className="text-xs">Save 2 months</Badge>
           )}
         </div>
+
+        {/* Founder banner */}
+        {billing === 'founder' && (
+          <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-center space-y-1">
+            <p className="text-sm font-semibold text-primary flex items-center justify-center gap-2">
+              <Flame className="h-4 w-4" />
+              Founder Plans — Limited to the First 50 Members
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Lock in a discounted 6-month rate. After 6 months, your plan automatically
+              continues at the regular monthly price.
+            </p>
+          </div>
+        )}
 
         {/* Pricing cards */}
         <div className="grid md:grid-cols-2 gap-6">
           {tiers.map((tier) => {
             const isCurrentPlan = subscribed && currentTier === tier.key;
-            const price = annual ? tier.annual.amount : tier.monthly.amount;
-            const period = annual ? '/year' : '/month';
+            const price = getPrice(tier);
+            const period = getPeriodLabel();
+            const isFounder = billing === 'founder';
 
             return (
               <Card
@@ -77,10 +124,17 @@ const Pricing = () => {
                   tier.popular ? 'border-primary shadow-lg ring-2 ring-primary/20' : ''
                 }`}
               >
-                {tier.popular && (
+                {tier.popular && !isFounder && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <Badge className="bg-primary text-primary-foreground">
                       <Sparkles className="h-3 w-3 mr-1" /> Most Popular
+                    </Badge>
+                  </div>
+                )}
+                {isFounder && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <Badge className="bg-destructive text-destructive-foreground border-destructive">
+                      <Flame className="h-3 w-3 mr-1" /> Founder — Limited
                     </Badge>
                   </div>
                 )}
@@ -92,9 +146,15 @@ const Pricing = () => {
                     </span>
                     <span className="text-muted-foreground">{period}</span>
                   </CardDescription>
-                  {annual && (
+                  {billing === 'annual' && (
                     <p className="text-xs text-muted-foreground">
                       (${Math.round(price / 12)}/mo equivalent)
+                    </p>
+                  )}
+                  {isFounder && (
+                    <p className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
+                      <Clock className="h-3 w-3" />
+                      Then ${tier.monthly.amount}/mo after 6 months
                     </p>
                   )}
                 </CardHeader>
@@ -109,14 +169,18 @@ const Pricing = () => {
                   </ul>
                   <Button
                     className="w-full"
-                    variant={tier.popular ? 'default' : 'outline'}
+                    variant={tier.popular || isFounder ? 'default' : 'outline'}
                     disabled={isCurrentPlan || !!checkoutLoading || subLoading}
                     onClick={() => handleCheckout(tier.key)}
                   >
                     {checkoutLoading === tier.key && (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     )}
-                    {isCurrentPlan ? 'Your Current Plan' : `Get ${tier.name}`}
+                    {isCurrentPlan
+                      ? 'Your Current Plan'
+                      : isFounder
+                        ? `Get ${tier.name} Founder Plan`
+                        : `Get ${tier.name}`}
                   </Button>
                 </CardContent>
               </Card>
