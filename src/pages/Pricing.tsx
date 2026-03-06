@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Layout } from '@/components/layout/Layout';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,7 @@ type BillingPeriod = 'monthly' | 'annual' | 'founder';
 const Pricing = () => {
   const { user } = useAuth();
   const { subscribed, tier: currentTier, createCheckout, checkSubscription, loading: subLoading } = useSubscription();
-  const [billing, setBilling] = useState<BillingPeriod>('monthly');
+  const [billing, setBilling] = useState<BillingPeriod>('founder');
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -217,29 +217,32 @@ const Pricing = () => {
         })}
       </div>
 
-      {/* Sign-in link for existing users */}
-      {!user && (
-        <div className="text-center">
-          <p className="text-sm text-muted-foreground">
-            Already have an account?{' '}
+      {/* Navigation link */}
+      <div className="text-center">
+        <p className="text-sm text-muted-foreground">
+          {user ? (
             <button
-              onClick={() => navigate('/auth')}
+              onClick={() => navigate('/')}
               className="text-primary font-medium hover:underline"
             >
-              Sign in here
+              ← Back to Dashboard
             </button>
-          </p>
-        </div>
-      )}
+          ) : (
+            <>
+              Already have an account?{' '}
+              <button
+                onClick={() => navigate('/auth')}
+                className="text-primary font-medium hover:underline"
+              >
+                Sign in here
+              </button>
+            </>
+          )}
+        </p>
+      </div>
     </div>
   );
 
-  // Wrap in Layout only for authenticated users
-  if (user) {
-    return <Layout>{content}</Layout>;
-  }
-
-  // Standalone page for unauthenticated visitors
   return (
     <div className="min-h-screen bg-background">
       <div className="px-4">
