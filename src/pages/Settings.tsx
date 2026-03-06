@@ -220,6 +220,10 @@ const Settings = () => {
               />
             )}
           </TabsContent>
+
+          <TabsContent value="subscription" className="mt-4">
+            <SubscriptionSettings />
+          </TabsContent>
         </Tabs>
       </div>
     </Layout>
