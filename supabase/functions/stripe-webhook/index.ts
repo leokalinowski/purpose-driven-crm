@@ -255,6 +255,59 @@ serve(async (req) => {
 
                   if (emailRes.ok) {
                     logStep("Welcome/password-set email sent via Resend");
+
+                    // Wait 30 seconds then send coaching call scheduling email
+                    await new Promise((resolve) => setTimeout(resolve, 30_000));
+
+                    const coachingRes = await fetch("https://api.resend.com/emails", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${resendKey}`,
+                      },
+                      body: JSON.stringify({
+                        from: `${fromName} <${fromEmail}>`,
+                        to: [customerEmail],
+                        subject: "Next Step: Schedule Your Coaching Call with Pam",
+                        html: `
+                          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <h2 style="color: #1a1a1a;">Let's Get You Started! 🎉</h2>
+                            <p style="color: #4a4a4a; line-height: 1.6;">
+                              Congratulations on joining the <strong>${(tier || "core").charAt(0).toUpperCase() + (tier || "core").slice(1)}</strong> plan! 
+                              Your next step is to schedule a one-on-one coaching call with <strong>Pam O'Bryant</strong>.
+                            </p>
+                            <p style="color: #4a4a4a; line-height: 1.6;">
+                              During this call, Pam will walk you through:
+                            </p>
+                            <ul style="color: #4a4a4a; line-height: 1.8;">
+                              <li>Getting your Hub account fully set up</li>
+                              <li>Your personalized coaching roadmap</li>
+                              <li>How to get the most out of your membership</li>
+                            </ul>
+                            <div style="text-align: center; margin: 30px 0;">
+                              <a href="https://lp.realestateonpurpose.com/appointmentwithreop"
+                                 style="background-color: #0d9488; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                                Schedule Your Call with Pam
+                              </a>
+                            </div>
+                            <p style="color: #6a6a6a; font-size: 14px; line-height: 1.5;">
+                              We recommend scheduling as soon as possible so you can hit the ground running.
+                            </p>
+                            <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 20px 0;" />
+                            <p style="color: #999; font-size: 12px;">
+                              Real Estate on Purpose · <a href="https://hub.realestateonpurpose.com" style="color: #0d9488;">hub.realestateonpurpose.com</a>
+                            </p>
+                          </div>
+                        `,
+                      }),
+                    });
+
+                    if (coachingRes.ok) {
+                      logStep("Coaching call scheduling email sent via Resend");
+                    } else {
+                      const errBody2 = await coachingRes.text();
+                      logStep("ERROR sending coaching email via Resend", { status: coachingRes.status, body: errBody2 });
+                    }
                   } else {
                     const errBody = await emailRes.text();
                     logStep("ERROR sending email via Resend", { status: emailRes.status, body: errBody });
