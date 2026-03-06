@@ -1,34 +1,67 @@
 
 
-## Fix: RSVP RLS Violation on Public Submissions
+## Plan: Fix Invite-Required Trigger Blocking Webhook User Creation
 
 ### Root Cause
 
-In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
+The `validate_invited_signup()` trigger on `auth.users` fires on EVERY insert, including `auth.admin.createUser()` calls from the service role. When a new customer completes Stripe checkout with an email like `leo_kalinowski@hotmail.com`, the webhook tries to create a Supabase user but the trigger rejects it because there's no matching invitation record.
 
-The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
+Auth log evidence:
+```
+ERROR: Invite required for signup (SQLSTATE P0001)
+```
 
 ### Fix
 
-Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
+Modify the `validate_invited_signup()` trigger function to **skip validation when the caller is the service role**. The service role is used by trusted backend code (like the stripe-webhook), so it should bypass the invitation check.
 
-### Step 1: Database Migration
+#### Database Migration
 
-Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
-- Verifies event exists and is published
-- Checks for duplicate RSVP (reuses existing logic)
-- Determines status based on capacity (confirmed vs waitlist)
-- Inserts the row and returns `id` and `status`
-- SECURITY DEFINER so it bypasses RLS
+Update the `validate_invited_signup` function to detect service-role context and skip the invite check:
 
-### Step 2: Update `src/hooks/useRSVP.ts`
+```sql
+CREATE OR REPLACE FUNCTION public.validate_invited_signup()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_has_invite boolean;
+  v_role text;
+BEGIN
+  -- Allow service-role (admin API) calls to bypass invite check
+  -- This enables the stripe-webhook to provision accounts for paying customers
+  v_role := current_setting('request.jwt.claims', true)::json->>'role';
+  IF v_role = 'service_role' THEN
+    RETURN NEW;
+  END IF;
 
-Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
+  -- Require a valid invitation for regular signups
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.invitations i
+    WHERE lower(i.email) = lower(NEW.email)
+      AND i.used = false
+      AND i.expires_at > now()
+  ) INTO v_has_invite;
 
-### Files Changed
+  IF NOT v_has_invite THEN
+    RAISE EXCEPTION 'Invite required for signup';
+  END IF;
 
-| File | Change |
-|------|--------|
-| Migration SQL | Create `submit_public_rsvp` function |
-| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
+  RETURN NEW;
+END;
+$function$;
+```
+
+This is the only change needed. No edge function code changes required -- the webhook logic is already correct; it was just being blocked by this trigger.
+
+### Verification
+
+After applying the migration, send another test checkout from Stripe. The webhook should:
+1. Successfully create the user account
+2. Create a profile row
+3. Assign the `core` role
+4. Send the welcome/password-set email via Resend
 
