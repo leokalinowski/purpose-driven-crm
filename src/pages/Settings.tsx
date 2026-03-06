@@ -12,7 +12,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useNavigate } from 'react-router-dom';
 import { AgentMarketingSettingsForm } from '@/components/admin/AgentMarketingSettingsForm';
-import { Loader2, User, Palette, Upload, X } from 'lucide-react';
+import { SubscriptionSettings } from '@/components/settings/SubscriptionSettings';
+import { Loader2, User, Palette, CreditCard } from 'lucide-react';
 import { buildAuthRedirectPath } from '@/utils/authRedirect';
 
 const Settings = () => {
