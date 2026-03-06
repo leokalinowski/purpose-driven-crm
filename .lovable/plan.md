@@ -1,34 +1,26 @@
 
 
-## Fix: RSVP RLS Violation on Public Submissions
+## Plan: Stripe Subscription Integration
 
-### Root Cause
+### Step 1: Enable Stripe
+Use the Stripe enable tool to connect your Stripe account and store the secret key. This will unlock additional Stripe tools (product/price creation, etc.) and provide detailed implementation guidance.
 
-In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
+### Step 2: After Stripe is enabled
+Once enabled, we'll get access to Stripe-specific tools and docs. Then we'll implement:
 
-The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
+1. **Database** — `subscriptions` table tracking `stripe_customer_id`, `stripe_subscription_id`, `plan`, `status`, `billing_interval`, `current_period_end`
+2. **Edge Functions**:
+   - `create-checkout-session` — creates Stripe Checkout for a given price
+   - `create-customer-portal` — billing management via Stripe portal
+   - `stripe-webhook` — syncs lifecycle events → updates `subscriptions` + `user_roles`
+3. **Frontend**:
+   - `/pricing` page with monthly/annual toggle (Core $149/mo, Managed $449/mo)
+   - `/checkout/success` confirmation page
+   - Subscription tab in Settings
+   - Auth flow redirect to `/pricing` for new signups
 
-### Fix
+### Why start with enabling Stripe first
+The enable tool will reveal what additional tools are available (e.g., creating products/prices directly). This determines the exact implementation steps, so there's no point planning further detail until we see what's unlocked.
 
-Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
-
-### Step 1: Database Migration
-
-Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
-- Verifies event exists and is published
-- Checks for duplicate RSVP (reuses existing logic)
-- Determines status based on capacity (confirmed vs waitlist)
-- Inserts the row and returns `id` and `status`
-- SECURITY DEFINER so it bypasses RLS
-
-### Step 2: Update `src/hooks/useRSVP.ts`
-
-Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
-
-### Files Changed
-
-| File | Change |
-|------|--------|
-| Migration SQL | Create `submit_public_rsvp` function |
-| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
+**Next step: I'll enable Stripe, which will prompt you for your Stripe secret key.**
 
