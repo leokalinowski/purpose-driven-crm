@@ -12,7 +12,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useNavigate } from 'react-router-dom';
 import { AgentMarketingSettingsForm } from '@/components/admin/AgentMarketingSettingsForm';
-import { Loader2, User, Palette, Upload, X } from 'lucide-react';
+import { SubscriptionSettings } from '@/components/settings/SubscriptionSettings';
+import { Loader2, User, Palette, CreditCard } from 'lucide-react';
 import { buildAuthRedirectPath } from '@/utils/authRedirect';
 
 const Settings = () => {
@@ -130,13 +131,17 @@ const Settings = () => {
 
         <Tabs defaultValue="profile" className="w-full">
           <TabsList>
-            <TabsTrigger value="profile" className="flex items-center gap-2">
+             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               Profile
             </TabsTrigger>
             <TabsTrigger value="branding" className="flex items-center gap-2">
               <Palette className="h-4 w-4" />
               Branding & Content
+            </TabsTrigger>
+            <TabsTrigger value="subscription" className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              Subscription
             </TabsTrigger>
           </TabsList>
 
@@ -214,6 +219,10 @@ const Settings = () => {
                 isAdmin={isAdmin}
               />
             )}
+          </TabsContent>
+
+          <TabsContent value="subscription" className="mt-4">
+            <SubscriptionSettings />
           </TabsContent>
         </Tabs>
       </div>
