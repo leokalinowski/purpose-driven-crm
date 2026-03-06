@@ -131,13 +131,17 @@ const Settings = () => {
 
         <Tabs defaultValue="profile" className="w-full">
           <TabsList>
-            <TabsTrigger value="profile" className="flex items-center gap-2">
+             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               Profile
             </TabsTrigger>
             <TabsTrigger value="branding" className="flex items-center gap-2">
               <Palette className="h-4 w-4" />
               Branding & Content
+            </TabsTrigger>
+            <TabsTrigger value="subscription" className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              Subscription
             </TabsTrigger>
           </TabsList>
 
