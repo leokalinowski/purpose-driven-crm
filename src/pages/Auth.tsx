@@ -701,6 +701,14 @@ const Auth = () => {
             </TabsContent>
             
             <TabsContent value="signup">
+              <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                <p className="text-sm text-blue-800">
+                  This signup is for <strong>invited agents</strong> only. Looking to subscribe to a plan?{' '}
+                  <a href="/pricing" className="font-semibold text-primary hover:underline">
+                    Visit our Pricing page →
+                  </a>
+                </p>
+              </div>
               {showSignInSwitch && (
                 <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <p className="text-sm text-yellow-800 mb-2">
