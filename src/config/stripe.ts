@@ -26,7 +26,6 @@ export const STRIPE_TIERS = {
       'Contact database (500 contacts)',
       'Weekly coaching submissions',
       'Monthly newsletter',
-      'Support tickets',
     ],
     role: 'core' as const,
   },
