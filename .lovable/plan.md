@@ -1,24 +1,34 @@
 
 
-## Plan: Fix validate_invited_signup Trigger for GoTrue Context
+## Fix: RSVP RLS Violation on Public Submissions
 
 ### Root Cause
-The migration we applied checks `current_setting('request.jwt.claims', true)->>'role'` for `'service_role'`. This works for PostgREST calls but **not** for GoTrue admin API calls (`auth.admin.createUser`). GoTrue connects to Postgres as the `supabase_auth_admin` database role, and does not set `request.jwt.claims`.
+
+In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
+
+The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
 
 ### Fix
-Update the `validate_invited_signup()` function to also check `session_user` for the GoTrue admin role:
 
-```sql
--- Allow GoTrue admin API (used by edge functions via service role)
-IF session_user = 'supabase_auth_admin' THEN
-  RETURN NEW;
-END IF;
-```
+Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
 
-This single line addition (replacing or supplementing the JWT claims check) will correctly bypass the invite requirement when the stripe-webhook calls `auth.admin.createUser()`.
+### Step 1: Database Migration
 
-### Changes
-- **Database migration**: Update `validate_invited_signup()` to detect the `supabase_auth_admin` session user, which is what GoTrue uses for all admin API operations.
+Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
+- Verifies event exists and is published
+- Checks for duplicate RSVP (reuses existing logic)
+- Determines status based on capacity (confirmed vs waitlist)
+- Inserts the row and returns `id` and `status`
+- SECURITY DEFINER so it bypasses RLS
 
-No edge function changes needed -- the webhook code is correct; only the trigger detection logic was wrong.
+### Step 2: Update `src/hooks/useRSVP.ts`
+
+Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| Migration SQL | Create `submit_public_rsvp` function |
+| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
 
