@@ -60,11 +60,15 @@ export function useSubscription() {
   }, [user, checkSubscription]);
 
   const createCheckout = async (priceId: string) => {
-    if (!session?.access_token) throw new Error('Not authenticated');
+    // Support both authenticated and unauthenticated checkout
+    const headers: Record<string, string> = {};
+    if (session?.access_token) {
+      headers.Authorization = `Bearer ${session.access_token}`;
+    }
 
     const { data, error } = await supabase.functions.invoke('create-checkout', {
       body: { priceId },
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      headers,
     });
     if (error) throw error;
     if (data?.url) {
