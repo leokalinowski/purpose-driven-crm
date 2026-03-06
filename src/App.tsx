@@ -39,6 +39,7 @@ import AdminSurveyResults from "./pages/AdminSurveyResults";
 import NewsletterBuilderPage from "./pages/NewsletterBuilder";
 import AdminAnnouncements from "./pages/AdminAnnouncements";
 import Settings from "./pages/Settings";
+import Pricing from "./pages/Pricing";
 
 const queryClient = new QueryClient();
 
