@@ -133,7 +133,7 @@ const Pricing = () => {
                 )}
                 {isFounder && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-orange-600 text-white border-orange-600">
+                    <Badge className="bg-destructive text-destructive-foreground border-destructive">
                       <Flame className="h-3 w-3 mr-1" /> Founder — Limited
                     </Badge>
                   </div>
