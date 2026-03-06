@@ -16,7 +16,7 @@ type BillingPeriod = 'monthly' | 'annual' | 'founder';
 const Pricing = () => {
   const { user } = useAuth();
   const { subscribed, tier: currentTier, createCheckout, checkSubscription, loading: subLoading } = useSubscription();
-  const [billing, setBilling] = useState<BillingPeriod>('monthly');
+  const [billing, setBilling] = useState<BillingPeriod>('founder');
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
