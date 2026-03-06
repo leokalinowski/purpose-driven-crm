@@ -269,14 +269,20 @@ serve(async (req) => {
           }
         }
 
-        // ── Assign role ──
+        // ── Assign role (clean up old subscription roles first) ──
         if (userId && tier && (tier === "core" || tier === "managed")) {
+          // Remove any existing subscription-tier roles to prevent accumulation
           await supabase
             .from("user_roles")
-            .upsert(
-              { user_id: userId, role: tier, created_by: userId },
-              { onConflict: "user_id,role" }
-            );
+            .delete()
+            .eq("user_id", userId)
+            .in("role", ["core", "managed"]);
+          logStep("Cleared old subscription roles", { userId });
+
+          // Insert the new role
+          await supabase
+            .from("user_roles")
+            .insert({ user_id: userId, role: tier, created_by: userId });
           logStep("User role assigned", { userId, role: tier });
         }
         break;
