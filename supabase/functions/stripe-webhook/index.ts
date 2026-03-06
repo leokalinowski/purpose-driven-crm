@@ -33,7 +33,6 @@ serve(async (req) => {
       return new Response(`Webhook Error: ${err.message}`, { status: 400 });
     }
   } else {
-    // Fallback: trust the event (for testing only)
     logStep("WARNING: No STRIPE_WEBHOOK_SECRET set, skipping signature verification");
     const body = await req.text();
     event = JSON.parse(body);
@@ -57,28 +56,31 @@ serve(async (req) => {
           break;
         }
 
-        // Retrieve the subscription to check founder metadata
+        // Retrieve the subscription to get metadata
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
         const metadata = subscription.metadata || {};
+        const sessionMetadata = session.metadata || {};
 
+        // Determine the tier from subscription metadata
+        const tier = metadata.tier as string | undefined;
+        logStep("Subscription metadata", { metadata, sessionMetadata, tier });
+
+        // ── Founder plan: convert to schedule ──
         if (metadata.founder === "true") {
           logStep("Founder subscription detected, converting to schedule", {
             subscriptionId,
-            tier: metadata.tier,
+            tier,
             monthlyPriceId: metadata.monthly_price_id,
           });
 
-          // Convert existing subscription into a subscription schedule
           const schedule = await stripe.subscriptionSchedules.create({
             from_subscription: subscriptionId,
           });
           logStep("Schedule created from subscription", { scheduleId: schedule.id });
 
-          // The schedule has one phase (the current 6-month founder phase).
-          // Add phase 2: regular monthly pricing after the founder phase ends.
           const currentPhase = schedule.phases[0];
           await stripe.subscriptionSchedules.update(schedule.id, {
-            end_behavior: "release", // subscription continues after schedule ends
+            end_behavior: "release",
             phases: [
               {
                 items: currentPhase.items.map((item: any) => ({
@@ -87,7 +89,7 @@ serve(async (req) => {
                 })),
                 start_date: currentPhase.start_date,
                 end_date: currentPhase.end_date,
-                metadata: { founder: "true", tier: metadata.tier },
+                metadata: { founder: "true", tier: tier || "" },
               },
               {
                 items: [
@@ -96,36 +98,168 @@ serve(async (req) => {
                     quantity: 1,
                   },
                 ],
-                metadata: { transitioned_from_founder: "true", tier: metadata.tier },
+                metadata: { transitioned_from_founder: "true", tier: tier || "" },
               },
             ],
           });
 
-          logStep("Schedule updated with monthly transition phase", {
-            scheduleId: schedule.id,
-            monthlyPriceId: metadata.monthly_price_id,
-          });
+          logStep("Schedule updated with monthly transition phase");
         }
 
-        // Update user role based on subscription
-        const userId = metadata.user_id || session.metadata?.user_id;
-        if (userId) {
-          const tier = metadata.tier;
-          if (tier === "core" || tier === "managed") {
-            // Upsert user role
-            const { error } = await supabase.rpc("has_role", {
-              _user_id: userId,
-              _role: tier,
+        // ── User provisioning ──
+        const customerEmail = session.customer_details?.email || session.customer_email;
+        const customerName = session.customer_details?.name || "";
+        let userId = metadata.user_id || sessionMetadata.user_id;
+
+        if (!userId && customerEmail) {
+          // Check if a Supabase user already exists with this email
+          const { data: existingUsers } = await supabase.auth.admin.listUsers({
+            page: 1,
+            perPage: 1,
+          });
+
+          const existingUser = existingUsers?.users?.find(
+            (u: any) => u.email?.toLowerCase() === customerEmail.toLowerCase()
+          );
+
+          if (existingUser) {
+            userId = existingUser.id;
+            logStep("Found existing Supabase user by email", { userId, email: customerEmail });
+          } else {
+            // Create a new user account (bypasses validate_invited_signup trigger)
+            logStep("Creating new Supabase user", { email: customerEmail, name: customerName });
+
+            const nameParts = customerName ? customerName.split(" ") : [];
+            const firstName = nameParts[0] || "";
+            const lastName = nameParts.slice(1).join(" ") || "";
+
+            const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+              email: customerEmail,
+              email_confirm: true,
+              user_metadata: {
+                first_name: firstName,
+                last_name: lastName,
+              },
             });
-            // Insert the role if not exists
-            await supabase
-              .from("user_roles")
-              .upsert(
-                { user_id: userId, role: tier, created_by: userId },
-                { onConflict: "user_id,role" }
-              );
-            logStep("User role updated", { userId, role: tier });
+
+            if (createError) {
+              logStep("ERROR creating user", { error: createError.message });
+              // If user already exists error, try to find them
+              if (createError.message?.includes("already")) {
+                const { data: allUsers } = await supabase.auth.admin.listUsers();
+                const found = allUsers?.users?.find(
+                  (u: any) => u.email?.toLowerCase() === customerEmail.toLowerCase()
+                );
+                if (found) {
+                  userId = found.id;
+                  logStep("Found user after create conflict", { userId });
+                }
+              }
+              if (!userId) break;
+            } else if (newUser?.user) {
+              userId = newUser.user.id;
+              logStep("New user created", { userId });
+
+              // Create profile row
+              const { error: profileError } = await supabase.from("profiles").upsert({
+                user_id: userId,
+                first_name: firstName || null,
+                last_name: lastName || null,
+                email: customerEmail,
+                role: tier || "core",
+              }, { onConflict: "user_id" });
+
+              if (profileError) {
+                logStep("ERROR creating profile", { error: profileError.message });
+              } else {
+                logStep("Profile created for new user");
+              }
+
+              // Send password reset email so user can set their password
+              try {
+                const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+                  type: "recovery",
+                  email: customerEmail,
+                  options: {
+                    redirectTo: "https://hub.realestateonpurpose.com/auth/reset",
+                  },
+                });
+
+                if (linkError) {
+                  logStep("ERROR generating recovery link", { error: linkError.message });
+                } else {
+                  logStep("Recovery link generated for new user", {
+                    email: customerEmail,
+                  });
+
+                  // Send email via Resend with the recovery link
+                  const resendKey = Deno.env.get("RESEND_API_KEY");
+                  const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "noreply@realestateonpurpose.com";
+                  const fromName = Deno.env.get("RESEND_FROM_NAME") || "Real Estate on Purpose";
+
+                  if (resendKey && linkData?.properties?.action_link) {
+                    const emailRes = await fetch("https://api.resend.com/emails", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${resendKey}`,
+                      },
+                      body: JSON.stringify({
+                        from: `${fromName} <${fromEmail}>`,
+                        to: [customerEmail],
+                        subject: "Welcome to REOP Hub — Set Your Password",
+                        html: `
+                          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <h2 style="color: #1a1a1a;">Welcome to Real Estate on Purpose!</h2>
+                            <p style="color: #4a4a4a; line-height: 1.6;">
+                              Your <strong>${(tier || "core").charAt(0).toUpperCase() + (tier || "core").slice(1)}</strong> subscription is now active. 
+                              To get started, please set your password by clicking the button below:
+                            </p>
+                            <div style="text-align: center; margin: 30px 0;">
+                              <a href="${linkData.properties.action_link}" 
+                                 style="background-color: #0d9488; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                                Set Your Password
+                              </a>
+                            </div>
+                            <p style="color: #6a6a6a; font-size: 14px; line-height: 1.5;">
+                              After setting your password, you can sign in at 
+                              <a href="https://hub.realestateonpurpose.com/auth" style="color: #0d9488;">hub.realestateonpurpose.com</a>.
+                            </p>
+                            <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 20px 0;" />
+                            <p style="color: #999; font-size: 12px;">
+                              If you didn't sign up for this account, you can safely ignore this email.
+                            </p>
+                          </div>
+                        `,
+                      }),
+                    });
+
+                    if (emailRes.ok) {
+                      logStep("Welcome/password-set email sent via Resend");
+                    } else {
+                      const errBody = await emailRes.text();
+                      logStep("ERROR sending email via Resend", { status: emailRes.status, body: errBody });
+                    }
+                  } else {
+                    logStep("Resend not configured or no action_link, skipping email");
+                  }
+                }
+              } catch (emailErr: any) {
+                logStep("ERROR in recovery email flow", { error: emailErr.message });
+              }
+            }
           }
+        }
+
+        // ── Assign role ──
+        if (userId && tier && (tier === "core" || tier === "managed")) {
+          await supabase
+            .from("user_roles")
+            .upsert(
+              { user_id: userId, role: tier, created_by: userId },
+              { onConflict: "user_id,role" }
+            );
+          logStep("User role assigned", { userId, role: tier });
         }
         break;
       }
@@ -134,13 +268,37 @@ serve(async (req) => {
         const subscription = event.data.object as any;
         const userId = subscription.metadata?.user_id;
         if (userId) {
-          // Remove subscription roles
           await supabase
             .from("user_roles")
             .delete()
             .eq("user_id", userId)
             .in("role", ["core", "managed"]);
           logStep("Subscription cancelled, roles removed", { userId });
+        } else {
+          // Try to find user by customer email
+          const customerId = subscription.customer;
+          if (customerId) {
+            try {
+              const customer = await stripe.customers.retrieve(customerId);
+              if (customer && !customer.deleted && (customer as any).email) {
+                const email = (customer as any).email;
+                const { data: allUsers } = await supabase.auth.admin.listUsers();
+                const found = allUsers?.users?.find(
+                  (u: any) => u.email?.toLowerCase() === email.toLowerCase()
+                );
+                if (found) {
+                  await supabase
+                    .from("user_roles")
+                    .delete()
+                    .eq("user_id", found.id)
+                    .in("role", ["core", "managed"]);
+                  logStep("Subscription cancelled (by email lookup), roles removed", { userId: found.id, email });
+                }
+              }
+            } catch (err: any) {
+              logStep("ERROR looking up customer for cancellation", { error: err.message });
+            }
+          }
         }
         break;
       }

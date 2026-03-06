@@ -15,21 +15,17 @@ const logStep = (step: string, details?: any) => {
 
 /**
  * Founder plan configuration.
- * Maps the "placeholder" monthly price IDs to the product + amounts
- * so we can find-or-create a proper 6-month interval price.
  */
 const FOUNDER_PLANS: Record<
   string,
   { tier: string; productId: string; amountCents: number; monthlyPriceId: string }
 > = {
-  // Core Founder
   "price_1T82T9QGA8aVyaHSx4NYVQCl": {
     tier: "core",
     productId: "prod_U6Ex7tgKBZtZc5",
     amountCents: 99700,
     monthlyPriceId: "price_1T809vQGA8aVyaHSqHxPGZVH",
   },
-  // Managed Founder
   "price_1T82UbQGA8aVyaHSwPJgIqXm": {
     tier: "managed",
     productId: "prod_U6Eyw4OBAEIm9V",
@@ -38,16 +34,23 @@ const FOUNDER_PLANS: Record<
   },
 };
 
-/**
- * Find or create a Stripe Price with interval_count = 6 months
- * so the customer is charged once for a 6-month period.
- */
+/** Map standard price IDs to their tier */
+const STANDARD_PRICE_TIERS: Record<string, string> = {
+  // Core monthly
+  "price_1T809vQGA8aVyaHSqHxPGZVH": "core",
+  // Core annual
+  "price_1T80BTQGA8aVyaHSwA5MG8Wx": "core",
+  // Managed monthly
+  "price_1T80CiQGA8aVyaHSTcBId8Ss": "managed",
+  // Managed annual
+  "price_1T80DBQGA8aVyaHSXggTaq9Z": "managed",
+};
+
 async function getOrCreateSixMonthPrice(
   stripe: Stripe,
   productId: string,
   amountCents: number
 ): Promise<string> {
-  // Look for existing 6-month price on this product
   const existing = await stripe.prices.list({ product: productId, active: true, limit: 20 });
   const match = existing.data.find(
     (p: any) =>
@@ -60,7 +63,6 @@ async function getOrCreateSixMonthPrice(
     return match.id;
   }
 
-  // Create a new 6-month recurring price
   const newPrice = await stripe.prices.create({
     product: productId,
     unit_amount: amountCents,
@@ -76,43 +78,50 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseClient = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_ANON_KEY") ?? ""
-  );
-
   try {
     logStep("Function started");
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const authHeader = req.headers.get("Authorization")!;
-    const token = authHeader.replace("Bearer ", "");
-    const { data } = await supabaseClient.auth.getUser(token);
-    const user = data.user;
-    if (!user?.email) throw new Error("User not authenticated or email not available");
-    logStep("User authenticated", { userId: user.id, email: user.email });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    const origin = req.headers.get("origin") || "https://hub.realestateonpurpose.com";
+
+    // Determine if user is authenticated
+    const authHeader = req.headers.get("Authorization");
+    let user: { id: string; email: string } | null = null;
+
+    if (authHeader && authHeader !== "Bearer ") {
+      const supabaseClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+      );
+      const token = authHeader.replace("Bearer ", "");
+      const { data } = await supabaseClient.auth.getUser(token);
+      if (data.user?.email) {
+        user = { id: data.user.id, email: data.user.email };
+        logStep("Authenticated user", { userId: user.id, email: user.email });
+      }
+    }
 
     const { priceId } = await req.json();
     if (!priceId) throw new Error("priceId is required");
-    logStep("Price ID received", { priceId });
+    logStep("Price ID received", { priceId, authenticated: !!user });
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-
-    // Check for existing Stripe customer
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    // Find existing Stripe customer if user is authenticated
     let customerId: string | undefined;
-    if (customers.data.length > 0) {
-      customerId = customers.data[0].id;
-      logStep("Existing customer found", { customerId });
+    if (user) {
+      const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+      if (customers.data.length > 0) {
+        customerId = customers.data[0].id;
+        logStep("Existing customer found", { customerId });
+      }
     }
 
-    const origin = req.headers.get("origin") || "https://hub.realestateonpurpose.com";
     const founderPlan = FOUNDER_PLANS[priceId];
 
     if (founderPlan) {
-      // ── Founder Plan: use 6-month interval price + tag for webhook schedule conversion ──
+      // ── Founder Plan ──
       logStep("Founder plan detected", { tier: founderPlan.tier });
 
       const sixMonthPriceId = await getOrCreateSixMonthPrice(
@@ -121,24 +130,31 @@ serve(async (req) => {
         founderPlan.amountCents
       );
 
-      const session = await stripe.checkout.sessions.create({
-        customer: customerId,
-        customer_email: customerId ? undefined : user.email,
+      const sessionParams: any = {
         line_items: [{ price: sixMonthPriceId, quantity: 1 }],
         mode: "subscription",
-        success_url: `${origin}/?checkout=success`,
+        success_url: `${origin}/pricing?checkout=success`,
         cancel_url: `${origin}/pricing`,
-        metadata: { user_id: user.id },
         subscription_data: {
           metadata: {
-            user_id: user.id,
             founder: "true",
             tier: founderPlan.tier,
             monthly_price_id: founderPlan.monthlyPriceId,
+            ...(user ? { user_id: user.id } : {}),
           },
         },
-      });
+      };
 
+      if (customerId) {
+        sessionParams.customer = customerId;
+        sessionParams.metadata = { user_id: user!.id };
+      } else if (user) {
+        sessionParams.customer_email = user.email;
+        sessionParams.metadata = { user_id: user.id };
+      }
+      // If unauthenticated: no customer_email, Stripe Checkout collects it
+
+      const session = await stripe.checkout.sessions.create(sessionParams);
       logStep("Founder checkout session created", { sessionId: session.id });
 
       return new Response(
@@ -148,16 +164,32 @@ serve(async (req) => {
     }
 
     // ── Standard plan checkout ──
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      customer_email: customerId ? undefined : user.email,
+    const tier = STANDARD_PRICE_TIERS[priceId] || null;
+    logStep("Standard plan", { tier });
+
+    const sessionParams: any = {
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
-      success_url: `${origin}/?checkout=success`,
+      success_url: `${origin}/pricing?checkout=success`,
       cancel_url: `${origin}/pricing`,
-      metadata: { user_id: user.id },
-    });
+      subscription_data: {
+        metadata: {
+          ...(tier ? { tier } : {}),
+          ...(user ? { user_id: user.id } : {}),
+        },
+      },
+    };
 
+    if (customerId) {
+      sessionParams.customer = customerId;
+      sessionParams.metadata = { user_id: user!.id };
+    } else if (user) {
+      sessionParams.customer_email = user.email;
+      sessionParams.metadata = { user_id: user.id };
+    }
+    // If unauthenticated: no customer_email set, Stripe collects it
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
     logStep("Checkout session created", { sessionId: session.id });
 
     return new Response(
