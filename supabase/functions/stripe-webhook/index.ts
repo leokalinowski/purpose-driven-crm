@@ -27,7 +27,8 @@ serve(async (req) => {
     const signature = req.headers.get("stripe-signature");
     const body = await req.text();
     try {
-      event = await stripe.webhooks.constructEventAsync(body, signature!, webhookSecret);
+      const cryptoProvider = Stripe.createSubtleCryptoProvider();
+      event = await stripe.webhooks.constructEventAsync(body, signature!, webhookSecret, undefined, cryptoProvider);
     } catch (err: any) {
       logStep("Webhook signature verification failed", { error: err.message });
       return new Response(`Webhook Error: ${err.message}`, { status: 400 });

@@ -1,39 +1,34 @@
 
 
-## Problem
+## Fix: RSVP RLS Violation on Public Submissions
 
-The `stripe-webhook` edge function is failing on **every** incoming event with:
-> `SubtleCryptoProvider cannot be used in a synchronous context. Use constructEventAsync(...) instead of constructEvent(...)`
+### Root Cause
 
-The source code already uses `constructEventAsync`, but the **deployed** version is stale and still uses the synchronous method. Stripe is retrying the webhook repeatedly (12+ attempts visible in logs), all failing.
+In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
 
-Meanwhile, `check-subscription` is now working correctly after the earlier fix.
+The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
 
-## Plan
+### Fix
 
-### 1. Redeploy the `stripe-webhook` edge function
-The code at `supabase/functions/stripe-webhook/index.ts` (line 30) already has the correct `await stripe.webhooks.constructEventAsync(...)` call. It simply needs to be redeployed so the live version matches.
+Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
 
-### 2. Add explicit Stripe crypto provider (safety measure)
-To ensure compatibility with the Deno/Edge runtime, add the `SubtleCryptoProvider` import and pass it to `constructEventAsync`:
+### Step 1: Database Migration
 
-```typescript
-import { Stripe } from "https://esm.sh/stripe@18.5.0";
+Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
+- Verifies event exists and is published
+- Checks for duplicate RSVP (reuses existing logic)
+- Determines status based on capacity (confirmed vs waitlist)
+- Inserts the row and returns `id` and `status`
+- SECURITY DEFINER so it bypasses RLS
 
-// In the verification block:
-const cryptoProvider = Stripe.createSubtleCryptoProvider();
-event = await stripe.webhooks.constructEventAsync(
-  body, signature!, webhookSecret, undefined, cryptoProvider
-);
-```
+### Step 2: Update `src/hooks/useRSVP.ts`
 
-This explicitly tells Stripe to use the Web Crypto API, which is required in Deno/Edge environments.
+Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
 
-### 3. Verify via logs
-After redeployment, the queued Stripe retries should succeed automatically. Check logs to confirm `checkout.session.completed` processes and the user account + role provisioning triggers.
+### Files Changed
 
-## Expected outcome
-- Webhook processes the test subscription event
-- User account is created (or matched) and role assigned
-- Password-set email is sent via Resend
+| File | Change |
+|------|--------|
+| Migration SQL | Create `submit_public_rsvp` function |
+| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
 
