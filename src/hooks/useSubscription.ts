@@ -9,6 +9,7 @@ interface SubscriptionState {
   priceId: string | null;
   subscriptionEnd: string | null;
   loading: boolean;
+  testMode: boolean;
 }
 
 export function useSubscription() {
@@ -19,6 +20,7 @@ export function useSubscription() {
     priceId: null,
     subscriptionEnd: null,
     loading: true,
+    testMode: false,
   });
 
   const checkSubscription = useCallback(async () => {
@@ -33,7 +35,8 @@ export function useSubscription() {
       });
       if (error) throw error;
 
-      const tier = data?.price_id ? getTierFromPriceId(data.price_id) : null;
+      const isTestMode = !!data?.test_mode;
+      const tier = data?.price_id ? getTierFromPriceId(data.price_id, isTestMode) : null;
 
       setState({
         subscribed: !!data?.subscribed,
@@ -41,6 +44,7 @@ export function useSubscription() {
         priceId: data?.price_id ?? null,
         subscriptionEnd: data?.subscription_end ?? null,
         loading: false,
+        testMode: isTestMode,
       });
     } catch (err) {
       console.error('[useSubscription] Error checking subscription:', err);
@@ -60,7 +64,6 @@ export function useSubscription() {
   }, [user, checkSubscription]);
 
   const createCheckout = async (priceId: string) => {
-    // Support both authenticated and unauthenticated checkout
     const headers: Record<string, string> = {};
     if (session?.access_token) {
       headers.Authorization = `Bearer ${session.access_token}`;

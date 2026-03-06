@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Check, Loader2, Sparkles, Flame, Clock, CheckCircle } from 'lucide-react';
-import { STRIPE_TIERS } from '@/config/stripe';
+import { STRIPE_TIERS, getStripeTiers } from '@/config/stripe';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
@@ -15,7 +15,7 @@ type BillingPeriod = 'monthly' | 'annual' | 'founder';
 
 const Pricing = () => {
   const { user } = useAuth();
-  const { subscribed, tier: currentTier, createCheckout, checkSubscription, loading: subLoading } = useSubscription();
+  const { subscribed, tier: currentTier, testMode, createCheckout, checkSubscription, loading: subLoading } = useSubscription();
   const [billing, setBilling] = useState<BillingPeriod>('founder');
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -23,14 +23,15 @@ const Pricing = () => {
 
   const checkoutSuccess = searchParams.get('checkout') === 'success';
 
+  // Use the correct tier config based on test/live mode
+  const activeTiers = getStripeTiers(testMode);
+
   // Handle ?checkout=success
   useEffect(() => {
     if (checkoutSuccess) {
       if (user) {
-        // Authenticated user returning from checkout — refresh subscription
         checkSubscription();
       }
-      // Clean up the URL param after showing the banner
       const timer = setTimeout(() => {
         setSearchParams({}, { replace: true });
       }, 15000);
@@ -39,7 +40,7 @@ const Pricing = () => {
   }, [checkoutSuccess, user]);
 
   const handleCheckout = async (tierKey: 'core' | 'managed') => {
-    const tier = STRIPE_TIERS[tierKey];
+    const tier = activeTiers[tierKey];
     let priceId: string;
     if (billing === 'founder') {
       priceId = tier.founder.price_id;
@@ -59,8 +60,8 @@ const Pricing = () => {
   };
 
   const tiers = [
-    { key: 'core' as const, ...STRIPE_TIERS.core, popular: false },
-    { key: 'managed' as const, ...STRIPE_TIERS.managed, popular: true },
+    { key: 'core' as const, ...activeTiers.core, popular: false },
+    { key: 'managed' as const, ...activeTiers.managed, popular: true },
   ];
 
   const getPrice = (tier: typeof tiers[number]) => {
@@ -88,6 +89,15 @@ const Pricing = () => {
           </div>
           <p className="text-xs text-green-700">
             Check your email for a link to set your password and sign in to your dashboard.
+          </p>
+        </div>
+      )}
+
+      {/* Test mode indicator */}
+      {testMode && (
+        <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-2 text-center">
+          <p className="text-xs font-medium text-yellow-800">
+            🧪 Stripe Test Mode — Use card 4242 4242 4242 4242
           </p>
         </div>
       )}

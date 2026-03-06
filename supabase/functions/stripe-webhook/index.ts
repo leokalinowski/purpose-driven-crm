@@ -7,6 +7,32 @@ const logStep = (step: string, details?: any) => {
   console.log(`[STRIPE-WEBHOOK] ${step}${detailsStr}`);
 };
 
+/** Price-to-tier maps for fallback when metadata.tier is missing */
+const PRICE_TO_TIER_LIVE: Record<string, string> = {
+  "price_1T809vQGA8aVyaHSqHxPGZVH": "core",
+  "price_1T80BTQGA8aVyaHSwA5MG8Wx": "core",
+  "price_1T82T9QGA8aVyaHSx4NYVQCl": "core",
+  "price_1T80CiQGA8aVyaHSTcBId8Ss": "managed",
+  "price_1T80DBQGA8aVyaHSXggTaq9Z": "managed",
+  "price_1T82UbQGA8aVyaHSwPJgIqXm": "managed",
+};
+
+const PRICE_TO_TIER_TEST: Record<string, string> = {
+  "price_1T87J0QGA8aVyaHS7vCe7Fw8": "core",
+  "price_1T87JNQGA8aVyaHS0fReVKmL": "core",
+  "price_1T87JeQGA8aVyaHSYcaEONPJ": "core",
+  "price_1T87JzQGA8aVyaHSBCJ7pzWT": "managed",
+  "price_1T87KUQGA8aVyaHSnpM40Lh3": "managed",
+  "price_1T87KlQGA8aVyaHSN5VInftx": "managed",
+};
+
+/** Derive tier from a price ID, checking both maps */
+function getTierFromPriceId(priceId: string, isTestMode: boolean): string | null {
+  const primary = isTestMode ? PRICE_TO_TIER_TEST : PRICE_TO_TIER_LIVE;
+  const fallback = isTestMode ? PRICE_TO_TIER_LIVE : PRICE_TO_TIER_TEST;
+  return primary[priceId] || fallback[priceId] || null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200 });
@@ -17,6 +43,9 @@ serve(async (req) => {
     logStep("ERROR", { message: "STRIPE_SECRET_KEY not set" });
     return new Response("Server error", { status: 500 });
   }
+
+  const isTestMode = stripeKey.startsWith("sk_test_");
+  logStep("Mode", { isTestMode });
 
   const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
@@ -62,8 +91,15 @@ serve(async (req) => {
         const metadata = subscription.metadata || {};
         const sessionMetadata = session.metadata || {};
 
-        // Determine the tier from subscription metadata
-        const tier = metadata.tier as string | undefined;
+        // Determine the tier from subscription metadata, with price-based fallback
+        let tier = metadata.tier as string | undefined;
+        if (!tier) {
+          const subPriceId = subscription.items?.data?.[0]?.price?.id;
+          if (subPriceId) {
+            tier = getTierFromPriceId(subPriceId, isTestMode) || undefined;
+            logStep("Tier derived from price fallback", { subPriceId, tier });
+          }
+        }
         logStep("Subscription metadata", { metadata, sessionMetadata, tier });
 
         // ── Founder plan: convert to schedule ──
@@ -127,7 +163,7 @@ serve(async (req) => {
             userId = existingUser.id;
             logStep("Found existing Supabase user by email", { userId, email: customerEmail });
           } else {
-            // Create a new user account (bypasses validate_invited_signup trigger)
+            // Create a new user account
             logStep("Creating new Supabase user", { email: customerEmail, name: customerName });
 
             const nameParts = customerName ? customerName.split(" ") : [];
@@ -145,7 +181,6 @@ serve(async (req) => {
 
             if (createError) {
               logStep("ERROR creating user", { error: createError.message });
-              // If user already exists error, try to find them
               if (createError.message?.includes("already")) {
                 const { data: allUsers } = await supabase.auth.admin.listUsers();
                 const found = allUsers?.users?.find(
@@ -189,11 +224,8 @@ serve(async (req) => {
                 if (linkError) {
                   logStep("ERROR generating recovery link", { error: linkError.message });
                 } else {
-                  logStep("Recovery link generated for new user", {
-                    email: customerEmail,
-                  });
+                  logStep("Recovery link generated for new user", { email: customerEmail });
 
-                  // Send email via Resend with the recovery link
                   const resendKey = Deno.env.get("RESEND_API_KEY");
                   const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "noreply@realestateonpurpose.com";
                   const fromName = Deno.env.get("RESEND_FROM_NAME") || "Real Estate on Purpose";
@@ -276,7 +308,6 @@ serve(async (req) => {
             .in("role", ["core", "managed"]);
           logStep("Subscription cancelled, roles removed", { userId });
         } else {
-          // Try to find user by customer email
           const customerId = subscription.customer;
           if (customerId) {
             try {

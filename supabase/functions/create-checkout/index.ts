@@ -14,9 +14,9 @@ const logStep = (step: string, details?: any) => {
 };
 
 /**
- * Founder plan configuration.
+ * Founder plan configuration — live and test mode.
  */
-const FOUNDER_PLANS: Record<
+const FOUNDER_PLANS_LIVE: Record<
   string,
   { tier: string; productId: string; amountCents: number; monthlyPriceId: string }
 > = {
@@ -34,16 +34,37 @@ const FOUNDER_PLANS: Record<
   },
 };
 
-/** Map standard price IDs to their tier */
-const STANDARD_PRICE_TIERS: Record<string, string> = {
-  // Core monthly
+const FOUNDER_PLANS_TEST: Record<
+  string,
+  { tier: string; productId: string; amountCents: number; monthlyPriceId: string }
+> = {
+  "price_1T87JeQGA8aVyaHSYcaEONPJ": {
+    tier: "core",
+    productId: "prod_U6Jx3oB19agtnz",
+    amountCents: 99700,
+    monthlyPriceId: "price_1T87J0QGA8aVyaHS7vCe7Fw8",
+  },
+  "price_1T87KlQGA8aVyaHSN5VInftx": {
+    tier: "managed",
+    productId: "prod_U6JydMsJcVubkF",
+    amountCents: 299700,
+    monthlyPriceId: "price_1T87JzQGA8aVyaHSBCJ7pzWT",
+  },
+};
+
+/** Map standard price IDs to their tier — live and test */
+const STANDARD_PRICE_TIERS_LIVE: Record<string, string> = {
   "price_1T809vQGA8aVyaHSqHxPGZVH": "core",
-  // Core annual
   "price_1T80BTQGA8aVyaHSwA5MG8Wx": "core",
-  // Managed monthly
   "price_1T80CiQGA8aVyaHSTcBId8Ss": "managed",
-  // Managed annual
   "price_1T80DBQGA8aVyaHSXggTaq9Z": "managed",
+};
+
+const STANDARD_PRICE_TIERS_TEST: Record<string, string> = {
+  "price_1T87J0QGA8aVyaHS7vCe7Fw8": "core",
+  "price_1T87JNQGA8aVyaHS0fReVKmL": "core",
+  "price_1T87JzQGA8aVyaHSBCJ7pzWT": "managed",
+  "price_1T87KUQGA8aVyaHSnpM40Lh3": "managed",
 };
 
 async function getOrCreateSixMonthPrice(
@@ -84,6 +105,13 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
+    const isTestMode = stripeKey.startsWith("sk_test_");
+    logStep("Mode detected", { isTestMode });
+
+    // Select the correct ID maps based on mode
+    const FOUNDER_PLANS = isTestMode ? FOUNDER_PLANS_TEST : FOUNDER_PLANS_LIVE;
+    const STANDARD_PRICE_TIERS = isTestMode ? STANDARD_PRICE_TIERS_TEST : STANDARD_PRICE_TIERS_LIVE;
+
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const origin = req.headers.get("origin") || "https://hub.realestateonpurpose.com";
 
@@ -106,7 +134,7 @@ serve(async (req) => {
 
     const { priceId } = await req.json();
     if (!priceId) throw new Error("priceId is required");
-    logStep("Price ID received", { priceId, authenticated: !!user });
+    logStep("Price ID received", { priceId, authenticated: !!user, isTestMode });
 
     // Find existing Stripe customer if user is authenticated
     let customerId: string | undefined;
@@ -152,7 +180,6 @@ serve(async (req) => {
         sessionParams.customer_email = user.email;
         sessionParams.metadata = { user_id: user.id };
       }
-      // If unauthenticated: no customer_email, Stripe Checkout collects it
 
       const session = await stripe.checkout.sessions.create(sessionParams);
       logStep("Founder checkout session created", { sessionId: session.id });
@@ -187,7 +214,6 @@ serve(async (req) => {
       sessionParams.customer_email = user.email;
       sessionParams.metadata = { user_id: user.id };
     }
-    // If unauthenticated: no customer_email set, Stripe collects it
 
     const session = await stripe.checkout.sessions.create(sessionParams);
     logStep("Checkout session created", { sessionId: session.id });
