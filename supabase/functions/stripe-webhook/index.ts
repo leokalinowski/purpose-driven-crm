@@ -149,149 +149,140 @@ serve(async (req) => {
         let userId = metadata.user_id || sessionMetadata.user_id;
 
         if (!userId && customerEmail) {
-          // Check if a Supabase user already exists with this email
-          const { data: existingUsers } = await supabase.auth.admin.listUsers({
-            page: 1,
-            perPage: 1,
+          // Try to create user directly — if they already exist, we catch the error and look them up
+          logStep("Attempting to create/find Supabase user", { email: customerEmail, name: customerName });
+
+          const nameParts = customerName ? customerName.split(" ") : [];
+          const firstName = nameParts[0] || "";
+          const lastName = nameParts.slice(1).join(" ") || "";
+
+          const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+            email: customerEmail,
+            email_confirm: true,
+            user_metadata: {
+              first_name: firstName,
+              last_name: lastName,
+            },
           });
 
-          const existingUser = existingUsers?.users?.find(
-            (u: any) => u.email?.toLowerCase() === customerEmail.toLowerCase()
-          );
+          if (createError) {
+            logStep("User creation returned error (likely already exists)", { error: createError.message });
+            // User already exists — find them by scanning all users
+            const { data: allUsers } = await supabase.auth.admin.listUsers();
+            const found = allUsers?.users?.find(
+              (u: any) => u.email?.toLowerCase() === customerEmail.toLowerCase()
+            );
+            if (found) {
+              userId = found.id;
+              logStep("Found existing user by email scan", { userId });
+            } else {
+              logStep("ERROR: Could not find user even after create conflict", { email: customerEmail });
+            }
+          } else if (newUser?.user) {
+            userId = newUser.user.id;
+            logStep("New user created", { userId });
 
-          if (existingUser) {
-            userId = existingUser.id;
-            logStep("Found existing Supabase user by email", { userId, email: customerEmail });
-          } else {
-            // Create a new user account
-            logStep("Creating new Supabase user", { email: customerEmail, name: customerName });
-
-            const nameParts = customerName ? customerName.split(" ") : [];
-            const firstName = nameParts[0] || "";
-            const lastName = nameParts.slice(1).join(" ") || "";
-
-            const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+            // Create profile row
+            const { error: profileError } = await supabase.from("profiles").upsert({
+              user_id: userId,
+              first_name: firstName || null,
+              last_name: lastName || null,
               email: customerEmail,
-              email_confirm: true,
-              user_metadata: {
-                first_name: firstName,
-                last_name: lastName,
-              },
-            });
+              role: tier || "core",
+            }, { onConflict: "user_id" });
 
-            if (createError) {
-              logStep("ERROR creating user", { error: createError.message });
-              if (createError.message?.includes("already")) {
-                const { data: allUsers } = await supabase.auth.admin.listUsers();
-                const found = allUsers?.users?.find(
-                  (u: any) => u.email?.toLowerCase() === customerEmail.toLowerCase()
-                );
-                if (found) {
-                  userId = found.id;
-                  logStep("Found user after create conflict", { userId });
-                }
-              }
-              if (!userId) break;
-            } else if (newUser?.user) {
-              userId = newUser.user.id;
-              logStep("New user created", { userId });
+            if (profileError) {
+              logStep("ERROR creating profile", { error: profileError.message });
+            } else {
+              logStep("Profile created for new user");
+            }
 
-              // Create profile row
-              const { error: profileError } = await supabase.from("profiles").upsert({
-                user_id: userId,
-                first_name: firstName || null,
-                last_name: lastName || null,
+            // Send password reset email so user can set their password
+            try {
+              const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+                type: "recovery",
                 email: customerEmail,
-                role: tier || "core",
-              }, { onConflict: "user_id" });
+                options: {
+                  redirectTo: "https://hub.realestateonpurpose.com/auth/reset",
+                },
+              });
 
-              if (profileError) {
-                logStep("ERROR creating profile", { error: profileError.message });
+              if (linkError) {
+                logStep("ERROR generating recovery link", { error: linkError.message });
               } else {
-                logStep("Profile created for new user");
-              }
+                logStep("Recovery link generated for new user", { email: customerEmail });
 
-              // Send password reset email so user can set their password
-              try {
-                const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-                  type: "recovery",
-                  email: customerEmail,
-                  options: {
-                    redirectTo: "https://hub.realestateonpurpose.com/auth/reset",
-                  },
-                });
+                const resendKey = Deno.env.get("RESEND_API_KEY");
+                const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "noreply@realestateonpurpose.com";
+                const fromName = Deno.env.get("RESEND_FROM_NAME") || "Real Estate on Purpose";
 
-                if (linkError) {
-                  logStep("ERROR generating recovery link", { error: linkError.message });
-                } else {
-                  logStep("Recovery link generated for new user", { email: customerEmail });
-
-                  const resendKey = Deno.env.get("RESEND_API_KEY");
-                  const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "noreply@realestateonpurpose.com";
-                  const fromName = Deno.env.get("RESEND_FROM_NAME") || "Real Estate on Purpose";
-
-                  if (resendKey && linkData?.properties?.action_link) {
-                    const emailRes = await fetch("https://api.resend.com/emails", {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${resendKey}`,
-                      },
-                      body: JSON.stringify({
-                        from: `${fromName} <${fromEmail}>`,
-                        to: [customerEmail],
-                        subject: "Welcome to REOP Hub — Set Your Password",
-                        html: `
-                          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                            <h2 style="color: #1a1a1a;">Welcome to Real Estate on Purpose!</h2>
-                            <p style="color: #4a4a4a; line-height: 1.6;">
-                              Your <strong>${(tier || "core").charAt(0).toUpperCase() + (tier || "core").slice(1)}</strong> subscription is now active. 
-                              To get started, please set your password by clicking the button below:
-                            </p>
-                            <div style="text-align: center; margin: 30px 0;">
-                              <a href="${linkData.properties.action_link}" 
-                                 style="background-color: #0d9488; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
-                                Set Your Password
-                              </a>
-                            </div>
-                            <p style="color: #6a6a6a; font-size: 14px; line-height: 1.5;">
-                              After setting your password, you can sign in at 
-                              <a href="https://hub.realestateonpurpose.com/auth" style="color: #0d9488;">hub.realestateonpurpose.com</a>.
-                            </p>
-                            <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 20px 0;" />
-                            <p style="color: #999; font-size: 12px;">
-                              If you didn't sign up for this account, you can safely ignore this email.
-                            </p>
+                if (resendKey && linkData?.properties?.action_link) {
+                  const emailRes = await fetch("https://api.resend.com/emails", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${resendKey}`,
+                    },
+                    body: JSON.stringify({
+                      from: `${fromName} <${fromEmail}>`,
+                      to: [customerEmail],
+                      subject: "Welcome to REOP Hub — Set Your Password",
+                      html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                          <h2 style="color: #1a1a1a;">Welcome to Real Estate on Purpose!</h2>
+                          <p style="color: #4a4a4a; line-height: 1.6;">
+                            Your <strong>${(tier || "core").charAt(0).toUpperCase() + (tier || "core").slice(1)}</strong> subscription is now active. 
+                            To get started, please set your password by clicking the button below:
+                          </p>
+                          <div style="text-align: center; margin: 30px 0;">
+                            <a href="${linkData.properties.action_link}" 
+                               style="background-color: #0d9488; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                              Set Your Password
+                            </a>
                           </div>
-                        `,
-                      }),
-                    });
+                          <p style="color: #6a6a6a; font-size: 14px; line-height: 1.5;">
+                            After setting your password, you can sign in at 
+                            <a href="https://hub.realestateonpurpose.com/auth" style="color: #0d9488;">hub.realestateonpurpose.com</a>.
+                          </p>
+                          <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 20px 0;" />
+                          <p style="color: #999; font-size: 12px;">
+                            If you didn't sign up for this account, you can safely ignore this email.
+                          </p>
+                        </div>
+                      `,
+                    }),
+                  });
 
-                    if (emailRes.ok) {
-                      logStep("Welcome/password-set email sent via Resend");
-                    } else {
-                      const errBody = await emailRes.text();
-                      logStep("ERROR sending email via Resend", { status: emailRes.status, body: errBody });
-                    }
+                  if (emailRes.ok) {
+                    logStep("Welcome/password-set email sent via Resend");
                   } else {
-                    logStep("Resend not configured or no action_link, skipping email");
+                    const errBody = await emailRes.text();
+                    logStep("ERROR sending email via Resend", { status: emailRes.status, body: errBody });
                   }
+                } else {
+                  logStep("Resend not configured or no action_link, skipping email");
                 }
-              } catch (emailErr: any) {
-                logStep("ERROR in recovery email flow", { error: emailErr.message });
               }
+            } catch (emailErr: any) {
+              logStep("ERROR in recovery email flow", { error: emailErr.message });
             }
           }
         }
 
-        // ── Assign role ──
+        // ── Assign role (clean up old subscription roles first) ──
         if (userId && tier && (tier === "core" || tier === "managed")) {
+          // Remove any existing subscription-tier roles to prevent accumulation
           await supabase
             .from("user_roles")
-            .upsert(
-              { user_id: userId, role: tier, created_by: userId },
-              { onConflict: "user_id,role" }
-            );
+            .delete()
+            .eq("user_id", userId)
+            .in("role", ["core", "managed"]);
+          logStep("Cleared old subscription roles", { userId });
+
+          // Insert the new role
+          await supabase
+            .from("user_roles")
+            .insert({ user_id: userId, role: tier, created_by: userId });
           logStep("User role assigned", { userId, role: tier });
         }
         break;
