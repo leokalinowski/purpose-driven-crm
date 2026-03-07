@@ -1,34 +1,31 @@
+## Problem
 
+After completing Stripe checkout, users are redirected back to `/pricing?checkout=success` which just shows the same pricing page with a tiny green banner. For new users who just paid, this is confusing — they see pricing cards and a "Your Current Plan" disabled button instead of a clear welcome/confirmation experience.
 
-## Fix: RSVP RLS Violation on Public Submissions
+## Solution
 
-### Root Cause
+Create a dedicated post-checkout confirmation view that replaces the pricing cards when `?checkout=success` is detected. This view will:
 
-In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
+1. Show a prominent success message with the REOP logo
+2. Congratulate the user on their purchase
+3. Tell them to check their email for a password-set link (for new users)
+4. Provide a clear "Go to Dashboard" button (for authenticated users) or "Sign In" button
 
-The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
+## Changes
 
-### Fix
+**File: `src/pages/Pricing.tsx**`
 
-Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
+When `checkoutSuccess` is true, render a full-page confirmation view instead of the pricing cards:
 
-### Step 1: Database Migration
+- Large green checkmark icon
+- "Welcome to Real Estate on Purpose!" heading
+- "Your subscription is now active" message
+- Instructions to check email for password setup (new users)
+- "Go to Dashboard" button (authenticated) or "Sign In" button (unauthenticated)
+- Keep the REOP logo at top for branding continuity
 
-Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
-- Verifies event exists and is published
-- Checks for duplicate RSVP (reuses existing logic)
-- Determines status based on capacity (confirmed vs waitlist)
-- Inserts the row and returns `id` and `status`
-- SECURITY DEFINER so it bypasses RLS
+This replaces the current approach of showing a small banner on top of the full pricing page.
 
-### Step 2: Update `src/hooks/useRSVP.ts`
+&nbsp;
 
-Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
-
-### Files Changed
-
-| File | Change |
-|------|--------|
-| Migration SQL | Create `submit_public_rsvp` function |
-| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
-
+After this, check the email logs. I did not receive anything in my inbox. 
