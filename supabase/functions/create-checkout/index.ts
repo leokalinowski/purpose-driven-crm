@@ -161,6 +161,7 @@ serve(async (req) => {
       const sessionParams: any = {
         line_items: [{ price: sixMonthPriceId, quantity: 1 }],
         mode: "subscription",
+        allow_promotion_codes: true,
         success_url: `${origin}/pricing?checkout=success`,
         cancel_url: `${origin}/pricing`,
         subscription_data: {
@@ -197,6 +198,7 @@ serve(async (req) => {
     const sessionParams: any = {
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
+      allow_promotion_codes: true,
       success_url: `${origin}/pricing?checkout=success`,
       cancel_url: `${origin}/pricing`,
       subscription_data: {

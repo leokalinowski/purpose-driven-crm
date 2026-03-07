@@ -1,20 +1,34 @@
 
 
-## Enable Promotion Code Field on Stripe Checkout
+## Fix: RSVP RLS Violation on Public Submissions
 
-The missing coupon field is a Stripe Checkout session configuration. By default, Stripe hides the promotion code input. We need to add `allow_promotion_codes: true` to the checkout session creation in the `create-checkout` edge function.
+### Root Cause
 
-### Changes
+In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
 
-**File: `supabase/functions/create-checkout/index.ts`**
+The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
 
-Add `allow_promotion_codes: true` to both the founder plan and standard plan `stripe.checkout.sessions.create()` calls. This adds a "Add promotion code" link on the Stripe Checkout page where you can enter your 100% off coupon.
+### Fix
 
-Two locations to update:
-1. Founder plan session (~line 128): add `allow_promotion_codes: true` to `sessionParams`
-2. Standard plan session (~line 160): add `allow_promotion_codes: true` to `sessionParams`
+Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
 
-### Pre-requisite
+### Step 1: Database Migration
 
-You'll also need a promotion code created in Stripe. I can create a 100% off coupon for you using the Stripe tools after implementing this change.
+Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
+- Verifies event exists and is published
+- Checks for duplicate RSVP (reuses existing logic)
+- Determines status based on capacity (confirmed vs waitlist)
+- Inserts the row and returns `id` and `status`
+- SECURITY DEFINER so it bypasses RLS
+
+### Step 2: Update `src/hooks/useRSVP.ts`
+
+Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| Migration SQL | Create `submit_public_rsvp` function |
+| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
 
