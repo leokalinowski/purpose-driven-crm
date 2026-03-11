@@ -17,6 +17,7 @@ import { useSupportTickets } from '@/hooks/useSupportTickets';
 const Support = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const { hasAccess, currentTier, getRequiredTier } = useFeatureAccess();
   
   const {
     highPriorityItems,

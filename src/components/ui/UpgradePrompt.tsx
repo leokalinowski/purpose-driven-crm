@@ -20,6 +20,7 @@ const TIER_LABELS: Record<string, string> = {
 };
 
 export function UpgradePrompt({ featureName, requiredTier, currentTier, description }: UpgradePromptProps) {
+  const navigate = useNavigate();
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <Card className="max-w-lg w-full text-center">
