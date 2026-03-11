@@ -99,6 +99,9 @@ const AdminEventsManagement = () => {
   const [deletingEvent, setDeletingEvent] = useState<EventWithAgent | null>(null);
   const [taskStats, setTaskStats] = useState<TaskStatsMap>({});
   const [detailTab, setDetailTab] = useState('overview');
+  const [syncingTasks, setSyncingTasks] = useState(false);
+  const [relinkingEvents, setRelinkingEvents] = useState(false);
+  const [registeringWebhook, setRegisteringWebhook] = useState(false);
   const [stats, setStats] = useState<EventStats>({
     total: 0,
     published: 0,
