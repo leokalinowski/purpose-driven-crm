@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Layout } from '@/components/layout/Layout';
@@ -12,6 +12,8 @@ import { TransactionOpportunity } from '@/components/dashboard/TransactionOpport
 import { TaskPerformance } from '@/components/dashboard/TaskPerformance';
 import { OverdueTasks } from '@/components/dashboard/OverdueTasks';
 import { DashboardRefreshButton } from '@/components/dashboard/DashboardRefreshButton';
+import { OnboardingWelcome } from '@/components/onboarding/OnboardingWelcome';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 
@@ -19,6 +21,21 @@ const Index = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { data, loading, error, refresh } = useDashboardBlocks();
+  const { profile } = useUserProfile();
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() =>
+    localStorage.getItem('reop_onboarding_dismissed') === 'true'
+  );
+
+  const isNewUser = data
+    ? data.blockOne.totalTouchpoints === 0 && data.blockThree.databaseSize === 0
+    : false;
+
+  const showOnboarding = !onboardingDismissed && !loading && !!data && isNewUser;
+
+  const dismissOnboarding = useCallback(() => {
+    localStorage.setItem('reop_onboarding_dismissed', 'true');
+    setOnboardingDismissed(true);
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -73,21 +90,21 @@ const Index = () => {
           </Card>
         )}
 
+        {showOnboarding && (
+          <OnboardingWelcome
+            userName={profile?.first_name}
+            onDismiss={dismissOnboarding}
+          />
+        )}
+
         {data && (
           <>
-            {/* Block 1: Weekly Touchpoints */}
             <WeeklyTouchpoints data={data.blockOne} />
-
-            {/* Block 2 + Block 3 side by side on large screens */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <WeeklyTasksBySystem data={data.blockTwo} />
               <TransactionOpportunity data={data.blockThree} />
             </div>
-
-            {/* Block 4: Performance */}
             <TaskPerformance data={data.blockFour} />
-
-            {/* Block 5: Overdue */}
             <OverdueTasks data={data.blockFive} />
           </>
         )}
