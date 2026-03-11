@@ -1,34 +1,29 @@
 
 
-## Fix: RSVP RLS Violation on Public Submissions
+## Plan: Switch Webhook Tier Detection from Price IDs to Product IDs
 
-### Root Cause
+### Problem
+The current `stripe-webhook` uses a `PRICE_TO_TIER_LIVE` / `PRICE_TO_TIER_TEST` map with 6 price IDs per environment. Every time you add a new price (e.g., a new billing interval or promo), you'd need to update this map. Product IDs are more stable — one product = one tier, regardless of how many prices it has.
 
-In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
+### Products → Tiers
 
-The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
+From Stripe:
+| Tier | Product IDs (Live) | Product IDs (Test) |
+|------|---|---|
+| Core | `prod_U6CZnBRXAi2jey` (monthly), `prod_U6CanelVG5Ilvn` (annual), `prod_U6Ex7tgKBZtZc5` (founder) | `prod_U6Jwx4nLCE1I2s`, `prod_U6JxCNA2455QJe`, `prod_U6Jx3oB19agtnz` |
+| Managed | `prod_U6CbXJqnPWpRVp` (monthly), `prod_U6CctQ78FSyxvp` (annual), `prod_U6Eyw4OBAEIm9V` (founder) | `prod_U6JxoQJVRqucDT`, `prod_U6JyhK7qt3CK4K`, `prod_U6JydMsJcVubkF` |
 
-### Fix
+### Changes
 
-Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
+**File: `supabase/functions/stripe-webhook/index.ts`**
 
-### Step 1: Database Migration
+1. Replace `PRICE_TO_TIER_LIVE` and `PRICE_TO_TIER_TEST` maps with `PRODUCT_TO_TIER_LIVE` and `PRODUCT_TO_TIER_TEST` maps using product IDs instead of price IDs.
 
-Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
-- Verifies event exists and is published
-- Checks for duplicate RSVP (reuses existing logic)
-- Determines status based on capacity (confirmed vs waitlist)
-- Inserts the row and returns `id` and `status`
-- SECURITY DEFINER so it bypasses RLS
+2. Replace `getTierFromPriceId()` with `getTierFromProductId()`.
 
-### Step 2: Update `src/hooks/useRSVP.ts`
+3. In the `checkout.session.completed` handler, after retrieving the subscription, get the product ID from `subscription.items.data[0].price.product` and use that for tier detection instead of the price ID.
 
-Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
+4. Redeploy the edge function.
 
-### Files Changed
-
-| File | Change |
-|------|--------|
-| Migration SQL | Create `submit_public_rsvp` function |
-| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
+This means any new price you create under an existing product will automatically be recognized — no code changes needed.
 
