@@ -297,6 +297,70 @@ const AdminEventsManagement = () => {
     }
   };
 
+  const handleSyncClickUpTasks = async () => {
+    try {
+      setSyncingTasks(true);
+      const { data, error } = await supabase.functions.invoke('clickup-sync-event-tasks');
+      if (error) throw error;
+      toast({
+        title: 'ClickUp Sync Complete',
+        description: data?.message || `Synced ${data?.synced || 0} tasks`,
+      });
+      fetchTaskStats();
+    } catch (error: any) {
+      toast({
+        title: 'Sync Failed',
+        description: error.message || 'Failed to sync ClickUp tasks',
+        variant: 'destructive',
+      });
+    } finally {
+      setSyncingTasks(false);
+    }
+  };
+
+  const handleRelinkEvents = async () => {
+    try {
+      setRelinkingEvents(true);
+      const { data, error } = await supabase.functions.invoke('clickup-link-events');
+      if (error) throw error;
+      toast({
+        title: 'Re-link Complete',
+        description: data?.message || 'Events re-linked with ClickUp',
+      });
+      fetchEvents();
+    } catch (error: any) {
+      toast({
+        title: 'Re-link Failed',
+        description: error.message || 'Failed to re-link events',
+        variant: 'destructive',
+      });
+    } finally {
+      setRelinkingEvents(false);
+    }
+  };
+
+  const handleRegisterWebhook = async () => {
+    try {
+      setRegisteringWebhook(true);
+      const { data, error } = await supabase.functions.invoke('clickup-register-and-sync', {
+        body: { team_id: '', list_id: '' },
+      });
+      if (error) throw error;
+      toast({
+        title: 'Webhook Registered',
+        description: data?.message || 'ClickUp webhook registered successfully',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Registration Failed',
+        description: error.message || 'Failed to register webhook',
+        variant: 'destructive',
+      });
+    } finally {
+      setRegisteringWebhook(false);
+    }
+  };
+
   const exportEvents = () => {
     const csv = [
       ['Title', 'Date', 'Location', 'Agent', 'Published', 'RSVPs', 'Capacity', 'Attendance', 'Leads'].join(','),
