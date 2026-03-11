@@ -115,6 +115,7 @@ interface AgentMarketingSettingsFormProps {
   agentName: string;
   onClose?: () => void;
   isAdmin?: boolean;
+  showContentTab?: boolean;
 }
 
 export const AgentMarketingSettingsForm = ({ userId, agentName, onClose, isAdmin = true }: AgentMarketingSettingsFormProps) => {
