@@ -63,7 +63,7 @@ const AdminCoachingSubmissionForm = () => {
   const currentWeekNumber = getCurrentWeekNumber();
   const currentYear = new Date().getFullYear();
 
-  const form = useForm<CoachingFormData>({
+  const form = useForm<any>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       week_number: currentWeekNumber,
@@ -71,6 +71,7 @@ const AdminCoachingSubmissionForm = () => {
       conversations: 0,
       dials_made: 0,
       leads_contacted: 0,
+      contacts_removed: 0,
       appointments_set: 0,
       appointments_held: 0,
       agreements_signed: 0,
