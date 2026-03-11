@@ -1,48 +1,34 @@
-## Filter Support Categories by Role & Add Subscription Category
 
-### Current State
 
-All users see the same 8 categories: Database/CRM, Social Media, Events, Newsletter, SphereSync, Coaching, Technical Issue, General Question.
+## Fix: RSVP RLS Violation on Public Submissions
 
-### Tier Access Mapping
+### Root Cause
 
-- **Core**: SphereSync, Database, Newsletter, Scoreboard → sees those 4 + Technical, General, **Subscription**
-- **Managed**: Core + Events, Pipeline, Social → sees all Core categories + Events, Social, **Subscription**
-- **Agent/Admin**: Full access, no subscription concerns → sees all categories except Subscription
+In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
 
-### Changes
+The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
 
-**1. `src/hooks/useSupportTickets.ts**`
+### Fix
 
-- Add `'subscription'` to the `TicketCategory` union type
+Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
 
-**2. `src/components/support/TicketForm.tsx**`
+### Step 1: Database Migration
 
-- Accept a `userRole` prop (or import `useUserRole` directly)
-- Define the full category list with a `minTier` field per category
-- Filter categories based on role:
-  - `subscription`: only for `core` and `managed`
-  - `social`, `events`: only for `managed`, `agent`, `admin`
-  - `database`, `spheresync`, `newsletter`, `scoreboard`, `technical`, `general`: all tiers
+Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
+- Verifies event exists and is published
+- Checks for duplicate RSVP (reuses existing logic)
+- Determines status based on capacity (confirmed vs waitlist)
+- Inserts the row and returns `id` and `status`
+- SECURITY DEFINER so it bypasses RLS
 
-```text
-Category          | Core | Managed | Agent | Admin
-──────────────────|──────|─────────|───────|──────
-Database / CRM    |  ✓   |    ✓    |   ✓   |   ✓
-SphereSync        |  ✓   |    ✓    |   ✓   |   ✓
-Newsletter        |  ✓   |    ✓    |   ✓   |   ✓
-Scoreboard          |  ✓   |    ✓    |   ✓   |   ✓
-Technical Issue   |  ✓   |    ✓    |   ✓   |   ✓
-General Question  |  ✓   |    ✓    |   ✓   |   ✓
-Subscription      |  ✓   |    ✓    |       |
-Events            |      |    ✓    |   ✓   |   ✓
-Social Media      |      |    ✓    |   ✓   |   ✓
-```
+### Step 2: Update `src/hooks/useRSVP.ts`
 
-**3. `src/pages/Support.tsx**`
+Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
 
-- Pass role info to `TicketForm` (or let `TicketForm` call `useUserRole` itself — cleaner since Support.tsx doesn't currently import it)
+### Files Changed
 
-### Implementation Detail
+| File | Change |
+|------|--------|
+| Migration SQL | Create `submit_public_rsvp` function |
+| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
 
-Import `useUserRole` inside `TicketForm` and filter the categories array using a simple role check. No changes needed to the edge function or database since `subscription` is just a new string category value — the ClickUp routing in `create-support-ticket` can default unmatched categories to the General assignment.

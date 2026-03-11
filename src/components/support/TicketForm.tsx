@@ -14,28 +14,39 @@ import {
 } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { CreateTicketInput, TicketCategory, TicketPriority } from '@/hooks/useSupportTickets';
+import { useUserRole } from '@/hooks/useUserRole';
 
 interface TicketFormProps {
   onSubmit: (data: CreateTicketInput) => void;
   isSubmitting: boolean;
 }
 
-const categories: { value: TicketCategory; label: string }[] = [
-  { value: 'database', label: 'Database / CRM' },
-  { value: 'social', label: 'Social Media' },
-  { value: 'events', label: 'Events' },
-  { value: 'newsletter', label: 'Newsletter' },
-  { value: 'spheresync', label: 'SphereSync' },
-  { value: 'coaching', label: 'Success Scoreboard / Coaching' },
-  { value: 'technical', label: 'Technical Issue' },
-  { value: 'general', label: 'General Question' },
+interface CategoryDef {
+  value: TicketCategory;
+  label: string;
+  roles: string[]; // roles that can see this category
+}
+
+const allCategories: CategoryDef[] = [
+  { value: 'database', label: 'Database / CRM', roles: ['core', 'managed', 'agent', 'admin', 'editor'] },
+  { value: 'spheresync', label: 'SphereSync', roles: ['core', 'managed', 'agent', 'admin', 'editor'] },
+  { value: 'newsletter', label: 'Newsletter', roles: ['core', 'managed', 'agent', 'admin', 'editor'] },
+  { value: 'coaching', label: 'Success Scoreboard / Coaching', roles: ['core', 'managed', 'agent', 'admin', 'editor'] },
+  { value: 'technical', label: 'Technical Issue', roles: ['core', 'managed', 'agent', 'admin', 'editor'] },
+  { value: 'general', label: 'General Question', roles: ['core', 'managed', 'agent', 'admin', 'editor'] },
+  { value: 'subscription', label: 'Subscription', roles: ['core', 'managed'] },
+  { value: 'events', label: 'Events', roles: ['managed', 'agent', 'admin', 'editor'] },
+  { value: 'social', label: 'Social Media', roles: ['managed', 'agent', 'admin', 'editor'] },
 ];
 
 export function TicketForm({ onSubmit, isSubmitting }: TicketFormProps) {
+  const { role } = useUserRole();
   const [category, setCategory] = useState<TicketCategory | ''>('');
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TicketPriority>('medium');
+
+  const categories = allCategories.filter(cat => cat.roles.includes(role || 'core'));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
