@@ -135,7 +135,7 @@ const AdminCoachingSubmissionForm = () => {
     }
   }, [existingSubmission, loadingExisting, selectedWeek, selectedYear, selectedAgentId, form]);
 
-  const handleFormSubmit = (data: CoachingFormData) => {
+  const handleFormSubmit = (data: any) => {
     if (!selectedAgentId) return;
     if (existingSubmission) {
       setPendingSubmission(data);
