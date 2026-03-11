@@ -196,15 +196,17 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose, isAdmin
       </div>
 
       <Tabs defaultValue="branding" className="w-full">
-        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-2'}`}>
+        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : showContentTab ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Branding</span>
           </TabsTrigger>
-          <TabsTrigger value="content" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">Content</span>
-          </TabsTrigger>
+          {showContentTab && (
+            <TabsTrigger value="content" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              <span className="hidden sm:inline">Content</span>
+            </TabsTrigger>
+          )}
           {isAdmin && (
             <TabsTrigger value="integrations" className="flex items-center gap-2">
               <Link2 className="h-4 w-4" />
