@@ -34,7 +34,10 @@ import {
   ChevronRight,
   Info,
   ListChecks,
-  Mail
+  Mail,
+  RefreshCw,
+  Link2,
+  Webhook
 } from 'lucide-react';
 import { format, startOfToday } from 'date-fns';
 import { EventForm } from '@/components/events/EventForm';

@@ -1,10 +1,5 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 interface PostingRequest {
   post_id: string;
@@ -14,7 +9,7 @@ interface PostingRequest {
   schedule_time: string;
 }
 
-const handler = async (req: Request): Promise<Response> => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -84,7 +79,7 @@ const handler = async (req: Request): Promise<Response> => {
       postStatus = 'posted';
       console.log(`✅ Successfully posted to ${platform}`);
 
-    } catch (platformError) {
+    } catch (platformError: any) {
       errorMessage = platformError.message;
       console.error(`❌ Failed to post to ${platform}:`, errorMessage);
     }
@@ -130,7 +125,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('💥 Direct posting error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
@@ -140,23 +135,20 @@ const handler = async (req: Request): Promise<Response> => {
       }
     );
   }
-};
+});
 
 // Facebook posting function
-async function postToFacebook(account: any, content: string, media_url?: string, schedule_time?: string) {
+async function postToFacebook(account: any, content: string, media_url?: string, _schedule_time?: string) {
   const pageAccessToken = account.access_token;
   const pageId = account.account_id;
 
-  // For scheduled posts, we'd need to use different endpoint
-  // For now, this posts immediately
   const postData: any = {
     message: content,
     access_token: pageAccessToken,
   };
 
   if (media_url) {
-    // If media URL provided, assume it's an image
-    postData.link = media_url; // Facebook can handle links to images
+    postData.link = media_url;
   }
 
   const response = await fetch(`https://graph.facebook.com/v18.0/${pageId}/feed`, {
@@ -174,31 +166,22 @@ async function postToFacebook(account: any, content: string, media_url?: string,
   return { post_id: result.id };
 }
 
-// Instagram posting function (placeholder - requires Instagram Business API)
-async function postToInstagram(account: any, content: string, media_url?: string, schedule_time?: string) {
-  // Instagram Business API implementation would go here
-  // This is complex and requires Instagram Business account setup
+// Instagram posting function (placeholder)
+async function postToInstagram(_account: any, _content: string, _media_url?: string, _schedule_time?: string) {
   throw new Error('Instagram direct posting not yet implemented');
 }
 
 // LinkedIn posting function (placeholder)
-async function postToLinkedIn(account: any, content: string, media_url?: string, schedule_time?: string) {
-  // LinkedIn API implementation would go here
+async function postToLinkedIn(_account: any, _content: string, _media_url?: string, _schedule_time?: string) {
   throw new Error('LinkedIn direct posting not yet implemented');
 }
 
 // Twitter/X posting function (placeholder)
-async function postToTwitter(account: any, content: string, media_url?: string, schedule_time?: string) {
-  // Twitter API v2 implementation would go here
+async function postToTwitter(_account: any, _content: string, _media_url?: string, _schedule_time?: string) {
   throw new Error('Twitter direct posting not yet implemented');
 }
 
 // TikTok posting function (placeholder)
-async function postToTikTok(account: any, content: string, media_url?: string, schedule_time?: string) {
-  // TikTok API implementation would go here
+async function postToTikTok(_account: any, _content: string, _media_url?: string, _schedule_time?: string) {
   throw new Error('TikTok direct posting not yet implemented');
 }
-
-console.log('🌟 Social Direct Posting Handler Loaded');
-serve(handler);
-
