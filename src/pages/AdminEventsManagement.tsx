@@ -449,6 +449,14 @@ const AdminEventsManagement = () => {
               <Calendar className="h-4 w-4 mr-2" />
               Create Event
             </Button>
+            <Button onClick={handleSyncClickUpTasks} variant="outline" disabled={syncingTasks}>
+              <RefreshCw className={cn("h-4 w-4 mr-2", syncingTasks && "animate-spin")} />
+              {syncingTasks ? 'Syncing...' : 'Sync Tasks'}
+            </Button>
+            <Button onClick={handleRelinkEvents} variant="outline" disabled={relinkingEvents}>
+              <Link2 className={cn("h-4 w-4 mr-2", relinkingEvents && "animate-spin")} />
+              {relinkingEvents ? 'Linking...' : 'Re-link Events'}
+            </Button>
             <Button onClick={exportEvents} variant="outline">
               <Download className="h-4 w-4 mr-2" />
               Export CSV
