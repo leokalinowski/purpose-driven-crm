@@ -162,7 +162,7 @@ export function OverdueTasks({ data }: Props) {
             {nudge}
           </p>
           <p className="text-[11px] text-muted-foreground/70">
-            Based on your last 4 weeks of task completion across SphereSync, Events, and Scoreboard.
+            Based on your last 4 weeks of task completion across SphereSync{hasAccess('/events') ? ', Events,' : ' and'} Scoreboard.
           </p>
         </div>
 
@@ -170,11 +170,11 @@ export function OverdueTasks({ data }: Props) {
         <div>
           <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
             Recent Overdue
-            {priorityTasks.length > 0 && (
-              <Badge variant="secondary" className="text-xs">{priorityTasks.length}</Badge>
+            {filteredTasks.length > 0 && (
+              <Badge variant="secondary" className="text-xs">{filteredTasks.length}</Badge>
             )}
           </h4>
-          {priorityTasks.length === 0 ? (
+          {filteredTasks.length === 0 ? (
             <div className="flex items-center gap-2 p-3 rounded-md bg-background border text-sm text-muted-foreground">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               No recent overdue tasks — nice work!
