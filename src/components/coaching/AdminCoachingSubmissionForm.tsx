@@ -34,6 +34,7 @@ const formSchema = z.object({
   conversations: z.number().min(0),
   dials_made: z.number().min(0),
   leads_contacted: z.number().min(0),
+  contacts_removed: z.number().min(0),
   appointments_set: z.number().min(0),
   appointments_held: z.number().min(0),
   agreements_signed: z.number().min(0),
