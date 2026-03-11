@@ -209,6 +209,17 @@ export function useDashboardBlocks() {
       completedSphereThisWeek.forEach(t => { if (t.lead_id) contactIds.add(t.lead_id); });
       ((eventEmailsWeek as any).data || []).forEach((e: any) => { if (e.recipient_email) contactIds.add(e.recipient_email); });
 
+      // Scoreboard metrics from coaching_submissions
+      const coachingRow = (coachingThisWeek.data || [])[0];
+      const scoreboardMetrics: ScoreboardMetrics = {
+        conversations: coachingRow?.conversations || 0,
+        activationAttempts: coachingRow?.dials_made || 0,
+        appointmentsSet: coachingRow?.appointments_set || 0,
+        contactsAdded: coachingRow?.leads_contacted || 0,
+        contactsRemoved: coachingRow?.deals_closed || 0,
+        submitted: (coachingThisWeek.data?.length || 0) > 0,
+      };
+
       const blockOne: BlockOneTouchpoints = {
         totalTouchpoints: sphereTouchpoints + eventEmailsTouchpoints + newsletterTouchpoints + socialTouchpoints,
         uniqueContactsTouched: contactIds.size,
@@ -218,6 +229,7 @@ export function useDashboardBlocks() {
           newsletter: newsletterTouchpoints,
           social: socialTouchpoints,
         },
+        scoreboard: scoreboardMetrics,
       };
 
       // ----- BLOCK TWO: Tasks by System -----
