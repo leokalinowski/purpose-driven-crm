@@ -42,6 +42,7 @@ import {
   type WeeklyCheckInData,
 } from '@/hooks/useCoaching';
 import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
+import { MySubmissionsHistory } from '@/components/coaching/MySubmissionsHistory';
 
 const CONVERSATION_TARGET = 25;
 
