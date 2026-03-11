@@ -118,7 +118,7 @@ interface AgentMarketingSettingsFormProps {
   showContentTab?: boolean;
 }
 
-export const AgentMarketingSettingsForm = ({ userId, agentName, onClose, isAdmin = true }: AgentMarketingSettingsFormProps) => {
+export const AgentMarketingSettingsForm = ({ userId, agentName, onClose, isAdmin = true, showContentTab = true }: AgentMarketingSettingsFormProps) => {
   const { loading, fetchSettings, upsertSettings } = useAgentMarketingSettings();
   const [settings, setSettings] = useState<AgentMarketingSettings | null>(null);
   const [formData, setFormData] = useState<AgentMarketingSettingsInput>({});
