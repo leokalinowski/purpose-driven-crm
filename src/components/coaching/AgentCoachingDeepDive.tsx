@@ -213,8 +213,9 @@ const AgentCoachingDeepDive = ({ selectedWeek = 'all' }: AgentCoachingDeepDivePr
                       <TableHead>Convos</TableHead>
                       <TableHead>Attempts</TableHead>
                       <TableHead>Appts</TableHead>
-                      <TableHead>Added</TableHead>
-                      <TableHead>Removed</TableHead>
+                      <TableHead>Contacts Added</TableHead>
+                      <TableHead>Contacts Removed</TableHead>
+                      <TableHead>Activation Day</TableHead>
                       <TableHead>Closings</TableHead>
                     </TableRow>
                   </TableHeader>
