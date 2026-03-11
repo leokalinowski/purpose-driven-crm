@@ -40,10 +40,13 @@ const allCategories: CategoryDef[] = [
 ];
 
 export function TicketForm({ onSubmit, isSubmitting }: TicketFormProps) {
+  const { role } = useUserRole();
   const [category, setCategory] = useState<TicketCategory | ''>('');
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TicketPriority>('medium');
+
+  const categories = allCategories.filter(cat => cat.roles.includes(role || 'core'));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
