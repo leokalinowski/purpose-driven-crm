@@ -117,7 +117,7 @@ async function sendReminderEmails(
       });
 
       const agentName = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || agent.email;
-      const emailSubject = "Reminder: Submit Your Weekly Performance Data";
+      const emailSubject = "Reminder: Submit Your SphereSync™ Weekly Check-In";
 
       if (emailResponse.error) {
         console.error(`[Background] Failed to send email to ${agent.email}:`, emailResponse.error);
