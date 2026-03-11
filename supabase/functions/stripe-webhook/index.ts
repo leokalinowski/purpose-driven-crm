@@ -7,30 +7,30 @@ const logStep = (step: string, details?: any) => {
   console.log(`[STRIPE-WEBHOOK] ${step}${detailsStr}`);
 };
 
-/** Price-to-tier maps for fallback when metadata.tier is missing */
-const PRICE_TO_TIER_LIVE: Record<string, string> = {
-  "price_1T809vQGA8aVyaHSqHxPGZVH": "core",
-  "price_1T80BTQGA8aVyaHSwA5MG8Wx": "core",
-  "price_1T82T9QGA8aVyaHSx4NYVQCl": "core",
-  "price_1T80CiQGA8aVyaHSTcBId8Ss": "managed",
-  "price_1T80DBQGA8aVyaHSXggTaq9Z": "managed",
-  "price_1T82UbQGA8aVyaHSwPJgIqXm": "managed",
+/** Product-to-tier maps for fallback when metadata.tier is missing */
+const PRODUCT_TO_TIER_LIVE: Record<string, string> = {
+  "prod_U6CZnBRXAi2jey": "core",
+  "prod_U6CanelVG5Ilvn": "core",
+  "prod_U6Ex7tgKBZtZc5": "core",
+  "prod_U6CbXJqnPWpRVp": "managed",
+  "prod_U6CctQ78FSyxvp": "managed",
+  "prod_U6Eyw4OBAEIm9V": "managed",
 };
 
-const PRICE_TO_TIER_TEST: Record<string, string> = {
-  "price_1T87J0QGA8aVyaHS7vCe7Fw8": "core",
-  "price_1T87JNQGA8aVyaHS0fReVKmL": "core",
-  "price_1T87JeQGA8aVyaHSYcaEONPJ": "core",
-  "price_1T87JzQGA8aVyaHSBCJ7pzWT": "managed",
-  "price_1T87KUQGA8aVyaHSnpM40Lh3": "managed",
-  "price_1T87KlQGA8aVyaHSN5VInftx": "managed",
+const PRODUCT_TO_TIER_TEST: Record<string, string> = {
+  "prod_U6Jwx4nLCE1I2s": "core",
+  "prod_U6JxCNA2455QJe": "core",
+  "prod_U6Jx3oB19agtnz": "core",
+  "prod_U6JxoQJVRqucDT": "managed",
+  "prod_U6JyhK7qt3CK4K": "managed",
+  "prod_U6JydMsJcVubkF": "managed",
 };
 
-/** Derive tier from a price ID, checking both maps */
-function getTierFromPriceId(priceId: string, isTestMode: boolean): string | null {
-  const primary = isTestMode ? PRICE_TO_TIER_TEST : PRICE_TO_TIER_LIVE;
-  const fallback = isTestMode ? PRICE_TO_TIER_LIVE : PRICE_TO_TIER_TEST;
-  return primary[priceId] || fallback[priceId] || null;
+/** Derive tier from a product ID, checking both maps */
+function getTierFromProductId(productId: string, isTestMode: boolean): string | null {
+  const primary = isTestMode ? PRODUCT_TO_TIER_TEST : PRODUCT_TO_TIER_LIVE;
+  const fallback = isTestMode ? PRODUCT_TO_TIER_LIVE : PRODUCT_TO_TIER_TEST;
+  return primary[productId] || fallback[productId] || null;
 }
 
 serve(async (req) => {
