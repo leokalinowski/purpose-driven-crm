@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Target, ExternalLink, ChevronDown, ChevronUp, Sparkles, CheckCircle2, AlertTriangle, Phone, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import type { BlockFiveOverdue, OverdueTask } from '@/hooks/useDashboardBlocks';
 
 interface Props {
@@ -120,17 +121,25 @@ function WeekGroupRow({ group }: { group: WeekGroup }) {
 
 export function OverdueTasks({ data }: Props) {
   const { accountabilityScore, priorityTasks } = data;
+  const { hasAccess } = useFeatureAccess();
   const colors = getScoreColor(accountabilityScore);
-  const nudge = getNudgeText(accountabilityScore, priorityTasks.length);
+
+  // Filter out tasks for systems the user can't access
+  const filteredTasks = priorityTasks.filter(t => {
+    if (t.system === 'events' && !hasAccess('/events')) return false;
+    return true;
+  });
+
+  const nudge = getNudgeText(accountabilityScore, filteredTasks.length);
 
   // Don't render if perfect score and nothing overdue
-  if (accountabilityScore >= 100 && priorityTasks.length === 0) {
+  if (accountabilityScore >= 100 && filteredTasks.length === 0) {
     return null;
   }
 
   // Group sphere tasks by week, keep events/coaching as-is
-  const sphereTasks = priorityTasks.filter(t => t.system === 'spheresync');
-  const otherTasks = priorityTasks.filter(t => t.system !== 'spheresync');
+  const sphereTasks = filteredTasks.filter(t => t.system === 'spheresync');
+  const otherTasks = filteredTasks.filter(t => t.system !== 'spheresync');
   const weekGroups = groupByWeek(sphereTasks);
 
   // Group other tasks too (events, coaching)
@@ -153,7 +162,7 @@ export function OverdueTasks({ data }: Props) {
             {nudge}
           </p>
           <p className="text-[11px] text-muted-foreground/70">
-            Based on your last 4 weeks of task completion across SphereSync, Events, and Scoreboard.
+            Based on your last 4 weeks of task completion across SphereSync{hasAccess('/events') ? ', Events,' : ' and'} Scoreboard.
           </p>
         </div>
 
@@ -161,11 +170,11 @@ export function OverdueTasks({ data }: Props) {
         <div>
           <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
             Recent Overdue
-            {priorityTasks.length > 0 && (
-              <Badge variant="secondary" className="text-xs">{priorityTasks.length}</Badge>
+            {filteredTasks.length > 0 && (
+              <Badge variant="secondary" className="text-xs">{filteredTasks.length}</Badge>
             )}
           </h4>
-          {priorityTasks.length === 0 ? (
+          {filteredTasks.length === 0 ? (
             <div className="flex items-center gap-2 p-3 rounded-md bg-background border text-sm text-muted-foreground">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               No recent overdue tasks — nice work!
