@@ -304,7 +304,7 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose, isAdmin
           </Card>
         </TabsContent>
 
-        <TabsContent value="content" className="space-y-4 mt-4">
+        {showContentTab && <TabsContent value="content" className="space-y-4 mt-4">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">AI & Content Guidelines</CardTitle>
