@@ -21,6 +21,21 @@ const Index = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { data, loading, error, refresh } = useDashboardBlocks();
+  const { profile } = useUserProfile();
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() =>
+    localStorage.getItem('reop_onboarding_dismissed') === 'true'
+  );
+
+  const isNewUser = data
+    ? data.blockOne.totalTouchpoints === 0 && data.blockThree.totalContacts === 0
+    : false;
+
+  const showOnboarding = !onboardingDismissed && !loading && !!data && isNewUser;
+
+  const dismissOnboarding = useCallback(() => {
+    localStorage.setItem('reop_onboarding_dismissed', 'true');
+    setOnboardingDismissed(true);
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !user) {
