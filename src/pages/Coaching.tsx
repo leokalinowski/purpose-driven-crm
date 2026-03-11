@@ -31,6 +31,7 @@ import {
   ArrowRight,
   Pencil,
   CheckCircle2,
+  History,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { 
