@@ -217,6 +217,7 @@ const Settings = () => {
                 userId={user.id}
                 agentName={`${firstName} ${lastName}`.trim() || 'My'}
                 isAdmin={isAdmin}
+                showContentTab={isAdmin || isAgent}
               />
             )}
           </TabsContent>
