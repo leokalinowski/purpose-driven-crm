@@ -69,20 +69,20 @@ async function sendReminderEmails(
           
           <p>Hi ${agent.first_name || 'there'},</p>
           
-          <p>This is a friendly reminder to submit your Weekly Success Scoreboard before ${reminderType === 'wednesday' ? "Thursday's" : "today's"} coaching Zoom session.</p>
+          <p>This is a friendly reminder to submit your SphereSync™ Weekly Check-In before ${reminderType === 'wednesday' ? "Thursday's" : "today's"} coaching Zoom session.</p>
           
           <div style="background-color: #f8fafc; border-left: 4px solid #2563eb; padding: 16px; margin: 20px 0;">
-            <p style="margin: 0; font-weight: 600;">What to submit in your scorecard:</p>
+            <p style="margin: 0; font-weight: 600;">What to submit in your weekly check-in:</p>
             <ul style="margin: 8px 0 0 16px;">
-              <li>Attempts Made and Leads Contacted</li>
-              <li>Appointments Set, Appointments Held, and Agreements Signed</li>
-              <li>Offers Made, # of Closings, and $ Closed (Amount)</li>
-              <li>Challenges and coaching notes</li>
+              <li>Conversations (toward your 25/week target)</li>
+              <li>Activation Attempts and Appointments Set</li>
+              <li>Contacts Added & Removed from your database</li>
+              <li>Activation Day and weekly notes</li>
               <li>Your ONE must-do task for next week</li>
             </ul>
           </div>
           
-          <p>Please log in to the coaching system and submit your weekly data at your earliest convenience.</p>
+          <p>Please log in and submit your weekly check-in at your earliest convenience.</p>
           
           <div style="margin: 24px 0;">
             <a href="https://hub.realestateonpurpose.com/coaching" 
