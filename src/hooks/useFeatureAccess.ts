@@ -37,7 +37,7 @@ const ROUTE_MIN_TIER: Record<string, Tier> = {
 };
 
 function getTierLevel(role: string | null): number {
-  if (!role) return 99;
+  if (!role) return TIER_LEVEL['core'];
   return TIER_LEVEL[role as Tier] ?? 99;
 }
 
