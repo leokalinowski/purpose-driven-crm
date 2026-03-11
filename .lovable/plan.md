@@ -1,34 +1,45 @@
 
 
-## Fix: RSVP RLS Violation on Public Submissions
+## Scoreboard vs Spec: Gap Analysis
 
-### Root Cause
+### What's Already Working
 
-In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
+The agent-facing Weekly Check-In form and Weekly Scoreboard are fully implemented and match the spec:
 
-The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
+- Sections 1-5 (form fields, hero metric, relationship work, discipline/streak, momentum rates, last 4 weeks) -- all present and correct
+- Section 7 (calculation rules) -- implemented correctly
+- Section 8 (UX: conversations first, target 25, mobile-friendly, edit support) -- done
+- Section 9 (reminder email) -- updated to SphereSync vocabulary
+- Section 10 (definitions in helper text) -- present in form
 
-### Fix
+### What's Missing
 
-Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
+**1. Dashboard Feed Mapping (Section 6) -- NOT implemented**
 
-### Step 1: Database Migration
+The spec explicitly defines how scoreboard data should appear on the Dashboard:
 
-Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
-- Verifies event exists and is published
-- Checks for duplicate RSVP (reuses existing logic)
-- Determines status based on capacity (confirmed vs waitlist)
-- Inserts the row and returns `id` and `status`
-- SECURITY DEFINER so it bypasses RLS
+| Dashboard Metric | Source Field | Current Status |
+|---|---|---|
+| Sphere Activations | `activation_attempts` | Not shown on dashboard |
+| Unique Relationships Activated | `conversations` | Not shown on dashboard |
+| Opportunity Creation | `appointments_set` | Not shown on dashboard |
+| Database Growth | `contacts_added` | Not shown on dashboard |
+| Database Hygiene | `contacts_removed` | Not shown on dashboard |
 
-### Step 2: Update `src/hooks/useRSVP.ts`
+Right now, the dashboard (Block 2) only checks whether a scoreboard submission *exists* for the current week. It does not display the actual numbers from the check-in. This is the single biggest gap.
 
-Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
+**2. Minor: table name difference (cosmetic, not blocking)**
 
-### Files Changed
+The spec says create a `weekly_activity` table. The current implementation uses `coaching_submissions` with field remapping (e.g., `dials_made` = activation_attempts, `leads_contacted` = contacts_added). This works functionally but adds cognitive overhead. Creating a new clean table would be ideal but is a large migration. Not recommended for now since everything works.
 
-| File | Change |
-|------|--------|
-| Migration SQL | Create `submit_public_rsvp` function |
-| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
+### Plan
+
+| # | File | Change |
+|---|---|---|
+| 1 | `src/hooks/useDashboardBlocks.ts` | In Block 1 (Weekly Impact), pull `conversations` from `coaching_submissions` for the current week and display as "Unique Relationships Activated". Pull `dials_made` (activation_attempts) and add to total touchpoints or show separately as "Sphere Activations". |
+| 2 | `src/hooks/useDashboardBlocks.ts` | In Block 2 (Weekly Tasks), enhance the scoreboard task to show the conversation count inline (e.g., "18/25 conversations") instead of just "submitted" / "not submitted". |
+| 3 | `src/hooks/useDashboardBlocks.ts` | Add scoreboard metrics to Block 3 or a new summary section: Database Growth (contacts_added / `leads_contacted`), Database Hygiene (contacts_removed / `deals_closed`), Opportunity Creation (appointments_set). |
+| 4 | `src/components/dashboard/DashboardCards.tsx` or equivalent | Update the dashboard UI components to render the new mapped metrics from the scoreboard data. |
+
+This connects the scoreboard to the dashboard as the spec requires, completing the data flow: Check-In → Scoreboard → Dashboard.
 
