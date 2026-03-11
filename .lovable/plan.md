@@ -1,46 +1,34 @@
 
 
-## Changes Needed
+## Fix: RSVP RLS Violation on Public Submissions
 
-Two adjustments based on your feedback:
+### Root Cause
 
-### 1. Restore Support Hub access for all tiers
+In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
 
-Change `/support` back from `'managed'` to `'core'` in `useFeatureAccess.ts` (line 33). The Support page already has working UI — it just needs the gate lowered back to Core so all paying users can access it.
+The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
 
-**File:** `src/hooks/useFeatureAccess.ts` — change `'/support': 'managed'` to `'/support': 'core'`
+### Fix
 
-### 2. Keep the webhook delay — but make it non-blocking
+Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
 
-The 30-second delay is fine conceptually, but the issue is that `await`-ing it blocks the webhook response to Stripe. Stripe times out at ~30s and retries, which could cause duplicate user creation and emails.
+### Step 1: Database Migration
 
-The fix is simple: **fire the coaching email without awaiting** so the webhook returns `200` to Stripe immediately, while the coaching email sends in the background after the delay.
+Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
+- Verifies event exists and is published
+- Checks for duplicate RSVP (reuses existing logic)
+- Determines status based on capacity (confirmed vs waitlist)
+- Inserts the row and returns `id` and `status`
+- SECURITY DEFINER so it bypasses RLS
 
-**File:** `supabase/functions/stripe-webhook/index.ts`
+### Step 2: Update `src/hooks/useRSVP.ts`
 
-Replace the `await new Promise(...)` + `await fetch(...)` block (lines 285-340) with a non-awaited wrapper:
+Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
 
-```typescript
-// Fire-and-forget: send coaching email after 2 minutes without blocking the webhook response
-setTimeout(async () => {
-  try {
-    const coachingRes = await fetch("https://api.resend.com/emails", { ... });
-    // existing coaching email logic
-  } catch (err) {
-    console.log("[STRIPE-WEBHOOK] ERROR sending delayed coaching email", err);
-  }
-}, 120_000); // 2 minutes
-```
+### Files Changed
 
-This way:
-- The webhook responds to Stripe in under 1 second (no retries, no duplicates)
-- The coaching email still sends 2 minutes later
-- You can increase the delay to whatever you want
-
-### Summary
-
-| # | File | Change |
-|---|---|---|
-| 1 | `src/hooks/useFeatureAccess.ts` | Change `/support` from `'managed'` back to `'core'` |
-| 2 | `supabase/functions/stripe-webhook/index.ts` | Make coaching email fire-and-forget with 2-minute `setTimeout` (no `await`) |
+| File | Change |
+|------|--------|
+| Migration SQL | Create `submit_public_rsvp` function |
+| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
 

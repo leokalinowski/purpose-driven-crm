@@ -282,58 +282,67 @@ serve(async (req) => {
                 }
               }
 
-              // Wait 30 seconds then send coaching email
-              await new Promise((resolve) => setTimeout(resolve, 30_000));
+              // Fire-and-forget: send coaching email after 2 minutes without blocking the webhook response
+              const capturedResendKey = resendKey;
+              const capturedFromName = fromName;
+              const capturedFromEmail = fromEmail;
+              const capturedCustomerEmail = customerEmail;
+              const capturedTierLabel = tierLabel;
+              setTimeout(async () => {
+                try {
+                  const coachingRes = await fetch("https://api.resend.com/emails", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${capturedResendKey}`,
+                    },
+                    body: JSON.stringify({
+                      from: `${capturedFromName} <${capturedFromEmail}>`,
+                      to: [capturedCustomerEmail],
+                      subject: "Next Step: Schedule Your Coaching Call with Pam",
+                      html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                          <h2 style="color: #1a1a1a;">Let's Get You Started! 🎉</h2>
+                          <p style="color: #4a4a4a; line-height: 1.6;">
+                            Congratulations on joining the <strong>${capturedTierLabel}</strong> plan! 
+                            Your next step is to schedule a one-on-one coaching call with <strong>Pam O'Bryant</strong>.
+                          </p>
+                          <p style="color: #4a4a4a; line-height: 1.6;">
+                            During this call, Pam will walk you through:
+                          </p>
+                          <ul style="color: #4a4a4a; line-height: 1.8;">
+                            <li>Getting your Hub account fully set up</li>
+                            <li>Your personalized coaching roadmap</li>
+                            <li>How to get the most out of your membership</li>
+                          </ul>
+                          <div style="text-align: center; margin: 30px 0;">
+                            <a href="https://lp.realestateonpurpose.com/appointmentwithreop"
+                               style="background-color: #0d9488; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                              Schedule Your Call with Pam
+                            </a>
+                          </div>
+                          <p style="color: #6a6a6a; font-size: 14px; line-height: 1.5;">
+                            We recommend scheduling as soon as possible so you can hit the ground running.
+                          </p>
+                          <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 20px 0;" />
+                          <p style="color: #999; font-size: 12px;">
+                            Real Estate on Purpose · <a href="https://hub.realestateonpurpose.com" style="color: #0d9488;">hub.realestateonpurpose.com</a>
+                          </p>
+                        </div>
+                      `,
+                    }),
+                  });
 
-              const coachingRes = await fetch("https://api.resend.com/emails", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": `Bearer ${resendKey}`,
-                },
-                body: JSON.stringify({
-                  from: `${fromName} <${fromEmail}>`,
-                  to: [customerEmail],
-                  subject: "Next Step: Schedule Your Coaching Call with Pam",
-                  html: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                      <h2 style="color: #1a1a1a;">Let's Get You Started! 🎉</h2>
-                      <p style="color: #4a4a4a; line-height: 1.6;">
-                        Congratulations on joining the <strong>${tierLabel}</strong> plan! 
-                        Your next step is to schedule a one-on-one coaching call with <strong>Pam O'Bryant</strong>.
-                      </p>
-                      <p style="color: #4a4a4a; line-height: 1.6;">
-                        During this call, Pam will walk you through:
-                      </p>
-                      <ul style="color: #4a4a4a; line-height: 1.8;">
-                        <li>Getting your Hub account fully set up</li>
-                        <li>Your personalized coaching roadmap</li>
-                        <li>How to get the most out of your membership</li>
-                      </ul>
-                      <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://lp.realestateonpurpose.com/appointmentwithreop"
-                           style="background-color: #0d9488; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
-                          Schedule Your Call with Pam
-                        </a>
-                      </div>
-                      <p style="color: #6a6a6a; font-size: 14px; line-height: 1.5;">
-                        We recommend scheduling as soon as possible so you can hit the ground running.
-                      </p>
-                      <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 20px 0;" />
-                      <p style="color: #999; font-size: 12px;">
-                        Real Estate on Purpose · <a href="https://hub.realestateonpurpose.com" style="color: #0d9488;">hub.realestateonpurpose.com</a>
-                      </p>
-                    </div>
-                  `,
-                }),
-              });
-
-              if (coachingRes.ok) {
-                logStep("Coaching call scheduling email sent via Resend");
-              } else {
-                const errBody2 = await coachingRes.text();
-                logStep("ERROR sending coaching email via Resend", { status: coachingRes.status, body: errBody2 });
-              }
+                  if (coachingRes.ok) {
+                    console.log("[STRIPE-WEBHOOK] Coaching call scheduling email sent via Resend (after 2min delay)");
+                  } else {
+                    const errBody2 = await coachingRes.text();
+                    console.log("[STRIPE-WEBHOOK] ERROR sending coaching email via Resend", JSON.stringify({ status: coachingRes.status, body: errBody2 }));
+                  }
+                } catch (delayedErr: any) {
+                  console.log("[STRIPE-WEBHOOK] ERROR in delayed coaching email", delayedErr.message);
+                }
+              }, 120_000); // 2 minutes
             } else {
               // Existing user: send subscription confirmation email
               logStep("Sending subscription confirmation to existing user", { email: customerEmail, tier });
