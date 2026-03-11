@@ -383,7 +383,7 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose, isAdmin
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent>}
 
         {isAdmin && <TabsContent value="integrations" className="space-y-4 mt-4">
           <Card>
