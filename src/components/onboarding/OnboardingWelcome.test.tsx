@@ -59,7 +59,7 @@ describe('OnboardingWelcome', () => {
 
     // Step 7 - Settings (last step)
     expect(screen.getByText(/Step 7 of 7/)).toBeInTheDocument();
-    expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Complete Your Profile' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /get started/i })).toBeInTheDocument();
   });
 
