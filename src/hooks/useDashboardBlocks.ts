@@ -12,10 +12,20 @@ export type TouchpointBreakdown = {
   social: number;
 };
 
+export type ScoreboardMetrics = {
+  conversations: number;
+  activationAttempts: number;
+  appointmentsSet: number;
+  contactsAdded: number;
+  contactsRemoved: number;
+  submitted: boolean;
+};
+
 export type BlockOneTouchpoints = {
   totalTouchpoints: number;
   uniqueContactsTouched: number;
   breakdown: TouchpointBreakdown;
+  scoreboard: ScoreboardMetrics;
 };
 
 export type SystemTask = {
