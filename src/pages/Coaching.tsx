@@ -451,11 +451,20 @@ const WeeklyScoreboard = ({ onEditClick }: { onEditClick: () => void }) => {
         </Card>
       )}
 
-      {/* Edit Button */}
-      <Button variant="outline" onClick={onEditClick} className="w-full">
-        <Pencil className="h-4 w-4 mr-2" />
-        Edit This Week's Check-In
-      </Button>
+      {/* Action Buttons */}
+      <div className="flex gap-3">
+        <Button variant="outline" onClick={onEditClick} className="flex-1">
+          <Pencil className="h-4 w-4 mr-2" />
+          Edit Check-In
+        </Button>
+        <Button variant="outline" onClick={() => {
+          const el = document.getElementById('full-history');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }} className="flex-1">
+          <History className="h-4 w-4 mr-2" />
+          View All History
+        </Button>
+      </div>
     </div>
   );
 };
