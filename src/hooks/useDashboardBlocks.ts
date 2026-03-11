@@ -333,8 +333,10 @@ export function useDashboardBlocks() {
         newsletter: newsletterTasks,
         social: socialTasks,
         scoreboard: {
-          submitted: (coachingThisWeek.data?.length || 0) > 0,
+          submitted: scoreboardMetrics.submitted,
           weekNumber: currentWeekNum,
+          conversations: scoreboardMetrics.conversations,
+          conversationTarget: 25,
         },
       };
 
