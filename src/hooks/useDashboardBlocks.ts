@@ -12,10 +12,20 @@ export type TouchpointBreakdown = {
   social: number;
 };
 
+export type ScoreboardMetrics = {
+  conversations: number;
+  activationAttempts: number;
+  appointmentsSet: number;
+  contactsAdded: number;
+  contactsRemoved: number;
+  submitted: boolean;
+};
+
 export type BlockOneTouchpoints = {
   totalTouchpoints: number;
   uniqueContactsTouched: number;
   breakdown: TouchpointBreakdown;
+  scoreboard: ScoreboardMetrics;
 };
 
 export type SystemTask = {
@@ -35,7 +45,7 @@ export type BlockTwoTasks = {
   events: SystemTask[];
   newsletter: SystemTask[];
   social: SystemTask[];
-  scoreboard: { submitted: boolean; weekNumber: number };
+  scoreboard: { submitted: boolean; weekNumber: number; conversations: number; conversationTarget: number };
 };
 
 export type BlockThreeOpportunity = {
@@ -159,7 +169,7 @@ export function useDashboardBlocks() {
         supabase.from('social_posts').select('id, content, platform, schedule_time, status')
           .eq('agent_id', user.id).gte('schedule_time', weekStart).lte('schedule_time', weekEnd),
         // Coaching: this week's submission
-        supabase.from('coaching_submissions').select('id')
+        supabase.from('coaching_submissions').select('id, conversations, dials_made, appointments_set, leads_contacted, deals_closed')
           .eq('agent_id', user.id).eq('week_number', currentWeekNum).eq('year', currentYear),
         // Coaching: past weeks without submission (last 4 weeks)
         supabase.from('coaching_submissions').select('week_number, year')
@@ -199,6 +209,17 @@ export function useDashboardBlocks() {
       completedSphereThisWeek.forEach(t => { if (t.lead_id) contactIds.add(t.lead_id); });
       ((eventEmailsWeek as any).data || []).forEach((e: any) => { if (e.recipient_email) contactIds.add(e.recipient_email); });
 
+      // Scoreboard metrics from coaching_submissions
+      const coachingRow = (coachingThisWeek.data || [])[0];
+      const scoreboardMetrics: ScoreboardMetrics = {
+        conversations: coachingRow?.conversations || 0,
+        activationAttempts: coachingRow?.dials_made || 0,
+        appointmentsSet: coachingRow?.appointments_set || 0,
+        contactsAdded: coachingRow?.leads_contacted || 0,
+        contactsRemoved: coachingRow?.deals_closed || 0,
+        submitted: (coachingThisWeek.data?.length || 0) > 0,
+      };
+
       const blockOne: BlockOneTouchpoints = {
         totalTouchpoints: sphereTouchpoints + eventEmailsTouchpoints + newsletterTouchpoints + socialTouchpoints,
         uniqueContactsTouched: contactIds.size,
@@ -208,6 +229,7 @@ export function useDashboardBlocks() {
           newsletter: newsletterTouchpoints,
           social: socialTouchpoints,
         },
+        scoreboard: scoreboardMetrics,
       };
 
       // ----- BLOCK TWO: Tasks by System -----
@@ -311,8 +333,10 @@ export function useDashboardBlocks() {
         newsletter: newsletterTasks,
         social: socialTasks,
         scoreboard: {
-          submitted: (coachingThisWeek.data?.length || 0) > 0,
+          submitted: scoreboardMetrics.submitted,
           weekNumber: currentWeekNum,
+          conversations: scoreboardMetrics.conversations,
+          conversationTarget: 25,
         },
       };
 

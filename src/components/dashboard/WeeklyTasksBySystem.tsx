@@ -124,7 +124,9 @@ export function WeeklyTasksBySystem({ data }: Props) {
             <TrendingUp className="h-4 w-4 text-primary" />
             <span className="font-medium text-sm">Scoreboard</span>
             {data.scoreboard.submitted ? (
-              <Badge className="text-xs bg-green-100 text-green-800 hover:bg-green-100">Done</Badge>
+              <Badge className="text-xs bg-green-100 text-green-800 hover:bg-green-100">
+                {data.scoreboard.conversations}/{data.scoreboard.conversationTarget} convos
+              </Badge>
             ) : (
               <Badge variant="destructive" className="text-xs">Missing</Badge>
             )}
