@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { BarChart3 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import type { BlockFourPerformance } from '@/hooks/useDashboardBlocks';
 
 interface Props {
@@ -10,6 +11,13 @@ interface Props {
 
 export function TaskPerformance({ data }: Props) {
   const { currentWeekPct, completedThisWeek, totalThisWeek, trend, bySystem } = data;
+  const { hasAccess } = useFeatureAccess();
+
+  const filteredBySystem = bySystem.filter(s => {
+    if (s.label === 'Events' && !hasAccess('/events')) return false;
+    if (s.label === 'Social' && !hasAccess('/social-scheduler')) return false;
+    return true;
+  });
 
   return (
     <Card>
