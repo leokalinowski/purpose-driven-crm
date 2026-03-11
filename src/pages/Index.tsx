@@ -27,7 +27,7 @@ const Index = () => {
   );
 
   const isNewUser = data
-    ? data.blockOne.totalTouchpoints === 0 && data.blockThree.totalContacts === 0
+    ? data.blockOne.totalTouchpoints === 0 && data.blockThree.databaseSize === 0
     : false;
 
   const showOnboarding = !onboardingDismissed && !loading && !!data && isNewUser;
