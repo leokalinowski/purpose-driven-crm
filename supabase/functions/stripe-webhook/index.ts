@@ -94,10 +94,10 @@ serve(async (req) => {
         // Determine the tier from subscription metadata, with price-based fallback
         let tier = metadata.tier as string | undefined;
         if (!tier) {
-          const subPriceId = subscription.items?.data?.[0]?.price?.id;
-          if (subPriceId) {
-            tier = getTierFromPriceId(subPriceId, isTestMode) || undefined;
-            logStep("Tier derived from price fallback", { subPriceId, tier });
+          const subProductId = subscription.items?.data?.[0]?.price?.product;
+          if (subProductId) {
+            tier = getTierFromProductId(subProductId as string, isTestMode) || undefined;
+            logStep("Tier derived from product fallback", { subProductId, tier });
           }
         }
         logStep("Subscription metadata", { metadata, sessionMetadata, tier });
