@@ -4,6 +4,8 @@ import { LifeBuoy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { buildAuthRedirectPath } from '@/utils/authRedirect';
 import { Layout } from '@/components/layout/Layout';
+import { UpgradePrompt } from '@/components/ui/UpgradePrompt';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { ActionItemsBanner } from '@/components/support/ActionItemsBanner';
 import { ActionItemsCard } from '@/components/support/ActionItemsCard';
 import { TicketForm } from '@/components/support/TicketForm';

@@ -44,9 +44,9 @@ export function UpgradePrompt({ featureName, requiredTier, currentTier, descript
             </Badge>
           </div>
 
-          <p className="text-sm text-muted-foreground pt-2">
-            Contact your administrator to upgrade your plan.
-          </p>
+          <Button className="mt-2" onClick={() => navigate('/pricing')}>
+            View Upgrade Options
+          </Button>
         </CardContent>
       </Card>
     </div>
