@@ -65,7 +65,7 @@ async function sendReminderEmails(
 
       const emailHtml = `
         <div style="font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333;">
-          <h2 style="color: #2563eb; margin-bottom: 24px;">Weekly Success Scoreboard Reminder</h2>
+          <h2 style="color: #2563eb; margin-bottom: 24px;">SphereSync™ Weekly Check-In Reminder</h2>
           
           <p>Hi ${agent.first_name || 'there'},</p>
           
