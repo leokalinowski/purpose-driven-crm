@@ -34,6 +34,7 @@ const formSchema = z.object({
   conversations: z.number().min(0),
   dials_made: z.number().min(0),
   leads_contacted: z.number().min(0),
+  contacts_removed: z.number().min(0),
   appointments_set: z.number().min(0),
   appointments_held: z.number().min(0),
   agreements_signed: z.number().min(0),
@@ -62,7 +63,7 @@ const AdminCoachingSubmissionForm = () => {
   const currentWeekNumber = getCurrentWeekNumber();
   const currentYear = new Date().getFullYear();
 
-  const form = useForm<CoachingFormData>({
+  const form = useForm<any>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       week_number: currentWeekNumber,
@@ -70,6 +71,7 @@ const AdminCoachingSubmissionForm = () => {
       conversations: 0,
       dials_made: 0,
       leads_contacted: 0,
+      contacts_removed: 0,
       appointments_set: 0,
       appointments_held: 0,
       agreements_signed: 0,
@@ -99,6 +101,7 @@ const AdminCoachingSubmissionForm = () => {
         conversations: existingSubmission.conversations || 0,
         dials_made: existingSubmission.dials_made || 0,
         leads_contacted: existingSubmission.leads_contacted || 0,
+        contacts_removed: existingSubmission.deals_closed || 0,
         appointments_set: existingSubmission.appointments_set || 0,
         appointments_held: existingSubmission.appointments_held || 0,
         agreements_signed: existingSubmission.agreements_signed || 0,
@@ -117,6 +120,7 @@ const AdminCoachingSubmissionForm = () => {
         conversations: 0,
         dials_made: 0,
         leads_contacted: 0,
+        contacts_removed: 0,
         appointments_set: 0,
         appointments_held: 0,
         agreements_signed: 0,
@@ -131,7 +135,7 @@ const AdminCoachingSubmissionForm = () => {
     }
   }, [existingSubmission, loadingExisting, selectedWeek, selectedYear, selectedAgentId, form]);
 
-  const handleFormSubmit = (data: CoachingFormData) => {
+  const handleFormSubmit = (data: any) => {
     if (!selectedAgentId) return;
     if (existingSubmission) {
       setPendingSubmission(data);
@@ -284,6 +288,17 @@ const AdminCoachingSubmissionForm = () => {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Contacts Added</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField control={form.control} name="contacts_removed"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Contacts Removed</FormLabel>
                         <FormControl>
                           <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
                         </FormControl>

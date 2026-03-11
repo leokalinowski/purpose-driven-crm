@@ -31,6 +31,7 @@ import {
   ArrowRight,
   Pencil,
   CheckCircle2,
+  History,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { 
@@ -41,6 +42,7 @@ import {
   type WeeklyCheckInData,
 } from '@/hooks/useCoaching';
 import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
+import { MySubmissionsHistory } from '@/components/coaching/MySubmissionsHistory';
 
 const CONVERSATION_TARGET = 25;
 
@@ -317,14 +319,15 @@ const WeeklyScoreboard = ({ onEditClick }: { onEditClick: () => void }) => {
     ? Math.round((appointmentsSet / conversations) * 100)
     : 0;
 
-  // Get week start date label for last 4 weeks
+  // Get week start date label using date-fns for ISO week consistency
   const getWeekLabel = (weekNum: number, year: number) => {
-    const jan1 = new Date(year, 0, 1);
-    const dayOfWeek = jan1.getDay();
-    const daysToMonday = dayOfWeek === 0 ? 1 : (dayOfWeek === 1 ? 0 : 8 - dayOfWeek);
-    const firstMonday = new Date(year, 0, 1 + daysToMonday);
-    const weekStart = new Date(firstMonday);
-    weekStart.setDate(firstMonday.getDate() + (weekNum - 2) * 7);
+    // ISO week: Jan 4 is always in week 1. Find Monday of the given ISO week.
+    const jan4 = new Date(year, 0, 4);
+    const jan4Day = jan4.getDay() || 7; // convert Sunday=0 to 7
+    const mondayOfWeek1 = new Date(jan4);
+    mondayOfWeek1.setDate(jan4.getDate() - (jan4Day - 1));
+    const weekStart = new Date(mondayOfWeek1);
+    weekStart.setDate(mondayOfWeek1.getDate() + (weekNum - 1) * 7);
     const month = weekStart.toLocaleString('en-US', { month: 'short' });
     const day = weekStart.getDate();
     return `Week of ${month} ${day}`;
@@ -449,11 +452,20 @@ const WeeklyScoreboard = ({ onEditClick }: { onEditClick: () => void }) => {
         </Card>
       )}
 
-      {/* Edit Button */}
-      <Button variant="outline" onClick={onEditClick} className="w-full">
-        <Pencil className="h-4 w-4 mr-2" />
-        Edit This Week's Check-In
-      </Button>
+      {/* Action Buttons */}
+      <div className="flex gap-3">
+        <Button variant="outline" onClick={onEditClick} className="flex-1">
+          <Pencil className="h-4 w-4 mr-2" />
+          Edit Check-In
+        </Button>
+        <Button variant="outline" onClick={() => {
+          const el = document.getElementById('full-history');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }} className="flex-1">
+          <History className="h-4 w-4 mr-2" />
+          View All History
+        </Button>
+      </div>
     </div>
   );
 };
@@ -488,7 +500,12 @@ const WeeklySuccessScoreboard = () => {
         {view === 'checkin' ? (
           <WeeklyCheckInForm onSubmitSuccess={() => setView('scoreboard')} />
         ) : (
-          <WeeklyScoreboard onEditClick={() => setView('checkin')} />
+          <>
+            <WeeklyScoreboard onEditClick={() => setView('checkin')} />
+            <div id="full-history" className="max-w-2xl mx-auto mt-6">
+              <MySubmissionsHistory />
+            </div>
+          </>
         )}
       </div>
     </Layout>

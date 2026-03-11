@@ -183,7 +183,8 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
                         <SortableHeader field="conversations">Convos</SortableHeader>
                         <SortableHeader field="dials_made">Attempts</SortableHeader>
                         <SortableHeader field="appointments_set">Appts</SortableHeader>
-                        <SortableHeader field="leads_contacted">Added</SortableHeader>
+                        <SortableHeader field="leads_contacted">Contacts Added</SortableHeader>
+                        <TableHead>Removed</TableHead>
                         <SortableHeader field="closings">Closings</SortableHeader>
                       </TableRow>
                     </TableHeader>
@@ -200,6 +201,7 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
                           <TableCell>{s.dials_made || 0}</TableCell>
                           <TableCell>{s.appointments_set || 0}</TableCell>
                           <TableCell>{s.leads_contacted || 0}</TableCell>
+                          <TableCell>{s.deals_closed || 0}</TableCell>
                           <TableCell>{s.closings || 0}</TableCell>
                         </TableRow>
                       ))}

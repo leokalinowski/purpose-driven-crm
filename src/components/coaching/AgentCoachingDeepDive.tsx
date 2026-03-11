@@ -213,8 +213,9 @@ const AgentCoachingDeepDive = ({ selectedWeek = 'all' }: AgentCoachingDeepDivePr
                       <TableHead>Convos</TableHead>
                       <TableHead>Attempts</TableHead>
                       <TableHead>Appts</TableHead>
-                      <TableHead>Added</TableHead>
-                      <TableHead>Removed</TableHead>
+                      <TableHead>Contacts Added</TableHead>
+                      <TableHead>Contacts Removed</TableHead>
+                      <TableHead>Activation Day</TableHead>
                       <TableHead>Closings</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -231,6 +232,11 @@ const AgentCoachingDeepDive = ({ selectedWeek = 'all' }: AgentCoachingDeepDivePr
                         <TableCell>{s.appointments_set || 0}</TableCell>
                         <TableCell>{s.leads_contacted || 0}</TableCell>
                         <TableCell>{s.deals_closed || 0}</TableCell>
+                        <TableCell>
+                          <Badge variant={(s.agreements_signed || 0) >= 1 ? "default" : "secondary"}>
+                            {(s.agreements_signed || 0) >= 1 ? 'Yes' : 'No'}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{s.closings || 0}</TableCell>
                       </TableRow>
                     ))}

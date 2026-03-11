@@ -162,7 +162,7 @@ export const useAdminSubmitCoachingForm = () => {
         coaching_notes: formData.coaching_notes,
         must_do_task: formData.must_do_task,
         database_size: contactCount || 0,
-        deals_closed: formData.closings || 0,
+        deals_closed: (formData as any).contacts_removed ?? formData.closings ?? 0,
         updated_at: new Date().toISOString(),
       };
 

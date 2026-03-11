@@ -238,7 +238,7 @@ export const useSubmitCoachingForm = () => {
         appointments_held: formData.appointments_held || 0,
         agreements_signed: formData.agreements_signed || 0,
         offers_made_accepted: formData.offers_made_accepted || 0,
-        deals_closed: 0,
+        deals_closed: formData.leads_contacted || 0, // preserve contacts_removed mapping
         closings: formData.closings || 0,
         closing_amount: formData.closing_amount || 0,
         challenges: formData.challenges || null,

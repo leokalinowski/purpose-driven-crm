@@ -176,7 +176,7 @@ export function AppSidebar() {
                 items={[
                   { title: 'Database Management', url: '/admin/database', icon: Database },
                   { title: 'SphereSync Recovery', url: '/admin/spheresync-recovery', icon: RotateCcw },
-                  { title: 'Coaching Management', url: '/admin/coaching', icon: TrendingUp },
+                  { title: 'SphereSync Management', url: '/admin/coaching', icon: TrendingUp },
                 ]}
                 pathname={location.pathname}
               />
