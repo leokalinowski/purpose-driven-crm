@@ -500,7 +500,12 @@ const WeeklySuccessScoreboard = () => {
         {view === 'checkin' ? (
           <WeeklyCheckInForm onSubmitSuccess={() => setView('scoreboard')} />
         ) : (
-          <WeeklyScoreboard onEditClick={() => setView('checkin')} />
+          <>
+            <WeeklyScoreboard onEditClick={() => setView('checkin')} />
+            <div id="full-history" className="max-w-2xl mx-auto mt-6">
+              <MySubmissionsHistory />
+            </div>
+          </>
         )}
       </div>
     </Layout>

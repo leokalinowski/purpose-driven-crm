@@ -232,6 +232,11 @@ const AgentCoachingDeepDive = ({ selectedWeek = 'all' }: AgentCoachingDeepDivePr
                         <TableCell>{s.appointments_set || 0}</TableCell>
                         <TableCell>{s.leads_contacted || 0}</TableCell>
                         <TableCell>{s.deals_closed || 0}</TableCell>
+                        <TableCell>
+                          <Badge variant={(s.agreements_signed || 0) >= 1 ? "default" : "secondary"}>
+                            {(s.agreements_signed || 0) >= 1 ? 'Yes' : 'No'}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{s.closings || 0}</TableCell>
                       </TableRow>
                     ))}

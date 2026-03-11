@@ -295,6 +295,17 @@ const AdminCoachingSubmissionForm = () => {
                       </FormItem>
                     )}
                   />
+                  <FormField control={form.control} name="contacts_removed"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Contacts Removed</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <FormField control={form.control} name="agreements_signed"
                     render={({ field }) => (
                       <FormItem>
