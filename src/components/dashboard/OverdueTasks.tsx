@@ -121,17 +121,25 @@ function WeekGroupRow({ group }: { group: WeekGroup }) {
 
 export function OverdueTasks({ data }: Props) {
   const { accountabilityScore, priorityTasks } = data;
+  const { hasAccess } = useFeatureAccess();
   const colors = getScoreColor(accountabilityScore);
-  const nudge = getNudgeText(accountabilityScore, priorityTasks.length);
+
+  // Filter out tasks for systems the user can't access
+  const filteredTasks = priorityTasks.filter(t => {
+    if (t.system === 'events' && !hasAccess('/events')) return false;
+    return true;
+  });
+
+  const nudge = getNudgeText(accountabilityScore, filteredTasks.length);
 
   // Don't render if perfect score and nothing overdue
-  if (accountabilityScore >= 100 && priorityTasks.length === 0) {
+  if (accountabilityScore >= 100 && filteredTasks.length === 0) {
     return null;
   }
 
   // Group sphere tasks by week, keep events/coaching as-is
-  const sphereTasks = priorityTasks.filter(t => t.system === 'spheresync');
-  const otherTasks = priorityTasks.filter(t => t.system !== 'spheresync');
+  const sphereTasks = filteredTasks.filter(t => t.system === 'spheresync');
+  const otherTasks = filteredTasks.filter(t => t.system !== 'spheresync');
   const weekGroups = groupByWeek(sphereTasks);
 
   // Group other tasks too (events, coaching)

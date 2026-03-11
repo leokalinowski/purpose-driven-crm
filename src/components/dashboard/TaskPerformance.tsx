@@ -40,7 +40,7 @@ export function TaskPerformance({ data }: Props) {
             {completedThisWeek} of {totalThisWeek} tasks completed
           </div>
           <div className="flex gap-2 ml-auto flex-wrap">
-            {bySystem.map(s => (
+            {filteredBySystem.map(s => (
               <Badge key={s.label} variant="outline" className="text-xs">
                 {s.label}: {s.completed}/{s.total}
               </Badge>
