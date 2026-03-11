@@ -169,7 +169,7 @@ export function useDashboardBlocks() {
         supabase.from('social_posts').select('id, content, platform, schedule_time, status')
           .eq('agent_id', user.id).gte('schedule_time', weekStart).lte('schedule_time', weekEnd),
         // Coaching: this week's submission
-        supabase.from('coaching_submissions').select('id')
+        supabase.from('coaching_submissions').select('id, conversations, dials_made, appointments_set, leads_contacted, deals_closed')
           .eq('agent_id', user.id).eq('week_number', currentWeekNum).eq('year', currentYear),
         // Coaching: past weeks without submission (last 4 weeks)
         supabase.from('coaching_submissions').select('week_number, year')
