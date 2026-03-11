@@ -90,21 +90,21 @@ const Index = () => {
           </Card>
         )}
 
+        {showOnboarding && (
+          <OnboardingWelcome
+            userName={profile?.first_name}
+            onDismiss={dismissOnboarding}
+          />
+        )}
+
         {data && (
           <>
-            {/* Block 1: Weekly Touchpoints */}
             <WeeklyTouchpoints data={data.blockOne} />
-
-            {/* Block 2 + Block 3 side by side on large screens */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <WeeklyTasksBySystem data={data.blockTwo} />
               <TransactionOpportunity data={data.blockThree} />
             </div>
-
-            {/* Block 4: Performance */}
             <TaskPerformance data={data.blockFour} />
-
-            {/* Block 5: Overdue */}
             <OverdueTasks data={data.blockFive} />
           </>
         )}
