@@ -183,7 +183,8 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
                         <SortableHeader field="conversations">Convos</SortableHeader>
                         <SortableHeader field="dials_made">Attempts</SortableHeader>
                         <SortableHeader field="appointments_set">Appts</SortableHeader>
-                        <SortableHeader field="leads_contacted">Added</SortableHeader>
+                        <SortableHeader field="leads_contacted">Contacts Added</SortableHeader>
+                        <TableHead>Removed</TableHead>
                         <SortableHeader field="closings">Closings</SortableHeader>
                       </TableRow>
                     </TableHeader>
