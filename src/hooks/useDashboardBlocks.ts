@@ -45,7 +45,7 @@ export type BlockTwoTasks = {
   events: SystemTask[];
   newsletter: SystemTask[];
   social: SystemTask[];
-  scoreboard: { submitted: boolean; weekNumber: number };
+  scoreboard: { submitted: boolean; weekNumber: number; conversations: number; conversationTarget: number };
 };
 
 export type BlockThreeOpportunity = {
