@@ -29,9 +29,10 @@ const ROUTE_MIN_TIER: Record<string, Tier> = {
   '/database': 'core',
   '/coaching': 'core',
   '/newsletter': 'core',
-  '/support': 'core',
   // Managed routes
+  '/support': 'managed',
   '/events': 'managed',
+  '/transactions': 'managed',
   '/social-scheduler': 'agent',
   '/pipeline': 'managed',
 };

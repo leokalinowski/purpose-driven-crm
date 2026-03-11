@@ -1,4 +1,5 @@
 import { Lock, ArrowUpCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +20,7 @@ const TIER_LABELS: Record<string, string> = {
 };
 
 export function UpgradePrompt({ featureName, requiredTier, currentTier, description }: UpgradePromptProps) {
+  const navigate = useNavigate();
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <Card className="max-w-lg w-full text-center">
@@ -43,9 +45,9 @@ export function UpgradePrompt({ featureName, requiredTier, currentTier, descript
             </Badge>
           </div>
 
-          <p className="text-sm text-muted-foreground pt-2">
-            Contact your administrator to upgrade your plan.
-          </p>
+          <Button className="mt-2" onClick={() => navigate('/pricing')}>
+            View Upgrade Options
+          </Button>
         </CardContent>
       </Card>
     </div>

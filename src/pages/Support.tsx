@@ -4,6 +4,8 @@ import { LifeBuoy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { buildAuthRedirectPath } from '@/utils/authRedirect';
 import { Layout } from '@/components/layout/Layout';
+import { UpgradePrompt } from '@/components/ui/UpgradePrompt';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { ActionItemsBanner } from '@/components/support/ActionItemsBanner';
 import { ActionItemsCard } from '@/components/support/ActionItemsCard';
 import { TicketForm } from '@/components/support/TicketForm';
@@ -15,6 +17,7 @@ import { useSupportTickets } from '@/hooks/useSupportTickets';
 const Support = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const { hasAccess, currentTier, getRequiredTier } = useFeatureAccess();
   
   const {
     highPriorityItems,
@@ -53,6 +56,19 @@ const Support = () => {
 
   if (!user) {
     return null;
+  }
+
+  if (!hasAccess('/support')) {
+    return (
+      <Layout>
+        <UpgradePrompt
+          featureName="Support Hub"
+          requiredTier={getRequiredTier('/support') || 'managed'}
+          currentTier={currentTier}
+          description="Submit support tickets and get direct help from the REOP team. Available on the Managed plan and above."
+        />
+      </Layout>
+    );
   }
 
   const handleDismiss = (id: string, dismissUntil?: Date) => {
