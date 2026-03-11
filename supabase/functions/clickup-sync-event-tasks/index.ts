@@ -7,36 +7,48 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Auth guard: require admin
+    // Auth guard: require admin OR cron job (X-Cron-Job header) OR service-key
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const isCronJob = req.headers.get("X-Cron-Job") === "true";
+    const isServiceKey = authHeader === `Bearer ${serviceKey}`;
 
-    const supabaseAuth = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    if (!(isCronJob || isServiceKey)) {
+      // Standard admin auth flow
+      if (!authHeader?.startsWith("Bearer ")) {
+        console.error("clickup-sync: Missing Authorization header");
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+      const supabaseAuth = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
 
-    const { data: userRole, error: roleError } = await supabaseAuth.rpc("get_current_user_role");
-    if (roleError || userRole !== "admin") {
-      return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const token = authHeader.replace("Bearer ", "");
+      const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) {
+        console.error("clickup-sync: getClaims failed:", claimsError?.message);
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: userRole, error: roleError } = await supabaseAuth.rpc("get_current_user_role");
+      if (roleError || userRole !== "admin") {
+        console.error("clickup-sync: Role check failed:", roleError?.message, "role:", userRole);
+        return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else {
+      console.log("clickup-sync: Authenticated via service key (cron job)");
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;

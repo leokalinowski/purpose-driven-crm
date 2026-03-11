@@ -27,6 +27,7 @@ serve(async (req) => {
     const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
 
     if (claimsError || !claimsData?.claims) {
+      console.error("admin-delete-user: getClaims failed:", claimsError?.message);
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

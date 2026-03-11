@@ -1,10 +1,5 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 interface SchedulePostRequest {
   content: string;
@@ -14,7 +9,7 @@ interface SchedulePostRequest {
   agent_id?: string;
 }
 
-const handler = async (req: Request): Promise<Response> => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -28,6 +23,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Get the user from the Authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.error("social-schedule: Missing Authorization header");
       throw new Error('No authorization header');
     }
 
@@ -35,6 +31,7 @@ const handler = async (req: Request): Promise<Response> => {
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
 
     if (authError || !user) {
+      console.error("social-schedule: Auth failed:", authError?.message);
       throw new Error('Unauthorized');
     }
 
@@ -90,13 +87,11 @@ const handler = async (req: Request): Promise<Response> => {
         }
 
         try {
-          // Retry logic for Postiz API calls
           const maxRetries = 3;
           let lastError: Error | null = null;
 
           for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-              // Prepare post data for Postiz
               const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/social-webhook`;
 
               const postData = {
@@ -104,14 +99,13 @@ const handler = async (req: Request): Promise<Response> => {
                 datetime: schedule_time,
                 platforms: [platform],
                 ...(media_url && { media: [{ url: media_url }] }),
-                webhook_url: webhookUrl, // Add webhook URL for status updates
+                webhook_url: webhookUrl,
               };
 
               console.log(`Attempting Postiz API call for ${platform} (attempt ${attempt}/${maxRetries})`);
 
-              // Call Postiz Public API with timeout
               const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+              const timeoutId = setTimeout(() => controller.abort(), 30000);
 
               const postizResponse = await fetch(`${postizBaseUrl}/api/posts`, {
                 method: 'POST',
@@ -129,14 +123,12 @@ const handler = async (req: Request): Promise<Response> => {
                 const errorData = await postizResponse.text();
                 console.error(`Postiz API error for ${platform} (attempt ${attempt}):`, errorData);
 
-                // Check if it's a retryable error
                 const isRetryable = postizResponse.status >= 500 || postizResponse.status === 429;
 
                 if (!isRetryable || attempt === maxRetries) {
                   throw new Error(`Postiz API error (${postizResponse.status}): ${errorData}`);
                 }
 
-                // Wait before retry (exponential backoff)
                 const waitTime = Math.pow(2, attempt) * 1000;
                 console.log(`Retrying ${platform} post in ${waitTime}ms...`);
                 await new Promise(resolve => setTimeout(resolve, waitTime));
@@ -146,7 +138,6 @@ const handler = async (req: Request): Promise<Response> => {
               const postizResult = await postizResponse.json();
               const postizId = postizResult.id || `postiz_${Date.now()}_${platform}`;
 
-              // Save the scheduled post to database
               const { data: post, error: insertError } = await supabaseClient
                 .from('social_posts')
                 .insert({
@@ -173,7 +164,7 @@ const handler = async (req: Request): Promise<Response> => {
                 post_id: post.id,
                 postiz_id: postizId,
               });
-              break; // Success, exit retry loop
+              break;
 
             } catch (attemptError) {
               lastError = attemptError as Error;
@@ -183,16 +174,14 @@ const handler = async (req: Request): Promise<Response> => {
                 throw lastError;
               }
 
-              // Wait before next attempt
               const waitTime = Math.pow(2, attempt) * 1000;
               await new Promise(resolve => setTimeout(resolve, waitTime));
             }
           }
 
-        } catch (postizError) {
+        } catch (postizError: any) {
           console.error(`❌ All Postiz attempts failed for ${platform}:`, postizError);
 
-          // Categorize the error
           let errorMessage = postizError.message;
           let fallbackStatus = 'failed';
 
@@ -206,8 +195,7 @@ const handler = async (req: Request): Promise<Response> => {
             fallbackStatus = 'pending';
           }
 
-          // Fallback: save to database without Postiz
-          const { data: post, error: insertError } = await supabaseClient
+          const { data: post } = await supabaseClient
             .from('social_posts')
             .insert({
               agent_id: actualAgentId,
@@ -221,7 +209,6 @@ const handler = async (req: Request): Promise<Response> => {
             .select()
             .single();
 
-          // Try direct posting as fallback for supported platforms
           if (platform === 'facebook' && post?.id) {
             try {
               console.log(`🔄 Attempting direct posting to ${platform} as fallback`);
@@ -245,7 +232,7 @@ const handler = async (req: Request): Promise<Response> => {
                   method: 'direct',
                   error: undefined,
                 });
-                continue; // Skip to next platform
+                continue;
               }
             } catch (directPostError) {
               console.error(`❌ Direct posting also failed for ${platform}:`, directPostError);
@@ -261,7 +248,7 @@ const handler = async (req: Request): Promise<Response> => {
           });
         }
 
-      } catch (platformError) {
+      } catch (platformError: any) {
         console.error(`Error scheduling ${platform} post:`, platformError);
         results.push({
           platform,
@@ -291,7 +278,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Schedule post error:', error);
     return new Response(
       JSON.stringify({ 
@@ -304,6 +291,4 @@ const handler = async (req: Request): Promise<Response> => {
       }
     );
   }
-};
-
-serve(handler);
+});
