@@ -105,7 +105,7 @@ async function sendReminderEmails(
       const emailResponse = await supabase.functions.invoke('send-email', {
         body: {
           to: { email: agent.email, name: `${agent.first_name || ''} ${agent.last_name || ''}`.trim() },
-          subject: "Reminder: Submit Your Weekly Performance Data",
+          subject: "Reminder: Submit Your SphereSync™ Weekly Check-In",
           html: emailHtml,
           categories: ["coaching-reminder"],
           metadata: {
