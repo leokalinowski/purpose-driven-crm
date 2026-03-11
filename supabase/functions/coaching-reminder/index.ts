@@ -65,33 +65,33 @@ async function sendReminderEmails(
 
       const emailHtml = `
         <div style="font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333;">
-          <h2 style="color: #2563eb; margin-bottom: 24px;">Weekly Success Scoreboard Reminder</h2>
+          <h2 style="color: #2563eb; margin-bottom: 24px;">SphereSync™ Weekly Check-In Reminder</h2>
           
           <p>Hi ${agent.first_name || 'there'},</p>
           
-          <p>This is a friendly reminder to submit your Weekly Success Scoreboard before ${reminderType === 'wednesday' ? "Thursday's" : "today's"} coaching Zoom session.</p>
+          <p>This is a friendly reminder to submit your SphereSync™ Weekly Check-In before ${reminderType === 'wednesday' ? "Thursday's" : "today's"} coaching Zoom session.</p>
           
           <div style="background-color: #f8fafc; border-left: 4px solid #2563eb; padding: 16px; margin: 20px 0;">
-            <p style="margin: 0; font-weight: 600;">What to submit in your scorecard:</p>
+            <p style="margin: 0; font-weight: 600;">What to submit in your weekly check-in:</p>
             <ul style="margin: 8px 0 0 16px;">
-              <li>Attempts Made and Leads Contacted</li>
-              <li>Appointments Set, Appointments Held, and Agreements Signed</li>
-              <li>Offers Made, # of Closings, and $ Closed (Amount)</li>
-              <li>Challenges and coaching notes</li>
+              <li>Conversations (toward your 25/week target)</li>
+              <li>Activation Attempts and Appointments Set</li>
+              <li>Contacts Added & Removed from your database</li>
+              <li>Activation Day and weekly notes</li>
               <li>Your ONE must-do task for next week</li>
             </ul>
           </div>
           
-          <p>Please log in to the coaching system and submit your weekly data at your earliest convenience.</p>
+          <p>Please log in and submit your weekly check-in at your earliest convenience.</p>
           
           <div style="margin: 24px 0;">
             <a href="https://hub.realestateonpurpose.com/coaching" 
                style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
-              Submit Weekly Data
+              Submit Weekly Check-In
             </a>
           </div>
           
-          <p>Thanks for your continued dedication to performance improvement!</p>
+          <p>Thanks for your continued dedication to growing your sphere!</p>
           
           <p style="color: #6b7280; font-size: 14px; margin-top: 32px;">
             Best regards,<br>
@@ -105,7 +105,7 @@ async function sendReminderEmails(
       const emailResponse = await supabase.functions.invoke('send-email', {
         body: {
           to: { email: agent.email, name: `${agent.first_name || ''} ${agent.last_name || ''}`.trim() },
-          subject: "Reminder: Submit Your Weekly Performance Data",
+          subject: "Reminder: Submit Your SphereSync™ Weekly Check-In",
           html: emailHtml,
           categories: ["coaching-reminder"],
           metadata: {
@@ -117,7 +117,7 @@ async function sendReminderEmails(
       });
 
       const agentName = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || agent.email;
-      const emailSubject = "Reminder: Submit Your Weekly Performance Data";
+      const emailSubject = "Reminder: Submit Your SphereSync™ Weekly Check-In";
 
       if (emailResponse.error) {
         console.error(`[Background] Failed to send email to ${agent.email}:`, emailResponse.error);

@@ -1,38 +1,34 @@
 
 
-## Audit: Reminders & Dashboard Integration
+## Fix: RSVP RLS Violation on Public Submissions
 
-### Reminders — Status
+### Root Cause
 
-**Coaching/Scoreboard Reminder (`coaching-reminder` edge function)**: Functionally works. It queries `coaching_submissions` for the current week and sends emails to agents who haven't submitted. Since we didn't rename the table or change the `week_number`/`year`/`agent_id` columns, the reminder logic is fully intact.
+In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
 
-**However**, the email body content is outdated. Lines 76-81 still list the old "Success Scoreboard" fields:
-- "Attempts Made and Leads Contacted"
-- "Appointments Set, Appointments Held, and Agreements Signed"  
-- "Offers Made, # of Closings, and $ Closed (Amount)"
+The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
 
-These no longer match what agents actually submit in the SphereSync Weekly Check-In (Conversations, Activation Attempts, Appointments Set, Contacts Added/Removed, Activation Day). The email should be updated to match the new vocabulary.
+### Fix
 
-**SphereSync Email Reminder (`spheresync-email-function`)**: Completely unaffected. It deals with SphereSync tasks (calls/texts), not coaching submissions. Works as before.
+Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
 
-### Dashboard — Status
+### Step 1: Database Migration
 
-**Fully connected.** The `useDashboardBlocks.ts` hook queries `coaching_submissions` directly and uses the data correctly:
+Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
+- Verifies event exists and is published
+- Checks for duplicate RSVP (reuses existing logic)
+- Determines status based on capacity (confirmed vs waitlist)
+- Inserts the row and returns `id` and `status`
+- SECURITY DEFINER so it bypasses RLS
 
-| Dashboard Block | What it reads | Status |
-|---|---|---|
-| Block 2 (Weekly Tasks) | Checks if a submission exists for current week → shows "Submit Scoreboard" task | Works |
-| Block 3 (Transaction Opportunity) | Reads `closings` column from all submissions this year | Works — `closings` column is untouched by our changes |
-| Block 4 (Performance) | Checks submission existence per week for 8-week trend | Works |
-| Block 5 (Accountability) | Uses coaching submission existence in completion calculations | Works |
+### Step 2: Update `src/hooks/useRSVP.ts`
 
-No dashboard block reads `conversations`, `dials_made`, `leads_contacted`, or `deals_closed` — they only check whether a submission row exists and read the `closings` column. So all dashboard integrations are intact.
+Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
 
-### Plan: Update Reminder Email Content
+### Files Changed
 
-| # | File | Change |
-|---|---|---|
-| 1 | `supabase/functions/coaching-reminder/index.ts` | Update the email HTML body to use SphereSync vocabulary: Conversations (toward your 25/week target), Activation Attempts, Appointments Set, Contacts Added/Removed, Activation Day, and your weekly notes. Change the subject line and CTA text to reference "SphereSync Weekly Check-In" instead of "Weekly Performance Data". |
-
-This is a single edge function file change — no database or frontend changes needed.
+| File | Change |
+|------|--------|
+| Migration SQL | Create `submit_public_rsvp` function |
+| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
 
