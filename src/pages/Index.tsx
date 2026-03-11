@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Layout } from '@/components/layout/Layout';
@@ -12,6 +12,8 @@ import { TransactionOpportunity } from '@/components/dashboard/TransactionOpport
 import { TaskPerformance } from '@/components/dashboard/TaskPerformance';
 import { OverdueTasks } from '@/components/dashboard/OverdueTasks';
 import { DashboardRefreshButton } from '@/components/dashboard/DashboardRefreshButton';
+import { OnboardingWelcome } from '@/components/onboarding/OnboardingWelcome';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 
