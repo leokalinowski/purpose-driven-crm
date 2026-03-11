@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Target, ExternalLink, ChevronDown, ChevronUp, Sparkles, CheckCircle2, AlertTriangle, Phone, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import type { BlockFiveOverdue, OverdueTask } from '@/hooks/useDashboardBlocks';
 
 interface Props {
