@@ -91,7 +91,7 @@ async function sendReminderEmails(
             </a>
           </div>
           
-          <p>Thanks for your continued dedication to performance improvement!</p>
+          <p>Thanks for your continued dedication to growing your sphere!</p>
           
           <p style="color: #6b7280; font-size: 14px; margin-top: 32px;">
             Best regards,<br>
