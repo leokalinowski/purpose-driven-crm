@@ -3,6 +3,7 @@ import { Progress } from '@/components/ui/progress';
 import { Phone, Mail, Share, Calendar, Zap, Users, MessageCircle, UserPlus, UserMinus, CalendarCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import type { BlockOneTouchpoints } from '@/hooks/useDashboardBlocks';
 
 interface Props {
@@ -14,12 +15,13 @@ export function WeeklyTouchpoints({ data }: Props) {
   const total = Math.max(totalTouchpoints, 1);
   const convoPct = Math.min(100, Math.round((scoreboard.conversations / 25) * 100));
   const navigate = useNavigate();
+  const { hasAccess } = useFeatureAccess();
 
   const channels = [
     { label: 'SphereSync', value: breakdown.spheresync, icon: Phone, color: 'bg-primary' },
-    { label: 'Events', value: breakdown.events, icon: Calendar, color: 'bg-chart-2' },
+    ...(hasAccess('/events') ? [{ label: 'Events', value: breakdown.events, icon: Calendar, color: 'bg-chart-2' }] : []),
     { label: 'Newsletter', value: breakdown.newsletter, icon: Mail, color: 'bg-chart-3' },
-    { label: 'Social', value: breakdown.social, icon: Share, color: 'bg-chart-4' },
+    ...(hasAccess('/social-scheduler') ? [{ label: 'Social', value: breakdown.social, icon: Share, color: 'bg-chart-4' }] : []),
   ];
 
   return (

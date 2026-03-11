@@ -1,51 +1,34 @@
 
 
-## Dashboard Data Reliability Audit
+## Fix: RSVP RLS Violation on Public Submissions
 
-### Architecture Summary
+### Root Cause
 
-The system has two dashboards:
-- **`/` (Index)** — uses `useDashboardBlocks`, always queries by `user.id`. Every role sees this.
-- **`/admin/dashboard`** — admin-only, uses separate hooks for company-wide data.
+In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
 
-The personal dashboard at `/` is role-agnostic by design. It shows whatever data exists for the logged-in user.
+The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
 
-### Reliability Assessment
+### Fix
 
-**What's working correctly:**
+Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
 
-| Data Source | Query Filter | RLS Compatible | Status |
-|---|---|---|---|
-| `spheresync_tasks` | `agent_id = user.id` | Yes | Reliable |
-| `event_tasks` | `agent_id = user.id` | Yes | Reliable |
-| `contacts` | `agent_id = user.id` | Yes | Reliable |
-| `coaching_submissions` | `agent_id = user.id` | Yes | Reliable |
-| `newsletter_campaigns` | `created_by = user.id` | Yes | Reliable |
-| `social_posts` | `agent_id = user.id` | Yes | Reliable |
-| `event_emails` | Scoped via user's event IDs | Yes | Reliable |
-| `newsletter_task_settings` | `agent_id = user.id` | Yes | Reliable |
+### Step 1: Database Migration
 
-Every query explicitly filters by the user's ID, and every table's RLS policies allow users to read their own data. This is solid.
+Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
+- Verifies event exists and is published
+- Checks for duplicate RSVP (reuses existing logic)
+- Determines status based on capacity (confirmed vs waitlist)
+- Inserts the row and returns `id` and `status`
+- SECURITY DEFINER so it bypasses RLS
 
-### Potential Issues by Role
+### Step 2: Update `src/hooks/useRSVP.ts`
 
-**Core & Managed users**: They see dashboard blocks for Events and Social, but these features are gated behind `useFeatureAccess`. If they navigate to `/events` or `/social-scheduler`, they're blocked. However, the dashboard still shows empty task lists for those systems — it doesn't hide them. This creates mild confusion (showing "Events: 0 tasks" when they can't use Events at all).
+Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
 
-**Admins visiting `/`**: They see their own personal agent-level data, which is correct. Their company-wide view is at `/admin/dashboard`.
+### Files Changed
 
-**Editors**: Same as agents — personal data only. Works fine.
-
-### One Real Bug Found
-
-In the `event_emails` query (lines 183-187), if an admin visits `/`, the query fetches events where `agent_id = user.id`. But admins might create events with `created_by` set to their ID rather than `agent_id`. The events table has both `agent_id` and `created_by` fields. If an admin creates an event and assigns it to an agent (`agent_id = agent's UUID`), the admin's personal dashboard won't show those event email touchpoints. This is minor and arguably correct behavior (the event belongs to the agent).
-
-### Verdict
-
-**The data pull is reliable for all account types.** No silent failures, no RLS conflicts, no missing filters. The one improvement worth considering:
-
-| # | Change | Impact |
-|---|---|---|
-| 1 | Hide Events and Social blocks for `core` and `managed` users in `WeeklyTasksBySystem.tsx` and `WeeklyTouchpoints.tsx` | Removes confusion — don't show systems they can't access |
-
-This is a small UX polish, not a data reliability fix. No data is being pulled incorrectly.
+| File | Change |
+|------|--------|
+| Migration SQL | Create `submit_public_rsvp` function |
+| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
 
