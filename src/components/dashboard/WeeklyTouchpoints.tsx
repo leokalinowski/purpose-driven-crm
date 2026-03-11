@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Phone, Mail, Share, Calendar, Zap, Users, MessageCircle, UserPlus, UserMinus, CalendarCheck } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 import type { BlockOneTouchpoints } from '@/hooks/useDashboardBlocks';
 
 interface Props {
@@ -11,6 +13,7 @@ export function WeeklyTouchpoints({ data }: Props) {
   const { totalTouchpoints, uniqueContactsTouched, breakdown, scoreboard } = data;
   const total = Math.max(totalTouchpoints, 1);
   const convoPct = Math.min(100, Math.round((scoreboard.conversations / 25) * 100));
+  const navigate = useNavigate();
 
   const channels = [
     { label: 'SphereSync', value: breakdown.spheresync, icon: Phone, color: 'bg-primary' },
@@ -28,49 +31,50 @@ export function WeeklyTouchpoints({ data }: Props) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Hero: Conversations toward 25 */}
-        {scoreboard.submitted && (
-          <div className="text-center p-4 rounded-lg bg-primary/5 border border-primary/10">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <MessageCircle className="h-5 w-5 text-primary" />
-              <span className="text-sm font-medium text-muted-foreground">Conversations This Week</span>
-            </div>
-            <div className="text-4xl font-bold text-primary">{scoreboard.conversations}</div>
-            <div className="text-sm text-muted-foreground mt-1">{scoreboard.conversations} / 25 conversations</div>
-            <Progress value={convoPct} className="h-2 mt-2 max-w-xs mx-auto" />
+        {/* Hero: Conversations toward 25 — always visible */}
+        <div className="text-center p-4 rounded-lg bg-primary/5 border border-primary/10">
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <MessageCircle className="h-5 w-5 text-primary" />
+            <span className="text-sm font-medium text-muted-foreground">Conversations This Week</span>
           </div>
-        )}
+          <div className="text-4xl font-bold text-primary">{scoreboard.conversations}</div>
+          <div className="text-sm text-muted-foreground mt-1">{scoreboard.conversations} / 25 conversations</div>
+          <Progress value={convoPct} className="h-2 mt-2 max-w-xs mx-auto" />
+          {!scoreboard.submitted && (
+            <Button variant="link" size="sm" className="mt-2 text-xs" onClick={() => navigate('/coaching')}>
+              Submit your Weekly Check-In →
+            </Button>
+          )}
+        </div>
 
-        {/* Scoreboard Metrics Grid */}
-        {scoreboard.submitted && (
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div className="text-center p-2 rounded-lg bg-muted/50">
-              <Phone className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-1" />
-              <div className="text-lg font-bold">{scoreboard.activationAttempts}</div>
-              <p className="text-xs text-muted-foreground">Sphere Activations</p>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-muted/50">
-              <MessageCircle className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-1" />
-              <div className="text-lg font-bold">{scoreboard.conversations}</div>
-              <p className="text-xs text-muted-foreground">Relationships</p>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-muted/50">
-              <CalendarCheck className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-1" />
-              <div className="text-lg font-bold">{scoreboard.appointmentsSet}</div>
-              <p className="text-xs text-muted-foreground">Opportunities</p>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-muted/50">
-              <UserPlus className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-1" />
-              <div className="text-lg font-bold">{scoreboard.contactsAdded}</div>
-              <p className="text-xs text-muted-foreground">DB Growth</p>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-muted/50">
-              <UserMinus className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-1" />
-              <div className="text-lg font-bold">{scoreboard.contactsRemoved}</div>
-              <p className="text-xs text-muted-foreground">DB Hygiene</p>
-            </div>
+        {/* Scoreboard Metrics Grid — always visible */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="text-center p-2 rounded-lg bg-muted/50">
+            <Phone className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-1" />
+            <div className="text-lg font-bold">{scoreboard.activationAttempts}</div>
+            <p className="text-xs text-muted-foreground">Sphere Activations</p>
           </div>
-        )}
+          <div className="text-center p-2 rounded-lg bg-muted/50">
+            <MessageCircle className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-1" />
+            <div className="text-lg font-bold">{scoreboard.conversations}</div>
+            <p className="text-xs text-muted-foreground">Relationships</p>
+          </div>
+          <div className="text-center p-2 rounded-lg bg-muted/50">
+            <CalendarCheck className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-1" />
+            <div className="text-lg font-bold">{scoreboard.appointmentsSet}</div>
+            <p className="text-xs text-muted-foreground">Opportunities</p>
+          </div>
+          <div className="text-center p-2 rounded-lg bg-muted/50">
+            <UserPlus className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-1" />
+            <div className="text-lg font-bold">{scoreboard.contactsAdded}</div>
+            <p className="text-xs text-muted-foreground">DB Growth</p>
+          </div>
+          <div className="text-center p-2 rounded-lg bg-muted/50">
+            <UserMinus className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-1" />
+            <div className="text-lg font-bold">{scoreboard.contactsRemoved}</div>
+            <p className="text-xs text-muted-foreground">DB Hygiene</p>
+          </div>
+        </div>
 
         {/* System touchpoints */}
         <div>

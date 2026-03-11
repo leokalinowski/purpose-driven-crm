@@ -1,22 +1,34 @@
 
 
-## The Issue: Scoreboard Data Only Visible After Submission
+## Fix: RSVP RLS Violation on Public Submissions
 
-The dashboard feed mapping is implemented but **conditionally hidden** behind `scoreboard.submitted`. This means:
+### Root Cause
 
-- **Before submitting**: User sees nothing about conversations — no hero metric, no 5-metric grid, no progress toward 25
-- **After submitting**: Everything appears
+In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
 
-This contradicts the spec's intent — the dashboard should always show the conversation target and encourage progress, even when the submission is at 0/25.
+The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
 
 ### Fix
 
-Show the scoreboard section **always**, not just when submitted. When no submission exists, display zeros with a prompt to submit.
+Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
 
-| # | File | Change |
-|---|---|---|
-| 1 | `src/components/dashboard/WeeklyTouchpoints.tsx` | Remove the `scoreboard.submitted &&` guards on lines 32 and 45. Always render the Conversations hero and 5-metric grid. When not submitted, the values will naturally show as 0. Add a subtle CTA ("Submit your Weekly Check-In") linking to `/coaching` when `!scoreboard.submitted`. |
-| 2 | `src/components/dashboard/WeeklyTasksBySystem.tsx` | No change needed — the scoreboard row already shows "Missing" + "Submit Now" when not submitted, which is correct behavior. |
+### Step 1: Database Migration
 
-This is a small UI change — just removing two conditional wrappers and adding a CTA link.
+Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
+- Verifies event exists and is published
+- Checks for duplicate RSVP (reuses existing logic)
+- Determines status based on capacity (confirmed vs waitlist)
+- Inserts the row and returns `id` and `status`
+- SECURITY DEFINER so it bypasses RLS
+
+### Step 2: Update `src/hooks/useRSVP.ts`
+
+Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| Migration SQL | Create `submit_public_rsvp` function |
+| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
 
