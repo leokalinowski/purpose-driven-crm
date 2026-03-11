@@ -24,10 +24,13 @@ export const STRIPE_TIERS = {
       label: '$997 for 6 months, then $149/mo',
     },
     features: [
+      'Personal dashboard with weekly metrics',
       'SphereSync task engine',
       'Contact database (500 contacts)',
       'Weekly coaching submissions',
       'Monthly newsletter',
+      'Historical performance tracking',
+      'Profile & settings management',
     ],
     role: 'core' as const,
   },

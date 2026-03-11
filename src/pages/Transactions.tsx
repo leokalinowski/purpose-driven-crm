@@ -6,10 +6,26 @@ import { TransactionTable } from "@/components/transactions/TransactionTable";
 import { TransactionCharts } from "@/components/transactions/TransactionCharts";
 import { SyncButton } from "@/components/transactions/SyncButton";
 import { useTransactions } from "@/hooks/useTransactions";
+import { UpgradePrompt } from "@/components/ui/UpgradePrompt";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Transactions() {
+  const { hasAccess, currentTier, getRequiredTier } = useFeatureAccess();
   const { transactions, metrics, loading, syncWithOpenToClose } = useTransactions();
+
+  if (!hasAccess('/transactions')) {
+    return (
+      <Layout>
+        <UpgradePrompt
+          featureName="Transaction Coordination"
+          requiredTier={getRequiredTier('/transactions') || 'managed'}
+          currentTier={currentTier}
+          description="Track your deals, monitor performance, and sync with OpenToClose. Available on the Managed plan and above."
+        />
+      </Layout>
+    );
+  }
 
   return (
     <>
