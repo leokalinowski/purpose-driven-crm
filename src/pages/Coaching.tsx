@@ -1,30 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { 
-  LineChart, 
-  Line, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  ResponsiveContainer, 
-  Legend 
-} from 'recharts';
-
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,819 +19,478 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { 
+  MessageCircle, 
+  Phone, 
+  CalendarCheck, 
+  UserPlus, 
+  UserMinus, 
+  Zap, 
+  TrendingUp, 
+  Flame, 
+  ArrowRight,
+  Pencil,
+  CheckCircle2,
+} from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { 
-  useSubmitCoachingForm, 
-  usePersonalMetrics, 
-  useTeamAverages, 
-  useAgentCurrentWeekMetrics,
+  useSubmitWeeklyCheckIn,
   useWeekSubmission,
-  type CoachingFormData 
+  useWeeklyStreak,
+  useLast4Weeks,
+  type WeeklyCheckInData,
 } from '@/hooks/useCoaching';
 import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
-import { MySubmissionsHistory } from '@/components/coaching/MySubmissionsHistory';
-import { format } from 'date-fns';
 
-const formSchema = z.object({
-  week_number: z.number().min(1, "Week must be between 1 and 52").max(52, "Week must be between 1 and 52"),
-  year: z.number().min(2020, "Year must be valid"),
-  dials_made: z.number().min(0, "Must be 0 or greater"),
-  leads_contacted: z.number().min(0, "Must be 0 or greater"),
-  appointments_set: z.number().min(0, "Must be 0 or greater"),
-  appointments_held: z.number().min(0, "Must be 0 or greater"),
-  agreements_signed: z.number().min(0, "Must be 0 or greater"),
-  offers_made_accepted: z.number().min(0, "Must be 0 or greater"),
-  closings: z.number().min(0, "Must be 0 or greater"),
-  closing_amount: z.number().min(0, "Must be 0 or greater"),
-  challenges: z.string().optional(),
-  tasks: z.string().optional(),
-  coaching_notes: z.string().optional(),
-  must_do_task: z.string().optional(),
-});
+const CONVERSATION_TARGET = 25;
 
-const WeeklySuccessScoreboard = () => {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("submit");
-  const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
-  const [pendingSubmission, setPendingSubmission] = useState<CoachingFormData | null>(null);
-  
+const WeeklyCheckInForm = ({ 
+  onSubmitSuccess 
+}: { 
+  onSubmitSuccess: () => void;
+}) => {
   const currentWeekNumber = getCurrentWeekNumber();
   const currentYear = new Date().getFullYear();
-  
-  // Track selected week/year for fetching existing submission
-  const [selectedWeek, setSelectedWeek] = useState(currentWeekNumber);
-  const [selectedYear, setSelectedYear] = useState(currentYear);
-  
-  const submitMutation = useSubmitCoachingForm();
-  const { data: personalMetrics, isLoading: personalLoading } = usePersonalMetrics();
-  const { data: teamAverages, isLoading: teamLoading } = useTeamAverages();
-  const { data: agentCurrentMetrics } = useAgentCurrentWeekMetrics();
-  const { data: existingSubmission, isLoading: loadingExisting } = useWeekSubmission(selectedWeek, selectedYear);
 
-  const form = useForm<CoachingFormData>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      week_number: currentWeekNumber,
-      year: currentYear,
-      dials_made: 0,
-      leads_contacted: 0,
-      appointments_set: 0,
-      appointments_held: 0,
-      agreements_signed: 0,
-      offers_made_accepted: 0,
-      closings: 0,
-      closing_amount: 0,
-      challenges: "",
-      tasks: "",
-      coaching_notes: "",
-      must_do_task: "",
-    },
-  });
+  const { data: existingSubmission, isLoading: loadingExisting } = useWeekSubmission(currentWeekNumber, currentYear);
+  const submitMutation = useSubmitWeeklyCheckIn();
 
-  // Watch for week/year changes in form
-  const watchedWeek = form.watch('week_number');
-  const watchedYear = form.watch('year');
+  const [conversations, setConversations] = useState(0);
+  const [activationAttempts, setActivationAttempts] = useState(0);
+  const [appointmentsSet, setAppointmentsSet] = useState(0);
+  const [contactsAdded, setContactsAdded] = useState(0);
+  const [contactsRemoved, setContactsRemoved] = useState(0);
+  const [activationDayCompleted, setActivationDayCompleted] = useState(false);
+  const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
 
-  // Update selected week/year when form values change
-  useEffect(() => {
-    if (watchedWeek !== selectedWeek) {
-      setSelectedWeek(watchedWeek);
-    }
-    if (watchedYear !== selectedYear) {
-      setSelectedYear(watchedYear);
-    }
-  }, [watchedWeek, watchedYear, selectedWeek, selectedYear]);
-
-  // Pre-populate form when existing submission is loaded
+  // Pre-populate from existing submission
   useEffect(() => {
     if (existingSubmission) {
-      form.reset({
-        week_number: existingSubmission.week_number,
-        year: existingSubmission.year,
-        dials_made: existingSubmission.dials_made || 0,
-        leads_contacted: existingSubmission.leads_contacted || 0,
-        appointments_set: existingSubmission.appointments_set || 0,
-        appointments_held: existingSubmission.appointments_held || 0,
-        agreements_signed: existingSubmission.agreements_signed || 0,
-        offers_made_accepted: existingSubmission.offers_made_accepted || 0,
-        closings: existingSubmission.closings || 0,
-        closing_amount: existingSubmission.closing_amount || 0,
-        challenges: existingSubmission.challenges || "",
-        tasks: existingSubmission.tasks || "",
-        coaching_notes: existingSubmission.coaching_notes || "",
-        must_do_task: existingSubmission.must_do_task || "",
-      });
-    } else if (!loadingExisting) {
-      // Reset to empty values for new week (but keep week/year)
-      form.reset({
-        week_number: selectedWeek,
-        year: selectedYear,
-        dials_made: 0,
-        leads_contacted: 0,
-        appointments_set: 0,
-        appointments_held: 0,
-        agreements_signed: 0,
-        offers_made_accepted: 0,
-        closings: 0,
-        closing_amount: 0,
-        challenges: "",
-        tasks: "",
-        coaching_notes: "",
-        must_do_task: "",
-      });
+      setConversations(existingSubmission.conversations || 0);
+      setActivationAttempts(existingSubmission.dials_made || 0);
+      setAppointmentsSet(existingSubmission.appointments_set || 0);
+      setContactsAdded(existingSubmission.leads_contacted || 0);
+      setContactsRemoved(existingSubmission.deals_closed || 0);
+      setActivationDayCompleted((existingSubmission.agreements_signed || 0) >= 1);
     }
-  }, [existingSubmission, loadingExisting, selectedWeek, selectedYear, form]);
+  }, [existingSubmission]);
 
-  const handleFormSubmit = (data: CoachingFormData) => {
-    // Show warning if updating existing submission
+  const handleSubmit = () => {
     if (existingSubmission) {
-      setPendingSubmission(data);
       setShowOverwriteWarning(true);
     } else {
-      submitMutation.mutate(data);
+      doSubmit();
     }
   };
 
-  const confirmOverwrite = () => {
-    if (pendingSubmission) {
-      submitMutation.mutate(pendingSubmission);
-    }
-    setShowOverwriteWarning(false);
-    setPendingSubmission(null);
+  const doSubmit = () => {
+    const data: WeeklyCheckInData = {
+      week_number: currentWeekNumber,
+      year: currentYear,
+      conversations,
+      activation_attempts: activationAttempts,
+      appointments_set: appointmentsSet,
+      contacts_added: contactsAdded,
+      contacts_removed: contactsRemoved,
+      activation_day_completed: activationDayCompleted,
+    };
+    submitMutation.mutate(data, {
+      onSuccess: () => onSubmitSuccess(),
+    });
   };
 
-  // Prepare enhanced chart data for personal metrics
-  const personalChartData = personalMetrics?.map(metric => ({
-    week: `Week ${metric.week_number}`,
-    'Attempts Made': metric.dials_made || 0,
-    'Leads Contacted': metric.leads_contacted || 0,
-    'Appointments Set': metric.appointments_set || 0,
-    'Appointments Held': metric.appointments_held || 0,
-    'Agreements Signed': metric.agreements_signed || 0,
-    'Offers Made': metric.offers_made_accepted || 0,
-    '# of Closings': metric.closings || 0,
-    '$ Closed': metric.closing_amount || 0,
-  })) || [];
+  const progressPercent = Math.min((conversations / CONVERSATION_TARGET) * 100, 100);
 
-  // Prepare chart data for team comparison
-  const comparisonChartData = teamAverages && agentCurrentMetrics ? [
-    {
-      metric: 'Attempts Made',
-      'Your Performance': agentCurrentMetrics.dials_made || 0,
-      'Team Average': teamAverages.avg_dials_made || 0,
-    },
-    {
-      metric: 'Leads Contacted',
-      'Your Performance': agentCurrentMetrics.leads_contacted || 0,
-      'Team Average': teamAverages.avg_leads_contacted || 0,
-    },
-    {
-      metric: 'Appointments Set',
-      'Your Performance': agentCurrentMetrics.appointments_set || 0,
-      'Team Average': teamAverages.avg_appointments_set || 0,
-    },
-    {
-      metric: 'Appointments Held',
-      'Your Performance': agentCurrentMetrics.appointments_held || 0,
-      'Team Average': teamAverages.avg_appointments_held || 0,
-    },
-    {
-      metric: 'Agreements Signed',
-      'Your Performance': agentCurrentMetrics.agreements_signed || 0,
-      'Team Average': teamAverages.avg_agreements_signed || 0,
-    },
-    {
-      metric: 'Offers Made',
-      'Your Performance': agentCurrentMetrics.offers_made_accepted || 0,
-      'Team Average': teamAverages.avg_offers_made_accepted || 0,
-    },
-    {
-      metric: '# of Closings',
-      'Your Performance': agentCurrentMetrics.closings || 0,
-      'Team Average': teamAverages.avg_closings || 0,
-    },
-    {
-      metric: '$ Closed',
-      'Your Performance': agentCurrentMetrics.closing_amount || 0,
-      'Team Average': teamAverages.avg_closing_amount || 0,
-    },
-  ] : [];
-
-  const chartConfig = {
-    "Attempts Made": {
-      label: "Attempts Made",
-      color: "hsl(var(--chart-1))",
-    },
-    "Leads Contacted": {
-      label: "Leads Contacted",
-      color: "hsl(var(--chart-2))",
-    },
-    "Appointments Set": {
-      label: "Appointments Set", 
-      color: "hsl(var(--chart-3))",
-    },
-    "Appointments Held": {
-      label: "Appointments Held",
-      color: "hsl(var(--chart-4))",
-    },
-    "Agreements Signed": {
-      label: "Agreements Signed",
-      color: "hsl(var(--chart-5))",
-    },
-    "Offers Made": {
-      label: "Offers Made",
-      color: "hsl(var(--chart-1))",
-    },
-    "# of Closings": {
-      label: "# of Closings",
-      color: "hsl(var(--chart-2))",
-    },
-    "$ Closed": {
-      label: "$ Closed",
-      color: "hsl(var(--chart-3))",
-    },
-    "Your Performance": {
-      label: "Your Performance",
-      color: "hsl(var(--chart-1))",
-    },
-    "Team Average": {
-      label: "Team Average",
-      color: "hsl(var(--chart-2))",
-    },
-  };
-
-  // Calculate YTD totals for dashboard cards
-  const currentYearMetrics = personalMetrics?.filter(m => m.year === currentYear) || [];
-  const ytdTotals = currentYearMetrics.reduce(
-    (acc, metric) => ({
-      database_size: Math.max(acc.database_size, metric.database_size || 0),
-      attempts_made: acc.attempts_made + (metric.dials_made || 0),
-      leads_contacted: acc.leads_contacted + (metric.leads_contacted || 0),
-      appointments_set: acc.appointments_set + (metric.appointments_set || 0),
-      appointments_held: acc.appointments_held + (metric.appointments_held || 0),
-      agreements_signed: acc.agreements_signed + (metric.agreements_signed || 0),
-      offers_made: acc.offers_made + (metric.offers_made_accepted || 0),
-      closings: acc.closings + (metric.closings || 0),
-      closing_amount: acc.closing_amount + (metric.closing_amount || 0),
-    }),
-    {
-      database_size: 0,
-      attempts_made: 0,
-      leads_contacted: 0,
-      appointments_set: 0,
-      appointments_held: 0,
-      agreements_signed: 0,
-      offers_made: 0,
-      closings: 0,
-      closing_amount: 0,
-    }
-  );
+  if (loadingExisting) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-48 w-full" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
 
   return (
-    <Layout>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Weekly Success Scoreboard</h1>
-            <p className="text-muted-foreground text-sm sm:text-base">
-              Track your performance and prepare for Thursday coaching sessions
-            </p>
-          </div>
+    <>
+      <div className="space-y-6 max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Weekly Check-In</h1>
+          <p className="text-muted-foreground">
+            Log your relationship work for the week
+          </p>
+          {existingSubmission && (
+            <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-300">
+              <Pencil className="h-3 w-3 mr-1" />
+              Editing Week {currentWeekNumber}
+            </Badge>
+          )}
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="submit">Success Scoreboard</TabsTrigger>
-            <TabsTrigger value="dashboard">Performance Dashboard</TabsTrigger>
-          </TabsList>
+        {/* Hero: Conversations */}
+        <Card className="border-2 border-primary/20">
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <MessageCircle className="h-4 w-4" />
+              How many real estate conversations did you have this week?
+            </div>
+            <div className="flex justify-center">
+              <Input
+                type="number"
+                min={0}
+                value={conversations}
+                onChange={(e) => setConversations(parseInt(e.target.value) || 0)}
+                className="text-center text-4xl font-bold h-20 w-32 border-2"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {conversations} / {CONVERSATION_TARGET} conversations
+                </span>
+                <span className="font-medium">
+                  {conversations >= CONVERSATION_TARGET ? '🎯 Target hit!' : `${CONVERSATION_TARGET - conversations} to go`}
+                </span>
+              </div>
+              <Progress value={progressPercent} className="h-3" />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              A conversation is a real two-way exchange by phone, text, DM, voice note, or in person.
+            </p>
+          </CardContent>
+        </Card>
 
-          <TabsContent value="submit" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Weekly Success Scorecard</CardTitle>
-                    <CardDescription>
-                      Submit your weekly metrics and prepare for Thursday coaching session
-                    </CardDescription>
-                  </div>
-                  {loadingExisting ? (
-                    <Skeleton className="h-6 w-32" />
-                  ) : existingSubmission ? (
-                    <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-300">
-                      Editing Week {selectedWeek} submission
-                      <span className="ml-1 text-xs opacity-75">
-                        (Updated {format(new Date(existingSubmission.updated_at), 'MMM d, h:mm a')})
-                      </span>
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-muted-foreground">
-                      New submission for Week {selectedWeek}
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="week_number"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Week Number</FormLabel>
-                            <Select onValueChange={(value) => field.onChange(parseInt(value))} defaultValue={field.value?.toString()}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select week" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {Array.from({ length: 52 }, (_, i) => i + 1).map((week) => (
-                                  <SelectItem key={week} value={week.toString()}>
-                                    Week {week}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={form.control}
-                        name="year"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Year</FormLabel>
-                            <FormControl>
-                              <Input 
-                                type="number" 
-                                min="2020" 
-                                max="2030" 
-                                {...field}
-                                onChange={(e) => field.onChange(parseInt(e.target.value) || currentYear)}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold">Activity Metrics</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="dials_made"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Attempts Made</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  {...field} 
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="leads_contacted"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Leads Contacted</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  {...field} 
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold">Pipeline Metrics</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="appointments_set"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Appointments Set</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  {...field} 
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="appointments_held"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Appointments Held</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  {...field} 
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="agreements_signed"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Agreements Signed</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  {...field} 
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold">Transaction Metrics</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="offers_made_accepted"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Offers Made</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  {...field} 
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="closings"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel># of Closings</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  {...field} 
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="closing_amount"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>$ Closed (Amount)</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  step="0.01"
-                                  {...field} 
-                                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold">Coaching Notes & Goals</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="challenges"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Challenges Faced</FormLabel>
-                              <FormControl>
-                                <Textarea 
-                                  placeholder="Describe any challenges you faced this week..."
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="tasks"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Tasks for Next Week</FormLabel>
-                              <FormControl>
-                                <Textarea 
-                                  placeholder="List your tasks for next week..."
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="coaching_notes"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Notes for Coaching</FormLabel>
-                              <FormControl>
-                                <Textarea 
-                                  placeholder="What do you want to discuss in coaching?"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="must_do_task"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>One Thing You MUST Do</FormLabel>
-                              <FormControl>
-                                <Textarea 
-                                  placeholder="What is the ONE critical thing you must accomplish?"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </div>
-
-                    <Button 
-                      type="submit" 
-                      disabled={submitMutation.isPending}
-                      className="w-full"
-                    >
-                      {submitMutation.isPending ? "Submitting..." : "Submit Weekly Scorecard"}
-                    </Button>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="dashboard" className="space-y-6">
-            {/* YTD Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Database Size</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{ytdTotals.database_size}</div>
-                  <p className="text-xs text-muted-foreground">Current</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Attempts YTD</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{ytdTotals.attempts_made}</div>
-                  <p className="text-xs text-muted-foreground">Year to date</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Leads Contacted YTD</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{ytdTotals.leads_contacted}</div>
-                  <p className="text-xs text-muted-foreground">Year to date</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Appointments Held YTD</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{ytdTotals.appointments_held}</div>
-                  <p className="text-xs text-muted-foreground">Year to date</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Agreements YTD</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{ytdTotals.agreements_signed}</div>
-                  <p className="text-xs text-muted-foreground">Year to date</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Offers Made YTD</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{ytdTotals.offers_made}</div>
-                  <p className="text-xs text-muted-foreground">Year to date</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Closings YTD</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{ytdTotals.closings}</div>
-                  <p className="text-xs text-muted-foreground">Year to date</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">$ Closed YTD</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">${ytdTotals.closing_amount.toLocaleString()}</div>
-                  <p className="text-xs text-muted-foreground">Year to date</p>
-                </CardContent>
-              </Card>
+        {/* Relationship Work Fields */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">What relationship work happened this week?</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Activation Attempts */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-2 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                Outreach attempts
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                value={activationAttempts}
+                onChange={(e) => setActivationAttempts(parseInt(e.target.value) || 0)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Include calls, texts, DMs, and voice messages. Total outreach attempted.
+              </p>
             </div>
 
-            <div className="grid gap-6">
-              {/* Personal Progress Chart */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Your Progress Over Time</CardTitle>
-                  <CardDescription>
-                    Track your weekly performance metrics
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {personalLoading ? (
-                    <div className="space-y-4">
-                      <Skeleton className="h-64 w-full" />
-                    </div>
-                  ) : personalChartData.length > 0 ? (
-                     <ChartContainer config={chartConfig} className="h-80">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={personalChartData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="week" />
-                          <YAxis />
-                          <ChartTooltip content={<ChartTooltipContent />} />
-                          <Legend />
-                          <Line 
-                            type="monotone" 
-                            dataKey="Attempts Made" 
-                            stroke="hsl(var(--chart-1))" 
-                            strokeWidth={2}
-                          />
-                          <Line 
-                            type="monotone" 
-                            dataKey="Leads Contacted" 
-                            stroke="hsl(var(--chart-2))" 
-                            strokeWidth={2}
-                          />
-                          <Line 
-                            type="monotone" 
-                            dataKey="Appointments Set" 
-                            stroke="hsl(var(--chart-3))" 
-                            strokeWidth={2}
-                          />
-                          <Line 
-                            type="monotone" 
-                            dataKey="Appointments Held" 
-                            stroke="hsl(var(--chart-4))" 
-                            strokeWidth={2}
-                          />
-                          <Line 
-                            type="monotone" 
-                            dataKey="Agreements Signed" 
-                            stroke="hsl(var(--chart-5))" 
-                            strokeWidth={2}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-64">
-                      <p className="text-muted-foreground">No data available. Submit your first weekly scorecard to see your progress.</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* My Weekly Submissions History */}
-              <MySubmissionsHistory />
-
-              {/* Team Comparison Chart */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Team Performance Comparison</CardTitle>
-                  <CardDescription>
-                    Compare your current week performance with team averages (anonymized)
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {teamLoading ? (
-                    <div className="space-y-4">
-                      <Skeleton className="h-64 w-full" />
-                    </div>
-                  ) : comparisonChartData.length > 0 ? (
-                    <ChartContainer config={chartConfig} className="h-80">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={comparisonChartData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="metric" />
-                          <YAxis />
-                          <ChartTooltip content={<ChartTooltipContent />} />
-                          <Legend />
-                          <Bar 
-                            dataKey="Your Performance" 
-                            fill="var(--color-your-performance)" 
-                          />
-                          <Bar 
-                            dataKey="Team Average" 
-                            fill="var(--color-team-average)" 
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-64">
-                      <p className="text-muted-foreground">No team data available for comparison.</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+            {/* Appointments Set */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-2 text-sm">
+                <CalendarCheck className="h-4 w-4 text-muted-foreground" />
+                Appointments set
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                value={appointmentsSet}
+                onChange={(e) => setAppointmentsSet(parseInt(e.target.value) || 0)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Buyer consults, seller consults, strategy sessions, or other real estate appointments.
+              </p>
             </div>
-          </TabsContent>
-        </Tabs>
+
+            {/* Contacts Added */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-2 text-sm">
+                <UserPlus className="h-4 w-4 text-muted-foreground" />
+                Contacts added
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                value={contactsAdded}
+                onChange={(e) => setContactsAdded(parseInt(e.target.value) || 0)}
+              />
+            </div>
+
+            {/* Contacts Removed */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-2 text-sm">
+                <UserMinus className="h-4 w-4 text-muted-foreground" />
+                Contacts removed / cleaned up
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                value={contactsRemoved}
+                onChange={(e) => setContactsRemoved(parseInt(e.target.value) || 0)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Activation Day */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label className="flex items-center gap-2 text-sm font-medium">
+                  <Zap className="h-4 w-4 text-muted-foreground" />
+                  Did you complete your Activation Day this week?
+                </Label>
+              </div>
+              <Switch
+                checked={activationDayCompleted}
+                onCheckedChange={setActivationDayCompleted}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Submit */}
+        <Button
+          onClick={handleSubmit}
+          disabled={submitMutation.isPending}
+          className="w-full h-12 text-lg"
+          size="lg"
+        >
+          {submitMutation.isPending ? 'Submitting...' : 'Submit Weekly Check-In'}
+          <ArrowRight className="ml-2 h-5 w-5" />
+        </Button>
       </div>
 
-      {/* Overwrite Warning Dialog */}
       <AlertDialog open={showOverwriteWarning} onOpenChange={setShowOverwriteWarning}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Update Existing Submission?</AlertDialogTitle>
+            <AlertDialogTitle>Update this week's check-in?</AlertDialogTitle>
             <AlertDialogDescription>
-              You already have a submission for Week {selectedWeek}, {selectedYear}. 
-              Submitting now will replace your existing data including any notes you previously saved.
+              You already submitted for Week {currentWeekNumber}. This will update your existing numbers.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingSubmission(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmOverwrite}>Update Submission</AlertDialogAction>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowOverwriteWarning(false); doSubmit(); }}>
+              Update Check-In
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </>
+  );
+};
+
+const WeeklyScoreboard = ({ onEditClick }: { onEditClick: () => void }) => {
+  const currentWeekNumber = getCurrentWeekNumber();
+  const currentYear = new Date().getFullYear();
+
+  const { data: submission, isLoading } = useWeekSubmission(currentWeekNumber, currentYear);
+  const { data: streak } = useWeeklyStreak();
+  const { data: last4Weeks } = useLast4Weeks();
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 max-w-2xl mx-auto">
+        <Skeleton className="h-48 w-full" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
+
+  if (!submission) {
+    return null; // shouldn't happen if routed correctly
+  }
+
+  const conversations = submission.conversations || 0;
+  const activationAttempts = submission.dials_made || 0;
+  const appointmentsSet = submission.appointments_set || 0;
+  const contactsAdded = submission.leads_contacted || 0;
+  const contactsRemoved = submission.deals_closed || 0;
+  const activationDayCompleted = (submission.agreements_signed || 0) >= 1;
+
+  const progressPercent = Math.min((conversations / CONVERSATION_TARGET) * 100, 100);
+  const activationToConversationRate = activationAttempts > 0
+    ? Math.round((conversations / activationAttempts) * 100)
+    : 0;
+  const conversationToConsultationRate = conversations > 0
+    ? Math.round((appointmentsSet / conversations) * 100)
+    : 0;
+
+  // Get week start date label for last 4 weeks
+  const getWeekLabel = (weekNum: number, year: number) => {
+    const jan1 = new Date(year, 0, 1);
+    const dayOfWeek = jan1.getDay();
+    const daysToMonday = dayOfWeek === 0 ? 1 : (dayOfWeek === 1 ? 0 : 8 - dayOfWeek);
+    const firstMonday = new Date(year, 0, 1 + daysToMonday);
+    const weekStart = new Date(firstMonday);
+    weekStart.setDate(firstMonday.getDate() + (weekNum - 2) * 7);
+    const month = weekStart.toLocaleString('en-US', { month: 'short' });
+    const day = weekStart.getDate();
+    return `Week of ${month} ${day}`;
+  };
+
+  return (
+    <div className="space-y-6 max-w-2xl mx-auto">
+      {/* Header */}
+      <div className="text-center space-y-1">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Weekly Scoreboard</h1>
+        <p className="text-muted-foreground text-sm">Week {currentWeekNumber}, {currentYear}</p>
+      </div>
+
+      {/* Section A: Hero Metric */}
+      <Card className="border-2 border-primary/20">
+        <CardContent className="pt-6 text-center space-y-4">
+          <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+            Conversations This Week
+          </p>
+          <div className="text-6xl font-bold text-primary">{conversations}</div>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>{conversations} / {CONVERSATION_TARGET} this week</span>
+              {conversations >= CONVERSATION_TARGET && (
+                <span className="text-primary font-medium flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4" /> Target hit!
+                </span>
+              )}
+            </div>
+            <Progress value={progressPercent} className="h-3" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section B: Relationship Work */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Relationship Work</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <MetricRow label="Activation Attempts" value={activationAttempts} icon={<Phone className="h-4 w-4" />} />
+            <MetricRow label="Conversations" value={conversations} icon={<MessageCircle className="h-4 w-4" />} />
+            <MetricRow label="Appointments Set" value={appointmentsSet} icon={<CalendarCheck className="h-4 w-4" />} />
+            <MetricRow label="Contacts Added" value={contactsAdded} icon={<UserPlus className="h-4 w-4" />} />
+            <MetricRow label="Contacts Removed" value={contactsRemoved} icon={<UserMinus className="h-4 w-4" />} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section C: Discipline */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Discipline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground flex items-center gap-2">
+                <Zap className="h-4 w-4" />
+                Activation Day Completed
+              </span>
+              <Badge variant={activationDayCompleted ? "default" : "secondary"}>
+                {activationDayCompleted ? 'Yes' : 'No'}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground flex items-center gap-2">
+                <Flame className="h-4 w-4" />
+                Current Streak
+              </span>
+              <span className="font-bold text-lg">
+                {streak || 0} week{(streak || 0) !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section D: Relationship Momentum */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" />
+            Relationship Momentum
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Activation → Conversation</p>
+              <p className="text-2xl font-bold">{activationToConversationRate}%</p>
+            </div>
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Conversation → Consultation</p>
+              <p className="text-2xl font-bold">{conversationToConsultationRate}%</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section E: Last 4 Weeks */}
+      {last4Weeks && last4Weeks.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Last 4 Weeks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {last4Weeks.map((week, i) => (
+                <div key={i} className="flex items-center justify-between py-1.5 border-b last:border-0">
+                  <span className="text-sm text-muted-foreground">
+                    {getWeekLabel(week.week_number, week.year)}
+                  </span>
+                  <span className="font-semibold">
+                    {week.conversations || 0} conversations
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Edit Button */}
+      <Button variant="outline" onClick={onEditClick} className="w-full">
+        <Pencil className="h-4 w-4 mr-2" />
+        Edit This Week's Check-In
+      </Button>
+    </div>
+  );
+};
+
+const MetricRow = ({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) => (
+  <div className="flex items-center justify-between py-1.5 border-b last:border-0">
+    <span className="text-sm text-muted-foreground flex items-center gap-2">
+      {icon}
+      {label}
+    </span>
+    <span className="font-semibold">{value}</span>
+  </div>
+);
+
+const WeeklySuccessScoreboard = () => {
+  const currentWeekNumber = getCurrentWeekNumber();
+  const currentYear = new Date().getFullYear();
+  const { data: existingSubmission } = useWeekSubmission(currentWeekNumber, currentYear);
+
+  // Show scoreboard if current week has a submission, check-in form otherwise
+  const [view, setView] = useState<'checkin' | 'scoreboard'>('checkin');
+
+  useEffect(() => {
+    if (existingSubmission) {
+      setView('scoreboard');
+    }
+  }, [existingSubmission]);
+
+  return (
+    <Layout>
+      <div className="py-4 sm:py-6">
+        {view === 'checkin' ? (
+          <WeeklyCheckInForm onSubmitSuccess={() => setView('scoreboard')} />
+        ) : (
+          <WeeklyScoreboard onEditClick={() => setView('checkin')} />
+        )}
+      </div>
     </Layout>
   );
 };

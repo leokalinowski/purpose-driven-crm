@@ -1,21 +1,16 @@
 import React, { useMemo } from 'react';
-import { Trophy, AlertTriangle, TrendingDown, TrendingUp, Users, Target, DollarSign, Phone } from 'lucide-react';
+import { Trophy, AlertTriangle, TrendingDown, TrendingUp, Users, MessageCircle, Phone } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  ResponsiveContainer, 
-  Legend,
-  Tooltip
+  LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer,
 } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { useAllCoachingSubmissions, useAgentsList, type CoachingSubmissionWithAgent } from '@/hooks/useAdminCoachingData';
+import { useAllCoachingSubmissions, useAgentsList } from '@/hooks/useAdminCoachingData';
 import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
+
+const CONVERSATION_TARGET = 25;
 
 interface CoachingInsightsProps {
   selectedWeek?: string;
@@ -28,18 +23,15 @@ const CoachingInsights = ({ selectedWeek = 'all' }: CoachingInsightsProps) => {
   const currentWeekNumber = getCurrentWeekNumber();
   const currentYear = new Date().getFullYear();
   
-  // Parse selected week for filtering
   const filterWeek = useMemo(() => {
     if (selectedWeek === 'all') return null;
     const [weekNum, year] = selectedWeek.split('-').map(Number);
     return { week: weekNum, year };
   }, [selectedWeek]);
 
-  // Calculate insights
   const insights = useMemo(() => {
     if (!submissions || !agents) return null;
 
-    // Use filtered week or current week for "Missing Submissions" and "Declining Metrics"
     const targetWeek = filterWeek?.week || currentWeekNumber;
     const targetYear = filterWeek?.year || currentYear;
     
@@ -50,33 +42,23 @@ const CoachingInsights = ({ selectedWeek = 'all' }: CoachingInsightsProps) => {
       s => s.week_number === targetWeek - 1 && s.year === targetYear
     );
 
-    // Agents who haven't submitted for the target week
     const submittedAgentIds = new Set(targetWeekSubmissions.map(s => s.agent_id));
     const missingSubmissions = agents.filter(a => !submittedAgentIds.has(a.id));
 
-    // YTD aggregates per agent
+    // YTD aggregates per agent — conversations-focused
     const ytdAggregates = new Map<string, { 
-      name: string; 
-      closings: number; 
-      amount: number; 
-      attempts: number;
-      appointments: number;
+      name: string; conversations: number; attempts: number; appointments: number;
     }>();
     
     submissions
       .filter(s => s.year === currentYear)
       .forEach(s => {
         const existing = ytdAggregates.get(s.agent_id) || { 
-          name: s.agent_name, 
-          closings: 0, 
-          amount: 0, 
-          attempts: 0,
-          appointments: 0
+          name: s.agent_name, conversations: 0, attempts: 0, appointments: 0
         };
         ytdAggregates.set(s.agent_id, {
           name: s.agent_name,
-          closings: existing.closings + (s.closings || 0),
-          amount: existing.amount + (s.closing_amount || 0),
+          conversations: existing.conversations + (s.conversations || 0),
           attempts: existing.attempts + (s.dials_made || 0),
           appointments: existing.appointments + (s.appointments_set || 0),
         });
@@ -84,50 +66,36 @@ const CoachingInsights = ({ selectedWeek = 'all' }: CoachingInsightsProps) => {
 
     const ytdList = Array.from(ytdAggregates.entries()).map(([id, data]) => ({ id, ...data }));
 
-    // Top performers
-    const topByClosings = [...ytdList].sort((a, b) => b.closings - a.closings).slice(0, 5);
-    const topByAmount = [...ytdList].sort((a, b) => b.amount - a.amount).slice(0, 5);
+    const topByConversations = [...ytdList].sort((a, b) => b.conversations - a.conversations).slice(0, 5);
     const topByAttempts = [...ytdList].sort((a, b) => b.attempts - a.attempts).slice(0, 5);
 
-    // Declining metrics - compare target week to previous week
-    const decliningAgents: { name: string; metric: string; change: number }[] = [];
-    
-    targetWeekSubmissions.forEach(current => {
-      const previous = previousWeekSubmissions.find(p => p.agent_id === current.agent_id);
-      if (previous) {
-        const currentAttempts = current.dials_made || 0;
-        const previousAttempts = previous.dials_made || 0;
-        if (previousAttempts > 0 && currentAttempts < previousAttempts * 0.6) {
-          const changePercent = Math.round(((currentAttempts - previousAttempts) / previousAttempts) * 100);
-          decliningAgents.push({
-            name: current.agent_name,
-            metric: 'attempts',
-            change: changePercent,
-          });
-        }
-      }
-    });
+    // Agents below target this week
+    const belowTarget = targetWeekSubmissions
+      .filter(s => (s.conversations || 0) < CONVERSATION_TARGET)
+      .map(s => ({
+        name: s.agent_name,
+        conversations: s.conversations || 0,
+        gap: CONVERSATION_TARGET - (s.conversations || 0),
+      }))
+      .sort((a, b) => a.conversations - b.conversations);
 
     // Team trends - last 8 weeks
     const last8Weeks = [];
     for (let i = 7; i >= 0; i--) {
       let week = currentWeekNumber - i;
       let year = currentYear;
-      if (week <= 0) {
-        week = 52 + week;
-        year = currentYear - 1;
-      }
+      if (week <= 0) { week = 52 + week; year = currentYear - 1; }
       
       const weekSubmissions = submissions.filter(s => s.week_number === week && s.year === year);
+      const totalConversations = weekSubmissions.reduce((sum, s) => sum + (s.conversations || 0), 0);
       const totalAttempts = weekSubmissions.reduce((sum, s) => sum + (s.dials_made || 0), 0);
-      const totalClosings = weekSubmissions.reduce((sum, s) => sum + (s.closings || 0), 0);
-      const totalAmount = weekSubmissions.reduce((sum, s) => sum + (s.closing_amount || 0), 0);
+      const avgConversations = weekSubmissions.length > 0 ? Math.round(totalConversations / weekSubmissions.length) : 0;
       
       last8Weeks.push({
         week: `W${week}`,
+        conversations: totalConversations,
+        avgConversations,
         attempts: totalAttempts,
-        closings: totalClosings,
-        amount: totalAmount,
         submissions: weekSubmissions.length,
       });
     }
@@ -135,27 +103,24 @@ const CoachingInsights = ({ selectedWeek = 'all' }: CoachingInsightsProps) => {
     return {
       missingSubmissions,
       missingWeekLabel: filterWeek ? `Week ${filterWeek.week}` : `Week ${currentWeekNumber}`,
-      topByClosings,
-      topByAmount,
+      topByConversations,
       topByAttempts,
-      decliningAgents,
+      belowTarget,
       trends: last8Weeks,
     };
   }, [submissions, agents, currentWeekNumber, currentYear, filterWeek]);
 
   const chartConfig = {
-    attempts: { label: "Total Attempts", color: "hsl(var(--chart-1))" },
-    closings: { label: "Total Closings", color: "hsl(var(--chart-2))" },
-    amount: { label: "$ Closed", color: "hsl(var(--chart-3))" },
+    conversations: { label: "Total Conversations", color: "hsl(var(--chart-1))" },
+    avgConversations: { label: "Avg Conversations", color: "hsl(var(--chart-2))" },
+    attempts: { label: "Total Attempts", color: "hsl(var(--chart-3))" },
   };
 
   if (submissionsLoading || agentsLoading) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-64" />
-          ))}
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-64" />)}
         </div>
       </div>
     );
@@ -167,7 +132,6 @@ const CoachingInsights = ({ selectedWeek = 'all' }: CoachingInsightsProps) => {
 
   return (
     <div className="space-y-6">
-      {/* Top Row - Top Performers & Needs Attention */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Performers */}
         <div className="space-y-4">
@@ -176,51 +140,49 @@ const CoachingInsights = ({ selectedWeek = 'all' }: CoachingInsightsProps) => {
             Top Performers (YTD)
           </h3>
           
-          <div className="grid grid-cols-1 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Target className="h-4 w-4 text-primary" />
-                  Most Closings
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {insights.topByClosings.map((agent, idx) => (
-                    <div key={agent.id} className="flex items-center justify-between py-1.5 border-b last:border-0">
-                      <div className="flex items-center gap-2">
-                        <span>{medals[idx]}</span>
-                        <span className="font-medium">{agent.name}</span>
-                      </div>
-                      <Badge variant="secondary">{agent.closings} closings</Badge>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <MessageCircle className="h-4 w-4 text-primary" />
+                Most Conversations
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {insights.topByConversations.map((agent, idx) => (
+                  <div key={agent.id} className="flex items-center justify-between py-1.5 border-b last:border-0">
+                    <div className="flex items-center gap-2">
+                      <span>{medals[idx]}</span>
+                      <span className="font-medium">{agent.name}</span>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    <Badge variant="secondary">{agent.conversations} conversations</Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-green-600" />
-                  Highest $ Closed
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {insights.topByAmount.map((agent, idx) => (
-                    <div key={agent.id} className="flex items-center justify-between py-1.5 border-b last:border-0">
-                      <div className="flex items-center gap-2">
-                        <span>{medals[idx]}</span>
-                        <span className="font-medium">{agent.name}</span>
-                      </div>
-                      <Badge variant="secondary">${agent.amount.toLocaleString()}</Badge>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Phone className="h-4 w-4 text-primary" />
+                Most Activation Attempts
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {insights.topByAttempts.map((agent, idx) => (
+                  <div key={agent.id} className="flex items-center justify-between py-1.5 border-b last:border-0">
+                    <div className="flex items-center gap-2">
+                      <span>{medals[idx]}</span>
+                      <span className="font-medium">{agent.name}</span>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                    <Badge variant="secondary">{agent.attempts} attempts</Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Needs Attention */}
@@ -233,18 +195,18 @@ const CoachingInsights = ({ selectedWeek = 'all' }: CoachingInsightsProps) => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <Users className="h-4 w-4 text-red-500" />
-                Missing Submissions ({insights.missingWeekLabel})
+                <Users className="h-4 w-4 text-destructive" />
+                Missing Check-Ins ({insights.missingWeekLabel})
               </CardTitle>
               <CardDescription>
-                {insights.missingSubmissions.length} agent(s) haven't submitted yet
+                {insights.missingSubmissions.length} agent(s) haven't checked in yet
               </CardDescription>
             </CardHeader>
             <CardContent>
               {insights.missingSubmissions.length === 0 ? (
-                <p className="text-sm text-green-600 flex items-center gap-2">
+                <p className="text-sm text-primary flex items-center gap-2">
                   <TrendingUp className="h-4 w-4" />
-                  All agents have submitted this week!
+                  All agents have checked in this week!
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -262,25 +224,20 @@ const CoachingInsights = ({ selectedWeek = 'all' }: CoachingInsightsProps) => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <TrendingDown className="h-4 w-4 text-orange-500" />
-                Declining Metrics
+                <TrendingDown className="h-4 w-4 text-amber-500" />
+                Below {CONVERSATION_TARGET} Conversations ({insights.missingWeekLabel})
               </CardTitle>
-              <CardDescription>
-                Agents with significant week-over-week drops
-              </CardDescription>
             </CardHeader>
             <CardContent>
-              {insights.decliningAgents.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No significant declines detected this week
-                </p>
+              {insights.belowTarget.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Everyone hit their target this week!</p>
               ) : (
                 <div className="space-y-2">
-                  {insights.decliningAgents.map((agent, idx) => (
+                  {insights.belowTarget.map((agent, idx) => (
                     <div key={idx} className="flex items-center justify-between py-1.5 border-b last:border-0">
                       <span className="font-medium">{agent.name}</span>
-                      <Badge variant="outline" className="text-orange-600 border-orange-300">
-                        {agent.change}% {agent.metric}
+                      <Badge variant="outline" className="text-amber-600 border-amber-300">
+                        {agent.conversations}/{CONVERSATION_TARGET} ({agent.gap} short)
                       </Badge>
                     </div>
                   ))}
@@ -291,17 +248,17 @@ const CoachingInsights = ({ selectedWeek = 'all' }: CoachingInsightsProps) => {
         </div>
       </div>
 
-      {/* Team Trends Charts */}
+      {/* Team Trends */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-blue-500" />
+          <TrendingUp className="h-5 w-5 text-primary" />
           Team Trends (Last 8 Weeks)
         </h3>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Total Attempts</CardTitle>
+              <CardTitle className="text-base">Total Team Conversations</CardTitle>
             </CardHeader>
             <CardContent>
               <ChartContainer config={chartConfig} className="h-[200px] w-full">
@@ -311,13 +268,7 @@ const CoachingInsights = ({ selectedWeek = 'all' }: CoachingInsightsProps) => {
                     <XAxis dataKey="week" className="text-xs" />
                     <YAxis className="text-xs" />
                     <ChartTooltip content={<ChartTooltipContent />} />
-                    <Line 
-                      type="monotone" 
-                      dataKey="attempts" 
-                      stroke="hsl(var(--chart-1))" 
-                      strokeWidth={2}
-                      dot={{ fill: "hsl(var(--chart-1))" }}
-                    />
+                    <Line type="monotone" dataKey="conversations" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={{ fill: "hsl(var(--chart-1))" }} />
                   </LineChart>
                 </ResponsiveContainer>
               </ChartContainer>
@@ -326,7 +277,7 @@ const CoachingInsights = ({ selectedWeek = 'all' }: CoachingInsightsProps) => {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Total Closings</CardTitle>
+              <CardTitle className="text-base">Avg Conversations per Agent</CardTitle>
             </CardHeader>
             <CardContent>
               <ChartContainer config={chartConfig} className="h-[200px] w-full">
@@ -336,13 +287,7 @@ const CoachingInsights = ({ selectedWeek = 'all' }: CoachingInsightsProps) => {
                     <XAxis dataKey="week" className="text-xs" />
                     <YAxis className="text-xs" />
                     <ChartTooltip content={<ChartTooltipContent />} />
-                    <Line 
-                      type="monotone" 
-                      dataKey="closings" 
-                      stroke="hsl(var(--chart-2))" 
-                      strokeWidth={2}
-                      dot={{ fill: "hsl(var(--chart-2))" }}
-                    />
+                    <Line type="monotone" dataKey="avgConversations" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={{ fill: "hsl(var(--chart-2))" }} />
                   </LineChart>
                 </ResponsiveContainer>
               </ChartContainer>

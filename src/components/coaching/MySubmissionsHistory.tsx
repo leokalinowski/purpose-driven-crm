@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Calendar, Target, MessageSquare, AlertCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp, Calendar, MessageCircle, Phone, CalendarCheck, UserPlus, UserMinus, Zap } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,10 +7,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useCoachingSubmissions, type CoachingSubmission } from '@/hooks/useCoaching';
 
+const CONVERSATION_TARGET = 25;
+
 const SubmissionCard = ({ submission }: { submission: CoachingSubmission }) => {
   const [isOpen, setIsOpen] = useState(false);
-
-  const hasNotes = submission.challenges || submission.tasks || submission.coaching_notes || submission.must_do_task;
+  const conversations = submission.conversations || 0;
+  const activationAttempts = submission.dials_made || 0;
+  const contactsAdded = submission.leads_contacted || 0;
+  const contactsRemoved = submission.deals_closed || 0;
+  const activationDay = (submission.agreements_signed || 0) >= 1;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -23,18 +28,14 @@ const SubmissionCard = ({ submission }: { submission: CoachingSubmission }) => {
                 <CardTitle className="text-base">
                   Week {submission.week_number}, {submission.year}
                 </CardTitle>
-                {hasNotes && (
-                  <Badge variant="secondary" className="text-xs">
-                    <MessageSquare className="h-3 w-3 mr-1" />
-                    Notes
-                  </Badge>
-                )}
               </div>
               <div className="flex items-center gap-4">
                 <div className="hidden sm:flex items-center gap-4 text-sm text-muted-foreground">
-                  <span>Attempts: {submission.dials_made || 0}</span>
-                  <span>Leads: {submission.leads_contacted || 0}</span>
-                  <span>Closings: {submission.closings || 0}</span>
+                  <span className="font-medium text-foreground">
+                    {conversations}/{CONVERSATION_TARGET} convos
+                  </span>
+                  <span>Attempts: {activationAttempts}</span>
+                  <span>Appts: {submission.appointments_set || 0}</span>
                 </div>
                 <Button variant="ghost" size="sm">
                   {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -45,57 +46,14 @@ const SubmissionCard = ({ submission }: { submission: CoachingSubmission }) => {
         </CollapsibleTrigger>
         <CollapsibleContent>
           <CardContent className="pt-0 space-y-4">
-            {/* Metrics Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <MetricItem label="Attempts Made" value={submission.dials_made || 0} />
-              <MetricItem label="Leads Contacted" value={submission.leads_contacted || 0} />
-              <MetricItem label="Appointments Set" value={submission.appointments_set || 0} />
-              <MetricItem label="Appointments Held" value={submission.appointments_held || 0} />
-              <MetricItem label="Agreements Signed" value={submission.agreements_signed || 0} />
-              <MetricItem label="Offers Made" value={submission.offers_made_accepted || 0} />
-              <MetricItem label="# of Closings" value={submission.closings || 0} />
-              <MetricItem label="$ Closed" value={`$${(submission.closing_amount || 0).toLocaleString()}`} />
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <MetricItem label="Conversations" value={conversations} icon={<MessageCircle className="h-3 w-3" />} />
+              <MetricItem label="Activation Attempts" value={activationAttempts} icon={<Phone className="h-3 w-3" />} />
+              <MetricItem label="Appointments Set" value={submission.appointments_set || 0} icon={<CalendarCheck className="h-3 w-3" />} />
+              <MetricItem label="Contacts Added" value={contactsAdded} icon={<UserPlus className="h-3 w-3" />} />
+              <MetricItem label="Contacts Removed" value={contactsRemoved} icon={<UserMinus className="h-3 w-3" />} />
+              <MetricItem label="Activation Day" value={activationDay ? 'Yes' : 'No'} icon={<Zap className="h-3 w-3" />} />
             </div>
-
-            {/* Coaching Notes Section */}
-            {hasNotes && (
-              <div className="border-t pt-4 space-y-3">
-                <h4 className="font-semibold text-sm flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4" />
-                  Coaching Notes & Goals
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {submission.challenges && (
-                    <NoteCard 
-                      title="Challenges Faced" 
-                      content={submission.challenges} 
-                      icon={<AlertCircle className="h-4 w-4 text-amber-500" />}
-                    />
-                  )}
-                  {submission.tasks && (
-                    <NoteCard 
-                      title="Tasks for Next Week" 
-                      content={submission.tasks}
-                      icon={<Target className="h-4 w-4 text-blue-500" />}
-                    />
-                  )}
-                  {submission.coaching_notes && (
-                    <NoteCard 
-                      title="Notes for Coaching" 
-                      content={submission.coaching_notes}
-                      icon={<MessageSquare className="h-4 w-4 text-green-500" />}
-                    />
-                  )}
-                  {submission.must_do_task && (
-                    <NoteCard 
-                      title="One Thing You MUST Do" 
-                      content={submission.must_do_task}
-                      icon={<Target className="h-4 w-4 text-red-500" />}
-                    />
-                  )}
-                </div>
-              </div>
-            )}
           </CardContent>
         </CollapsibleContent>
       </Card>
@@ -103,20 +61,10 @@ const SubmissionCard = ({ submission }: { submission: CoachingSubmission }) => {
   );
 };
 
-const MetricItem = ({ label, value }: { label: string; value: string | number }) => (
+const MetricItem = ({ label, value, icon }: { label: string; value: string | number; icon?: React.ReactNode }) => (
   <div className="bg-muted/50 rounded-md p-2">
-    <p className="text-xs text-muted-foreground">{label}</p>
+    <p className="text-xs text-muted-foreground flex items-center gap-1">{icon}{label}</p>
     <p className="font-semibold">{value}</p>
-  </div>
-);
-
-const NoteCard = ({ title, content, icon }: { title: string; content: string; icon: React.ReactNode }) => (
-  <div className="bg-muted/30 border rounded-md p-3">
-    <div className="flex items-center gap-2 mb-1">
-      {icon}
-      <p className="text-sm font-medium">{title}</p>
-    </div>
-    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{content}</p>
   </div>
 );
 
@@ -127,7 +75,7 @@ export const MySubmissionsHistory = () => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>My Weekly Submissions</CardTitle>
+          <CardTitle>My Weekly Check-Ins</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -144,11 +92,11 @@ export const MySubmissionsHistory = () => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>My Weekly Submissions</CardTitle>
+          <CardTitle>My Weekly Check-Ins</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground text-center py-6">
-            No submissions yet. Submit your first weekly scorecard to see your history here.
+            No check-ins yet. Submit your first weekly check-in to see your history here.
           </p>
         </CardContent>
       </Card>
@@ -158,9 +106,9 @@ export const MySubmissionsHistory = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>My Weekly Submissions</CardTitle>
+        <CardTitle>My Weekly Check-Ins</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Click on any week to see full details including your notes and goals
+          Click on any week to see full details
         </p>
       </CardHeader>
       <CardContent>

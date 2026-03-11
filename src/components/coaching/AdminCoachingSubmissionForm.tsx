@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,16 +29,17 @@ import { User, Loader2 } from 'lucide-react';
 import type { CoachingFormData } from '@/hooks/useCoaching';
 
 const formSchema = z.object({
-  week_number: z.number().min(1, "Week must be between 1 and 52").max(52, "Week must be between 1 and 52"),
-  year: z.number().min(2020, "Year must be valid"),
-  dials_made: z.number().min(0, "Must be 0 or greater"),
-  leads_contacted: z.number().min(0, "Must be 0 or greater"),
-  appointments_set: z.number().min(0, "Must be 0 or greater"),
-  appointments_held: z.number().min(0, "Must be 0 or greater"),
-  agreements_signed: z.number().min(0, "Must be 0 or greater"),
-  offers_made_accepted: z.number().min(0, "Must be 0 or greater"),
-  closings: z.number().min(0, "Must be 0 or greater"),
-  closing_amount: z.number().min(0, "Must be 0 or greater"),
+  week_number: z.number().min(1).max(52),
+  year: z.number().min(2020),
+  conversations: z.number().min(0),
+  dials_made: z.number().min(0),
+  leads_contacted: z.number().min(0),
+  appointments_set: z.number().min(0),
+  appointments_held: z.number().min(0),
+  agreements_signed: z.number().min(0),
+  offers_made_accepted: z.number().min(0),
+  closings: z.number().min(0),
+  closing_amount: z.number().min(0),
   challenges: z.string().optional(),
   tasks: z.string().optional(),
   coaching_notes: z.string().optional(),
@@ -53,9 +55,7 @@ const AdminCoachingSubmissionForm = () => {
 
   const { data: agents, isLoading: agentsLoading } = useAgentsList();
   const { data: existingSubmission, isLoading: loadingExisting } = useAdminWeekSubmission(
-    selectedAgentId, 
-    selectedWeek, 
-    selectedYear
+    selectedAgentId, selectedWeek, selectedYear
   );
   const submitMutation = useAdminSubmitCoachingForm();
 
@@ -67,6 +67,7 @@ const AdminCoachingSubmissionForm = () => {
     defaultValues: {
       week_number: currentWeekNumber,
       year: currentYear,
+      conversations: 0,
       dials_made: 0,
       leads_contacted: 0,
       appointments_set: 0,
@@ -82,26 +83,20 @@ const AdminCoachingSubmissionForm = () => {
     },
   });
 
-  // Watch for week/year changes in form
   const watchedWeek = form.watch('week_number');
   const watchedYear = form.watch('year');
 
-  // Update selected week/year when form values change
   useEffect(() => {
-    if (watchedWeek !== selectedWeek) {
-      setSelectedWeek(watchedWeek);
-    }
-    if (watchedYear !== selectedYear) {
-      setSelectedYear(watchedYear);
-    }
+    if (watchedWeek !== selectedWeek) setSelectedWeek(watchedWeek);
+    if (watchedYear !== selectedYear) setSelectedYear(watchedYear);
   }, [watchedWeek, watchedYear, selectedWeek, selectedYear]);
 
-  // Pre-populate form when existing submission is loaded
   useEffect(() => {
     if (existingSubmission) {
       form.reset({
         week_number: existingSubmission.week_number,
         year: existingSubmission.year,
+        conversations: existingSubmission.conversations || 0,
         dials_made: existingSubmission.dials_made || 0,
         leads_contacted: existingSubmission.leads_contacted || 0,
         appointments_set: existingSubmission.appointments_set || 0,
@@ -116,10 +111,10 @@ const AdminCoachingSubmissionForm = () => {
         must_do_task: existingSubmission.must_do_task || "",
       });
     } else if (!loadingExisting && selectedAgentId) {
-      // Reset to empty values for new week (but keep week/year)
       form.reset({
         week_number: selectedWeek,
         year: selectedYear,
+        conversations: 0,
         dials_made: 0,
         leads_contacted: 0,
         appointments_set: 0,
@@ -138,7 +133,6 @@ const AdminCoachingSubmissionForm = () => {
 
   const handleFormSubmit = (data: CoachingFormData) => {
     if (!selectedAgentId) return;
-    
     if (existingSubmission) {
       setPendingSubmission(data);
       setShowOverwriteWarning(true);
@@ -165,10 +159,10 @@ const AdminCoachingSubmissionForm = () => {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
-                Submit Coaching Data for Agent
+                Submit Check-In for Agent
               </CardTitle>
               <CardDescription>
-                Enter weekly metrics on behalf of a team member
+                Enter weekly SphereSync data on behalf of a team member. Includes transaction fields for admin tracking.
               </CardDescription>
             </div>
             {selectedAgentId && (
@@ -176,14 +170,14 @@ const AdminCoachingSubmissionForm = () => {
                 <Skeleton className="h-6 w-32" />
               ) : existingSubmission ? (
                 <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-300">
-                  Editing Week {selectedWeek} submission
+                  Editing Week {selectedWeek}
                   <span className="ml-1 text-xs opacity-75">
                     (Updated {format(new Date(existingSubmission.updated_at), 'MMM d, h:mm a')})
                   </span>
                 </Badge>
               ) : (
                 <Badge variant="outline" className="text-muted-foreground">
-                  New submission for Week {selectedWeek}
+                  New for Week {selectedWeek}
                 </Badge>
               )
             )}
@@ -215,27 +209,18 @@ const AdminCoachingSubmissionForm = () => {
                 </FormItem>
               </div>
 
-              {/* Week/Year Selection */}
+              {/* Week/Year */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="week_number"
+                <FormField control={form.control} name="week_number"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Week Number</FormLabel>
-                      <Select 
-                        onValueChange={(value) => field.onChange(parseInt(value))} 
-                        value={field.value?.toString()}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select week" />
-                          </SelectTrigger>
-                        </FormControl>
+                      <Select onValueChange={(v) => field.onChange(parseInt(v))} value={field.value?.toString()}>
+                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                         <SelectContent>
-                          {Array.from({ length: 52 }, (_, i) => i + 1).map((week) => (
-                            <SelectItem key={week} value={week.toString()}>
-                              Week {week} {week === currentWeekNumber ? '(Current)' : ''}
+                          {Array.from({ length: 52 }, (_, i) => i + 1).map((w) => (
+                            <SelectItem key={w} value={w.toString()}>
+                              Week {w} {w === currentWeekNumber ? '(Current)' : ''}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -244,21 +229,13 @@ const AdminCoachingSubmissionForm = () => {
                     </FormItem>
                   )}
                 />
-                
-                <FormField
-                  control={form.control}
-                  name="year"
+                <FormField control={form.control} name="year"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Year</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          min="2020" 
-                          max="2030" 
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || currentYear)}
-                        />
+                        <Input type="number" min="2020" max="2030" {...field}
+                          onChange={(e) => field.onChange(parseInt(e.target.value) || currentYear)} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -266,100 +243,60 @@ const AdminCoachingSubmissionForm = () => {
                 />
               </div>
 
-              {/* Activity Metrics */}
+              {/* SphereSync Metrics */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Activity Metrics</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="dials_made"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Attempts Made</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field} 
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="leads_contacted"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Leads Contacted</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field} 
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-
-              {/* Pipeline Metrics */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Pipeline Metrics</h3>
+                <h3 className="text-lg font-semibold">SphereSync™ Metrics</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="appointments_set"
+                  <FormField control={form.control} name="conversations"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Conversations (Target: 25)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField control={form.control} name="dials_made"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Activation Attempts</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField control={form.control} name="appointments_set"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Appointments Set</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field} 
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                          />
+                          <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  
-                  <FormField
-                    control={form.control}
-                    name="appointments_held"
+                  <FormField control={form.control} name="leads_contacted"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Appointments Held</FormLabel>
+                        <FormLabel>Contacts Added</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field} 
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                          />
+                          <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  
-                  <FormField
-                    control={form.control}
-                    name="agreements_signed"
+                  <FormField control={form.control} name="agreements_signed"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Agreements Signed</FormLabel>
+                        <FormLabel>Activation Day (0=No, 1=Yes)</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field} 
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                          />
+                          <Input type="number" min={0} max={1} {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -368,58 +305,49 @@ const AdminCoachingSubmissionForm = () => {
                 </div>
               </div>
 
-              {/* Transaction Metrics */}
+              {/* Transaction Metrics (Admin-only) */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Transaction Metrics</h3>
+                <h3 className="text-lg font-semibold">Transaction Metrics (Admin)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="offers_made_accepted"
+                  <FormField control={form.control} name="appointments_held"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Appointments Held</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField control={form.control} name="offers_made_accepted"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Offers Made</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field} 
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                          />
+                          <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  
-                  <FormField
-                    control={form.control}
-                    name="closings"
+                  <FormField control={form.control} name="closings"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel># of Closings</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field} 
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                          />
+                          <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  
-                  <FormField
-                    control={form.control}
-                    name="closing_amount"
+                  <FormField control={form.control} name="closing_amount"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>$ Closed</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field} 
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                          />
+                          <Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -432,72 +360,45 @@ const AdminCoachingSubmissionForm = () => {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Coaching Notes</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="challenges"
+                  <FormField control={form.control} name="challenges"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Challenges Faced</FormLabel>
                         <FormControl>
-                          <Textarea 
-                            placeholder="What challenges did the agent face this week?"
-                            className="min-h-[100px]"
-                            {...field}
-                          />
+                          <Textarea placeholder="What challenges did the agent face?" className="min-h-[100px]" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  
-                  <FormField
-                    control={form.control}
-                    name="tasks"
+                  <FormField control={form.control} name="tasks"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Tasks for Next Week</FormLabel>
                         <FormControl>
-                          <Textarea 
-                            placeholder="Key tasks for next week"
-                            className="min-h-[100px]"
-                            {...field}
-                          />
+                          <Textarea placeholder="Key tasks for next week" className="min-h-[100px]" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  
-                  <FormField
-                    control={form.control}
-                    name="coaching_notes"
+                  <FormField control={form.control} name="coaching_notes"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Notes for Coaching Session</FormLabel>
                         <FormControl>
-                          <Textarea 
-                            placeholder="Notes for the coaching session"
-                            className="min-h-[100px]"
-                            {...field}
-                          />
+                          <Textarea placeholder="Notes for the coaching session" className="min-h-[100px]" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  
-                  <FormField
-                    control={form.control}
-                    name="must_do_task"
+                  <FormField control={form.control} name="must_do_task"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>One Thing You MUST Do</FormLabel>
                         <FormControl>
-                          <Textarea 
-                            placeholder="The one thing that must get done"
-                            className="min-h-[100px]"
-                            {...field}
-                          />
+                          <Textarea placeholder="The one thing that must get done" className="min-h-[100px]" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -506,20 +407,11 @@ const AdminCoachingSubmissionForm = () => {
                 </div>
               </div>
 
-              <Button 
-                type="submit" 
-                className="w-full"
-                disabled={!selectedAgentId || submitMutation.isPending}
-              >
+              <Button type="submit" className="w-full" disabled={!selectedAgentId || submitMutation.isPending}>
                 {submitMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Submitting...
-                  </>
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting...</>
                 ) : (
-                  <>
-                    {existingSubmission ? 'Update' : 'Submit'} for {selectedAgent?.name || 'Agent'}
-                  </>
+                  <>{existingSubmission ? 'Update' : 'Submit'} for {selectedAgent?.name || 'Agent'}</>
                 )}
               </Button>
             </form>
@@ -527,21 +419,18 @@ const AdminCoachingSubmissionForm = () => {
         </CardContent>
       </Card>
 
-      {/* Overwrite Warning Dialog */}
       <AlertDialog open={showOverwriteWarning} onOpenChange={setShowOverwriteWarning}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Update Existing Submission?</AlertDialogTitle>
+            <AlertDialogTitle>Update Existing Check-In?</AlertDialogTitle>
             <AlertDialogDescription>
-              {selectedAgent?.name} already has a submission for Week {selectedWeek}, {selectedYear}. 
-              This will overwrite the existing data. This action cannot be undone.
+              {selectedAgent?.name} already has a check-in for Week {selectedWeek}, {selectedYear}. 
+              This will overwrite the existing data.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmOverwrite}>
-              Yes, Update Submission
-            </AlertDialogAction>
+            <AlertDialogAction onClick={confirmOverwrite}>Yes, Update</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

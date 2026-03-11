@@ -148,6 +148,7 @@ export const useAdminSubmitCoachingForm = () => {
         week_number: formData.week_number,
         year: formData.year,
         week_ending: weekEnding,
+        conversations: formData.conversations || 0,
         dials_made: formData.dials_made,
         leads_contacted: formData.leads_contacted,
         appointments_set: formData.appointments_set,

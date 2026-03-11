@@ -1,12 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Users, TrendingUp, Trophy, ChevronDown, ChevronUp, MessageSquare, Target, AlertCircle } from 'lucide-react';
+import { Users, TrendingUp, Trophy, ChevronDown, ChevronUp, MessageCircle, Phone } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Table,
   TableBody,
@@ -18,7 +17,9 @@ import {
 import { useAllCoachingSubmissions, useAgentsList, type CoachingSubmissionWithAgent } from '@/hooks/useAdminCoachingData';
 import { getCurrentWeekNumber } from '@/utils/sphereSyncLogic';
 
-type SortField = 'agent_name' | 'week_number' | 'dials_made' | 'leads_contacted' | 'appointments_set' | 'closings' | 'closing_amount';
+const CONVERSATION_TARGET = 25;
+
+type SortField = 'agent_name' | 'week_number' | 'conversations' | 'dials_made' | 'appointments_set' | 'leads_contacted' | 'closings';
 type SortDirection = 'asc' | 'desc';
 
 interface AdminTeamOverviewProps {
@@ -37,17 +38,14 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
   const currentWeekNumber = getCurrentWeekNumber();
   const currentYear = new Date().getFullYear();
 
-  // Filter submissions by selected agent and week
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
     let filtered = submissions;
     
-    // Filter by agent
     if (selectedAgent !== 'all') {
       filtered = filtered.filter(s => s.agent_id === selectedAgent);
     }
     
-    // Filter by week
     if (selectedWeek !== 'all') {
       const [weekNum, year] = selectedWeek.split('-').map(Number);
       filtered = filtered.filter(s => s.week_number === weekNum && s.year === year);
@@ -56,11 +54,10 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
     return filtered;
   }, [submissions, selectedAgent, selectedWeek]);
 
-  // Sort submissions
   const sortedSubmissions = useMemo(() => {
     return [...filteredSubmissions].sort((a, b) => {
-      let aVal = a[sortField];
-      let bVal = b[sortField];
+      let aVal: any = sortField === 'conversations' ? (a.conversations || 0) : a[sortField];
+      let bVal: any = sortField === 'conversations' ? (b.conversations || 0) : b[sortField];
 
       if (typeof aVal === 'string') aVal = aVal.toLowerCase();
       if (typeof bVal === 'string') bVal = bVal.toLowerCase();
@@ -71,7 +68,6 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
     });
   }, [filteredSubmissions, sortField, sortDirection]);
 
-  // Current week submissions for leaderboard (or filtered week)
   const leaderboardSubmissions = useMemo(() => {
     if (!submissions) return [];
     if (selectedWeek !== 'all') {
@@ -81,22 +77,20 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
     return submissions.filter(s => s.week_number === currentWeekNumber && s.year === currentYear);
   }, [submissions, selectedWeek, currentWeekNumber, currentYear]);
 
-  // Generate leaderboard data
   const leaderboardData = useMemo(() => {
-    const sortedByClosings = [...leaderboardSubmissions].sort((a, b) => (b.closings || 0) - (a.closings || 0));
-    const sortedByAmount = [...leaderboardSubmissions].sort((a, b) => (b.closing_amount || 0) - (a.closing_amount || 0));
+    const sortedByConversations = [...leaderboardSubmissions].sort((a, b) => (b.conversations || 0) - (a.conversations || 0));
     const sortedByAttempts = [...leaderboardSubmissions].sort((a, b) => (b.dials_made || 0) - (a.dials_made || 0));
     const sortedByAppointments = [...leaderboardSubmissions].sort((a, b) => (b.appointments_set || 0) - (a.appointments_set || 0));
+    const sortedByClosings = [...leaderboardSubmissions].sort((a, b) => (b.closings || 0) - (a.closings || 0));
 
     return {
-      closings: sortedByClosings.slice(0, 5),
-      amount: sortedByAmount.slice(0, 5),
+      conversations: sortedByConversations.slice(0, 5),
       attempts: sortedByAttempts.slice(0, 5),
       appointments: sortedByAppointments.slice(0, 5),
+      closings: sortedByClosings.slice(0, 5),
     };
   }, [leaderboardSubmissions]);
   
-  // Get the week label for leaderboard subtitle
   const leaderboardWeekLabel = useMemo(() => {
     if (selectedWeek !== 'all') {
       const [weekNum, year] = selectedWeek.split('-').map(Number);
@@ -139,7 +133,6 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
 
   return (
     <div className="space-y-6">
-      {/* Agent Selector */}
       <div className="flex items-center gap-4">
         <Users className="h-5 w-5 text-muted-foreground" />
         <Select value={selectedAgent} onValueChange={setSelectedAgent}>
@@ -155,14 +148,8 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
             ))}
           </SelectContent>
         </Select>
-        {selectedAgent !== 'all' && (
-          <Badge variant="secondary">
-            Viewing: {agents?.find(a => a.id === selectedAgent)?.name}
-          </Badge>
-        )}
       </div>
 
-      {/* Sub-tabs */}
       <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
         <TabsList>
           <TabsTrigger value="comparison" className="flex items-center gap-2">
@@ -175,22 +162,17 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
           </TabsTrigger>
         </TabsList>
 
-        {/* Team Comparison Table */}
         <TabsContent value="comparison" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Team Metrics Comparison</CardTitle>
+              <CardTitle>Team Weekly Check-Ins</CardTitle>
               <CardDescription>
-                {selectedAgent === 'all' 
-                  ? 'View and compare all agent submissions. Click headers to sort.' 
-                  : `Viewing submissions for ${agents?.find(a => a.id === selectedAgent)?.name}`}
+                Click headers to sort. Conversations target: {CONVERSATION_TARGET}/week.
               </CardDescription>
             </CardHeader>
             <CardContent>
               {sortedSubmissions.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  No submissions found for the selected criteria.
-                </p>
+                <p className="text-muted-foreground text-center py-8">No check-ins found.</p>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -198,17 +180,28 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
                       <TableRow>
                         <SortableHeader field="agent_name">Agent</SortableHeader>
                         <SortableHeader field="week_number">Week</SortableHeader>
+                        <SortableHeader field="conversations">Convos</SortableHeader>
                         <SortableHeader field="dials_made">Attempts</SortableHeader>
-                        <SortableHeader field="leads_contacted">Leads</SortableHeader>
-                        <SortableHeader field="appointments_set">Appts Set</SortableHeader>
+                        <SortableHeader field="appointments_set">Appts</SortableHeader>
+                        <SortableHeader field="leads_contacted">Added</SortableHeader>
                         <SortableHeader field="closings">Closings</SortableHeader>
-                        <SortableHeader field="closing_amount">$ Closed</SortableHeader>
-                        <TableHead>Notes</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {sortedSubmissions.map((submission) => (
-                        <SubmissionRow key={submission.id} submission={submission} />
+                      {sortedSubmissions.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell className="font-medium">{s.agent_name}</TableCell>
+                          <TableCell>W{s.week_number} / {s.year}</TableCell>
+                          <TableCell>
+                            <span className={(s.conversations || 0) >= CONVERSATION_TARGET ? 'text-primary font-bold' : ''}>
+                              {s.conversations || 0}
+                            </span>
+                          </TableCell>
+                          <TableCell>{s.dials_made || 0}</TableCell>
+                          <TableCell>{s.appointments_set || 0}</TableCell>
+                          <TableCell>{s.leads_contacted || 0}</TableCell>
+                          <TableCell>{s.closings || 0}</TableCell>
+                        </TableRow>
                       ))}
                     </TableBody>
                   </Table>
@@ -218,25 +211,17 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
           </Card>
         </TabsContent>
 
-        {/* Leaderboard */}
         <TabsContent value="leaderboard" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <LeaderboardCard
-              title="Top Closings"
+              title="Most Conversations"
               subtitle={leaderboardWeekLabel}
-              data={leaderboardData.closings}
-              metric="closings"
-              formatValue={(v) => v.toString()}
+              data={leaderboardData.conversations}
+              metric="conversations"
+              formatValue={(v) => `${v}/${CONVERSATION_TARGET}`}
             />
             <LeaderboardCard
-              title="Top $ Closed"
-              subtitle={leaderboardWeekLabel}
-              data={leaderboardData.amount}
-              metric="closing_amount"
-              formatValue={(v) => `$${v.toLocaleString()}`}
-            />
-            <LeaderboardCard
-              title="Most Attempts"
+              title="Most Activation Attempts"
               subtitle={leaderboardWeekLabel}
               data={leaderboardData.attempts}
               metric="dials_made"
@@ -249,6 +234,13 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
               metric="appointments_set"
               formatValue={(v) => v.toString()}
             />
+            <LeaderboardCard
+              title="Top Closings"
+              subtitle={leaderboardWeekLabel}
+              data={leaderboardData.closings}
+              metric="closings"
+              formatValue={(v) => v.toString()}
+            />
           </div>
         </TabsContent>
       </Tabs>
@@ -256,95 +248,11 @@ const AdminTeamOverview = ({ selectedWeek = 'all' }: AdminTeamOverviewProps) => 
   );
 };
 
-// Submission Row with expandable notes
-const SubmissionRow = ({ submission }: { submission: CoachingSubmissionWithAgent }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const hasNotes = submission.challenges || submission.tasks || submission.coaching_notes || submission.must_do_task;
-
-  return (
-    <>
-      <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => hasNotes && setIsOpen(!isOpen)}>
-        <TableCell className="font-medium">{submission.agent_name}</TableCell>
-        <TableCell>W{submission.week_number} / {submission.year}</TableCell>
-        <TableCell>{submission.dials_made || 0}</TableCell>
-        <TableCell>{submission.leads_contacted || 0}</TableCell>
-        <TableCell>{submission.appointments_set || 0}</TableCell>
-        <TableCell>{submission.closings || 0}</TableCell>
-        <TableCell>${(submission.closing_amount || 0).toLocaleString()}</TableCell>
-        <TableCell>
-          {hasNotes ? (
-            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              {isOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            </Button>
-          ) : (
-            <span className="text-muted-foreground text-sm">—</span>
-          )}
-        </TableCell>
-      </TableRow>
-      {isOpen && hasNotes && (
-        <TableRow>
-          <TableCell colSpan={8} className="bg-muted/30 p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {submission.challenges && (
-                <NoteCard 
-                  title="Challenges Faced" 
-                  content={submission.challenges} 
-                  icon={<AlertCircle className="h-4 w-4 text-amber-500" />}
-                />
-              )}
-              {submission.tasks && (
-                <NoteCard 
-                  title="Tasks for Next Week" 
-                  content={submission.tasks}
-                  icon={<Target className="h-4 w-4 text-blue-500" />}
-                />
-              )}
-              {submission.coaching_notes && (
-                <NoteCard 
-                  title="Notes for Coaching" 
-                  content={submission.coaching_notes}
-                  icon={<MessageSquare className="h-4 w-4 text-green-500" />}
-                />
-              )}
-              {submission.must_do_task && (
-                <NoteCard 
-                  title="One Thing You MUST Do" 
-                  content={submission.must_do_task}
-                  icon={<Target className="h-4 w-4 text-red-500" />}
-                />
-              )}
-            </div>
-          </TableCell>
-        </TableRow>
-      )}
-    </>
-  );
-};
-
-const NoteCard = ({ title, content, icon }: { title: string; content: string; icon: React.ReactNode }) => (
-  <div className="bg-background border rounded-md p-3">
-    <div className="flex items-center gap-2 mb-1">
-      {icon}
-      <p className="text-sm font-medium">{title}</p>
-    </div>
-    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{content}</p>
-  </div>
-);
-
-// Leaderboard Card
 const LeaderboardCard = ({ 
-  title, 
-  subtitle, 
-  data, 
-  metric, 
-  formatValue 
+  title, subtitle, data, metric, formatValue 
 }: { 
-  title: string; 
-  subtitle: string; 
-  data: CoachingSubmissionWithAgent[];
-  metric: keyof CoachingSubmissionWithAgent;
-  formatValue: (value: number) => string;
+  title: string; subtitle: string; data: CoachingSubmissionWithAgent[];
+  metric: keyof CoachingSubmissionWithAgent; formatValue: (value: number) => string;
 }) => {
   const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
 

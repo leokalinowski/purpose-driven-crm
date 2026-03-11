@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Users, TrendingUp, BarChart3, Target, CalendarDays, PenLine } from 'lucide-react';
+import { Users, TrendingUp, BarChart3, MessageCircle, CalendarDays, PenLine } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,6 +12,8 @@ import CoachingInsights from '@/components/coaching/CoachingInsights';
 import AgentCoachingDeepDive from '@/components/coaching/AgentCoachingDeepDive';
 import AdminCoachingSubmissionForm from '@/components/coaching/AdminCoachingSubmissionForm';
 
+const CONVERSATION_TARGET = 25;
+
 const AdminCoachingManagement = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedWeek, setSelectedWeek] = useState('all');
@@ -22,7 +24,6 @@ const AdminCoachingManagement = () => {
   const currentWeekNumber = getCurrentWeekNumber();
   const currentYear = new Date().getFullYear();
 
-  // Generate available weeks from submissions
   const availableWeeks = useMemo(() => {
     if (!submissions) return [];
     const weeks = new Map<string, { week: number; year: number }>();
@@ -34,10 +35,9 @@ const AdminCoachingManagement = () => {
     });
     return Array.from(weeks.values())
       .sort((a, b) => b.year - a.year || b.week - a.week)
-      .slice(0, 12); // Last 12 weeks with data
+      .slice(0, 12);
   }, [submissions]);
 
-  // Calculate summary metrics
   const summaryMetrics = useMemo(() => {
     if (!submissions || !agents) return null;
 
@@ -48,26 +48,23 @@ const AdminCoachingManagement = () => {
     const totalAgents = agents.length;
     const submittedThisWeek = new Set(currentWeekSubmissions.map(s => s.agent_id)).size;
     
-    // Average attempts per week (current week)
+    const avgConversations = currentWeekSubmissions.length > 0
+      ? Math.round(currentWeekSubmissions.reduce((sum, s) => sum + (s.conversations || 0), 0) / currentWeekSubmissions.length)
+      : 0;
+
     const avgAttempts = currentWeekSubmissions.length > 0
       ? Math.round(currentWeekSubmissions.reduce((sum, s) => sum + (s.dials_made || 0), 0) / currentWeekSubmissions.length)
       : 0;
 
-    // Average closings per week (current week)
-    const avgClosings = currentWeekSubmissions.length > 0
-      ? (currentWeekSubmissions.reduce((sum, s) => sum + (s.closings || 0), 0) / currentWeekSubmissions.length).toFixed(1)
-      : '0';
-
-    // YTD total $ closed
     const ytdSubmissions = submissions.filter(s => s.year === currentYear);
-    const ytdTotalClosed = ytdSubmissions.reduce((sum, s) => sum + (s.closing_amount || 0), 0);
+    const ytdTotalConversations = ytdSubmissions.reduce((sum, s) => sum + (s.conversations || 0), 0);
 
     return {
       submittedThisWeek,
       totalAgents,
+      avgConversations,
       avgAttempts,
-      avgClosings,
-      ytdTotalClosed,
+      ytdTotalConversations,
     };
   }, [submissions, agents, currentWeekNumber, currentYear]);
 
@@ -76,12 +73,11 @@ const AdminCoachingManagement = () => {
   return (
     <Layout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Coaching Management</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">SphereSync™ Management</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
-              Compare agent performance and identify coaching priorities
+              Track team conversations, identify coaching priorities, and monitor weekly check-ins
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -107,7 +103,6 @@ const AdminCoachingManagement = () => {
           </div>
         </div>
 
-        {/* Summary Cards */}
         {isLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
@@ -120,7 +115,7 @@ const AdminCoachingManagement = () => {
               <CardContent className="pt-4">
                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                   <Users className="h-4 w-4" />
-                  Submissions This Week
+                  Check-Ins This Week
                 </div>
                 <div className="text-2xl font-bold">
                   {summaryMetrics.submittedThisWeek}/{summaryMetrics.totalAgents}
@@ -132,8 +127,21 @@ const AdminCoachingManagement = () => {
             <Card>
               <CardContent className="pt-4">
                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-                  <Target className="h-4 w-4" />
-                  Avg Attempts/Week
+                  <MessageCircle className="h-4 w-4" />
+                  Avg Conversations
+                </div>
+                <div className="text-2xl font-bold">
+                  {summaryMetrics.avgConversations}/{CONVERSATION_TARGET}
+                </div>
+                <p className="text-xs text-muted-foreground">This week's average</p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+                  <TrendingUp className="h-4 w-4" />
+                  Avg Activation Attempts
                 </div>
                 <div className="text-2xl font-bold">
                   {summaryMetrics.avgAttempts}
@@ -145,24 +153,11 @@ const AdminCoachingManagement = () => {
             <Card>
               <CardContent className="pt-4">
                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-                  <TrendingUp className="h-4 w-4" />
-                  Avg Closings/Week
-                </div>
-                <div className="text-2xl font-bold">
-                  {summaryMetrics.avgClosings}
-                </div>
-                <p className="text-xs text-muted-foreground">This week's average</p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                   <BarChart3 className="h-4 w-4" />
-                  Team $ Closed YTD
+                  Team Conversations YTD
                 </div>
                 <div className="text-2xl font-bold">
-                  ${summaryMetrics.ytdTotalClosed.toLocaleString()}
+                  {summaryMetrics.ytdTotalConversations.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground">{currentYear} total</p>
               </CardContent>
@@ -170,7 +165,6 @@ const AdminCoachingManagement = () => {
           </div>
         )}
 
-        {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview" className="flex items-center gap-2">
@@ -184,7 +178,7 @@ const AdminCoachingManagement = () => {
               <span className="sm:hidden">Insights</span>
             </TabsTrigger>
             <TabsTrigger value="deepdive" className="flex items-center gap-2">
-              <Target className="h-4 w-4" />
+              <MessageCircle className="h-4 w-4" />
               <span className="hidden sm:inline">Agent Deep Dive</span>
               <span className="sm:hidden">Deep Dive</span>
             </TabsTrigger>
