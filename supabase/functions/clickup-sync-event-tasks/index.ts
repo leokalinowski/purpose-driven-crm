@@ -7,13 +7,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Auth guard: require admin OR service-key (for cron jobs)
+    // Auth guard: require admin OR cron job (X-Cron-Job header) OR service-key
     const authHeader = req.headers.get("Authorization");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const isCronJob = req.headers.get("X-Cron-Job") === "true";
     const isServiceKey = authHeader === `Bearer ${serviceKey}`;
 
-    if (!(isCronJob && isServiceKey)) {
+    if (!(isCronJob || isServiceKey)) {
       // Standard admin auth flow
       if (!authHeader?.startsWith("Bearer ")) {
         console.error("clickup-sync: Missing Authorization header");
