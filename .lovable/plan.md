@@ -1,20 +1,34 @@
 
 
-## Hide Content Tab from Core and Managed Users
+## Fix: RSVP RLS Violation on Public Submissions
 
-### Changes
+### Root Cause
 
-**1. `src/components/admin/AgentMarketingSettingsForm.tsx`**
-- Add a new optional prop `showContentTab?: boolean` (default `true`)
-- Conditionally render the Content `TabsTrigger` and `TabsContent` only when `showContentTab` is true
-- Update the grid-cols class to account for the tab being hidden (when not admin and no content tab, it becomes `grid-cols-1`)
+In `useRSVP.ts`, the RSVP insert uses `.insert([{...}]).select().single()`. PostgreSQL treats `INSERT ... RETURNING` (which `.select()` triggers) as requiring **both** INSERT and SELECT RLS policies to pass. 
 
-**2. `src/pages/Settings.tsx`**
-- Import `useUserRole` (already imported)
-- Pass `showContentTab={isAdmin || isAgent}` to `AgentMarketingSettingsForm`, so only Admin and Agent roles see the Content tab
+The INSERT policy passes (event is published), but the only SELECT policy on `event_rsvps` requires `auth.uid() = event.agent_id OR admin` — which anonymous RSVP submitters can never satisfy. This causes the "new row violates row-level security" error.
 
-### Result
-- Core and Managed users see only the Branding tab in Settings → Branding & Content
-- Agent and Admin users continue seeing both Branding and Content tabs
-- Admin users still see all 5 tabs (Branding, Content, Integrations, Images, Backgrounds)
+### Fix
+
+Create a `SECURITY DEFINER` RPC function `submit_public_rsvp` that handles the insert server-side (bypassing RLS) and returns the new RSVP ID and status. Then update `useRSVP.ts` to call this RPC instead of doing a direct `.insert().select()`.
+
+### Step 1: Database Migration
+
+Create function `submit_public_rsvp(p_event_id, p_email, p_name, p_phone, p_guest_count)`:
+- Verifies event exists and is published
+- Checks for duplicate RSVP (reuses existing logic)
+- Determines status based on capacity (confirmed vs waitlist)
+- Inserts the row and returns `id` and `status`
+- SECURITY DEFINER so it bypasses RLS
+
+### Step 2: Update `src/hooks/useRSVP.ts`
+
+Replace the two direct `.insert().select().single()` calls (one for waitlist, one for confirmed) with a single call to the new `submit_public_rsvp` RPC. This eliminates the SELECT policy requirement for anonymous users entirely.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| Migration SQL | Create `submit_public_rsvp` function |
+| `src/hooks/useRSVP.ts` | Replace direct inserts with RPC call |
 

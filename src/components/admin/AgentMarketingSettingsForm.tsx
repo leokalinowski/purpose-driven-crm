@@ -115,9 +115,10 @@ interface AgentMarketingSettingsFormProps {
   agentName: string;
   onClose?: () => void;
   isAdmin?: boolean;
+  showContentTab?: boolean;
 }
 
-export const AgentMarketingSettingsForm = ({ userId, agentName, onClose, isAdmin = true }: AgentMarketingSettingsFormProps) => {
+export const AgentMarketingSettingsForm = ({ userId, agentName, onClose, isAdmin = true, showContentTab = true }: AgentMarketingSettingsFormProps) => {
   const { loading, fetchSettings, upsertSettings } = useAgentMarketingSettings();
   const [settings, setSettings] = useState<AgentMarketingSettings | null>(null);
   const [formData, setFormData] = useState<AgentMarketingSettingsInput>({});
@@ -195,15 +196,17 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose, isAdmin
       </div>
 
       <Tabs defaultValue="branding" className="w-full">
-        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-2'}`}>
+        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : showContentTab ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Branding</span>
           </TabsTrigger>
-          <TabsTrigger value="content" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">Content</span>
-          </TabsTrigger>
+          {showContentTab && (
+            <TabsTrigger value="content" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              <span className="hidden sm:inline">Content</span>
+            </TabsTrigger>
+          )}
           {isAdmin && (
             <TabsTrigger value="integrations" className="flex items-center gap-2">
               <Link2 className="h-4 w-4" />
@@ -301,7 +304,7 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose, isAdmin
           </Card>
         </TabsContent>
 
-        <TabsContent value="content" className="space-y-4 mt-4">
+        {showContentTab && <TabsContent value="content" className="space-y-4 mt-4">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">AI & Content Guidelines</CardTitle>
@@ -380,7 +383,7 @@ export const AgentMarketingSettingsForm = ({ userId, agentName, onClose, isAdmin
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent>}
 
         {isAdmin && <TabsContent value="integrations" className="space-y-4 mt-4">
           <Card>

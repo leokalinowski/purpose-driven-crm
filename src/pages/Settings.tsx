@@ -18,7 +18,7 @@ import { buildAuthRedirectPath } from '@/utils/authRedirect';
 
 const Settings = () => {
   const { user, loading: authLoading } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, isAgent } = useUserRole();
   const navigate = useNavigate();
 
   const [profileLoading, setProfileLoading] = useState(true);
@@ -217,6 +217,7 @@ const Settings = () => {
                 userId={user.id}
                 agentName={`${firstName} ${lastName}`.trim() || 'My'}
                 isAdmin={isAdmin}
+                showContentTab={isAdmin || isAgent}
               />
             )}
           </TabsContent>
