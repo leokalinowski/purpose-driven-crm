@@ -141,17 +141,6 @@ const EventPublicPage = () => {
             agentHeadshot={event.profiles?.headshot_url}
           />
 
-          {/* RSVP Stats (if available) */}
-          {showStats && event.max_capacity !== undefined && (
-            <RSVPStats
-              total={event.current_rsvp_count || 0}
-              confirmed={event.current_rsvp_count || 0}
-              waitlist={0}
-              checkedIn={0}
-              maxCapacity={event.max_capacity}
-            />
-          )}
-
           {/* RSVP Section */}
           {!rsvpSubmitted ? (
             <Card>
