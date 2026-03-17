@@ -49,7 +49,7 @@ const EventPublicPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [rsvpSubmitted, setRsvpSubmitted] = useState(false);
   const [rsvpData, setRsvpData] = useState<any>(null);
-  const [showStats, setShowStats] = useState(false);
+  
 
   useEffect(() => {
     if (!slug) {
