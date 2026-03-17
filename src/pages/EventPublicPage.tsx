@@ -4,7 +4,7 @@ import { useRSVP } from '@/hooks/useRSVP';
 import { EventPublicHeader } from '@/components/events/rsvp/EventPublicHeader';
 import { RSVPForm } from '@/components/events/rsvp/RSVPForm';
 import { RSVPConfirmation } from '@/components/events/rsvp/RSVPConfirmation';
-import { RSVPStats } from '@/components/events/rsvp/RSVPStats';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
