@@ -90,7 +90,7 @@ export const useRSVPQuestions = () => {
 
     const { error } = await supabase.rpc('submit_rsvp_answers', {
       p_rsvp_id: rsvpId,
-      p_answers: JSON.stringify(answers),
+      p_answers: answers,
     });
 
     if (error) throw error;
