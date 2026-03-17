@@ -1,16 +1,18 @@
-## ClickUp & Social Media Backend Fixes — COMPLETED
 
-### What was done
 
-1. **ClickUp Sync UI** — Added "Sync Tasks" and "Re-link Events" buttons to Admin Events Management page
-2. **Service-key bypass** — `clickup-sync-event-tasks` now accepts `X-Cron-Job: true` header for automated calls
-3. **pg_cron job** — ClickUp task sync runs automatically every 2 hours
-4. **Social functions updated** — `social-schedule` and `social-posting` now use `Deno.serve()`, `npm:@supabase/supabase-js@2`, and shared CORS headers
-5. **Error logging** — All 13 edge functions with `getClaims` now log errors before returning 401
+## Install GTM, Google Analytics & Microsoft Clarity
 
-### Files changed
-- `src/pages/AdminEventsManagement.tsx` — sync buttons
-- `supabase/functions/clickup-sync-event-tasks/index.ts` — cron bypass
-- `supabase/functions/social-schedule/index.ts` — modernized
-- `supabase/functions/social-posting/index.ts` — modernized
-- 10 edge functions — added `console.error` to getClaims blocks
+All three tracking scripts will be added to `index.html`.
+
+### Changes to `index.html`
+
+1. **In `<head>`** (after the existing meta tags, before `</head>`):
+   - GTM head snippet (container `GTM-WNCHZB45`)
+   - GA4 gtag.js snippet (measurement ID `G-0XTL0R6Q98`)
+   - Microsoft Clarity snippet (project `vx9tje0e7c`)
+
+2. **In `<body>`** (immediately after `<body>` tag):
+   - GTM noscript fallback iframe
+
+No other files need changes. Since GA4 is also configured via GTM typically, having both the standalone gtag.js snippet and GTM gives you flexibility — you can later remove the standalone GA snippet if you manage it entirely through GTM.
+
