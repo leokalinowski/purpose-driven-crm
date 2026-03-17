@@ -62,7 +62,7 @@ const EventPublicPage = () => {
       try {
         const eventData = await getEventBySlug(slug);
         setEvent(eventData as EventData);
-        setShowStats(true);
+        
       } catch (err: any) {
         setError(err.message || 'Event not found');
       } finally {
