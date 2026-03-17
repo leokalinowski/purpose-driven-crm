@@ -4,7 +4,7 @@ import { useRSVP } from '@/hooks/useRSVP';
 import { EventPublicHeader } from '@/components/events/rsvp/EventPublicHeader';
 import { RSVPForm } from '@/components/events/rsvp/RSVPForm';
 import { RSVPConfirmation } from '@/components/events/rsvp/RSVPConfirmation';
-import { RSVPStats } from '@/components/events/rsvp/RSVPStats';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -49,7 +49,7 @@ const EventPublicPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [rsvpSubmitted, setRsvpSubmitted] = useState(false);
   const [rsvpData, setRsvpData] = useState<any>(null);
-  const [showStats, setShowStats] = useState(false);
+  
 
   useEffect(() => {
     if (!slug) {
@@ -62,7 +62,7 @@ const EventPublicPage = () => {
       try {
         const eventData = await getEventBySlug(slug);
         setEvent(eventData as EventData);
-        setShowStats(true);
+        
       } catch (err: any) {
         setError(err.message || 'Event not found');
       } finally {
@@ -140,17 +140,6 @@ const EventPublicPage = () => {
             agentLogo={event.profiles?.logo_colored_url}
             agentHeadshot={event.profiles?.headshot_url}
           />
-
-          {/* RSVP Stats (if available) */}
-          {showStats && event.max_capacity !== undefined && (
-            <RSVPStats
-              total={event.current_rsvp_count || 0}
-              confirmed={event.current_rsvp_count || 0}
-              waitlist={0}
-              checkedIn={0}
-              maxCapacity={event.max_capacity}
-            />
-          )}
 
           {/* RSVP Section */}
           {!rsvpSubmitted ? (
