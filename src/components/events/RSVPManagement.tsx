@@ -21,7 +21,7 @@ interface RSVPManagementProps {
 }
 
 export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagementProps) => {
-  const { getEventRSVPs, getRSVPStats, checkInRSVP } = useRSVP();
+  const { getEventRSVPs, getRSVPStats, checkInRSVP, addWalkInAttendee } = useRSVP();
   const { getEventAnswers, getEventQuestions } = useRSVPQuestions();
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
   const [stats, setStats] = useState<any>(null);
@@ -31,6 +31,9 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
   const [answers, setAnswers] = useState<RSVPAnswer[]>([]);
   const [questions, setQuestions] = useState<RSVPQuestion[]>([]);
   const [expandedRsvps, setExpandedRsvps] = useState<Set<string>>(new Set());
+  const [showWalkInDialog, setShowWalkInDialog] = useState(false);
+  const [walkInForm, setWalkInForm] = useState({ name: '', email: '', phone: '', guest_count: 1 });
+  const [walkInSubmitting, setWalkInSubmitting] = useState(false);
 
   useEffect(() => {
     loadAll();
