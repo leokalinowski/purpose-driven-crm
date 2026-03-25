@@ -218,7 +218,8 @@ serve(async (req) => {
           try {
             const resendKey = Deno.env.get("RESEND_API_KEY");
             const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "noreply@realestateonpurpose.com";
-            const fromName = Deno.env.get("RESEND_FROM_NAME") || "Real Estate on Purpose";
+            // Hardcode from name for subscription emails — never use RESEND_FROM_NAME (that's for newsletters)
+            const fromName = "Real Estate on Purpose";
             const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
 
             if (!resendKey) {
