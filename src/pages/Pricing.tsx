@@ -9,7 +9,7 @@ import { STRIPE_TIERS, getStripeTiers } from '@/config/stripe';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+
 
 type BillingPeriod = 'monthly' | 'annual' | 'founder';
 
