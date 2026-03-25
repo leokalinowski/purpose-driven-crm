@@ -39,7 +39,7 @@ serve(async (req) => {
     let functionName = '';
     let body: any = { eventId: event_id };
 
-    if (email_type === 'reminder_7day' || email_type === 'reminder_1day') {
+    if (email_type === 'reminder_7day' || email_type === 'reminder_1day' || email_type === 'thank_you' || email_type === 'no_show') {
       functionName = 'event-reminder-email';
       body.emailType = email_type;
     } else if (email_type === 'confirmation') {
@@ -48,10 +48,6 @@ serve(async (req) => {
         JSON.stringify({ error: "Confirmation emails are sent via RSVP. Use rsvp-confirmation-email function." }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
-    } else if (email_type === 'thank_you') {
-      functionName = 'event-thank-you-email';
-    } else if (email_type === 'no_show') {
-      functionName = 'event-no-show-email';
     }
 
     if (!functionName) {
