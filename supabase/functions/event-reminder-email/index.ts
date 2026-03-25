@@ -97,12 +97,21 @@ serve(async (req) => {
       marketingBranding = mktData
     }
 
-    // Get confirmed RSVPs
-    const { data: rsvps, error: rsvpsError } = await supabaseClient
+    // Get RSVPs filtered by email type
+    let rsvpQuery = supabaseClient
       .from('event_rsvps')
       .select('*')
       .eq('event_id', eventId)
       .eq('status', 'confirmed')
+
+    // Filter by check-in status for thank_you and no_show
+    if (emailType === 'thank_you') {
+      rsvpQuery = rsvpQuery.eq('check_in_status', 'checked_in')
+    } else if (emailType === 'no_show') {
+      rsvpQuery = rsvpQuery.neq('check_in_status', 'checked_in')
+    }
+
+    const { data: rsvps, error: rsvpsError } = await rsvpQuery
 
     if (rsvpsError) {
       throw new Error('Failed to fetch RSVPs')
