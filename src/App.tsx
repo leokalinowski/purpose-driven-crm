@@ -40,6 +40,7 @@ import NewsletterBuilderPage from "./pages/NewsletterBuilder";
 import AdminAnnouncements from "./pages/AdminAnnouncements";
 import Settings from "./pages/Settings";
 import Pricing from "./pages/Pricing";
+import Welcome from "./pages/Welcome";
 
 const queryClient = new QueryClient();
 
@@ -81,6 +82,7 @@ const AppContent = () => {
         <Route path="/admin/announcements" element={<AdminAnnouncements />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/pricing" element={<Pricing />} />
+        <Route path="/welcome" element={<Welcome />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>

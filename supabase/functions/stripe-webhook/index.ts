@@ -218,7 +218,8 @@ serve(async (req) => {
           try {
             const resendKey = Deno.env.get("RESEND_API_KEY");
             const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "noreply@realestateonpurpose.com";
-            const fromName = Deno.env.get("RESEND_FROM_NAME") || "Real Estate on Purpose";
+            // Hardcode from name for subscription emails — never use RESEND_FROM_NAME (that's for newsletters)
+            const fromName = "Real Estate on Purpose";
             const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
 
             if (!resendKey) {
@@ -371,8 +372,8 @@ serve(async (req) => {
                         </a>
                       </div>
                       <p style="color: #6a6a6a; font-size: 14px; line-height: 1.5;">
-                        If you have any questions about your plan, feel free to reach out through the 
-                        <a href="https://hub.realestateonpurpose.com/support" style="color: #0d9488;">Support</a> page in your dashboard.
+                        If you have any questions, reply to this email or contact us at 
+                        <a href="mailto:pam@realestateonpurpose.com" style="color: #0d9488;">pam@realestateonpurpose.com</a>.
                       </p>
                       <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 20px 0;" />
                       <p style="color: #999; font-size: 12px;">
@@ -388,6 +389,73 @@ serve(async (req) => {
               } else {
                 const errBody = await confirmRes.text();
                 logStep("ERROR sending confirmation email", { status: confirmRes.status, body: errBody });
+              }
+
+              // Check if existing user has never signed in — send password-set email
+              if (userId) {
+                const { data: userData } = await supabase.auth.admin.getUserById(userId);
+                if (userData?.user && !userData.user.last_sign_in_at) {
+                  logStep("Existing user has never signed in, sending password-set email", { userId });
+
+                  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+                    type: "recovery",
+                    email: customerEmail,
+                    options: {
+                      redirectTo: "https://hub.realestateonpurpose.com/auth/reset",
+                    },
+                  });
+
+                  if (linkError) {
+                    logStep("ERROR generating recovery link for existing user", { error: linkError.message });
+                  } else if (linkData?.properties?.action_link) {
+                    const pwdRes = await fetch("https://api.resend.com/emails", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${resendKey}`,
+                      },
+                      body: JSON.stringify({
+                        from: `${fromName} <${fromEmail}>`,
+                        to: [customerEmail],
+                        subject: "Set Your Password — Real Estate on Purpose Hub",
+                        html: `
+                          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <h2 style="color: #1a1a1a;">Set Your Password</h2>
+                            <p style="color: #4a4a4a; line-height: 1.6;">
+                              Your <strong>${tierLabel}</strong> plan is active! To access your dashboard, 
+                              please set your password by clicking the button below:
+                            </p>
+                            <div style="text-align: center; margin: 30px 0;">
+                              <a href="${linkData.properties.action_link}" 
+                                 style="background-color: #0d9488; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                                Set Your Password
+                              </a>
+                            </div>
+                            <p style="color: #6a6a6a; font-size: 14px; line-height: 1.5;">
+                              After setting your password, sign in at 
+                              <a href="https://hub.realestateonpurpose.com/auth" style="color: #0d9488;">hub.realestateonpurpose.com</a>.
+                            </p>
+                            <p style="color: #6a6a6a; font-size: 14px; line-height: 1.5;">
+                              Questions? Contact us at 
+                              <a href="mailto:pam@realestateonpurpose.com" style="color: #0d9488;">pam@realestateonpurpose.com</a>.
+                            </p>
+                            <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 20px 0;" />
+                            <p style="color: #999; font-size: 12px;">
+                              Real Estate on Purpose · <a href="https://hub.realestateonpurpose.com" style="color: #0d9488;">hub.realestateonpurpose.com</a>
+                            </p>
+                          </div>
+                        `,
+                      }),
+                    });
+
+                    if (pwdRes.ok) {
+                      logStep("Password-set email sent to existing user who never signed in");
+                    } else {
+                      const errBody2 = await pwdRes.text();
+                      logStep("ERROR sending password-set email", { status: pwdRes.status, body: errBody2 });
+                    }
+                  }
+                }
               }
             }
           } catch (emailErr: any) {
