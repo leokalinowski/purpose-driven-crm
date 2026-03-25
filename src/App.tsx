@@ -40,6 +40,7 @@ import NewsletterBuilderPage from "./pages/NewsletterBuilder";
 import AdminAnnouncements from "./pages/AdminAnnouncements";
 import Settings from "./pages/Settings";
 import Pricing from "./pages/Pricing";
+import Welcome from "./pages/Welcome";
 
 const queryClient = new QueryClient();
 
