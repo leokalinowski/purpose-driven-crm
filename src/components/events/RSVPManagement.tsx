@@ -3,11 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { useRSVP, RSVP } from '@/hooks/useRSVP';
 import { useRSVPQuestions, RSVPAnswer, RSVPQuestion } from '@/hooks/useRSVPQuestions';
-import { CheckCircle2, Search, Download, ExternalLink, ChevronDown } from 'lucide-react';
+import { CheckCircle2, Search, Download, ExternalLink, ChevronDown, UserPlus } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { RSVPStats } from './rsvp/RSVPStats';
@@ -19,7 +21,7 @@ interface RSVPManagementProps {
 }
 
 export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagementProps) => {
-  const { getEventRSVPs, getRSVPStats, checkInRSVP } = useRSVP();
+  const { getEventRSVPs, getRSVPStats, checkInRSVP, addWalkInAttendee } = useRSVP();
   const { getEventAnswers, getEventQuestions } = useRSVPQuestions();
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
   const [stats, setStats] = useState<any>(null);
@@ -29,6 +31,9 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
   const [answers, setAnswers] = useState<RSVPAnswer[]>([]);
   const [questions, setQuestions] = useState<RSVPQuestion[]>([]);
   const [expandedRsvps, setExpandedRsvps] = useState<Set<string>>(new Set());
+  const [showWalkInDialog, setShowWalkInDialog] = useState(false);
+  const [walkInForm, setWalkInForm] = useState({ name: '', email: '', phone: '', guest_count: 1 });
+  const [walkInSubmitting, setWalkInSubmitting] = useState(false);
 
   useEffect(() => {
     loadAll();
@@ -60,6 +65,30 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
       loadAll();
     } catch (error: any) {
       toast.error('Failed to check in: ' + error.message);
+    }
+  };
+
+  const handleAddWalkIn = async () => {
+    if (!walkInForm.name || !walkInForm.email) {
+      toast.error('Name and email are required');
+      return;
+    }
+    setWalkInSubmitting(true);
+    try {
+      await addWalkInAttendee(eventId, {
+        name: walkInForm.name,
+        email: walkInForm.email,
+        phone: walkInForm.phone || undefined,
+        guest_count: walkInForm.guest_count,
+      });
+      toast.success('Walk-in attendee added successfully');
+      setShowWalkInDialog(false);
+      setWalkInForm({ name: '', email: '', phone: '', guest_count: 1 });
+      loadAll();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to add walk-in attendee');
+    } finally {
+      setWalkInSubmitting(false);
     }
   };
 
@@ -158,6 +187,7 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
   }
 
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -165,7 +195,11 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
             <CardTitle>RSVP Management</CardTitle>
             <CardDescription>Manage RSVPs for this event</CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button size="sm" onClick={() => setShowWalkInDialog(true)}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Add Walk-In
+            </Button>
             {publicSlug && getPublicPageUrl() && (
               <Button variant="outline" size="sm" onClick={() => window.open(getPublicPageUrl(), '_blank')}>
                 <ExternalLink className="h-4 w-4 mr-2" />
@@ -286,5 +320,63 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
         </Tabs>
       </CardContent>
     </Card>
+
+    {/* Walk-In Attendee Dialog */}
+    <Dialog open={showWalkInDialog} onOpenChange={setShowWalkInDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add Walk-In Attendee</DialogTitle>
+          <DialogDescription>Add someone who showed up but didn't RSVP. They'll be marked as checked in.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="walkin-name">Name *</Label>
+            <Input
+              id="walkin-name"
+              placeholder="Full name"
+              value={walkInForm.name}
+              onChange={(e) => setWalkInForm(prev => ({ ...prev, name: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="walkin-email">Email *</Label>
+            <Input
+              id="walkin-email"
+              type="email"
+              placeholder="email@example.com"
+              value={walkInForm.email}
+              onChange={(e) => setWalkInForm(prev => ({ ...prev, email: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="walkin-phone">Phone (optional)</Label>
+            <Input
+              id="walkin-phone"
+              type="tel"
+              placeholder="(555) 123-4567"
+              value={walkInForm.phone}
+              onChange={(e) => setWalkInForm(prev => ({ ...prev, phone: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="walkin-guests">Guest Count</Label>
+            <Input
+              id="walkin-guests"
+              type="number"
+              min="1"
+              value={walkInForm.guest_count}
+              onChange={(e) => setWalkInForm(prev => ({ ...prev, guest_count: parseInt(e.target.value) || 1 }))}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowWalkInDialog(false)}>Cancel</Button>
+          <Button onClick={handleAddWalkIn} disabled={walkInSubmitting}>
+            {walkInSubmitting ? 'Adding...' : 'Add Attendee'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };

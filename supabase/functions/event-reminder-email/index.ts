@@ -41,7 +41,7 @@ const corsHeaders = {
 
 interface EmailRequest {
   eventId: string
-  emailType: 'reminder_7day' | 'reminder_1day'
+  emailType: 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show'
 }
 
 serve(async (req) => {
@@ -97,12 +97,21 @@ serve(async (req) => {
       marketingBranding = mktData
     }
 
-    // Get confirmed RSVPs
-    const { data: rsvps, error: rsvpsError } = await supabaseClient
+    // Get RSVPs filtered by email type
+    let rsvpQuery = supabaseClient
       .from('event_rsvps')
       .select('*')
       .eq('event_id', eventId)
       .eq('status', 'confirmed')
+
+    // Filter by check-in status for thank_you and no_show
+    if (emailType === 'thank_you') {
+      rsvpQuery = rsvpQuery.eq('check_in_status', 'checked_in')
+    } else if (emailType === 'no_show') {
+      rsvpQuery = rsvpQuery.neq('check_in_status', 'checked_in')
+    }
+
+    const { data: rsvps, error: rsvpsError } = await rsvpQuery
 
     if (rsvpsError) {
       throw new Error('Failed to fetch RSVPs')
@@ -239,9 +248,13 @@ serve(async (req) => {
           })
 
         // Log to unified email_logs table
+        const emailLogType = emailType === 'reminder_7day' ? 'event_reminder_7day' 
+          : emailType === 'reminder_1day' ? 'event_reminder_1day'
+          : emailType === 'thank_you' ? 'event_thank_you'
+          : 'event_no_show'
         await logEmailToUnifiedTable(
           supabaseClient,
-          emailType === 'reminder_7day' ? 'event_reminder_7day' : 'event_reminder_1day',
+          emailLogType,
           rsvp.email,
           rsvp.name,
           event.agent_id,
@@ -273,9 +286,13 @@ serve(async (req) => {
           })
 
         // Log to unified email_logs table
+        const failedEmailLogType = emailType === 'reminder_7day' ? 'event_reminder_7day' 
+          : emailType === 'reminder_1day' ? 'event_reminder_1day'
+          : emailType === 'thank_you' ? 'event_thank_you'
+          : 'event_no_show'
         await logEmailToUnifiedTable(
           supabaseClient,
-          emailType === 'reminder_7day' ? 'event_reminder_7day' : 'event_reminder_1day',
+          failedEmailLogType,
           rsvp.email,
           rsvp.name,
           event.agent_id,
