@@ -3,11 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { useRSVP, RSVP } from '@/hooks/useRSVP';
 import { useRSVPQuestions, RSVPAnswer, RSVPQuestion } from '@/hooks/useRSVPQuestions';
-import { CheckCircle2, Search, Download, ExternalLink, ChevronDown } from 'lucide-react';
+import { CheckCircle2, Search, Download, ExternalLink, ChevronDown, UserPlus } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { RSVPStats } from './rsvp/RSVPStats';
