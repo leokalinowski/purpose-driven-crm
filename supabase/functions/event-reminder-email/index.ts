@@ -248,9 +248,13 @@ serve(async (req) => {
           })
 
         // Log to unified email_logs table
+        const emailLogType = emailType === 'reminder_7day' ? 'event_reminder_7day' 
+          : emailType === 'reminder_1day' ? 'event_reminder_1day'
+          : emailType === 'thank_you' ? 'event_thank_you'
+          : 'event_no_show'
         await logEmailToUnifiedTable(
           supabaseClient,
-          emailType === 'reminder_7day' ? 'event_reminder_7day' : 'event_reminder_1day',
+          emailLogType,
           rsvp.email,
           rsvp.name,
           event.agent_id,
