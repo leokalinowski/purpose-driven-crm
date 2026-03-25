@@ -68,6 +68,30 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
     }
   };
 
+  const handleAddWalkIn = async () => {
+    if (!walkInForm.name || !walkInForm.email) {
+      toast.error('Name and email are required');
+      return;
+    }
+    setWalkInSubmitting(true);
+    try {
+      await addWalkInAttendee(eventId, {
+        name: walkInForm.name,
+        email: walkInForm.email,
+        phone: walkInForm.phone || undefined,
+        guest_count: walkInForm.guest_count,
+      });
+      toast.success('Walk-in attendee added successfully');
+      setShowWalkInDialog(false);
+      setWalkInForm({ name: '', email: '', phone: '', guest_count: 1 });
+      loadAll();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to add walk-in attendee');
+    } finally {
+      setWalkInSubmitting(false);
+    }
+  };
+
   const getAnswersForRsvp = (rsvpId: string) => {
     return answers.filter(a => a.rsvp_id === rsvpId).sort((a, b) => a.sort_order - b.sort_order);
   };

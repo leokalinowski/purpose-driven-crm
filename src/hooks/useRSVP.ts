@@ -298,6 +298,48 @@ export const useRSVP = () => {
     }
   };
 
+  // Add walk-in attendee (requires auth for agent)
+  const addWalkInAttendee = async (eventId: string, formData: RSVPFormData): Promise<RSVP> => {
+    if (!user) {
+      throw new Error('Authentication required');
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data, error } = await supabase
+        .from('event_rsvps')
+        .insert({
+          event_id: eventId,
+          email: formData.email.toLowerCase(),
+          name: formData.name,
+          phone: formData.phone || null,
+          guest_count: formData.guest_count || 1,
+          status: 'confirmed',
+          check_in_status: 'checked_in',
+          checked_in_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        if (error.message?.includes('duplicate') || error.code === '23505') {
+          throw new Error('This email has already been added to this event');
+        }
+        throw error;
+      }
+
+      return data as RSVP;
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to add walk-in attendee';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     loading,
     error,
@@ -308,6 +350,7 @@ export const useRSVP = () => {
     getEventRSVPs,
     checkInRSVP,
     cancelRSVP,
+    addWalkInAttendee,
   };
 };
 
