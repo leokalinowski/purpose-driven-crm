@@ -319,5 +319,63 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
         </Tabs>
       </CardContent>
     </Card>
+
+    {/* Walk-In Attendee Dialog */}
+    <Dialog open={showWalkInDialog} onOpenChange={setShowWalkInDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add Walk-In Attendee</DialogTitle>
+          <DialogDescription>Add someone who showed up but didn't RSVP. They'll be marked as checked in.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="walkin-name">Name *</Label>
+            <Input
+              id="walkin-name"
+              placeholder="Full name"
+              value={walkInForm.name}
+              onChange={(e) => setWalkInForm(prev => ({ ...prev, name: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="walkin-email">Email *</Label>
+            <Input
+              id="walkin-email"
+              type="email"
+              placeholder="email@example.com"
+              value={walkInForm.email}
+              onChange={(e) => setWalkInForm(prev => ({ ...prev, email: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="walkin-phone">Phone (optional)</Label>
+            <Input
+              id="walkin-phone"
+              type="tel"
+              placeholder="(555) 123-4567"
+              value={walkInForm.phone}
+              onChange={(e) => setWalkInForm(prev => ({ ...prev, phone: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="walkin-guests">Guest Count</Label>
+            <Input
+              id="walkin-guests"
+              type="number"
+              min="1"
+              value={walkInForm.guest_count}
+              onChange={(e) => setWalkInForm(prev => ({ ...prev, guest_count: parseInt(e.target.value) || 1 }))}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowWalkInDialog(false)}>Cancel</Button>
+          <Button onClick={handleAddWalkIn} disabled={walkInSubmitting}>
+            {walkInSubmitting ? 'Adding...' : 'Add Attendee'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };
