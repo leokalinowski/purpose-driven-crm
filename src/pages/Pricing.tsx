@@ -26,18 +26,12 @@ const Pricing = () => {
   // Use the correct tier config based on test/live mode
   const activeTiers = getStripeTiers(testMode);
 
-  // Handle ?checkout=success
+  // Redirect to /welcome if checkout=success (fallback for old links)
   useEffect(() => {
     if (checkoutSuccess) {
-      if (user) {
-        checkSubscription();
-      }
-      const timer = setTimeout(() => {
-        setSearchParams({}, { replace: true });
-      }, 15000);
-      return () => clearTimeout(timer);
+      navigate('/welcome?checkout=success', { replace: true });
     }
-  }, [checkoutSuccess, user]);
+  }, [checkoutSuccess]);
 
   const handleCheckout = async (tierKey: 'core' | 'managed') => {
     const tier = activeTiers[tierKey];
