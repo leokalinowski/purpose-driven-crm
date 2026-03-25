@@ -1,49 +1,37 @@
-## Diagnosis: Bobby Brown's Core Plan — No Account Created
+## Enhance Onboarding & Welcome Experience
 
-### What Happened
+The current onboarding components are functional but visually understated. The plan enhances both the **Welcome page** (post-checkout) and the **OnboardingWelcome** (dashboard walkthrough) to make them feel more celebratory and important.
 
-1. Bobby Brown paid for the Core plan on Stripe (one of the two customers: `cus_UD6xHVjHdgC89m` or `cus_U6MFUycgiCrF5T`)
-2. The `stripe-webhook` edge function has **zero logs** — meaning it either never received the webhook event from Stripe, or it crashed before logging anything
-3. Bobby Brown does **not exist** in `auth.users`, `profiles`, or `user_roles` — no account was ever provisioned
-4. No email was logged in `email_logs` for Bobby either
+### Changes
 
-### Root Cause
+#### 1. Welcome Page (`src/pages/Welcome.tsx`)
 
-The `stripe-webhook` function never processed the checkout event. Most likely causes:
+- Make the success icon larger with a pulsing glow animation
+- Add a bold "You're In!" badge/banner above the title
+- Add a subtitle tagline: "Your journey to purposeful real estate starts now"
+- Add a 3-step "What's Next" quick guide section (Check Email → Set Password → Explore Dashboard)
+- Style the email notice card more prominently with an icon and stronger border
 
-- **The webhook endpoint URL in Stripe is not pointing to the deployed function** — or it was never registered
-- **The function wasn't deployed** at the time of the payment
-- **The webhook secret mismatch** caused a silent 400 rejection (though we'd still expect boot logs)
+#### 2. Onboarding Walkthrough (`src/components/onboarding/OnboardingWelcome.tsx`)
 
-### Immediate Fix Plan (Bobby Brown)
+- Add a prominent "GETTING STARTED" label/badge above the card to draw attention
+- Increase the card's border weight and add a subtle animated glow/pulse border effect
+- Make the icon area larger (bigger circle, bigger icon) with a gradient background
+- Increase the title font size from `text-xl` to `text-2xl`/`text-3xl`
+- Add step-specific subtitle/tagline under each title (e.g., "The foundation of your business" for Database)
+- Add a decorative "Important" or "Setup Guide" ribbon/badge in the top-left corner
+- Make the CTA buttons more prominent (larger, filled variant instead of outline)
+- Add a subtle entrance animation (fade-in + scale) when switching steps
 
-Since no account exists, we need to manually provision Bobby's account. This requires:
+#### 3. Announcement Modal (`src/components/announcements/AnnouncementModal.tsx`)
 
-1. **Identify Bobby's email** — You'll need to check the Stripe Dashboard for the customer email (the API didn't return it in the search results). Check both `cus_UD6xHVjHdgC89m` and `cus_U6MFUycgiCrF5T` in the [Stripe Dashboard](https://dashboard.stripe.com/customers).
-2. **Manually provision the account** — Once we have the email, we can use the `stripe-webhook` logic manually by invoking the edge function or running the provisioning steps:
-  - Create the Supabase user via admin API
-  - Create the profile
-  - Assign the `core` role in `user_roles`
-  - Generate and send a password-set recovery email
-3. **Deploy the stripe-webhook** — Ensure the latest code is deployed and verify the webhook is registered in Stripe pointing to: `https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/stripe-webhook`
+- Add a header banner area with gradient background behind the badge and title
+- Make modal titles larger and bolder
+- Add a subtle animated entrance for the modal content
 
-### Steps to Implement
+### Technical Details
 
-**Step 1**: You provide Bobby Brown's email (check the Stripe Dashboard linked above) - [jjgagliardi8@gmail.com](mailto:jjgagliardi8@gmail.com)
-
-**Step 2**: I will create an edge function or use existing admin tools to:
-
-- Create the user in Supabase auth
-- Create their profile with first_name "Bobby", last_name "Brown"
-- Insert `core` role into `user_roles`
-- Generate a recovery link and send the password-set email
-
-**Step 3**: Deploy the `stripe-webhook` and verify it's receiving events by checking:
-
-- The webhook endpoint URL in Stripe Dashboard → Developers → Webhooks
-- That it points to `https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/stripe-webhook`
-- That the signing secret matches the `STRIPE_WEBHOOK_SECRET` in Supabase secrets
-
-### What I Need From You
-
-**Bobby Brown's email address** — either tell me directly or check the two Stripe customers in the dashboard. Once I have that, I can provision his account immediately.
+- All animations use existing Tailwind animation utilities and CSS keyframes already defined in the project
+- No new dependencies required
+- Changes are purely visual/CSS with minor JSX restructuring
+- Step subtitles added as a new `subtitle` field in the STEPS array
