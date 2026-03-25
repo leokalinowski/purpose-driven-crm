@@ -162,7 +162,7 @@ serve(async (req) => {
         line_items: [{ price: sixMonthPriceId, quantity: 1 }],
         mode: "subscription",
         allow_promotion_codes: true,
-        success_url: `${origin}/pricing?checkout=success`,
+        success_url: `${origin}/welcome?checkout=success`,
         cancel_url: `${origin}/pricing`,
         subscription_data: {
           metadata: {
