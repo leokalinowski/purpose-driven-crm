@@ -194,7 +194,11 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
             <CardTitle>RSVP Management</CardTitle>
             <CardDescription>Manage RSVPs for this event</CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button size="sm" onClick={() => setShowWalkInDialog(true)}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Add Walk-In
+            </Button>
             {publicSlug && getPublicPageUrl() && (
               <Button variant="outline" size="sm" onClick={() => window.open(getPublicPageUrl(), '_blank')}>
                 <ExternalLink className="h-4 w-4 mr-2" />
