@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Check, Loader2, Sparkles, Flame, Clock, CheckCircle } from 'lucide-react';
+import { Check, Loader2, Sparkles, Flame, Clock } from 'lucide-react';
 import { STRIPE_TIERS, getStripeTiers } from '@/config/stripe';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
