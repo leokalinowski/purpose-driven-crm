@@ -13,7 +13,6 @@ interface SlideView {
   image_url?: string | null;
 }
 
-// Position classes for toast
 const positionClasses: Record<string, string> = {
   'top-right': 'top-4 right-4',
   'top-left': 'top-4 left-4',
@@ -134,56 +133,61 @@ function ModalAnnouncement({ announcement, onDismiss, onAction, onClose }: {
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <div className="flex items-center gap-2 mb-1">
-            <Badge variant={config.variant} className="gap-1">
-              <TypeIcon className="h-3 w-3" />
-              {config.label}
-            </Badge>
-          </div>
-          <DialogTitle className="text-xl">{slide.title}</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-lg overflow-hidden p-0">
+        {/* Gradient header banner */}
+        <div className="bg-gradient-to-r from-primary/15 via-primary/5 to-accent/10 px-6 pt-6 pb-4">
+          <DialogHeader>
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant={config.variant} className="gap-1 text-xs font-bold">
+                <TypeIcon className="h-3.5 w-3.5" />
+                {config.label}
+              </Badge>
+            </div>
+            <DialogTitle className="text-2xl font-extrabold tracking-tight">{slide.title}</DialogTitle>
+          </DialogHeader>
+        </div>
 
-        {slide.image_url && (
-          <div className="rounded-lg overflow-hidden border bg-muted">
-            <img src={slide.image_url} alt={slide.title} className="w-full h-auto max-h-64 object-contain" />
-          </div>
-        )}
+        <div className="px-6 pb-6 space-y-4 animate-fade-in" key={safeSlideIndex}>
+          {slide.image_url && (
+            <div className="rounded-lg overflow-hidden border bg-muted">
+              <img src={slide.image_url} alt={slide.title} className="w-full h-auto max-h-64 object-contain" />
+            </div>
+          )}
 
-        <DialogDescription className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">
-          {slide.content}
-        </DialogDescription>
+          <DialogDescription className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">
+            {slide.content}
+          </DialogDescription>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2">
-          <div className="flex items-center gap-1 mr-auto">
-            {totalSlides > 1 && (
-              <>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentSlideIndex(Math.max(0, safeSlideIndex - 1))} disabled={safeSlideIndex === 0}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <div className="flex gap-1">
-                  {allSlides.map((_, i) => (
-                    <button key={i} className={`h-1.5 rounded-full transition-all ${i === safeSlideIndex ? 'w-4 bg-primary' : 'w-1.5 bg-muted-foreground/30'}`} onClick={() => setCurrentSlideIndex(i)} />
-                  ))}
-                </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentSlideIndex(Math.min(totalSlides - 1, safeSlideIndex + 1))} disabled={isLastSlide}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </>
-            )}
-          </div>
-          <div className="flex gap-2">
-            {isLastSlide && announcement.action_url && (
-              <Button onClick={onAction}>{announcement.action_label || 'Try it now'}</Button>
-            )}
-            {isLastSlide ? (
-              <Button variant="secondary" onClick={onDismiss}>Got it</Button>
-            ) : (
-              <Button onClick={() => setCurrentSlideIndex(safeSlideIndex + 1)}>Next</Button>
-            )}
-          </div>
-        </DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
+            <div className="flex items-center gap-1 mr-auto">
+              {totalSlides > 1 && (
+                <>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentSlideIndex(Math.max(0, safeSlideIndex - 1))} disabled={safeSlideIndex === 0}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="flex gap-1">
+                    {allSlides.map((_, i) => (
+                      <button key={i} className={`h-1.5 rounded-full transition-all ${i === safeSlideIndex ? 'w-4 bg-primary' : 'w-1.5 bg-muted-foreground/30'}`} onClick={() => setCurrentSlideIndex(i)} />
+                    ))}
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentSlideIndex(Math.min(totalSlides - 1, safeSlideIndex + 1))} disabled={isLastSlide}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {isLastSlide && announcement.action_url && (
+                <Button onClick={onAction} className="font-semibold">{announcement.action_label || 'Try it now'}</Button>
+              )}
+              {isLastSlide ? (
+                <Button variant="secondary" onClick={onDismiss}>Got it</Button>
+              ) : (
+                <Button onClick={() => setCurrentSlideIndex(safeSlideIndex + 1)}>Next</Button>
+              )}
+            </div>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -216,12 +220,10 @@ export function AnnouncementModal() {
     }
   };
 
-  // Group by display style
   const modals = visibleAnnouncements.filter(a => (a.display_style || 'modal') === 'modal');
   const toasts = visibleAnnouncements.filter(a => a.display_style === 'toast');
   const banners = visibleAnnouncements.filter(a => a.display_style === 'banner');
 
-  // Show first modal if any
   const currentModal = modals[0];
 
   return (
