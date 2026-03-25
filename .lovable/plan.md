@@ -1,54 +1,49 @@
+## Diagnosis: Bobby Brown's Core Plan — No Account Created
 
+### What Happened
 
-## Fix Hub Post-Payment Issues
+1. Bobby Brown paid for the Core plan on Stripe (one of the two customers: `cus_UD6xHVjHdgC89m` or `cus_U6MFUycgiCrF5T`)
+2. The `stripe-webhook` edge function has **zero logs** — meaning it either never received the webhook event from Stripe, or it crashed before logging anything
+3. Bobby Brown does **not exist** in `auth.users`, `profiles`, or `user_roles` — no account was ever provisioned
+4. No email was logged in `email_logs` for Bobby either
 
-Three problems identified from the screenshot and code:
+### Root Cause
 
-### Problem 1: Password email not received by new user
-The `stripe-webhook` sends a welcome/password-set email via Resend. Looking at the screenshot, the "Your Core Plan is Now Active" email was sent from `noreply@news.realestateonpurpose.com` with sender name "Real Estate on Purpose - Market Report". This means:
-- The `RESEND_API_KEY` is scoped to the `news.realestateonpurpose.com` domain
-- The `RESEND_FROM_EMAIL` env var is likely set to `noreply@news.realestateonpurpose.com`
-- The `RESEND_FROM_NAME` env var is likely set to `Real Estate on Purpose - Market Report`
+The `stripe-webhook` function never processed the checkout event. Most likely causes:
 
-Since the user was detected as an **existing user** (they got the "Plan Active" email, not the "Set Your Password" email), the password-set flow was skipped entirely. The user already existed in Supabase but never set a password — this is the root cause of them not receiving a password email.
+- **The webhook endpoint URL in Stripe is not pointing to the deployed function** — or it was never registered
+- **The function wasn't deployed** at the time of the payment
+- **The webhook secret mismatch** caused a silent 400 rejection (though we'd still expect boot logs)
 
-**Fix in `stripe-webhook`:** After sending the existing-user confirmation email, also check if the user has **never signed in** (no `last_sign_in_at`), and if so, generate and send a recovery/password-set link just like for new users.
+### Immediate Fix Plan (Bobby Brown)
 
-### Problem 2: Wrong "From" name on emails
-The `stripe-webhook` uses `RESEND_FROM_NAME` which is set to "Real Estate on Purpose - Market Report" (used for newsletters). 
+Since no account exists, we need to manually provision Bobby's account. This requires:
 
-**Fix:** Hardcode the from name for subscription emails to `"Real Estate on Purpose"` instead of using the `RESEND_FROM_NAME` env var. Also use `noreply@hub.realestateonpurpose.com` as the from address for account/subscription emails (separate from newsletter domain).
+1. **Identify Bobby's email** — You'll need to check the Stripe Dashboard for the customer email (the API didn't return it in the search results). Check both `cus_UD6xHVjHdgC89m` and `cus_U6MFUycgiCrF5T` in the [Stripe Dashboard](https://dashboard.stripe.com/customers).
+2. **Manually provision the account** — Once we have the email, we can use the `stripe-webhook` logic manually by invoking the edge function or running the provisioning steps:
+  - Create the Supabase user via admin API
+  - Create the profile
+  - Assign the `core` role in `user_roles`
+  - Generate and send a password-set recovery email
+3. **Deploy the stripe-webhook** — Ensure the latest code is deployed and verify the webhook is registered in Stripe pointing to: `https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/stripe-webhook`
 
-### Problem 3: Support link requires login
-The confirmation email links to `hub.realestateonpurpose.com/support` which requires authentication.
+### Steps to Implement
 
-**Fix:** Replace the support link with a direct contact method — either Pam's email or a public-facing support page/form URL.
+**Step 1**: You provide Bobby Brown's email (check the Stripe Dashboard linked above) - [jjgagliardi8@gmail.com](mailto:jjgagliardi8@gmail.com)
 
-### Problem 4: Redirect to welcome page after checkout
-Currently, Stripe redirects to `/pricing?checkout=success` which shows a success view. The user wants a dedicated `/welcome` page instead.
+**Step 2**: I will create an edge function or use existing admin tools to:
 
-**Fix:** 
-1. Create a new `/welcome` page with the success content (currently shown inline on Pricing)
-2. Update `create-checkout` to redirect to `/welcome` instead of `/pricing?checkout=success`
-3. Keep the page simple — user said they'll edit the content
+- Create the user in Supabase auth
+- Create their profile with first_name "Bobby", last_name "Brown"
+- Insert `core` role into `user_roles`
+- Generate a recovery link and send the password-set email
 
-### Changes
+**Step 3**: Deploy the `stripe-webhook` and verify it's receiving events by checking:
 
-**File 1: `supabase/functions/stripe-webhook/index.ts`**
-- Hardcode from name to `"Real Estate on Purpose"` for subscription emails (not `RESEND_FROM_NAME`)
-- For existing users: check `last_sign_in_at` — if null, also send a password-set email
-- Replace support link with direct email (`pam@realestateonpurpose.com` or similar public contact)
+- The webhook endpoint URL in Stripe Dashboard → Developers → Webhooks
+- That it points to `https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/stripe-webhook`
+- That the signing secret matches the `STRIPE_WEBHOOK_SECRET` in Supabase secrets
 
-**File 2: `supabase/functions/create-checkout/index.ts`**
-- Change `success_url` from `/pricing?checkout=success` to `/welcome?checkout=success`
+### What I Need From You
 
-**File 3: `src/pages/Welcome.tsx`** (new)
-- Standalone welcome page (no sidebar, like Pricing)
-- Shows REOP logo, success message, "check your email" notice for unauthenticated users, and sign-in button
-- Simple and clean — user will customize content later
-
-**File 4: `src/App.tsx`**
-- Add route for `/welcome` pointing to the new Welcome page
-
-**File 5: `src/pages/Pricing.tsx`**
-- Keep the `?checkout=success` handling as a fallback, but redirect to `/welcome` if detected
+**Bobby Brown's email address** — either tell me directly or check the two Stripe customers in the dashboard. Once I have that, I can provision his account immediately.
