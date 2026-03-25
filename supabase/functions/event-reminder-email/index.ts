@@ -41,7 +41,7 @@ const corsHeaders = {
 
 interface EmailRequest {
   eventId: string
-  emailType: 'reminder_7day' | 'reminder_1day'
+  emailType: 'reminder_7day' | 'reminder_1day' | 'thank_you' | 'no_show'
 }
 
 serve(async (req) => {
