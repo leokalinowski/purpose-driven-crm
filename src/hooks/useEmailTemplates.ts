@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/integrations/supabase/client'
-import { useAuth } from '@/hooks/useAuth'
 
 export interface EmailTemplate {
   id: string
@@ -44,10 +43,28 @@ export interface EmailRecord {
   updated_at: string
 }
 
+/**
+ * Extract a meaningful error message from a supabase.functions.invoke error.
+ * The FunctionsHttpError wraps the response; we try to parse JSON from it.
+ */
+async function extractEdgeFunctionError(error: any, fallback: string): Promise<string> {
+  try {
+    // FunctionsHttpError has a context property with the Response
+    if (error?.context && typeof error.context.json === 'function') {
+      const body = await error.context.json()
+      if (body?.error) return body.error
+    }
+    // FunctionsRelayError or FunctionsFetchError
+    if (error?.message) return error.message
+  } catch {
+    // JSON parsing failed, fall through
+  }
+  return error?.message || fallback
+}
+
 export const useEmailTemplates = (eventId?: string) => {
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [loading, setLoading] = useState(false)
-  const { user } = useAuth()
 
   const fetchTemplates = useCallback(async () => {
     if (!eventId) return
@@ -113,9 +130,8 @@ export const useEmailTemplates = (eventId?: string) => {
       body: { eventId, emailType }
     })
     if (error) {
-      // Extract the real error message from the edge function response
-      const msg = error?.context?.body ? JSON.parse(await error.context.body.text?.() || '{}')?.error : error.message
-      throw new Error(msg || error.message || 'Failed to send reminder emails')
+      const msg = await extractEdgeFunctionError(error, 'Failed to send reminder emails')
+      throw new Error(msg)
     }
     if (data && !data.success) throw new Error(data.error || 'Failed to send reminder emails')
     return data
@@ -126,8 +142,8 @@ export const useEmailTemplates = (eventId?: string) => {
       body: { eventId, emailType: 'thank_you' }
     })
     if (error) {
-      const msg = error?.context?.body ? JSON.parse(await error.context.body.text?.() || '{}')?.error : error.message
-      throw new Error(msg || error.message || 'Failed to send thank-you emails')
+      const msg = await extractEdgeFunctionError(error, 'Failed to send thank-you emails')
+      throw new Error(msg)
     }
     if (data && !data.success) throw new Error(data.error || 'Failed to send thank-you emails')
     return data
@@ -138,8 +154,8 @@ export const useEmailTemplates = (eventId?: string) => {
       body: { eventId, emailType: 'no_show' }
     })
     if (error) {
-      const msg = error?.context?.body ? JSON.parse(await error.context.body.text?.() || '{}')?.error : error.message
-      throw new Error(msg || error.message || 'Failed to send no-show emails')
+      const msg = await extractEdgeFunctionError(error, 'Failed to send no-show emails')
+      throw new Error(msg)
     }
     if (data && !data.success) throw new Error(data.error || 'Failed to send no-show emails')
     return data
@@ -149,7 +165,11 @@ export const useEmailTemplates = (eventId?: string) => {
     const { data, error } = await supabase.functions.invoke('send-event-invitation', {
       body: { eventId }
     })
-    if (error) throw error
+    if (error) {
+      const msg = await extractEdgeFunctionError(error, 'Failed to send invitation emails')
+      throw new Error(msg)
+    }
+    if (data && !data.success) throw new Error(data.error || 'Failed to send invitation emails')
     return data
   }
 
@@ -157,7 +177,11 @@ export const useEmailTemplates = (eventId?: string) => {
     const { data, error } = await supabase.functions.invoke('send-event-invitation', {
       body: { eventId, followupNumber }
     })
-    if (error) throw error
+    if (error) {
+      const msg = await extractEdgeFunctionError(error, 'Failed to send follow-up emails')
+      throw new Error(msg)
+    }
+    if (data && !data.success) throw new Error(data.error || 'Failed to send follow-up emails')
     return data
   }
 
