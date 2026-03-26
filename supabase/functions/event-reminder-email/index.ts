@@ -285,13 +285,14 @@ serve(async (req) => {
 
     for (const rsvp of rsvps) {
       try {
-        // Check if this email was already sent
+        // Check if this email was already SUCCESSFULLY sent
         const { data: existingEmail } = await adminClient
           .from('event_emails')
           .select('id')
           .eq('event_id', eventId)
           .eq('rsvp_id', rsvp.id)
           .eq('email_type', emailType)
+          .eq('status', 'sent')
           .maybeSingle()
 
         if (existingEmail) {
