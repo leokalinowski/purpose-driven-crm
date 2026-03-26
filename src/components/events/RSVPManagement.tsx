@@ -9,6 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { useRSVP, RSVP } from '@/hooks/useRSVP';
 import { useRSVPQuestions, RSVPAnswer, RSVPQuestion } from '@/hooks/useRSVPQuestions';
+import { Switch } from '@/components/ui/switch';
 import { CheckCircle2, Search, Download, ExternalLink, ChevronDown, UserPlus } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
