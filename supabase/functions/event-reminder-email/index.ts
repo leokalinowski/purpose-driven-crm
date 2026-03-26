@@ -285,13 +285,14 @@ serve(async (req) => {
 
     for (const rsvp of rsvps) {
       try {
-        // Check if this email was already sent
+        // Check if this email was already SUCCESSFULLY sent
         const { data: existingEmail } = await adminClient
           .from('event_emails')
           .select('id')
           .eq('event_id', eventId)
           .eq('rsvp_id', rsvp.id)
           .eq('email_type', emailType)
+          .eq('status', 'sent')
           .maybeSingle()
 
         if (existingEmail) {
@@ -327,6 +328,15 @@ serve(async (req) => {
         if (!resendResponse.ok) {
           throw new Error(`Resend API error: ${resendData.message || JSON.stringify(resendData)}`)
         }
+
+        // Clean up old failed records before recording success
+        await adminClient
+          .from('event_emails')
+          .delete()
+          .eq('event_id', eventId)
+          .eq('rsvp_id', rsvp.id)
+          .eq('email_type', emailType)
+          .eq('status', 'failed')
 
         // Record email in tracking table
         await adminClient
