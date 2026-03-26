@@ -329,6 +329,15 @@ serve(async (req) => {
           throw new Error(`Resend API error: ${resendData.message || JSON.stringify(resendData)}`)
         }
 
+        // Clean up old failed records before recording success
+        await adminClient
+          .from('event_emails')
+          .delete()
+          .eq('event_id', eventId)
+          .eq('rsvp_id', rsvp.id)
+          .eq('email_type', emailType)
+          .eq('status', 'failed')
+
         // Record email in tracking table
         await adminClient
           .from('event_emails')
