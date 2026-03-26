@@ -329,9 +329,24 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Walk-In Attendee</DialogTitle>
-          <DialogDescription>Add someone who showed up but didn't RSVP. They'll be marked as checked in.</DialogDescription>
+          <DialogDescription>Add an attendee manually — from Eventbrite, walk-ins, or other sources.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="walkin-checkin-toggle" className="font-medium">Mark as checked in</Label>
+              <p className="text-xs text-muted-foreground">
+                {walkInCheckedIn
+                  ? 'This person will be marked as attended (receives Thank You email)'
+                  : 'This person will be marked as not attended (receives No-Show email)'}
+              </p>
+            </div>
+            <Switch
+              id="walkin-checkin-toggle"
+              checked={walkInCheckedIn}
+              onCheckedChange={setWalkInCheckedIn}
+            />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="walkin-name">Name *</Label>
             <Input

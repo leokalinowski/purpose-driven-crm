@@ -299,7 +299,7 @@ export const useRSVP = () => {
   };
 
   // Add walk-in attendee (requires auth for agent)
-  const addWalkInAttendee = async (eventId: string, formData: RSVPFormData): Promise<RSVP> => {
+  const addWalkInAttendee = async (eventId: string, formData: RSVPFormData, markCheckedIn: boolean = true): Promise<RSVP> => {
     if (!user) {
       throw new Error('Authentication required');
     }
@@ -308,18 +308,22 @@ export const useRSVP = () => {
     setError(null);
 
     try {
+      const insertData: any = {
+        event_id: eventId,
+        email: formData.email.toLowerCase(),
+        name: formData.name,
+        phone: formData.phone || null,
+        guest_count: formData.guest_count || 1,
+        status: 'confirmed',
+        check_in_status: markCheckedIn ? 'checked_in' : 'not_checked_in',
+      };
+      if (markCheckedIn) {
+        insertData.checked_in_at = new Date().toISOString();
+      }
+
       const { data, error } = await supabase
         .from('event_rsvps')
-        .insert({
-          event_id: eventId,
-          email: formData.email.toLowerCase(),
-          name: formData.name,
-          phone: formData.phone || null,
-          guest_count: formData.guest_count || 1,
-          status: 'confirmed',
-          check_in_status: 'checked_in',
-          checked_in_at: new Date().toISOString(),
-        })
+        .insert(insertData)
         .select()
         .single();
 
