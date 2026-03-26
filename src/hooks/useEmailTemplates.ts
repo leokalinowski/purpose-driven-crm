@@ -112,7 +112,12 @@ export const useEmailTemplates = (eventId?: string) => {
     const { data, error } = await supabase.functions.invoke('event-reminder-email', {
       body: { eventId, emailType }
     })
-    if (error) throw error
+    if (error) {
+      // Extract the real error message from the edge function response
+      const msg = error?.context?.body ? JSON.parse(await error.context.body.text?.() || '{}')?.error : error.message
+      throw new Error(msg || error.message || 'Failed to send reminder emails')
+    }
+    if (data && !data.success) throw new Error(data.error || 'Failed to send reminder emails')
     return data
   }
 
@@ -120,7 +125,11 @@ export const useEmailTemplates = (eventId?: string) => {
     const { data, error } = await supabase.functions.invoke('event-reminder-email', {
       body: { eventId, emailType: 'thank_you' }
     })
-    if (error) throw error
+    if (error) {
+      const msg = error?.context?.body ? JSON.parse(await error.context.body.text?.() || '{}')?.error : error.message
+      throw new Error(msg || error.message || 'Failed to send thank-you emails')
+    }
+    if (data && !data.success) throw new Error(data.error || 'Failed to send thank-you emails')
     return data
   }
 
@@ -128,7 +137,11 @@ export const useEmailTemplates = (eventId?: string) => {
     const { data, error } = await supabase.functions.invoke('event-reminder-email', {
       body: { eventId, emailType: 'no_show' }
     })
-    if (error) throw error
+    if (error) {
+      const msg = error?.context?.body ? JSON.parse(await error.context.body.text?.() || '{}')?.error : error.message
+      throw new Error(msg || error.message || 'Failed to send no-show emails')
+    }
+    if (data && !data.success) throw new Error(data.error || 'Failed to send no-show emails')
     return data
   }
 
