@@ -271,12 +271,19 @@ serve(async (req) => {
       text_content: eventTemplate.text_content ? replaceVars(eventTemplate.text_content) : null
     }
 
-    // --- Step 8: Send emails ---
+    // --- Step 8: Send emails sequentially with throttling ---
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
     let sentCount = 0
     let skippedCount = 0
     let failedCount = 0
+    let lastError: string | null = null
 
-    const emailPromises = rsvps.map(async (rsvp) => {
+    const emailLogType = emailType === 'reminder_7day' ? 'event_reminder_7day' 
+      : emailType === 'reminder_1day' ? 'event_reminder_1day'
+      : emailType === 'thank_you' ? 'event_thank_you'
+      : 'event_no_show'
+
+    for (const rsvp of rsvps) {
       try {
         // Check if this email was already sent
         const { data: existingEmail } = await adminClient
@@ -290,10 +297,10 @@ serve(async (req) => {
         if (existingEmail) {
           console.log(`Skipped (already sent): ${rsvp.email} for ${emailType}`)
           skippedCount++
-          return
+          continue
         }
 
-        // Send email via Resend
+        // Send email via Resend using verified events subdomain
         const resendResponse = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -301,12 +308,12 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'Real Estate on Purpose <noreply@realestateonpurpose.com>',
+            from: 'Real Estate on Purpose <noreply@events.realestateonpurpose.com>',
             to: [rsvp.email],
             subject: template.subject,
             html: template.html_content,
             text: template.text_content,
-            reply_to: profile?.email || 'noreply@realestateonpurpose.com',
+            reply_to: profile?.email || 'noreply@events.realestateonpurpose.com',
             tags: [
               { name: 'event_id', value: eventId },
               { name: 'email_type', value: emailType },
@@ -337,29 +344,17 @@ serve(async (req) => {
 
         sentCount++
 
-        // Log to unified email_logs table
-        const emailLogType = emailType === 'reminder_7day' ? 'event_reminder_7day' 
-          : emailType === 'reminder_1day' ? 'event_reminder_1day'
-          : emailType === 'thank_you' ? 'event_thank_you'
-          : 'event_no_show'
         await logEmailToUnifiedTable(
-          adminClient,
-          emailLogType,
-          rsvp.email,
-          rsvp.name,
-          event.agent_id,
-          template.subject,
-          'sent',
-          resendData.id,
-          null,
+          adminClient, emailLogType, rsvp.email, rsvp.name, event.agent_id,
+          template.subject, 'sent', resendData.id, null,
           { event_id: eventId, event_title: event.title, rsvp_id: rsvp.id }
         )
 
       } catch (error) {
         console.error(`Failed to send email to ${rsvp.email}:`, error)
         failedCount++
+        lastError = error.message
 
-        // Record failed email
         await adminClient
           .from('event_emails')
           .insert({
@@ -372,27 +367,16 @@ serve(async (req) => {
             error_message: error.message
           })
 
-        // Log to unified email_logs table
-        const failedEmailLogType = emailType === 'reminder_7day' ? 'event_reminder_7day' 
-          : emailType === 'reminder_1day' ? 'event_reminder_1day'
-          : emailType === 'thank_you' ? 'event_thank_you'
-          : 'event_no_show'
         await logEmailToUnifiedTable(
-          adminClient,
-          failedEmailLogType,
-          rsvp.email,
-          rsvp.name,
-          event.agent_id,
-          template.subject,
-          'failed',
-          null,
-          error.message,
+          adminClient, emailLogType, rsvp.email, rsvp.name, event.agent_id,
+          template.subject, 'failed', null, error.message,
           { event_id: eventId, event_title: event.title, rsvp_id: rsvp.id }
         )
       }
-    })
 
-    await Promise.all(emailPromises)
+      // Throttle: wait 250ms between sends to stay under Resend's 5 req/s limit
+      await delay(250)
+    }
 
     const parts = []
     if (sentCount > 0) parts.push(`${sentCount} sent`)
