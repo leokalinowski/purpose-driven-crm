@@ -1,83 +1,45 @@
 
-Root cause is now clear: the thank-you flow is failing for delivery reasons, not because the event can’t be found.
 
-### What’s actually broken
-1. `event-reminder-email` sends from:
-   - `Real Estate on Purpose <noreply@realestateonpurpose.com>`
-2. Recent function logs show Resend rejecting that sender:
-   - `The realestateonpurpose.com domain is not verified`
-3. The function also sends all thank-you emails in parallel with `Promise.all(...)`, which is triggering:
-   - `Too many requests. You can only make 5 requests per second`
+## Fix: Failed Emails Block Retries
 
-So there are two backend issues still present:
-- wrong/unverified sender domain for this function
-- no rate limiting / retry strategy for bulk sends
+### Problem
 
-### What I will change
-1. **Fix the sender identity in `event-reminder-email`**
-   - Stop hardcoding `noreply@realestateonpurpose.com`
-   - Use the same verified event sender pattern already used elsewhere:
-     - `noreply@events.realestateonpurpose.com`
-   - Keep branding as “Real Estate on Purpose” or “Agent Name - Events” consistently with the existing event email system
+Two issues are causing Timothy's thank-you emails to permanently fail:
 
-2. **Add safe rate limiting to thank-you / no-show / reminder sends**
-   - Replace the `Promise.all(...)` blast with sequential sending or small-batch sending
-   - Add a delay between sends, matching the safer invitation-email pattern already in the codebase
-   - This should eliminate the current Resend 429 errors
+1. **Dedup check doesn't distinguish failed from sent**: When the function sends an email and it fails (e.g., Resend rejects it), it inserts a record into `event_emails` with `status: 'failed'`. On retry, the dedup check (line 289-295) looks for ANY existing record matching `event_id + rsvp_id + email_type` — it does NOT filter by status. So it finds the failed record and skips the retry, reporting "already sent."
 
-3. **Improve result handling so partial failures are obvious**
-   - Return a response that clearly reports:
-     - sent
-     - skipped
-     - failed
-     - first failure reason
-   - Make the UI show the actual provider error instead of the generic “Failed to send thank-you emails”
+2. **Unknown Resend rejection reason**: The emails failed on the first attempt (likely domain verification or rate limiting), got recorded as failed, and now can never be retried.
 
-4. **Standardize event email sending paths**
-   - Align `event-reminder-email` with the stronger conventions already used by:
-     - `send-event-invitation`
-     - RSVP confirmation emails
-   - This reduces inconsistent behavior between invitation emails and post-event emails
+### Fix
 
-### Important inconsistency I found
-The event system currently uses two different sender domains:
-- invitations / RSVP confirmations: `noreply@events.realestateonpurpose.com`
-- thank-you / reminder emails: `noreply@realestateonpurpose.com`
+#### 1. Update dedup check to only skip successfully sent emails (`event-reminder-email/index.ts`)
 
-That mismatch is the main reason this specific send path still fails.
+Change the existing dedup query from:
+```
+.eq('event_id', eventId).eq('rsvp_id', rsvp.id).eq('email_type', emailType)
+```
+to:
+```
+.eq('event_id', eventId).eq('rsvp_id', rsvp.id).eq('email_type', emailType).eq('status', 'sent')
+```
+
+This way, failed records don't block retries. Only successfully sent emails are skipped.
+
+#### 2. Delete old failed records before retrying
+
+When a retry succeeds, delete the old failed record so the tracking table stays clean. Add a cleanup step: before inserting a new `sent` record, delete any prior `failed` records for the same `event_id + rsvp_id + email_type`.
+
+#### 3. Deploy and verify
+
+- Deploy the updated edge function
+- Check the logs for the actual Resend error to confirm the sender domain fix from the last deploy is active
+- Test sending thank-you emails again
 
 ### Files to update
-- `supabase/functions/event-reminder-email/index.ts`
-  - fix sender domain
-  - replace parallel blasting with throttled sending
-  - improve error payloads
-- `src/hooks/useEmailTemplates.ts`
-  - preserve detailed backend/provider errors
-- `src/components/events/email/EmailManagement.tsx`
-  - show clearer failure messages for partial and full send failures
+
+- `supabase/functions/event-reminder-email/index.ts` — fix dedup query, add failed-record cleanup
 
 ### Expected outcome
-After this fix:
-- Timothy’s thank-you emails should send from the verified events sender
-- bulk sends should stop failing from Resend rate-limit bursts
-- if anything still fails, the UI should show the real reason immediately instead of a vague generic message
 
-### Technical details
-```text
-Current failure chain:
-UI -> event-reminder-email
-   -> fetch RSVPs OK
-   -> template OK
-   -> send from unverified root domain -> provider reject
-   -> send all at once -> rate limit on some recipients
-   -> UI sometimes collapses result to generic failure text
+After this fix, clicking "Send Thank You" again will retry all 8 failed recipients instead of skipping them. Successfully sent emails will still be properly deduplicated on future retries.
 
-Planned fix:
-UI -> event-reminder-email
-   -> fetch RSVPs OK
-   -> template OK
-   -> send from verified events subdomain
-   -> throttle sends
-   -> return detailed summary
-   -> UI displays exact reason
-```
