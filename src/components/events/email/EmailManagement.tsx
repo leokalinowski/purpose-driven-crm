@@ -365,9 +365,10 @@ export const EmailManagement: React.FC<EmailManagementProps> = ({ eventId: initi
       }
 
       toast.success(result.message || `${EMAIL_TYPES.find(t => t.key === selectedType)?.label} emails sent.`)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending emails:', error)
-      toast.error("There was an error sending the emails. Please try again.")
+      const errorMessage = error?.message || error?.context?.body || "There was an error sending the emails. Please try again."
+      toast.error(errorMessage)
     } finally {
       setSending(false)
     }

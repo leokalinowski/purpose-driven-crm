@@ -9,6 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { useRSVP, RSVP } from '@/hooks/useRSVP';
 import { useRSVPQuestions, RSVPAnswer, RSVPQuestion } from '@/hooks/useRSVPQuestions';
+import { Switch } from '@/components/ui/switch';
 import { CheckCircle2, Search, Download, ExternalLink, ChevronDown, UserPlus } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -33,6 +34,7 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
   const [expandedRsvps, setExpandedRsvps] = useState<Set<string>>(new Set());
   const [showWalkInDialog, setShowWalkInDialog] = useState(false);
   const [walkInForm, setWalkInForm] = useState({ name: '', email: '', phone: '', guest_count: 1 });
+  const [walkInCheckedIn, setWalkInCheckedIn] = useState(true);
   const [walkInSubmitting, setWalkInSubmitting] = useState(false);
 
   useEffect(() => {
@@ -80,10 +82,11 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
         email: walkInForm.email,
         phone: walkInForm.phone || undefined,
         guest_count: walkInForm.guest_count,
-      });
+      }, walkInCheckedIn);
       toast.success('Walk-in attendee added successfully');
       setShowWalkInDialog(false);
       setWalkInForm({ name: '', email: '', phone: '', guest_count: 1 });
+      setWalkInCheckedIn(true);
       loadAll();
     } catch (error: any) {
       toast.error(error.message || 'Failed to add walk-in attendee');
@@ -326,9 +329,24 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Walk-In Attendee</DialogTitle>
-          <DialogDescription>Add someone who showed up but didn't RSVP. They'll be marked as checked in.</DialogDescription>
+          <DialogDescription>Add an attendee manually — from Eventbrite, walk-ins, or other sources.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="walkin-checkin-toggle" className="font-medium">Mark as checked in</Label>
+              <p className="text-xs text-muted-foreground">
+                {walkInCheckedIn
+                  ? 'This person will be marked as attended (receives Thank You email)'
+                  : 'This person will be marked as not attended (receives No-Show email)'}
+              </p>
+            </div>
+            <Switch
+              id="walkin-checkin-toggle"
+              checked={walkInCheckedIn}
+              onCheckedChange={setWalkInCheckedIn}
+            />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="walkin-name">Name *</Label>
             <Input
