@@ -387,6 +387,7 @@ serve(async (req) => {
       JSON.stringify({
         success: failedCount === 0,
         message: `${emailType} emails: ${parts.join(', ')}`,
+        error: lastError ? `${failedCount} email(s) failed. Last error: ${lastError}` : undefined,
         sent: sentCount,
         skipped: skippedCount,
         failed: failedCount,
