@@ -86,6 +86,7 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
       toast.success('Walk-in attendee added successfully');
       setShowWalkInDialog(false);
       setWalkInForm({ name: '', email: '', phone: '', guest_count: 1 });
+      setWalkInCheckedIn(true);
       loadAll();
     } catch (error: any) {
       toast.error(error.message || 'Failed to add walk-in attendee');
