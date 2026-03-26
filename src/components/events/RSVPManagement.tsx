@@ -34,6 +34,7 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
   const [expandedRsvps, setExpandedRsvps] = useState<Set<string>>(new Set());
   const [showWalkInDialog, setShowWalkInDialog] = useState(false);
   const [walkInForm, setWalkInForm] = useState({ name: '', email: '', phone: '', guest_count: 1 });
+  const [walkInCheckedIn, setWalkInCheckedIn] = useState(true);
   const [walkInSubmitting, setWalkInSubmitting] = useState(false);
 
   useEffect(() => {
