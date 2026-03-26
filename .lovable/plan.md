@@ -1,127 +1,83 @@
 
-## Diagnosis: why Timothy’s email send is still failing
+Root cause is now clear: the thank-you flow is failing for delivery reasons, not because the event can’t be found.
 
-The failure is real, and the main issue was not fully fixed.
+### What’s actually broken
+1. `event-reminder-email` sends from:
+   - `Real Estate on Purpose <noreply@realestateonpurpose.com>`
+2. Recent function logs show Resend rejecting that sender:
+   - `The realestateonpurpose.com domain is not verified`
+3. The function also sends all thank-you emails in parallel with `Promise.all(...)`, which is triggering:
+   - `Too many requests. You can only make 5 requests per second`
 
-### What the logs show
-The deployed `event-reminder-email` function is still throwing:
+So there are two backend issues still present:
+- wrong/unverified sender domain for this function
+- no rate limiting / retry strategy for bulk sends
 
-```text
-Error sending reminder emails: Error: Event not found
-```
+### What I will change
+1. **Fix the sender identity in `event-reminder-email`**
+   - Stop hardcoding `noreply@realestateonpurpose.com`
+   - Use the same verified event sender pattern already used elsewhere:
+     - `noreply@events.realestateonpurpose.com`
+   - Keep branding as “Real Estate on Purpose” or “Agent Name - Events” consistently with the existing event email system
 
-That means the function is failing before it even gets to the thank-you / no-show recipient filtering.
+2. **Add safe rate limiting to thank-you / no-show / reminder sends**
+   - Replace the `Promise.all(...)` blast with sequential sending or small-batch sending
+   - Add a delay between sends, matching the safer invitation-email pattern already in the codebase
+   - This should eliminate the current Resend 429 errors
 
-### Why this is happening
+3. **Improve result handling so partial failures are obvious**
+   - Return a response that clearly reports:
+     - sent
+     - skipped
+     - failed
+     - first failure reason
+   - Make the UI show the actual provider error instead of the generic “Failed to send thank-you emails”
 
-1. **The function still uses the wrong auth/data-access pattern**
-   - `event-reminder-email` is still built around a single client created with the anon key plus whatever `Authorization` header happens to come in.
-   - If that header is missing, stale, or not usable in this context, the function falls back to anon-level access.
-   - Anon access can only see **published** events, so admin-triggered sends for unpublished/admin-managed events will fail with “Event not found”.
+4. **Standardize event email sending paths**
+   - Align `event-reminder-email` with the stronger conventions already used by:
+     - `send-event-invitation`
+     - RSVP confirmation emails
+   - This reduces inconsistent behavior between invitation emails and post-event emails
 
-2. **The event lookup is still using a fragile nested relation query**
-   - The function does:
-     - `from('events').select('*, profiles:agent_id (...)')`
-   - But elsewhere in the app, event/profile data is intentionally fetched in **separate queries** “to avoid relationship query issues”.
-   - So the send function is still using a query pattern the frontend already avoids. If that relation fails, the code turns it into the misleading generic error “Event not found”.
+### Important inconsistency I found
+The event system currently uses two different sender domains:
+- invitations / RSVP confirmations: `noreply@events.realestateonpurpose.com`
+- thank-you / reminder emails: `noreply@realestateonpurpose.com`
 
-3. **The earlier “fix” did not address the real failing path**
-   - The prior work did improve:
-     - thank-you / no-show filtering logic
-     - walk-in check-in handling
-   - But it **did not harden the actual event fetch + auth path** inside `event-reminder-email`.
-   - Also, `EmailManagement` sends directly to `event-reminder-email`; the `manual-send-event-email` function is not the main path used by the button Timothy/Kate are hitting.
+That mismatch is the main reason this specific send path still fails.
 
-4. **The error message is still too generic**
-   - The function throws `new Error('Event not found')` for any event query failure.
-   - So if the true problem is:
-     - auth context missing
-     - relation query failure
-     - RLS denial
-   - the UI still only gets a vague message.
-
-## What has not actually been fixed yet
-
-- The edge function still does **not** use the safer two-client pattern:
-  - user-context client to validate access
-  - service-role client to fetch/send/log reliably
-- The function still uses the risky embedded `profiles:agent_id (...)` event query.
-- The current implementation still masks the real root error as “Event not found”.
-- The admin send flow was not made robust for unpublished events or flaky auth headers.
-
-## Plan to fix it properly
-
-### 1. Rebuild `event-reminder-email` auth flow
-Update the function so it uses:
-- a **user-context client** to verify the caller is allowed to send for that event
-- a **service-role client** for the actual event/template/RSVP/email-log operations
-
-This removes dependence on the browser token for the operational queries while still keeping permission checks secure.
-
-### 2. Replace the fragile event query
-Stop using the nested `profiles:agent_id (...)` relation in the edge function.
-
-Instead:
-- fetch the event first
-- then fetch the agent profile separately
-- then fetch marketing settings separately
-
-That matches the safer pattern already used in the frontend.
-
-### 3. Return real diagnostics instead of “Event not found”
-Change the function to distinguish:
-- event truly missing
-- caller not authorized
-- relation/query failure
-- template missing
-- RSVP fetch failure
-
-This will make admin troubleshooting much faster and prevent false “fixed” claims.
-
-### 4. Verify the admin email path specifically
-Review both places that render `EmailManagement`:
-- `src/pages/Events.tsx`
-- `src/pages/AdminEventsManagement.tsx`
-
-Then make sure the send flow works the same when triggered from admin-managed events, especially unpublished ones.
-
-### 5. Tighten UI error surfacing
-Improve the email hook/UI layer so the toast shows the returned API error body consistently, not just a generic function error object.
-
-### 6. Keep the existing thank-you / no-show filtering
-Retain the already-added attendance filtering:
-- `thank_you` → checked-in only
-- `no_show` → not checked-in
-
-But move it onto the service-role query path so it actually runs reliably.
-
-## Files to update
-
+### Files to update
 - `supabase/functions/event-reminder-email/index.ts`
-  - main auth/data-access rewrite
-  - separate event/profile/settings queries
-  - better error reporting
-
+  - fix sender domain
+  - replace parallel blasting with throttled sending
+  - improve error payloads
 - `src/hooks/useEmailTemplates.ts`
-  - normalize edge-function errors before throwing
-
+  - preserve detailed backend/provider errors
 - `src/components/events/email/EmailManagement.tsx`
-  - keep/improve explicit user-facing error display
+  - show clearer failure messages for partial and full send failures
 
-## Expected outcome
-
+### Expected outcome
 After this fix:
-- admins will be able to send Timothy’s emails reliably
-- unpublished/admin-managed events will no longer fail just because the function fell back to anon access
-- the function will fail with the **real cause**, not a misleading “Event not found”
-- the previously added thank-you/no-show logic will finally sit on a stable send path
+- Timothy’s thank-you emails should send from the verified events sender
+- bulk sends should stop failing from Resend rate-limit bursts
+- if anything still fails, the UI should show the real reason immediately instead of a vague generic message
 
-## Bottom line
+### Technical details
+```text
+Current failure chain:
+UI -> event-reminder-email
+   -> fetch RSVPs OK
+   -> template OK
+   -> send from unverified root domain -> provider reject
+   -> send all at once -> rate limit on some recipients
+   -> UI sometimes collapses result to generic failure text
 
-The problem is not that thank-you logic is too complex.  
-The problem is that the function’s **foundation** is still wrong:
-- wrong auth pattern
-- brittle event query
-- misleading error handling
-
-That is why it still fails even though part of the earlier work was technically changed.
+Planned fix:
+UI -> event-reminder-email
+   -> fetch RSVPs OK
+   -> template OK
+   -> send from verified events subdomain
+   -> throttle sends
+   -> return detailed summary
+   -> UI displays exact reason
+```
