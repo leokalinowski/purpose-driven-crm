@@ -82,7 +82,7 @@ export const RSVPManagement = ({ eventId, publicSlug, maxCapacity }: RSVPManagem
         email: walkInForm.email,
         phone: walkInForm.phone || undefined,
         guest_count: walkInForm.guest_count,
-      });
+      }, walkInCheckedIn);
       toast.success('Walk-in attendee added successfully');
       setShowWalkInDialog(false);
       setWalkInForm({ name: '', email: '', phone: '', guest_count: 1 });
