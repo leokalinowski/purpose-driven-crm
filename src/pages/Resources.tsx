@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useResources, RESOURCE_CATEGORIES } from '@/hooks/useResources';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,12 +25,16 @@ const categoryColors: Record<string, string> = {
 };
 
 export default function Resources() {
+  const { isAdmin, loading } = useUserRole();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
 
   const { resources, isLoading, getPublicUrl } = useResources(
     activeCategory === 'all' ? undefined : activeCategory
   );
+
+  if (loading) return null;
+  if (!isAdmin) return <Navigate to="/" replace />;
 
   const filtered = resources.filter(
     (r) =>
