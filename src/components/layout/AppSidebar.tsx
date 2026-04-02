@@ -93,6 +93,7 @@ const menuItems = [
   { title: 'Social Media', url: '/social-scheduler', icon: Share },
   { title: 'Success Scoreboard', url: '/coaching', icon: TrendingUp },
   { title: 'Support Hub', url: '/support', icon: LifeBuoy },
+  { title: 'Resources', url: '/resources', icon: FolderOpen },
   { title: 'Settings', url: '/settings', icon: Settings },
 ];
 
