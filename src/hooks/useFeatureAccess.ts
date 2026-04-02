@@ -48,12 +48,15 @@ export function useFeatureAccess() {
 
   /** Check if the current user can access a given route */
   const hasAccess = (route: string): boolean => {
-    // Admins, editors, and agents always have full access
-    if (isAdmin || role === 'editor' || role === 'agent') return true;
-
     const minTier = ROUTE_MIN_TIER[route];
     // If route isn't gated, allow access
     if (!minTier) return true;
+
+    // Admin-only routes require admin role specifically
+    if (minTier === 'admin') return isAdmin;
+
+    // Admins, editors, and agents have full access to non-admin routes
+    if (isAdmin || role === 'editor' || role === 'agent') return true;
 
     return getTierLevel(role) <= getTierLevel(minTier);
   };
