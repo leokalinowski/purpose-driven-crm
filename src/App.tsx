@@ -41,6 +41,8 @@ import AdminAnnouncements from "./pages/AdminAnnouncements";
 import Settings from "./pages/Settings";
 import Pricing from "./pages/Pricing";
 import Welcome from "./pages/Welcome";
+import Resources from "./pages/Resources";
+import AdminResources from "./pages/AdminResources";
 
 const queryClient = new QueryClient();
 
