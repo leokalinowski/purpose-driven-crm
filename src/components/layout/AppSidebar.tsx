@@ -6,6 +6,7 @@ import {
   TrendingUp,
   Phone,
   PenTool,
+  FolderOpen,
   LogOut,
   BarChart3,
   UserPlus,
