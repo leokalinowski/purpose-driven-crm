@@ -1,45 +1,66 @@
 
 
-## Fix: Failed Emails Block Retries
+## Resources Tab — File Library for Agents
 
-### Problem
+A new "Resources" page where agents can browse, search, and download categorized files. Admins get a management panel to upload, categorize, and remove resources.
 
-Two issues are causing Timothy's thank-you emails to permanently fail:
+### Database
 
-1. **Dedup check doesn't distinguish failed from sent**: When the function sends an email and it fails (e.g., Resend rejects it), it inserts a record into `event_emails` with `status: 'failed'`. On retry, the dedup check (line 289-295) looks for ANY existing record matching `event_id + rsvp_id + email_type` — it does NOT filter by status. So it finds the failed record and skips the retry, reporting "already sent."
+**New table: `resources`**
 
-2. **Unknown Resend rejection reason**: The emails failed on the first attempt (likely domain verification or rate limiting), got recorded as failed, and now can never be retried.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| title | text NOT NULL | Display name |
+| description | text | Optional summary |
+| category | text NOT NULL | e.g. "Contracts & Forms", "Marketing Templates", "Scripts & Guides" |
+| file_path | text NOT NULL | Path in Supabase storage bucket |
+| file_name | text NOT NULL | Original filename for download |
+| file_size | bigint | Bytes |
+| file_type | text | MIME type |
+| uploaded_by | uuid REFERENCES auth.users | Admin who uploaded |
+| created_at | timestamptz DEFAULT now() | |
 
-### Fix
+**RLS policies:**
+- SELECT: all authenticated users
+- INSERT / UPDATE / DELETE: admin role only (via `has_role(auth.uid(), 'admin')`)
 
-#### 1. Update dedup check to only skip successfully sent emails (`event-reminder-email/index.ts`)
+**New storage bucket: `resources`** (public: true, so files are downloadable via URL)
 
-Change the existing dedup query from:
-```
-.eq('event_id', eventId).eq('rsvp_id', rsvp.id).eq('email_type', emailType)
-```
-to:
-```
-.eq('event_id', eventId).eq('rsvp_id', rsvp.id).eq('email_type', emailType).eq('status', 'sent')
-```
+### New Files
 
-This way, failed records don't block retries. Only successfully sent emails are skipped.
+#### 1. `src/pages/Resources.tsx`
+- Auth-gated page with Layout wrapper
+- Search bar + category filter tabs (All, Contracts & Forms, Marketing Templates, Scripts & Guides)
+- Card grid showing each resource with title, description, category badge, file size, and download button
+- Downloads use the public Supabase storage URL
 
-#### 2. Delete old failed records before retrying
+#### 2. `src/components/admin/ResourcesManager.tsx`
+- Upload form: title, description, category dropdown, file picker
+- Uploads file to `resources` bucket, inserts row into `resources` table
+- List of existing resources with delete button
+- Used on a new admin page
 
-When a retry succeeds, delete the old failed record so the tracking table stays clean. Add a cleanup step: before inserting a new `sent` record, delete any prior `failed` records for the same `event_id + rsvp_id + email_type`.
+#### 3. `src/pages/AdminResources.tsx`
+- Admin page wrapping `ResourcesManager` with Layout and admin auth guard
 
-#### 3. Deploy and verify
+#### 4. `src/hooks/useResources.ts`
+- `useQuery` to fetch all resources, filtered by category
+- `useMutation` for create and delete (admin only)
 
-- Deploy the updated edge function
-- Check the logs for the actual Resend error to confirm the sender domain fix from the last deploy is active
-- Test sending thank-you emails again
+### Routing & Navigation
 
-### Files to update
+- Add `/resources` route in `App.tsx`
+- Add `/admin/resources` route in `App.tsx`
+- Add "Resources" item to sidebar navigation (icon: `FolderOpen`) after "Support Hub"
+- Add "Resources" to admin sidebar under "Content & Comms" sub-group
+- Add `/resources` to `useFeatureAccess.ts` as `'core'` tier (accessible to all)
 
-- `supabase/functions/event-reminder-email/index.ts` — fix dedup query, add failed-record cleanup
+### Technical Details
 
-### Expected outcome
-
-After this fix, clicking "Send Thank You" again will retry all 8 failed recipients instead of skipping them. Successfully sent emails will still be properly deduplicated on future retries.
+- File upload uses `supabase.storage.from('resources').upload(path, file)`
+- Public URL via `supabase.storage.from('resources').getPublicUrl(path)`
+- Category filter uses client-side filtering on the fetched list
+- No edge functions needed — all operations go through Supabase client SDK
+- File size displayed as human-readable (KB/MB)
 
