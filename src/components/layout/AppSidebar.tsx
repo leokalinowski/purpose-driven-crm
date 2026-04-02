@@ -169,6 +169,7 @@ export function AppSidebar() {
                   { title: 'Social Media', url: '/admin/social-scheduler', icon: Share },
                   { title: 'Events Management', url: '/admin/events', icon: Calendar },
                   { title: 'Email Logs', url: '/admin/email-logs', icon: FileText },
+                  { title: 'Resources', url: '/admin/resources', icon: FolderOpen },
                 ]}
                 pathname={location.pathname}
               />

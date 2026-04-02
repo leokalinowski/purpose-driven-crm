@@ -85,6 +85,8 @@ const AppContent = () => {
         <Route path="/settings" element={<Settings />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/welcome" element={<Welcome />} />
+        <Route path="/resources" element={<Resources />} />
+        <Route path="/admin/resources" element={<AdminResources />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
