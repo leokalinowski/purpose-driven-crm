@@ -25,7 +25,12 @@ const categoryColors: Record<string, string> = {
 };
 
 export default function Resources() {
+  const { isAdmin, loading } = useUserRole();
   const [search, setSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState('all');
+
+  if (loading) return null;
+  if (!isAdmin) return <Navigate to="/" replace />;
   const [activeCategory, setActiveCategory] = useState('all');
 
   const { resources, isLoading, getPublicUrl } = useResources(
