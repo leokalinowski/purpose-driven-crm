@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useResources, RESOURCE_CATEGORIES } from '@/hooks/useResources';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';

@@ -35,7 +35,7 @@ const ROUTE_MIN_TIER: Record<string, Tier> = {
   '/transactions': 'managed',
   '/social-scheduler': 'agent',
   '/pipeline': 'managed',
-  '/resources': 'core',
+  '/resources': 'admin',
 };
 
 function getTierLevel(role: string | null): number {
