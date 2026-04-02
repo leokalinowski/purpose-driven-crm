@@ -6,6 +6,7 @@ import {
   TrendingUp,
   Phone,
   PenTool,
+  FolderOpen,
   LogOut,
   BarChart3,
   UserPlus,
@@ -92,6 +93,7 @@ const menuItems = [
   { title: 'Social Media', url: '/social-scheduler', icon: Share },
   { title: 'Success Scoreboard', url: '/coaching', icon: TrendingUp },
   { title: 'Support Hub', url: '/support', icon: LifeBuoy },
+  { title: 'Resources', url: '/resources', icon: FolderOpen },
   { title: 'Settings', url: '/settings', icon: Settings },
 ];
 
@@ -167,6 +169,7 @@ export function AppSidebar() {
                   { title: 'Social Media', url: '/admin/social-scheduler', icon: Share },
                   { title: 'Events Management', url: '/admin/events', icon: Calendar },
                   { title: 'Email Logs', url: '/admin/email-logs', icon: FileText },
+                  { title: 'Resources', url: '/admin/resources', icon: FolderOpen },
                 ]}
                 pathname={location.pathname}
               />
