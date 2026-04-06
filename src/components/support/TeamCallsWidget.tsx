@@ -4,12 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
-// Update these with your actual Zoom/Meet links
-const ZOOM_LINK = 'https://zoom.us/j/YOUR_MEETING_ID';
-
 const SCHEDULE = [
-  { day: 2, dayName: 'Tuesday', hour: 15, minute: 0, label: '3:00 PM' },
-  { day: 4, dayName: 'Thursday', hour: 11, minute: 0, label: '11:00 AM' },
+  { day: 2, dayName: 'Tuesday', hour: 15, minute: 0, label: '3:00 PM', link: 'https://meet.google.com/hnd-fnfq-rih' },
+  { day: 4, dayName: 'Thursday', hour: 11, minute: 0, label: '11:00 AM', link: 'https://zoom.us/j/YOUR_MEETING_ID' },
 ] as const;
 
 function isLiveNow(dayOfWeek: number, hour: number, minute: number) {
