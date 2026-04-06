@@ -90,6 +90,9 @@ const Support = () => {
           </p>
         </div>
 
+        {/* Team Calls Widget */}
+        <TeamCallsWidget />
+
         {/* High Priority Action Items Banner */}
         {!actionItemsLoading && highPriorityItems.length > 0 && (
           <ActionItemsBanner
