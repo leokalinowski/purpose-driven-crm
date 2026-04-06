@@ -3531,6 +3531,10 @@ export type Database = {
           status: string
         }[]
       }
+      get_public_event_agent_profile: {
+        Args: { p_agent_id: string }
+        Returns: Json
+      }
       get_rsvp_answers: {
         Args: { p_event_id: string }
         Returns: {
