@@ -29,26 +29,35 @@ export function useSubscription() {
       return;
     }
 
-    try {
-      const { data, error } = await supabase.functions.invoke('check-subscription', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (error) throw error;
+    const MAX_RETRIES = 2;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const { data, error } = await supabase.functions.invoke('check-subscription', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (error) throw error;
 
-      const isTestMode = !!data?.test_mode;
-      const tier = data?.price_id ? getTierFromPriceId(data.price_id, isTestMode) : null;
+        const isTestMode = !!data?.test_mode;
+        const tier = data?.price_id ? getTierFromPriceId(data.price_id, isTestMode) : null;
 
-      setState({
-        subscribed: !!data?.subscribed,
-        tier,
-        priceId: data?.price_id ?? null,
-        subscriptionEnd: data?.subscription_end ?? null,
-        loading: false,
-        testMode: isTestMode,
-      });
-    } catch (err) {
-      console.error('[useSubscription] Error checking subscription:', err);
-      setState((s) => ({ ...s, loading: false }));
+        setState({
+          subscribed: !!data?.subscribed,
+          tier,
+          priceId: data?.price_id ?? null,
+          subscriptionEnd: data?.subscription_end ?? null,
+          loading: false,
+          testMode: isTestMode,
+        });
+        return; // success — exit retry loop
+      } catch (err) {
+        console.error(`[useSubscription] Attempt ${attempt + 1} failed:`, err);
+        if (attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+        } else {
+          // Preserve last known state instead of clearing it
+          setState((s) => ({ ...s, loading: false }));
+        }
+      }
     }
   }, [session?.access_token]);
 
@@ -75,7 +84,11 @@ export function useSubscription() {
     });
     if (error) throw error;
     if (data?.url) {
-      window.open(data.url, '_blank');
+      // Fallback to redirect if popup is blocked
+      const popup = window.open(data.url, '_blank');
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        window.location.href = data.url;
+      }
     }
   };
 

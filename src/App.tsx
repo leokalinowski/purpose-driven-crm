@@ -44,7 +44,23 @@ import Welcome from "./pages/Welcome";
 import Resources from "./pages/Resources";
 import AdminResources from "./pages/AdminResources";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000, // 1 min — reduce unnecessary refetches on tab focus
+      retry: (failureCount, error: any) => {
+        // Don't retry auth errors
+        if (error?.status === 401 || error?.code === 'PGRST301') return false;
+        return failureCount < 2;
+      },
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10_000),
+      refetchOnWindowFocus: false, // opt-in per query instead
+    },
+    mutations: {
+      retry: false,
+    },
+  },
+});
 
 const AppContent = () => {
   useEffect(() => {
