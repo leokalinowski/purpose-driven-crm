@@ -161,11 +161,7 @@ export const useRSVP = () => {
       let branding = null;
       if (event.agent_id) {
         const [profileRes, brandingRes] = await Promise.all([
-          supabase
-            .from('profiles')
-            .select('first_name, last_name, team_name, brokerage, phone_number, office_number, office_address, website, state_licenses')
-            .eq('user_id', event.agent_id)
-            .single(),
+          supabase.rpc('get_public_event_agent_profile', { p_agent_id: event.agent_id }),
           supabase
             .from('agent_marketing_settings')
             .select('primary_color, secondary_color, headshot_url, logo_colored_url, logo_white_url')
