@@ -83,7 +83,7 @@ export function TeamCallsWidget() {
                 </p>
 
                 <Button asChild size="sm" variant={live ? 'default' : 'outline'}>
-                  <a href={ZOOM_LINK} target="_blank" rel="noopener noreferrer">
+                  <a href={slot.link} target="_blank" rel="noopener noreferrer">
                     Join Call
                     <ExternalLink className="ml-1 h-3.5 w-3.5" />
                   </a>
