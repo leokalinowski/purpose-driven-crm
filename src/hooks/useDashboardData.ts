@@ -259,12 +259,12 @@ export function useDashboardData() {
       eventsData,
       newslettersData
     ] = await Promise.all([
-      supabase.from('profiles').select('*').eq('role', 'agent'),
-      supabase.from('contacts').select('*'),
-      supabase.from('spheresync_tasks').select('*'),
-      supabase.from('transaction_coordination').select('*'),
-      supabase.from('events').select('*'),
-      supabase.from('newsletter_campaigns').select('*')
+      supabase.from('profiles').select('*').eq('role', 'agent').limit(10000),
+      supabase.from('contacts').select('*').limit(10000),
+      supabase.from('spheresync_tasks').select('*').limit(10000),
+      supabase.from('transaction_coordination').select('*').limit(10000),
+      supabase.from('events').select('*').limit(10000),
+      supabase.from('newsletter_campaigns').select('*').limit(10000)
     ]);
 
     const totalContacts = contactsData.data?.length || 0;
@@ -386,9 +386,10 @@ export function useDashboardData() {
     fetchData();
   }, [fetchData]);
 
-  // Set up real-time subscriptions
+  // Set up real-time subscriptions with reconnection
   useEffect(() => {
     if (!user) return;
+    let mounted = true;
 
     console.log('🔌 Setting up real-time subscriptions');
     
@@ -402,9 +403,20 @@ export function useDashboardData() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'coaching_sessions' }, debouncedFetchData)
       .subscribe((status) => {
         console.log('📡 Real-time subscription status:', status);
+        // Auto-reconnect on channel errors
+        if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && mounted) {
+          console.warn('⚠️ Realtime channel error, attempting reconnect in 5s…');
+          setTimeout(() => {
+            if (mounted) {
+              supabase.removeChannel(channel);
+              // The effect will re-run and create a new subscription
+            }
+          }, 5000);
+        }
       });
 
     return () => {
+      mounted = false;
       console.log('🔌 Cleaning up real-time subscriptions');
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);

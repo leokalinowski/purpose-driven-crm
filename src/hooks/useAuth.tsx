@@ -69,6 +69,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (initialised) {
           setLoading(false);
         }
+
+        // Handle token refresh failures — force re-auth if session is lost
+        if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
+          setSession(null);
+          setUser(null);
+        }
       }
     );
 
