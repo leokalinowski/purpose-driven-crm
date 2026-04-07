@@ -3610,6 +3610,10 @@ export type Database = {
         Args: { p_answers: Json; p_rsvp_id: string }
         Returns: undefined
       }
+      validate_invitation: {
+        Args: { p_code: string; p_email: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "agent" | "editor" | "managed" | "core"

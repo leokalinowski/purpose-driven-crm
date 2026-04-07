@@ -131,15 +131,9 @@ const Auth = () => {
       // Clear any existing session to avoid redirect conflicts
       await supabase.auth.signOut({ scope: 'global' }).catch(() => {});
 
-      // Validate invitation code first
+      // Validate invitation code via secure RPC (no direct table access)
       const { data: invitation, error: inviteError } = await supabase
-        .from('invitations' as any)
-        .select('*')
-        .eq('code', inviteCode)
-        .eq('email', email)
-        .eq('used', false)
-        .gt('expires_at', new Date().toISOString())
-        .single();
+        .rpc('validate_invitation', { p_code: inviteCode, p_email: email });
 
       if (inviteError || !invitation) {
         toast({
