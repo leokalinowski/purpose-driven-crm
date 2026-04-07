@@ -136,7 +136,6 @@ serve(async (req) => {
         .from('contacts')
         .select('id, first_name, last_name, email')
         .eq('agent_id', agentId)
-        .eq('dnc', false)
         .not('email', 'is', null)
 
       if (contactsError) throw new Error('Failed to fetch contacts: ' + contactsError.message)
@@ -228,7 +227,6 @@ serve(async (req) => {
         .from('contacts')
         .select('id, first_name, last_name, email')
         .eq('agent_id', agentId)
-        .eq('dnc', false)
         .in('email', targetEmails)
 
       eligibleContacts = contacts || []
