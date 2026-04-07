@@ -1,37 +1,50 @@
 
 
-## Add Team Calls Widget to Support Hub
+## Fix: DNC Flag Blocking Event Invitation Emails
 
-A new card placed between the header and action items on the Support page, showing the two recurring weekly calls with a "Join Call" button linking to the Zoom room.
+### Problem
 
-### New Component
+Pam has 79 contacts with emails, but 46 are marked `dnc = true`. The `send-event-invitation` edge function filters contacts with `.eq('dnc', false)`, so only 33 emails were sent. The DNC (Do Not Call) flag is a **phone compliance** flag — it should not prevent sending event invitation emails.
 
-**`src/components/support/TeamCallsWidget.tsx`**
+### Impact
 
-A card with two call entries, each showing:
-- Day and time (e.g. "Every Tuesday at 3:00 PM" / "Every Thursday at 11:00 AM")
-- A status indicator: "Live Now" (green pulse) if current time falls within the call window, or "Next call in X days" otherwise
-- A "Join Call" button linking to the Zoom URL (opens in new tab)
-- Video icon for visual clarity
+This affects ALL agents, not just Pam. Any contact flagged DNC is silently excluded from event invitations, follow-ups, and any email that uses the same filter pattern.
 
-The Zoom link will be hardcoded initially. If you want to change it later, it's a single constant at the top of the file.
+### Fix
 
-### Page Update
+**File: `supabase/functions/send-event-invitation/index.ts`**
 
-**`src/pages/Support.tsx`**
+Remove `.eq('dnc', false)` from the contacts query on line 139. The initial invitation query (line 135-141) currently reads:
 
-Insert the `<TeamCallsWidget />` immediately after the page header (before action items banner), so it's one of the first things users see.
+```typescript
+.eq('agent_id', agentId)
+.eq('dnc', false)          // ← REMOVE THIS LINE
+.not('email', 'is', null)
+```
 
-### Design
+Also remove the same filter from the follow-up contacts query on line 231:
 
-- Matches existing card style (same `Card` / `CardHeader` / `CardContent` components)
-- Two-column layout on desktop, stacked on mobile
-- "Live Now" badge with a pulsing green dot when the call is happening (30-min window)
-- External link icon on the Join button
+```typescript
+.eq('agent_id', agentId)
+.eq('dnc', false)          // ← REMOVE THIS LINE
+.in('email', targetEmails)
+```
+
+After fixing, redeploy the edge function.
+
+### Prevention: Re-send Pam's Missing Invitations
+
+After deploying the fix, Pam can click "Send Invitations" again for her event. The deduplication logic already skips contacts who received the email (lines 152-165), so only the 46 previously-excluded contacts will receive invitations this time.
+
+### Verification
+
+After deploying, query to confirm:
+- Eligible contacts should jump from 33 to 79
+- The 33 already-sent contacts will be correctly skipped
 
 ### Technical Details
 
-- "Live Now" detection: compares current day/hour against the schedule using `new Date()` — checks if it's the right weekday and within a ~60 minute window of the start time
-- No database needed — purely frontend, static schedule
-- I'll need you to provide the Zoom link after implementation, or I can use a placeholder
+- **1 file changed**: `supabase/functions/send-event-invitation/index.ts` (2 lines removed)
+- **Risk**: Low — we're removing an incorrect filter. The DNC flag remains visible in the UI for phone call guidance per existing design (agents see DNC markers but can still email).
+- **No migration needed**: No database changes required.
 
