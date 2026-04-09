@@ -1,50 +1,51 @@
 
 
-## Fix: DNC Flag Blocking Event Invitation Emails
+## Redesign Survey Results: Full Response Detail View
 
 ### Problem
 
-Pam has 79 contacts with emails, but 46 are marked `dnc = true`. The `send-event-invitation` edge function filters contacts with `.eq('dnc', false)`, so only 33 emails were sent. The DNC (Do Not Call) flag is a **phone compliance** flag — it should not prevent sending event invitation emails.
+The current "All Responses" table only shows 6 of 13 fields, and long text is truncated with `max-w-[200px] truncate`. Array fields like pipeline stages, must-have fields, activity types, integration priorities, and desired views are completely hidden. Free-text fields (additional fields, biggest pain point, additional comments) are also missing.
 
-### Impact
+### Solution
 
-This affects ALL agents, not just Pam. Any contact flagged DNC is silently excluded from event invitations, follow-ups, and any email that uses the same filter pattern.
+Replace the cramped table with a **card-per-response layout** using expandable accordions. Each response gets a card showing the respondent's name, email, and date at a glance, with all 13 fields visible when expanded.
 
-### Fix
+### Layout
 
-**File: `supabase/functions/send-event-invitation/index.ts`**
-
-Remove `.eq('dnc', false)` from the contacts query on line 139. The initial invitation query (line 135-141) currently reads:
-
-```typescript
-.eq('agent_id', agentId)
-.eq('dnc', false)          // ← REMOVE THIS LINE
-.not('email', 'is', null)
+```text
+┌─────────────────────────────────────────────┐
+│ ▶ Jane Smith · jane@example.com · Apr 3     │
+├─────────────────────────────────────────────┤
+│  Pipeline Stages: [New Lead] [Contacted]... │
+│  Buyer/Seller Split: "Yes, completely..."   │
+│  Must-Have Fields: [Deal Value] [MLS #]...  │
+│  Additional Fields: "Lender contact info"   │
+│  Follow-Up Automation: "Very interested..." │
+│  Activity Types: [Phone Calls] [Emails]...  │
+│  Integration Priorities: [SphereSync]...    │
+│  Biggest Pain Point: "I lose track of..."   │
+│  Desired Views: [Kanban] [List View]        │
+│  Mobile Importance: "Critical — I'm on..."  │
+│  Additional Comments: "Love the idea!"      │
+└─────────────────────────────────────────────┘
 ```
 
-Also remove the same filter from the follow-up contacts query on line 231:
+### Changes
 
-```typescript
-.eq('agent_id', agentId)
-.eq('dnc', false)          // ← REMOVE THIS LINE
-.in('email', targetEmails)
-```
+**File: `src/pages/AdminSurveyResults.tsx`**
 
-After fixing, redeploy the edge function.
-
-### Prevention: Re-send Pam's Missing Invitations
-
-After deploying the fix, Pam can click "Send Invitations" again for her event. The deduplication logic already skips contacts who received the email (lines 152-165), so only the 46 previously-excluded contacts will receive invitations this time.
-
-### Verification
-
-After deploying, query to confirm:
-- Eligible contacts should jump from 33 to 79
-- The 33 already-sent contacts will be correctly skipped
+- Replace the `<Table>` section (lines 124-154) with an accordion-based card list
+- Each response renders as a collapsible `Accordion.Item` with:
+  - **Header**: Name, email, submission date
+  - **Body**: All 13 survey fields in a clean 2-column grid
+  - Array fields rendered as inline badges/chips
+  - Free-text fields shown in full (no truncation)
+- Import `Accordion` from the existing UI components
+- Keep the charts section and export button unchanged
 
 ### Technical Details
 
-- **1 file changed**: `supabase/functions/send-event-invitation/index.ts` (2 lines removed)
-- **Risk**: Low — we're removing an incorrect filter. The DNC flag remains visible in the UI for phone call guidance per existing design (agents see DNC markers but can still email).
-- **No migration needed**: No database changes required.
+- Uses existing `src/components/ui/accordion.tsx` and `src/components/ui/badge.tsx`
+- No new components or dependencies needed
+- 1 file modified: `src/pages/AdminSurveyResults.tsx`
 
