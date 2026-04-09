@@ -4,11 +4,34 @@ import { supabase } from '@/integrations/supabase/client';
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Download, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import Papa from 'papaparse';
+
+const ArrayField = ({ label, values }: { label: string; values: string[] | null }) => (
+  <div>
+    <p className="text-xs font-medium text-muted-foreground mb-1">{label}</p>
+    {values && values.length > 0 ? (
+      <div className="flex flex-wrap gap-1">
+        {values.map((v) => (
+          <Badge key={v} variant="secondary" className="text-xs">{v}</Badge>
+        ))}
+      </div>
+    ) : (
+      <p className="text-sm text-muted-foreground italic">Not answered</p>
+    )}
+  </div>
+);
+
+const TextField = ({ label, value }: { label: string; value: string | null }) => (
+  <div>
+    <p className="text-xs font-medium text-muted-foreground mb-1">{label}</p>
+    <p className="text-sm">{value || <span className="text-muted-foreground italic">Not answered</span>}</p>
+  </div>
+);
 
 const AdminSurveyResults = () => {
   const { data: responses = [], isLoading } = useQuery({
@@ -112,7 +135,6 @@ const AdminSurveyResults = () => {
           </Card>
         ) : (
           <>
-            {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ChartCard title="Most Requested Pipeline Stages" data={stagesData} />
               <ChartCard title="Must-Have Fields" data={fieldsData} />
@@ -120,36 +142,41 @@ const AdminSurveyResults = () => {
               <ChartCard title="Preferred Views" data={viewsData} />
             </div>
 
-            {/* Response Table */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">All Responses</CardTitle>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Submitted</TableHead>
-                      <TableHead>Buyer/Seller Split</TableHead>
-                      <TableHead>Automation Interest</TableHead>
-                      <TableHead>Mobile</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {responses.map((r: any) => (
-                      <TableRow key={r.id}>
-                        <TableCell className="font-medium">{r.agent_name}</TableCell>
-                        <TableCell>{r.email}</TableCell>
-                        <TableCell>{format(new Date(r.created_at), 'MMM d, yyyy')}</TableCell>
-                        <TableCell className="max-w-[200px] truncate">{r.separate_buyer_seller}</TableCell>
-                        <TableCell className="max-w-[200px] truncate">{r.follow_up_automation}</TableCell>
-                        <TableCell className="max-w-[200px] truncate">{r.mobile_importance}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <CardContent>
+                <Accordion type="multiple" className="space-y-2">
+                  {responses.map((r: any) => (
+                    <AccordionItem key={r.id} value={r.id} className="border rounded-lg px-4">
+                      <AccordionTrigger className="hover:no-underline">
+                        <div className="flex items-center gap-3 text-left">
+                          <span className="font-medium">{r.agent_name}</span>
+                          <span className="text-muted-foreground text-sm">{r.email}</span>
+                          <span className="text-muted-foreground text-xs">
+                            {format(new Date(r.created_at), 'MMM d, yyyy')}
+                          </span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                          <ArrayField label="Pipeline Stages" values={r.pipeline_stages} />
+                          <TextField label="Separate Buyer/Seller Pipelines" value={r.separate_buyer_seller} />
+                          <ArrayField label="Must-Have Fields" values={r.must_have_fields} />
+                          <TextField label="Additional Fields Requested" value={r.additional_fields} />
+                          <TextField label="Follow-Up Automation Interest" value={r.follow_up_automation} />
+                          <ArrayField label="Activity Types" values={r.activity_types} />
+                          <ArrayField label="Integration Priorities" values={r.integration_priorities} />
+                          <TextField label="Biggest Pain Point" value={r.biggest_pain_point} />
+                          <ArrayField label="Desired Views" values={r.desired_views} />
+                          <TextField label="Mobile Importance" value={r.mobile_importance} />
+                          <TextField label="Additional Comments" value={r.additional_comments} />
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
               </CardContent>
             </Card>
           </>
