@@ -7,7 +7,8 @@ const CRAWLER_PATTERNS = [
 ];
 
 const DEFAULT_OG_IMAGE = "https://hub.realestateonpurpose.com/og-image.png";
-const SITE_URL = "https://hub.realestateonpurpose.com";
+const OG_SITE_URL = "https://hub.realestateonpurpose.com";
+const REDIRECT_URL = "https://purpose-driven-crm.lovable.app";
 
 function isCrawler(ua: string | null): boolean {
   if (!ua) return false;
