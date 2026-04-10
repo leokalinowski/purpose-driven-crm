@@ -1,34 +1,43 @@
 
 
-## Fix: "Never Checked" Count Showing Already-Checked DNC Contacts
+## Fix: Avg Attendance and Related Issues on Admin Events Management
 
 ### Root Cause
-47 of Pam's contacts were flagged as `dnc = true` by an older version of the DNC check function that did **not** set `dnc_last_checked`. The current stats query counts all contacts with `dnc_last_checked IS NULL` as "Never Checked," even though they've clearly been checked (they're on the DNC list).
 
-### Changes
+The `attendance_count` column on every event is **0** because there is no mechanism to populate it. The "Avg Attendance" stat card (line 239-241) computes the average from `attendance_count`, so it always shows **0**.
 
-**1. Fix the stats query in `useDNCStats.ts` (line 53-59)**
-Add `.eq('dnc', false)` to the "Never Checked" query so it only counts contacts that genuinely haven't been checked yet.
+The same issue applies to `leads_generated` — also always 0.
 
-**2. Backfill the legacy data (SQL migration)**
-Update the 47 contacts that have `dnc = true` but `dnc_last_checked IS NULL` — set their `dnc_last_checked` to `now()` since they were already verified.
+### Proposed Changes
 
-```sql
-UPDATE contacts
-SET dnc_last_checked = now()
-WHERE dnc = true AND dnc_last_checked IS NULL;
+**1. Use confirmed RSVPs as attendance proxy for past events (code fix)**
+
+Since there's no check-in workflow, the best proxy for attendance on past events is the confirmed RSVP count. Update the `calculateStats` function (line 239) to use `current_rsvp_count` for past events instead of the unpopulated `attendance_count`:
+
+```ts
+const avgAttendance = past > 0 
+  ? pastEvents.reduce((sum, e) => sum + (e.attendance_count || e.current_rsvp_count || 0), 0) / past
+  : 0;
 ```
 
-**3. Same fix in admin stats hook**
-Apply the same `.eq('dnc', false)` filter to the admin version of the stats query if it has the same issue.
+This way attendance data takes priority if manually entered, but falls back to RSVP count.
 
-### Result
-- "Never Checked" will show **0** for Pam (all her contacts have been processed)
-- "Safe to Call" and "DNC Listed" numbers remain accurate
-- Future contacts flagged as DNC will always have `dnc_last_checked` set (already fixed in current edge function code)
+**2. Same fallback in the Overview detail panel (line 816)**
+
+Change the Attendance tile in the expanded event detail from:
+```
+{event.attendance_count || 0}
+```
+to:
+```
+{event.attendance_count || event.current_rsvp_count || 0}
+```
+And update the label to "Attendance / RSVPs" when using the fallback, so it's transparent.
+
+**3. No other critical issues found**
+
+The rest of the page (filters, table, detail tabs, CSV export, task stats, ClickUp sync) works correctly. The `leads_generated` column is also 0 everywhere, but that's a data-entry issue — there's no automatic source for it.
 
 ### Files Modified
-- `src/hooks/useDNCStats.ts` — add `dnc = false` filter to "Never Checked" query
-- Admin DNC stats hook (if applicable) — same filter fix
-- New SQL migration — backfill `dnc_last_checked` for legacy DNC contacts
+- `src/pages/AdminEventsManagement.tsx` — 2 small changes to `calculateStats` and the overview detail tile
 
