@@ -40,7 +40,8 @@ Deno.serve(async (req) => {
         headers: { "Accept": "text/html" },
         redirect: "follow",
       });
-      const html = await spaRes.text();
+      let html = await spaRes.text();
+      html = html.replace('<head>', '<head><base href="https://purpose-driven-crm.lovable.app/">');
       return new Response(html, {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" },
