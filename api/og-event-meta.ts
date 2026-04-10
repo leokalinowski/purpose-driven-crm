@@ -31,28 +31,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const spaUrl = `${SITE_URL}/event/${slug}`;
   const ua = req.headers["user-agent"] as string | undefined;
 
-  // Human browsers: proxy the SPA with <base> tag
+  // ── Human browsers: serve the SPA shell (index.html from root) ──
+  // Assets use relative paths (/assets/...) which the vercel.json
+  // catch-all proxies to the Lovable origin automatically.
   if (!isCrawler(ua)) {
     try {
-      const spaRes = await fetch(`${SPA_ORIGIN}/event/${slug}`, {
+      const spaRes = await fetch(`${SPA_ORIGIN}/`, {
         headers: { Accept: "text/html" },
         redirect: "follow",
       });
-      let html = await spaRes.text();
-      html = html.replace("<head>", `<head><base href="${SPA_ORIGIN}/">`);
+      const html = await spaRes.text();
       res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Cache-Control", "no-store");
       return res.status(200).send(html);
     } catch (e) {
-      // Fallback redirect
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      return res.status(200).send(
-        `<!DOCTYPE html><html><head><meta charset="utf-8"/><script>window.location.replace("${spaUrl}");</script></head><body></body></html>`
-      );
+      // Fallback: redirect to the SPA directly
+      return res.redirect(302, `${SPA_ORIGIN}/event/${slug}`);
     }
   }
 
-  // Crawlers: serve OG meta tags
+  // ── Crawlers: serve OG meta tags ──
   try {
     const apiRes = await fetch(
       `${SUPABASE_URL}/rest/v1/events?public_slug=eq.${encodeURIComponent(slug)}&is_published=eq.true&select=title,description,header_image_url,event_date,location&limit=1`,
