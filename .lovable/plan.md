@@ -1,51 +1,61 @@
 
 
-## Redesign Survey Results: Full Response Detail View
+## Dynamic Open Graph Images for Event RSVP Pages
 
 ### Problem
-
-The current "All Responses" table only shows 6 of 13 fields, and long text is truncated with `max-w-[200px] truncate`. Array fields like pipeline stages, must-have fields, activity types, integration priorities, and desired views are completely hidden. Free-text fields (additional fields, biggest pain point, additional comments) are also missing.
+When sharing an event RSVP link (e.g. `/event/pams-open-house`), messaging apps and social platforms fetch the static `index.html` and see the generic CRM OG image — not the event's header banner. Link crawlers don't execute JavaScript, so the SPA can't dynamically set meta tags.
 
 ### Solution
+Create a Supabase Edge Function that acts as a proxy for event public pages. When a crawler requests an event URL, it returns HTML with the correct OG meta tags (title, description, image). For regular browsers, it redirects to the SPA.
 
-Replace the cramped table with a **card-per-response layout** using expandable accordions. Each response gets a card showing the respondent's name, email, and date at a glance, with all 13 fields visible when expanded.
-
-### Layout
+### How It Works
 
 ```text
-┌─────────────────────────────────────────────┐
-│ ▶ Jane Smith · jane@example.com · Apr 3     │
-├─────────────────────────────────────────────┤
-│  Pipeline Stages: [New Lead] [Contacted]... │
-│  Buyer/Seller Split: "Yes, completely..."   │
-│  Must-Have Fields: [Deal Value] [MLS #]...  │
-│  Additional Fields: "Lender contact info"   │
-│  Follow-Up Automation: "Very interested..." │
-│  Activity Types: [Phone Calls] [Emails]...  │
-│  Integration Priorities: [SphereSync]...    │
-│  Biggest Pain Point: "I lose track of..."   │
-│  Desired Views: [Kanban] [List View]        │
-│  Mobile Importance: "Critical — I'm on..."  │
-│  Additional Comments: "Love the idea!"      │
-└─────────────────────────────────────────────┘
+User shares: https://purpose-driven-crm.lovable.app/event/pams-open-house
+                              │
+                    Crawler hits URL
+                              │
+              ┌───────────────┴───────────────┐
+              │  Vercel rewrite rule sends     │
+              │  /event/:slug to edge function │
+              └───────────────┬───────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              │  Edge function detects crawler │
+              │  via User-Agent                │
+              │  → Returns minimal HTML with   │
+              │    correct OG tags + redirect  │
+              │                                │
+              │  Regular browser?              │
+              │  → Serves index.html as normal │
+              └───────────────────────────────┘
 ```
 
 ### Changes
 
-**File: `src/pages/AdminSurveyResults.tsx`**
+1. **New Edge Function: `supabase/functions/og-event-meta/index.ts`**
+   - Accepts a `slug` query parameter
+   - Fetches event data from the `events` table (title, description, header_image_url, event_date, location)
+   - If request is from a crawler (detected by User-Agent: facebookexternalhit, Twitterbot, iMessage, WhatsApp, Slackbot, LinkedInBot, etc.), returns a minimal HTML page with:
+     - `og:title` = event title
+     - `og:description` = event date + location
+     - `og:image` = header_image_url
+     - `twitter:card` = summary_large_image
+     - A meta refresh redirect to the real SPA page
+   - If request is from a regular browser, returns a 302 redirect to the SPA
 
-- Replace the `<Table>` section (lines 124-154) with an accordion-based card list
-- Each response renders as a collapsible `Accordion.Item` with:
-  - **Header**: Name, email, submission date
-  - **Body**: All 13 survey fields in a clean 2-column grid
-  - Array fields rendered as inline badges/chips
-  - Free-text fields shown in full (no truncation)
-- Import `Accordion` from the existing UI components
-- Keep the charts section and export button unchanged
+2. **Update `vercel.json`** — Add a rewrite rule so `/event/:slug` hits the edge function first:
+   ```json
+   { "source": "/event/:slug", "destination": "https://<supabase-url>/functions/v1/og-event-meta?slug=:slug" }
+   ```
+   This rewrite is transparent — browsers get redirected to the SPA, crawlers get the OG tags.
+
+3. **Deploy the edge function**
 
 ### Technical Details
-
-- Uses existing `src/components/ui/accordion.tsx` and `src/components/ui/badge.tsx`
-- No new components or dependencies needed
-- 1 file modified: `src/pages/AdminSurveyResults.tsx`
+- No changes to `EventPublicPage.tsx` or the SPA routing
+- The edge function only queries the `events` table (public slug + is_published check)
+- Crawler detection uses standard User-Agent strings
+- Fallback: if no header image exists, falls back to the current default OG image
+- 2 files changed: 1 new edge function, 1 `vercel.json` update
 
