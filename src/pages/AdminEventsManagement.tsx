@@ -236,8 +236,9 @@ const AdminEventsManagement = () => {
     const past = eventsList.filter(e => new Date(e.event_date) < now).length;
     const totalRSVPs = eventsList.reduce((sum, e) => sum + (e.current_rsvp_count || 0), 0);
     const totalCapacity = eventsList.reduce((sum, e) => sum + (e.max_capacity || 0), 0);
+    const pastEvents = eventsList.filter(e => new Date(e.event_date) < now);
     const avgAttendance = past > 0 
-      ? eventsList.filter(e => new Date(e.event_date) < now).reduce((sum, e) => sum + (e.attendance_count || 0), 0) / past
+      ? pastEvents.reduce((sum, e) => sum + (e.attendance_count || e.current_rsvp_count || 0), 0) / past
       : 0;
 
     setStats({
@@ -812,8 +813,10 @@ const AdminEventsManagement = () => {
                                                   </p>
                                                 </div>
                                                 <div className="p-3 rounded-lg bg-background border">
-                                                  <p className="text-xs text-muted-foreground">Attendance</p>
-                                                  <p className="text-xl font-bold">{event.attendance_count || 0}</p>
+                                                  <p className="text-xs text-muted-foreground">
+                                                    {event.attendance_count ? 'Attendance' : 'RSVPs'}
+                                                  </p>
+                                                  <p className="text-xl font-bold">{event.attendance_count || event.current_rsvp_count || 0}</p>
                                                 </div>
                                                 <div className="p-3 rounded-lg bg-background border">
                                                   <p className="text-xs text-muted-foreground">Leads</p>
