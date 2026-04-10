@@ -31,10 +31,11 @@ Deno.serve(async (req) => {
     return new Response("Missing slug", { status: 400, headers: corsHeaders });
   }
 
-  const spaUrl = `${SITE_URL}/event/${slug}`;
+  const spaUrl = `${OG_SITE_URL}/event/${slug}`;
+  const redirectUrl = `${REDIRECT_URL}/event/${slug}`;
 
   if (!isCrawler(req.headers.get("user-agent"))) {
-    return new Response(null, { status: 302, headers: { ...corsHeaders, Location: spaUrl } });
+    return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirectUrl } });
   }
 
   try {
