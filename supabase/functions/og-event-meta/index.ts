@@ -6,8 +6,8 @@ const CRAWLER_PATTERNS = [
   "bingbot", "iMessageLinkPreviews", "Applebot", "Pinterest", "Embedly",
 ];
 
-const DEFAULT_OG_IMAGE = "https://purpose-driven-crm.lovable.app/og-image.png";
-const SITE_URL = "https://purpose-driven-crm.lovable.app";
+const DEFAULT_OG_IMAGE = "https://hub.realestateonpurpose.com/og-image.png";
+const SITE_URL = "https://hub.realestateonpurpose.com";
 
 function isCrawler(ua: string | null): boolean {
   if (!ua) return false;
