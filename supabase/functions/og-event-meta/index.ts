@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
     const event = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
 
     if (!event) {
-      return new Response(null, { status: 302, headers: { ...corsHeaders, Location: spaUrl } });
+      return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirectUrl } });
     }
 
     const ogTitle = event.title;
@@ -82,6 +82,6 @@ Deno.serve(async (req) => {
     return new Response(html, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } });
   } catch (err) {
     console.error("og-event-meta error:", err);
-    return new Response(null, { status: 302, headers: { ...corsHeaders, Location: spaUrl } });
+    return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirectUrl } });
   }
 });
