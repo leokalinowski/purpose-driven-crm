@@ -1,0 +1,1 @@
+UPDATE contacts SET dnc_last_checked = now() WHERE dnc = true AND dnc_last_checked IS NULL;
