@@ -1,43 +1,39 @@
 
 
-## Fix: Avg Attendance and Related Issues on Admin Events Management
+## Fix: RSVP Pages Redirect Loop (ERR_TOO_MANY_REDIRECTS)
 
 ### Root Cause
 
-The `attendance_count` column on every event is **0** because there is no mechanism to populate it. The "Avg Attendance" stat card (line 239-241) computes the average from `attendance_count`, so it always shows **0**.
+The `og-event-meta` edge function has two jobs:
+1. **Crawlers** (Facebook, Twitter, etc.) get HTML with OG meta tags — these should reference `hub.realestateonpurpose.com`
+2. **Regular browsers** get a 302 redirect to the actual SPA page
 
-The same issue applies to `leads_generated` — also always 0.
+The problem: `vercel.json` rewrites ALL `/event/:slug` requests to the edge function. When the edge function redirects non-crawlers back to `hub.realestateonpurpose.com/event/:slug`, Vercel intercepts it again and sends it back to the edge function — creating an infinite redirect loop.
 
-### Proposed Changes
+Previously `SITE_URL` was `purpose-driven-crm.lovable.app` (the direct Lovable URL), so non-crawler redirects bypassed Vercel entirely. Changing it to `hub.realestateonpurpose.com` broke this.
 
-**1. Use confirmed RSVPs as attendance proxy for past events (code fix)**
+### Fix
 
-Since there's no check-in workflow, the best proxy for attendance on past events is the confirmed RSVP count. Update the `calculateStats` function (line 239) to use `current_rsvp_count` for past events instead of the unpopulated `attendance_count`:
+**File: `supabase/functions/og-event-meta/index.ts`**
 
-```ts
-const avgAttendance = past > 0 
-  ? pastEvents.reduce((sum, e) => sum + (e.attendance_count || e.current_rsvp_count || 0), 0) / past
-  : 0;
-```
+Split into two constants:
+- `OG_SITE_URL = "https://hub.realestateonpurpose.com"` — used in OG meta tags (og:url, meta refresh) so link previews show the correct branded URL
+- `REDIRECT_URL = "https://purpose-driven-crm.lovable.app"` — used for 302 non-crawler redirects to bypass Vercel's rewrite and land directly on the SPA
 
-This way attendance data takes priority if manually entered, but falls back to RSVP count.
+Changes:
+- Line 10: Add `REDIRECT_URL` constant
+- Lines 33-36: Non-crawler redirect uses `REDIRECT_URL` instead of `SITE_URL`
+- Lines 51-52: Fallback redirect uses `REDIRECT_URL`
+- Lines 67, 77, 83: OG meta tags and meta-refresh keep using `OG_SITE_URL`
 
-**2. Same fallback in the Overview detail panel (line 816)**
+Then redeploy the edge function.
 
-Change the Attendance tile in the expanded event detail from:
-```
-{event.attendance_count || 0}
-```
-to:
-```
-{event.attendance_count || event.current_rsvp_count || 0}
-```
-And update the label to "Attendance / RSVPs" when using the fallback, so it's transparent.
-
-**3. No other critical issues found**
-
-The rest of the page (filters, table, detail tabs, CSV export, task stats, ClickUp sync) works correctly. The `leads_generated` column is also 0 everywhere, but that's a data-entry issue — there's no automatic source for it.
+### Result
+- Regular users visiting `hub.realestateonpurpose.com/event/slug` → Vercel rewrites to edge function → 302 to `purpose-driven-crm.lovable.app/event/slug` → SPA loads correctly
+- Crawlers → get OG HTML with `hub.realestateonpurpose.com` URLs → link previews show correct domain
+- No more redirect loop
 
 ### Files Modified
-- `src/pages/AdminEventsManagement.tsx` — 2 small changes to `calculateStats` and the overview detail tile
+- `supabase/functions/og-event-meta/index.ts` — split SITE_URL into OG vs redirect URLs
+- Edge function redeployed
 
