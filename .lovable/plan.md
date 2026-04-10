@@ -1,58 +1,88 @@
 
+Goal: fix the public RSVP page so it reliably loads on `hub.realestateonpurpose.com`, stays public for non-users, and keeps dynamic OG previews.
 
-## Fix: RSVP Pages Show Raw HTML (Supabase Content-Type Restriction)
+What I verified
+- The public route itself is not auth-gated in app code:
+  - `src/App.tsx` exposes `/event/:slug` publicly
+  - `src/pages/EventPublicPage.tsx` does not redirect to login
+  - `src/hooks/useRSVP.ts` and `src/hooks/useRSVPQuestions.ts` use public reads/RPCs for the RSVP flow
+- I tested the current hub event page and it is still broken:
+  - URL stayed on `https://hub.realestateonpurpose.com/event/purge-perk`
+  - browser hit the boot timeout
+  - the event document returned 200, but the JS/CSS requests failed
+- This does not currently look like an auth/RLS lockout. The app is failing before React mounts.
 
-### Root Cause (Confirmed via Network Headers)
+Root cause
+- The current Vercel function for humans fetches `https://purpose-driven-crm.lovable.app/event/:slug` and injects:
+  - `<base href="https://purpose-driven-crm.lovable.app/">`
+- That forces asset loading from the Lovable origin instead of the hub proxy path.
+- In the browser test, the event page then requested hashed assets directly from `purpose-driven-crm.lovable.app` and those requests failed, which explains the permanent loading screen.
+- So the weak point is the human HTML delivery strategy in `api/og-event-meta.ts`, not the public RSVP route permissions.
 
-Supabase's gateway **forces** two headers on all edge function responses:
-- `Content-Type: text/plain` (overrides our `text/html`)
-- `Content-Security-Policy: default-src 'none'; sandbox`
+Ultimate fix
+1. Replace the human-page proxy strategy
+- In `api/og-event-meta.ts`, stop fetching `/${event-slug}` from the published app for human users.
+- Instead fetch the current SPA shell from the app root (`https://purpose-driven-crm.lovable.app/` or `/index.html`), not a deep event route.
+- Return that shell as HTML for humans.
 
-This means the `og-event-meta` Supabase edge function **cannot serve renderable HTML to browsers**. The browser receives the HTML as plain text and displays the raw source code. No amount of header-setting in the edge function will fix this — it's a Supabase gateway restriction.
+2. Remove the `<base>` injection for humans
+- Do not force assets to load from `purpose-driven-crm.lovable.app`.
+- Let relative asset paths stay relative so the browser requests:
+  - `https://hub.realestateonpurpose.com/assets/...`
+- Your existing `vercel.json` catch-all already proxies those asset requests to the published app, and that path is what was working on the hub homepage.
 
-Crawlers (Facebook, Twitter) still work because they parse OG tags from the response body regardless of Content-Type.
+3. Keep crawler OG handling separate
+- Keep `/event/:slug -> /api/og-event-meta?slug=:slug`
+- Keep crawler detection and dynamic OG tags in `api/og-event-meta.ts`
+- Crawlers should still get branded metadata for `hub.realestateonpurpose.com`
+- Humans should get the plain SPA shell, not crawler HTML and not origin-forced assets
 
-### Solution: Move Human Traffic to a Vercel Serverless Function
+4. Make human responses uncached
+- Set human-side HTML cache to `no-store` or equivalent
+- This avoids stale HTML pointing at stale hashed assets after new publishes
 
-Create a Vercel serverless function at `api/og-event-meta.ts` that replaces the Supabase edge function for browser traffic. Vercel serverless functions **do** respect the Content-Type you set.
+5. Keep the page fully public
+- Do not add any auth checks to `/event/:slug`
+- Preserve the public `events` lookup and public RSVP RPC flow
+- If needed, only harden error handling, not access control
 
-### Implementation
+6. Fix one public RSVP bug while touching the flow
+- In `src/components/events/rsvp/RSVPForm.tsx`, the form currently disables submit when at capacity:
+  - `disabled={loading || isAtCapacity}`
+- That contradicts the “Join Waitlist” behavior
+- Change it so waitlist submissions remain possible when capacity is reached
 
-**1. Create `api/og-event-meta.ts` (new Vercel serverless function)**
+Files to update
+- `api/og-event-meta.ts`
+  - human branch should serve current SPA shell from app root
+  - remove `<base href="https://purpose-driven-crm.lovable.app/">`
+  - keep crawler OG HTML
+  - add strict no-store for human HTML
+- `vercel.json`
+  - likely keep as-is unless a small rewrite adjustment is needed after implementation
+- `src/components/events/rsvp/RSVPForm.tsx`
+  - allow waitlist submission instead of disabling the button at capacity
+- optionally `src/hooks/useRSVP.ts`
+  - only minor cleanup if we want clearer public error messages, not for the core fix
 
-This function contains the same logic currently in the Supabase edge function:
-- Detect crawlers via User-Agent
-- **Crawlers**: Query Supabase REST API for event data, return HTML with dynamic OG meta tags (title, description, event banner image) and `Content-Type: text/html`
-- **Humans**: Fetch the SPA's `index.html` from `purpose-driven-crm.lovable.app`, inject `<base href>` tag, return with `Content-Type: text/html`
+Verification I will do after implementation
+1. Open Pam’s public event on:
+- `https://hub.realestateonpurpose.com/event/...`
+2. Confirm:
+- URL remains on `hub.realestateonpurpose.com`
+- no boot timeout
+- JS/CSS load successfully
+- React mounts and the event content renders
+- the page is still accessible while logged out
+3. Confirm OG behavior:
+- crawler response still includes correct event title/image/meta
+4. Confirm RSVP behavior:
+- form renders
+- waitlist behavior works if event is full
+- if you want me to test a live RSVP submission too, I should use a clearly marked test email so we don’t pollute real attendee data
 
-**2. Update `vercel.json`**
-
-Change the `/event/:slug` rewrite to point to the local API function instead of the Supabase edge function:
-
-```text
-Before:
-  /event/:slug → https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/og-event-meta?slug=:slug
-
-After:
-  /event/:slug → /api/og-event-meta?slug=:slug
-  /(.*) → https://purpose-driven-crm.lovable.app/$1  (unchanged catch-all)
-```
-
-**3. Keep Supabase edge function as-is**
-
-No changes needed — it can remain deployed for any direct API usage, but browser traffic will no longer go through it.
-
-### What This Fixes
-- HTML renders properly (correct `Content-Type: text/html`, no sandbox CSP)
-- URL stays on `hub.realestateonpurpose.com` (proxy, not redirect)
-- JS/CSS assets load via `<base>` tag pointing to Lovable origin
-- Social media link previews continue to show event banner images
-- Bad/missing slugs show clean "Event not found" error
-
-### Files
-- `api/og-event-meta.ts` — **new** Vercel serverless function
-- `vercel.json` — update rewrite target
-
-### Note
-The `api/` directory is a Vercel convention for serverless functions. Since the project already uses `vercel.json` and is deployed to Vercel for the hub domain, this will work automatically — Vercel detects and deploys functions in `api/`.
-
+Expected result
+- public RSVP pages load again on the branded domain
+- they stay accessible to normal non-user visitors
+- dynamic preview images remain intact
+- no more raw HTML / no more endless loading state
