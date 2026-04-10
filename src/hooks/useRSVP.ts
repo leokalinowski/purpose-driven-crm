@@ -150,10 +150,13 @@ export const useRSVP = () => {
         .select('*')
         .eq('public_slug', slug)
         .eq('is_published', true)
-        .single();
+        .maybeSingle();
 
-      if (eventError || !event) {
-        throw eventError || new Error('Event not found');
+      if (eventError) {
+        throw eventError;
+      }
+      if (!event) {
+        throw new Error('Event not found');
       }
 
       // Then fetch the agent profile separately if agent_id exists (contact info only)
