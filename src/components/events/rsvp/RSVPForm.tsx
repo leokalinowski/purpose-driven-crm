@@ -266,7 +266,7 @@ export const RSVPForm = ({ eventId, maxCapacity, currentCount, onSuccess }: RSVP
       <Button
         type="submit"
         className="w-full"
-        disabled={loading || isAtCapacity}
+        disabled={loading}
       >
         {loading ? (
           <>
