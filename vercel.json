@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/event/:slug",
+      "destination": "https://cguoaokqwgqvzkqqezcq.supabase.co/functions/v1/og-event-meta?slug=:slug"
+    },
+    {
       "source": "/(.*)",
       "destination": "/"
     }
