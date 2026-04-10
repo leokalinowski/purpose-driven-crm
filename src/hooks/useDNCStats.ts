@@ -54,6 +54,7 @@ export const useDNCStats = () => {
         .from('contacts')
         .select('*', { count: 'exact', head: true })
         .eq('agent_id', effectiveAgentId)
+        .eq('dnc', false)
         .is('dnc_last_checked', null)
         .not('phone', 'is', null)
         .neq('phone', '');
