@@ -7,8 +7,8 @@ const CRAWLER_PATTERNS = [
 ];
 
 const DEFAULT_OG_IMAGE = "https://hub.realestateonpurpose.com/og-image.png";
-const OG_SITE_URL = "https://hub.realestateonpurpose.com";
-const REDIRECT_URL = "https://purpose-driven-crm.lovable.app";
+const SITE_URL = "https://hub.realestateonpurpose.com";
+const SPA_ORIGIN = "https://purpose-driven-crm.lovable.app";
 
 function isCrawler(ua: string | null): boolean {
   if (!ua) return false;
@@ -31,13 +31,29 @@ Deno.serve(async (req) => {
     return new Response("Missing slug", { status: 400, headers: corsHeaders });
   }
 
-  const spaUrl = `${OG_SITE_URL}/event/${slug}`;
-  const redirectUrl = `${REDIRECT_URL}/event/${slug}`;
+  const spaUrl = `${SITE_URL}/event/${slug}`;
 
+  // For regular browsers: proxy the SPA's index.html so the user stays on hub.realestateonpurpose.com
   if (!isCrawler(req.headers.get("user-agent"))) {
-    return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirectUrl } });
+    try {
+      const spaRes = await fetch(`${SPA_ORIGIN}/event/${slug}`, {
+        headers: { "Accept": "text/html" },
+        redirect: "follow",
+      });
+      const html = await spaRes.text();
+      return new Response(html, {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" },
+      });
+    } catch (e) {
+      console.error("Failed to proxy SPA:", e);
+      // Fallback: serve a simple page that loads the SPA client-side
+      const fallback = `<!DOCTYPE html><html><head><meta charset="utf-8"/><script>window.location.replace("${spaUrl}");</script></head><body></body></html>`;
+      return new Response(fallback, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } });
+    }
   }
 
+  // For crawlers: serve OG meta tags
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -51,7 +67,9 @@ Deno.serve(async (req) => {
     const event = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
 
     if (!event) {
-      return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirectUrl } });
+      // No published event found — just serve a redirect to the SPA page
+      const fallback = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta http-equiv="refresh" content="0;url=${spaUrl}"/></head><body><p>Redirecting…</p></body></html>`;
+      return new Response(fallback, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } });
     }
 
     const ogTitle = event.title;
@@ -82,6 +100,7 @@ Deno.serve(async (req) => {
     return new Response(html, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } });
   } catch (err) {
     console.error("og-event-meta error:", err);
-    return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirectUrl } });
+    const fallback = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta http-equiv="refresh" content="0;url=${spaUrl}"/></head><body><p>Redirecting…</p></body></html>`;
+    return new Response(fallback, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } });
   }
 });
