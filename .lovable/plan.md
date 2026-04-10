@@ -1,99 +1,47 @@
 
 
-## Add Dynamic Meta Tags for All Pages via Vercel Function
+## Fix: Avg Attendance Showing 0 (Not Reading Check-In Data)
 
-### Approach
+### Root Cause
 
-Extend the existing working pattern: the Vercel serverless function at `api/og-event-meta.ts` already handles `/event/:slug` with crawler detection. We'll create a **general-purpose** Vercel function (`api/og-meta.ts`) that handles all routes, keeping the event-specific one intact.
+The `attendance_count` column on the `events` table is always 0 — it is never updated when guests are checked in. The actual attendance data lives in the `event_rsvps` table (`check_in_status = 'checked_in'`). For example, Purge & Perk has 16 checked-in guests but `attendance_count = 0`.
 
-### How It Works
+The admin page reads `e.attendance_count || e.current_rsvp_count` which always returns 0 for attendance, falling back to RSVP count.
 
-**For crawlers**: The function inspects the URL path and generates appropriate OG tags based on the page type:
+### Solution
 
-| Route | Title | Description | Image |
-|-------|-------|-------------|-------|
-| `/event/:slug` | Event title | Date + Location | Event banner (`header_image_url`) |
-| `/` | Real Estate on Purpose - CRM | Professional Real Estate CRM... | Default OG image |
-| `/pricing` | Pricing - Real Estate on Purpose | Plans and pricing... | Default OG image |
-| `/newsletter` | Newsletter - Real Estate on Purpose | ... | Default OG image |
-| `/pipeline` | Pipeline - Real Estate on Purpose | ... | Default OG image |
-| Other pages | Page Name - Real Estate on Purpose | Static description | Default OG image |
+Two changes:
 
-Only `/event/:slug` needs a database lookup. All other pages use a static mapping — simple, fast, and cannot break.
+**1. Create a database trigger to keep `attendance_count` in sync**
 
-**For humans**: Serve the SPA shell exactly as today (fetch root `index.html`, return with `text/html`). No change to human delivery.
+Add a trigger on `event_rsvps` that updates `events.attendance_count` whenever `check_in_status` changes — same pattern as the existing `update_event_rsvp_count` trigger that keeps `current_rsvp_count` in sync.
 
-### Implementation
+**2. Backfill existing data**
 
-**1. Create `api/og-meta.ts`** — A new general-purpose Vercel function
+Run a one-time SQL update to set `attendance_count` for all events based on current check-in data:
 
-- Accepts `path` query param (the full URL path like `/event/purge-perk` or `/pricing`)
-- Crawler detection same as existing function
-- For humans: fetch and return the SPA shell (same logic as current `og-event-meta.ts`)
-- For crawlers: match the path against known routes and return appropriate OG HTML
-  - If path matches `/event/:slug`, query Supabase for event data (reuse existing logic)
-  - If path matches a known static page, use the static title/description
-  - Fallback: generic site-level OG tags
-
-**2. Update `vercel.json`** — Route all traffic through the new function
-
-```json
-{
-  "rewrites": [
-    {
-      "source": "/event/:slug",
-      "destination": "/api/og-meta?path=/event/:slug"
-    },
-    {
-      "source": "/pricing",
-      "destination": "/api/og-meta?path=/pricing"
-    },
-    {
-      "source": "/newsletter",
-      "destination": "/api/og-meta?path=/newsletter"
-    },
-    {
-      "source": "/pipeline",
-      "destination": "/api/og-meta?path=/pipeline"
-    },
-    {
-      "source": "/coaching",
-      "destination": "/api/og-meta?path=/coaching"
-    },
-    {
-      "source": "/resources",
-      "destination": "/api/og-meta?path=/resources"
-    },
-    {
-      "source": "/support",
-      "destination": "/api/og-meta?path=/support"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "https://purpose-driven-crm.lovable.app/$1"
-    }
-  ]
-}
+```sql
+UPDATE events e
+SET attendance_count = (
+  SELECT COUNT(*)
+  FROM event_rsvps r
+  WHERE r.event_id = e.id
+  AND r.check_in_status = 'checked_in'
+);
 ```
 
-The catch-all at the bottom still proxies assets and any unmatched routes to the Lovable origin.
+### What changes
 
-**3. Keep `api/og-event-meta.ts`** — No changes, it can stay as a backup. The new function replaces its role.
+| File / Asset | Change |
+|---|---|
+| New migration | Trigger `update_event_attendance_count` on `event_rsvps` + backfill query |
+| No app code changes | The admin page already reads `attendance_count` correctly — it just needs the column to be populated |
 
-### Safety measures
+### After this
 
-- Human delivery is identical to the working solution (fetch SPA root, serve as HTML, `no-store` cache)
-- Static pages don't query the database at all — zero risk of breaking
-- Only `/event/:slug` hits Supabase, using the same proven query
-- If anything fails, fallback to generic OG tags + SPA shell
-
-### Files
-- `api/og-meta.ts` — new general-purpose OG + proxy function
-- `vercel.json` — add rewrite rules for key pages
-- `api/og-event-meta.ts` — keep as-is (no changes)
-
-### After implementation
-- Test Pam's event page to confirm it still loads
-- Test a static page like `/pricing` with a crawler user-agent to verify OG tags
-- Test human access to confirm SPA still hydrates
+- Purge & Perk will show attendance = 16
+- Right Sizing will show attendance = 8
+- The Real Estate Scholarship will show attendance = 3
+- Avg Attendance card will compute correctly across past events
+- Future check-ins will automatically update the count via the trigger
 
