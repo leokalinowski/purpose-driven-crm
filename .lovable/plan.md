@@ -1,88 +1,99 @@
 
-Goal: fix the public RSVP page so it reliably loads on `hub.realestateonpurpose.com`, stays public for non-users, and keeps dynamic OG previews.
 
-What I verified
-- The public route itself is not auth-gated in app code:
-  - `src/App.tsx` exposes `/event/:slug` publicly
-  - `src/pages/EventPublicPage.tsx` does not redirect to login
-  - `src/hooks/useRSVP.ts` and `src/hooks/useRSVPQuestions.ts` use public reads/RPCs for the RSVP flow
-- I tested the current hub event page and it is still broken:
-  - URL stayed on `https://hub.realestateonpurpose.com/event/purge-perk`
-  - browser hit the boot timeout
-  - the event document returned 200, but the JS/CSS requests failed
-- This does not currently look like an auth/RLS lockout. The app is failing before React mounts.
+## Add Dynamic Meta Tags for All Pages via Vercel Function
 
-Root cause
-- The current Vercel function for humans fetches `https://purpose-driven-crm.lovable.app/event/:slug` and injects:
-  - `<base href="https://purpose-driven-crm.lovable.app/">`
-- That forces asset loading from the Lovable origin instead of the hub proxy path.
-- In the browser test, the event page then requested hashed assets directly from `purpose-driven-crm.lovable.app` and those requests failed, which explains the permanent loading screen.
-- So the weak point is the human HTML delivery strategy in `api/og-event-meta.ts`, not the public RSVP route permissions.
+### Approach
 
-Ultimate fix
-1. Replace the human-page proxy strategy
-- In `api/og-event-meta.ts`, stop fetching `/${event-slug}` from the published app for human users.
-- Instead fetch the current SPA shell from the app root (`https://purpose-driven-crm.lovable.app/` or `/index.html`), not a deep event route.
-- Return that shell as HTML for humans.
+Extend the existing working pattern: the Vercel serverless function at `api/og-event-meta.ts` already handles `/event/:slug` with crawler detection. We'll create a **general-purpose** Vercel function (`api/og-meta.ts`) that handles all routes, keeping the event-specific one intact.
 
-2. Remove the `<base>` injection for humans
-- Do not force assets to load from `purpose-driven-crm.lovable.app`.
-- Let relative asset paths stay relative so the browser requests:
-  - `https://hub.realestateonpurpose.com/assets/...`
-- Your existing `vercel.json` catch-all already proxies those asset requests to the published app, and that path is what was working on the hub homepage.
+### How It Works
 
-3. Keep crawler OG handling separate
-- Keep `/event/:slug -> /api/og-event-meta?slug=:slug`
-- Keep crawler detection and dynamic OG tags in `api/og-event-meta.ts`
-- Crawlers should still get branded metadata for `hub.realestateonpurpose.com`
-- Humans should get the plain SPA shell, not crawler HTML and not origin-forced assets
+**For crawlers**: The function inspects the URL path and generates appropriate OG tags based on the page type:
 
-4. Make human responses uncached
-- Set human-side HTML cache to `no-store` or equivalent
-- This avoids stale HTML pointing at stale hashed assets after new publishes
+| Route | Title | Description | Image |
+|-------|-------|-------------|-------|
+| `/event/:slug` | Event title | Date + Location | Event banner (`header_image_url`) |
+| `/` | Real Estate on Purpose - CRM | Professional Real Estate CRM... | Default OG image |
+| `/pricing` | Pricing - Real Estate on Purpose | Plans and pricing... | Default OG image |
+| `/newsletter` | Newsletter - Real Estate on Purpose | ... | Default OG image |
+| `/pipeline` | Pipeline - Real Estate on Purpose | ... | Default OG image |
+| Other pages | Page Name - Real Estate on Purpose | Static description | Default OG image |
 
-5. Keep the page fully public
-- Do not add any auth checks to `/event/:slug`
-- Preserve the public `events` lookup and public RSVP RPC flow
-- If needed, only harden error handling, not access control
+Only `/event/:slug` needs a database lookup. All other pages use a static mapping — simple, fast, and cannot break.
 
-6. Fix one public RSVP bug while touching the flow
-- In `src/components/events/rsvp/RSVPForm.tsx`, the form currently disables submit when at capacity:
-  - `disabled={loading || isAtCapacity}`
-- That contradicts the “Join Waitlist” behavior
-- Change it so waitlist submissions remain possible when capacity is reached
+**For humans**: Serve the SPA shell exactly as today (fetch root `index.html`, return with `text/html`). No change to human delivery.
 
-Files to update
-- `api/og-event-meta.ts`
-  - human branch should serve current SPA shell from app root
-  - remove `<base href="https://purpose-driven-crm.lovable.app/">`
-  - keep crawler OG HTML
-  - add strict no-store for human HTML
-- `vercel.json`
-  - likely keep as-is unless a small rewrite adjustment is needed after implementation
-- `src/components/events/rsvp/RSVPForm.tsx`
-  - allow waitlist submission instead of disabling the button at capacity
-- optionally `src/hooks/useRSVP.ts`
-  - only minor cleanup if we want clearer public error messages, not for the core fix
+### Implementation
 
-Verification I will do after implementation
-1. Open Pam’s public event on:
-- `https://hub.realestateonpurpose.com/event/...`
-2. Confirm:
-- URL remains on `hub.realestateonpurpose.com`
-- no boot timeout
-- JS/CSS load successfully
-- React mounts and the event content renders
-- the page is still accessible while logged out
-3. Confirm OG behavior:
-- crawler response still includes correct event title/image/meta
-4. Confirm RSVP behavior:
-- form renders
-- waitlist behavior works if event is full
-- if you want me to test a live RSVP submission too, I should use a clearly marked test email so we don’t pollute real attendee data
+**1. Create `api/og-meta.ts`** — A new general-purpose Vercel function
 
-Expected result
-- public RSVP pages load again on the branded domain
-- they stay accessible to normal non-user visitors
-- dynamic preview images remain intact
-- no more raw HTML / no more endless loading state
+- Accepts `path` query param (the full URL path like `/event/purge-perk` or `/pricing`)
+- Crawler detection same as existing function
+- For humans: fetch and return the SPA shell (same logic as current `og-event-meta.ts`)
+- For crawlers: match the path against known routes and return appropriate OG HTML
+  - If path matches `/event/:slug`, query Supabase for event data (reuse existing logic)
+  - If path matches a known static page, use the static title/description
+  - Fallback: generic site-level OG tags
+
+**2. Update `vercel.json`** — Route all traffic through the new function
+
+```json
+{
+  "rewrites": [
+    {
+      "source": "/event/:slug",
+      "destination": "/api/og-meta?path=/event/:slug"
+    },
+    {
+      "source": "/pricing",
+      "destination": "/api/og-meta?path=/pricing"
+    },
+    {
+      "source": "/newsletter",
+      "destination": "/api/og-meta?path=/newsletter"
+    },
+    {
+      "source": "/pipeline",
+      "destination": "/api/og-meta?path=/pipeline"
+    },
+    {
+      "source": "/coaching",
+      "destination": "/api/og-meta?path=/coaching"
+    },
+    {
+      "source": "/resources",
+      "destination": "/api/og-meta?path=/resources"
+    },
+    {
+      "source": "/support",
+      "destination": "/api/og-meta?path=/support"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "https://purpose-driven-crm.lovable.app/$1"
+    }
+  ]
+}
+```
+
+The catch-all at the bottom still proxies assets and any unmatched routes to the Lovable origin.
+
+**3. Keep `api/og-event-meta.ts`** — No changes, it can stay as a backup. The new function replaces its role.
+
+### Safety measures
+
+- Human delivery is identical to the working solution (fetch SPA root, serve as HTML, `no-store` cache)
+- Static pages don't query the database at all — zero risk of breaking
+- Only `/event/:slug` hits Supabase, using the same proven query
+- If anything fails, fallback to generic OG tags + SPA shell
+
+### Files
+- `api/og-meta.ts` — new general-purpose OG + proxy function
+- `vercel.json` — add rewrite rules for key pages
+- `api/og-event-meta.ts` — keep as-is (no changes)
+
+### After implementation
+- Test Pam's event page to confirm it still loads
+- Test a static page like `/pricing` with a crawler user-agent to verify OG tags
+- Test human access to confirm SPA still hydrates
+
