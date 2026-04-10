@@ -7,7 +7,8 @@ const CRAWLER_PATTERNS = [
 ];
 
 const DEFAULT_OG_IMAGE = "https://hub.realestateonpurpose.com/og-image.png";
-const SITE_URL = "https://hub.realestateonpurpose.com";
+const OG_SITE_URL = "https://hub.realestateonpurpose.com";
+const REDIRECT_URL = "https://purpose-driven-crm.lovable.app";
 
 function isCrawler(ua: string | null): boolean {
   if (!ua) return false;
@@ -30,10 +31,11 @@ Deno.serve(async (req) => {
     return new Response("Missing slug", { status: 400, headers: corsHeaders });
   }
 
-  const spaUrl = `${SITE_URL}/event/${slug}`;
+  const spaUrl = `${OG_SITE_URL}/event/${slug}`;
+  const redirectUrl = `${REDIRECT_URL}/event/${slug}`;
 
   if (!isCrawler(req.headers.get("user-agent"))) {
-    return new Response(null, { status: 302, headers: { ...corsHeaders, Location: spaUrl } });
+    return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirectUrl } });
   }
 
   try {
@@ -49,7 +51,7 @@ Deno.serve(async (req) => {
     const event = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
 
     if (!event) {
-      return new Response(null, { status: 302, headers: { ...corsHeaders, Location: spaUrl } });
+      return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirectUrl } });
     }
 
     const ogTitle = event.title;
@@ -80,6 +82,6 @@ Deno.serve(async (req) => {
     return new Response(html, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } });
   } catch (err) {
     console.error("og-event-meta error:", err);
-    return new Response(null, { status: 302, headers: { ...corsHeaders, Location: spaUrl } });
+    return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirectUrl } });
   }
 });
