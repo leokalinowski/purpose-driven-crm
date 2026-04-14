@@ -2,104 +2,80 @@
 
 ## Plan: Fix 4 Security Issues
 
-### Fix 1 — `.gitignore`: Add env file patterns
+### Fix 1 — `src/main.tsx`: Gate console logging behind DEV check
 
-Append these lines to the bottom of `.gitignore`:
+Wrap lines 7-11 (the four `console.log` statements logging initialization info, Supabase URL, environment, and base URL) inside `if (import.meta.env.DEV) { ... }`. Also gate the success log on line 67 (`console.log('✅ React app mounted successfully')`).
 
-```
-.env
-.env.local
-.env.production
-.env.*.local
-```
-
-**File changed:** `.gitignore`
+**File changed:** `src/main.tsx`
 
 ---
 
-### Fix 2 — `src/integrations/supabase/client.ts`: Use env vars + runtime guard
+### Fix 2 — XSS: Sanitize all `dangerouslySetInnerHTML` usage
 
-Replace the entire file with:
+Install `dompurify` and `@types/dompurify`, then add `import DOMPurify from 'dompurify'` and wrap every `__html` value with `DOMPurify.sanitize(...)` in these files:
 
-```ts
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from './types';
+| File | Lines |
+|------|-------|
+| `src/components/newsletter/builder/BlockRenderer.tsx` | Lines 216, 416 |
+| `src/components/admin/AdminNewsletterPreview.tsx` | Line 297 |
+| `src/components/newsletter/NewsletterPreview.tsx` | Line 334 |
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+**Files changed:** 3 component files + `package.json`
 
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  throw new Error(
-    'Missing Supabase environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY must be set'
-  );
+---
+
+### Fix 3 — Admin pages: Add loading guard before content renders
+
+Several admin pages either lack `useUserRole` entirely or have no early return while auth/role state is loading. Add `useUserRole` + loading guard + admin redirect to each:
+
+| Page | Current state | Fix needed |
+|------|--------------|------------|
+| `AdminCoachingManagement.tsx` | No admin check at all | Add `useUserRole`, loading guard, redirect |
+| `AdminNewsletter.tsx` | No admin check at all | Add `useUserRole`, loading guard, redirect |
+| `AdminSurveyResults.tsx` | No admin check at all | Add `useUserRole`, loading guard, redirect |
+| `AdminAnnouncements.tsx` | No admin check at all | Add `useUserRole`, loading guard, redirect |
+| `AdminSocialScheduler.tsx` | No admin check at all | Add `useUserRole`, loading guard, redirect |
+| `AdminDatabaseManagement.tsx` | Has `useUserRole` but no loading guard | Add `loading` destructure + early return |
+| `AdminTeamManagement.tsx` | Has auth check but no `useUserRole` guard | Add `useUserRole`, loading guard |
+
+Pattern for each:
+```tsx
+const { isAdmin, loading: roleLoading } = useUserRole();
+
+if (roleLoading) return null;
+if (!isAdmin) return <Navigate to="/" replace />;
+```
+
+**Files changed:** 7 admin page files
+
+---
+
+### Fix 4 — `src/pages/OAuthCallback.tsx`: Validate platform + fix redirect logic
+
+Two changes:
+
+1. After extracting `platform`, validate it against a whitelist:
+```tsx
+const ALLOWED_PLATFORMS = ['google', 'facebook', 'instagram', 'linkedin', 'twitter', 'tiktok'];
+if (!ALLOWED_PLATFORMS.includes(platform)) {
+  throw new Error(`Unsupported platform: ${platform}`);
 }
-
-// Import the supabase client like this:
-// import { supabase } from "@/integrations/supabase/client";
-
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  auth: {
-    storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
-  }
-});
 ```
 
-**File changed:** `src/integrations/supabase/client.ts`
+2. Remove the error-case `setTimeout` redirect (lines 87-90) so users on error stay on the callback page with the error message instead of being auto-redirected. Only redirect on success.
+
+**File changed:** `src/pages/OAuthCallback.tsx`
 
 ---
 
-### Fix 3 — Invitations table RLS: Add 4 granular admin policies
+### Summary of all files
 
-Create a new migration that replaces the existing broad policy with four explicit per-operation policies:
+| # | Fix | Files |
+|---|-----|-------|
+| 1 | Gate dev logging | `src/main.tsx` |
+| 2 | DOMPurify sanitization | `BlockRenderer.tsx`, `AdminNewsletterPreview.tsx`, `NewsletterPreview.tsx`, `package.json` |
+| 3 | Admin loading guards | 7 admin page files |
+| 4 | OAuth platform validation | `OAuthCallback.tsx` |
 
-```sql
--- Drop existing broad policy
-DROP POLICY IF EXISTS "Admins can manage all invitations" ON public.invitations;
-
--- SELECT
-CREATE POLICY "Admins can select invitations"
-  ON public.invitations FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'::app_role));
-
--- INSERT
-CREATE POLICY "Admins can insert invitations"
-  ON public.invitations FOR INSERT TO authenticated
-  WITH CHECK (public.has_role(auth.uid(), 'admin'::app_role));
-
--- UPDATE
-CREATE POLICY "Admins can update invitations"
-  ON public.invitations FOR UPDATE TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'::app_role))
-  WITH CHECK (public.has_role(auth.uid(), 'admin'::app_role));
-
--- DELETE
-CREATE POLICY "Admins can delete invitations"
-  ON public.invitations FOR DELETE TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'::app_role));
-```
-
-**File changed:** New migration file in `supabase/migrations/`
-
-After the migration runs, mark `invitations_table_no_select_policy` as fixed in the security scan.
-
----
-
-### Fix 4 — automation_settings: Ignore the security finding
-
-Mark the `automation_settings_no_agent_select` finding (scanner: `supabase_lov`) as intentionally ignored with explanation: "Admin-only access is by design. No frontend code reads this table as a non-admin user. The ALL policy restricted to admin role is the intended access pattern."
-
-No code or migration changes needed.
-
----
-
-### Summary
-
-| # | What | Files / Assets |
-|---|------|---------------|
-| 1 | Add env patterns to `.gitignore` | `.gitignore` |
-| 2 | Env vars + runtime guard | `src/integrations/supabase/client.ts` |
-| 3 | 4 granular RLS policies on `invitations` | New migration |
-| 4 | Ignore `automation_settings` finding | Security scan update only |
+**Total: 12 files changed, 1 package installed**
 
