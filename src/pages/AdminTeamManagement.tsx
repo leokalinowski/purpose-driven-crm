@@ -12,7 +12,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { useNavigate } from 'react-router-dom';
+import { useUserRole } from '@/hooks/useUserRole';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAgents, Agent } from '@/hooks/useAgents';
 import { AgentMarketingSettingsForm } from '@/components/admin/AgentMarketingSettingsForm';
 import { Copy, Mail, Plus, Users, Clock, CheckCircle, XCircle, Trash2, Edit, Shield, ShieldCheck, Upload, X, Settings2 } from 'lucide-react';
@@ -69,6 +70,7 @@ const AdminTeamManagement = () => {
   const [marketingDialogOpen, setMarketingDialogOpen] = useState(false);
 
   const { user, loading: authLoading } = useAuth();
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const { agents, fetchAgents, getAgentDisplayName } = useAgents();
 

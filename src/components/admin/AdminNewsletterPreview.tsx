@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import DOMPurify from 'dompurify'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -294,7 +295,7 @@ export function AdminNewsletterPreview() {
             <CardContent>
               <div className="border rounded-lg p-4 bg-white">
                 <div 
-                  dangerouslySetInnerHTML={{ __html: previewData.html_email }} 
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewData.html_email) }} 
                   className="prose max-w-none"
                 />
               </div>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import DOMPurify from 'dompurify';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -331,7 +332,7 @@ export const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({
                   </div>
                   <div 
                     className="prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: previewData.content }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewData.content) }}
                   />
                 </div>
               </CardContent>

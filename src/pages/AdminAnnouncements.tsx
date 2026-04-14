@@ -1,7 +1,9 @@
 import { useState, useRef } from 'react';
+import { Navigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { useAdminAnnouncements, Announcement, AnnouncementSlide } from '@/hooks/useAnnouncements';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,6 +39,7 @@ const emptyForm = {
 };
 
 export default function AdminAnnouncements() {
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const { announcements, isLoading, dismissalCounts, createAnnouncement, updateAnnouncement, deleteAnnouncement } = useAdminAnnouncements();
   const { user } = useAuth();
   const [formOpen, setFormOpen] = useState(false);

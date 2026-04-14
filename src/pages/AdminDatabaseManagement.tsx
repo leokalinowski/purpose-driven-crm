@@ -449,7 +449,7 @@ const AdminDatabaseManagement = () => {
   } = useAdminDNCStats(selectedViewingAgent);
 
   const { user } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const { toast } = useToast();
   const { agents, fetchAgents, getAgentDisplayName } = useAgents();
   const { generateTasksForNewContacts } = useSphereSyncTasks();

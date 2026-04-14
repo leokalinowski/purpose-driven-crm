@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Settings, Users, Wrench } from 'lucide-react';
+import { useUserRole } from '@/hooks/useUserRole';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
@@ -13,6 +15,7 @@ import { AgentSelector } from '@/components/admin/AgentSelector';
 import { useAgents } from '@/hooks/useAgents';
 
 export default function AdminSocialScheduler() {
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showGlobalSettings, setShowGlobalSettings] = useState(false);
