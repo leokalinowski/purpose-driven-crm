@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
+import { Navigate } from 'react-router-dom';
 import { Users, TrendingUp, BarChart3, MessageCircle, CalendarDays, PenLine } from 'lucide-react';
+import { useUserRole } from '@/hooks/useUserRole';
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -15,6 +17,7 @@ import AdminCoachingSubmissionForm from '@/components/coaching/AdminCoachingSubm
 const CONVERSATION_TARGET = 25;
 
 const AdminCoachingManagement = () => {
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedWeek, setSelectedWeek] = useState('all');
   
@@ -69,6 +72,9 @@ const AdminCoachingManagement = () => {
   }, [submissions, agents, currentWeekNumber, currentYear]);
 
   const isLoading = submissionsLoading || agentsLoading;
+
+  if (roleLoading) return null;
+  if (!isAdmin) return <Navigate to="/" replace />;
 
   return (
     <Layout>

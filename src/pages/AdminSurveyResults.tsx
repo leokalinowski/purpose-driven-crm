@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useUserRole } from '@/hooks/useUserRole';
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,6 +36,7 @@ const TextField = ({ label, value }: { label: string; value: string | null }) =>
 );
 
 const AdminSurveyResults = () => {
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const { data: responses = [], isLoading } = useQuery({
     queryKey: ['survey-responses'],
     queryFn: async () => {
@@ -110,6 +113,9 @@ const AdminSurveyResults = () => {
       </CardContent>
     </Card>
   );
+
+  if (roleLoading) return null;
+  if (!isAdmin) return <Navigate to="/" replace />;
 
   return (
     <Layout>

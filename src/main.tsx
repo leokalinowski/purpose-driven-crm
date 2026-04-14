@@ -4,11 +4,13 @@ import { HelmetProvider } from 'react-helmet-async';
 import App from './App.tsx';
 import './index.css';
 
-// Health check logging
-console.log('🚀 REOP CRM Initializing...');
-console.log('📡 Supabase URL:', 'https://cguoaokqwgqvzkqqezcq.supabase.co');
-console.log('🌍 Environment:', import.meta.env.MODE);
-console.log('📍 Base URL:', import.meta.env.BASE_URL);
+// Health check logging (dev only)
+if (import.meta.env.DEV) {
+  console.log('🚀 REOP CRM Initializing...');
+  console.log('📡 Supabase URL:', 'https://cguoaokqwgqvzkqqezcq.supabase.co');
+  console.log('🌍 Environment:', import.meta.env.MODE);
+  console.log('📍 Base URL:', import.meta.env.BASE_URL);
+}
 
 // Global error handler for chunk loading and parse failures
 window.addEventListener('error', (e) => {
@@ -64,7 +66,9 @@ try {
   );
   // Mark successful boot
   (window as any).__APP_BOOT = 'mounted';
-  console.log('✅ React app mounted successfully');
+  if (import.meta.env.DEV) {
+    console.log('✅ React app mounted successfully');
+  }
   
   // Hide boot loader after 100ms to allow React to render
   setTimeout(() => {

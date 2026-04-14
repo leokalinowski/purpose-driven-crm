@@ -1,5 +1,6 @@
 import { useDrag, useDrop } from 'react-dnd';
 import { Trash2, Copy, GripVertical, ChevronUp, ChevronDown, Facebook, Instagram, Linkedin, Twitter, Youtube, Globe } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { Button } from '@/components/ui/button';
 import { NewsletterBlock, BlockType, BLOCK_DEFAULTS } from './types';
 import { ChildPath } from './NewsletterBuilder';
@@ -213,7 +214,7 @@ function BlockPreview({
         <div
           className="max-w-none"
           style={{ textAlign: block.props.align, color: block.props.color || undefined, fontSize: block.props.fontSize }}
-          dangerouslySetInnerHTML={{ __html: convertNewlines(block.props.html || '') }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(convertNewlines(block.props.html || '')) }}
         />
       );
     case 'image':
@@ -413,7 +414,7 @@ function BlockPreview({
             <span className="text-xs font-medium text-muted-foreground">Raw HTML</span>
           </div>
           {block.props.html ? (
-            <div className="p-3" dangerouslySetInnerHTML={{ __html: block.props.html }} />
+            <div className="p-3" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(block.props.html) }} />
           ) : (
             <div className="p-3 text-xs text-muted-foreground font-mono">{'<p>Custom HTML here</p>'}</div>
           )}

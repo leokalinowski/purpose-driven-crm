@@ -1,5 +1,6 @@
 import { Helmet } from "react-helmet-async";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 export default function AdminNewsletter() {
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
   const {
@@ -70,6 +72,9 @@ export default function AdminNewsletter() {
       setIsGenerating(false);
     }
   };
+
+  if (roleLoading) return null;
+  if (!isAdmin) return <Navigate to="/" replace />;
 
   if (isLoading) {
     return (
