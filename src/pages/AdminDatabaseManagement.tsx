@@ -835,6 +835,7 @@ const AdminDatabaseManagement = () => {
     return agent ? getAgentDisplayName(agent) : 'Unknown Agent';
   };
 
+  if (roleLoading) return null;
   if (!isAdmin) {
     return (
       <Layout>

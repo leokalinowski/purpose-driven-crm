@@ -114,6 +114,9 @@ const AdminSurveyResults = () => {
     </Card>
   );
 
+  if (roleLoading) return null;
+  if (!isAdmin) return <Navigate to="/" replace />;
+
   return (
     <Layout>
       <div className="space-y-6">

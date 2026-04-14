@@ -27,6 +27,9 @@ export default function AdminSocialScheduler() {
 
   const selectedAgent = agents.find(agent => agent.user_id === selectedAgentId);
 
+  if (roleLoading) return null;
+  if (!isAdmin) return <Navigate to="/" replace />;
+
   return (
     <Layout>
       <div className="space-y-6">

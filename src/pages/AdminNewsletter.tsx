@@ -73,6 +73,9 @@ export default function AdminNewsletter() {
     }
   };
 
+  if (roleLoading) return null;
+  if (!isAdmin) return <Navigate to="/" replace />;
+
   if (isLoading) {
     return (
       <Layout>

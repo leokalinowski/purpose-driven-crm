@@ -6,6 +6,8 @@ import { toast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 
+const ALLOWED_PLATFORMS = ['google', 'facebook', 'instagram', 'linkedin', 'twitter', 'tiktok'];
+
 const OAuthCallback = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -36,6 +38,10 @@ const OAuthCallback = () => {
 
         if (!code || !platform) {
           throw new Error('Missing required parameters (code or platform)');
+        }
+
+        if (!ALLOWED_PLATFORMS.includes(platform)) {
+          throw new Error(`Unsupported platform: ${platform}`);
         }
 
         if (!user) {
@@ -83,11 +89,6 @@ const OAuthCallback = () => {
           description: 'Failed to connect social media account',
           variant: 'destructive',
         });
-
-        // Redirect back to social scheduler after a brief delay
-        setTimeout(() => {
-          navigate('/social-scheduler');
-        }, 3000);
       }
     };
 

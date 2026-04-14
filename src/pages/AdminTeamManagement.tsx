@@ -648,6 +648,9 @@ const AdminTeamManagement = () => {
   const usedInvitations = invitations.filter(inv => inv.used);
   const expiredInvitations = invitations.filter(inv => !inv.used && !isAfter(new Date(inv.expires_at), new Date()));
 
+  if (roleLoading) return null;
+  if (!isAdmin) return <Navigate to="/" replace />;
+
   return (
     <Layout>
       <div className="container mx-auto p-6 max-w-7xl">

@@ -181,6 +181,9 @@ export default function AdminAnnouncements() {
     setForm(prev => ({ ...prev, slides: newSlides }));
   };
 
+  if (roleLoading) return null;
+  if (!isAdmin) return <Navigate to="/" replace />;
+
   return (
     <Layout>
       <div className="space-y-6">
