@@ -48,7 +48,7 @@ export function useToday() {
         `)
         .eq('agent_id', user.id)
         .is('actual_close_date', null)
-        .not('outcome', 'in', '("lost","withdrawn")')
+        .or('outcome.is.null,outcome.not.in.(lost,withdrawn)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;

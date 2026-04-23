@@ -2,7 +2,7 @@ import { useDrop } from 'react-dnd';
 import { Opportunity } from "@/hooks/usePipeline";
 import { PipelineStage } from "@/config/pipelineStages";
 import { OpportunityCard } from "./OpportunityCard";
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface PipelineColumnProps {
   stage: PipelineStage;
@@ -15,71 +15,55 @@ export function PipelineColumn({ stage, opportunities, onStageUpdate, onEditOppo
   const [{ isOver }, drop] = useDrop({
     accept: 'opportunity',
     drop: (item: { id: string }) => {
-      if (item.id) {
-        onStageUpdate(item.id, stage.key);
-      }
+      if (item.id) onStageUpdate(item.id, stage.key);
     },
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
-    }),
+    collect: monitor => ({ isOver: monitor.isOver() }),
   });
 
-  const totalValue = opportunities.reduce((sum, opp) => sum + (opp.deal_value ?? 0), 0);
-
-  const scoredOpps = opportunities.filter(o => o.ai_deal_probability != null);
-  const avgProbability =
-    scoredOpps.length > 0
-      ? Math.round(
-          scoredOpps.reduce((s, o) => s + (o.ai_deal_probability ?? 0), 0) / scoredOpps.length
-        )
-      : null;
+  const totalValue = opportunities.reduce((s, o) => s + (o.deal_value ?? 0), 0);
 
   return (
     <div
       ref={drop}
-      className={`
-        min-h-[400px] rounded-xl border-2 transition-all duration-150 flex flex-col
-        ${isOver
-          ? 'border-primary/60 bg-primary/5 shadow-md'
-          : `${stage.color} border-dashed`}
-      `}
+      className={cn(
+        'min-h-[480px] rounded-xl border flex flex-col transition-colors duration-100',
+        isOver ? 'border-primary/50 bg-primary/[0.03]' : 'border-border bg-background'
+      )}
     >
-      {/* Column header */}
-      <div className="px-3 py-3 border-b border-border/40">
+      {/* Header */}
+      <div className="px-3 py-2.5 border-b border-border">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-semibold text-sm text-foreground truncate">
-              {stage.label}
-            </span>
-            <Badge variant="secondary" className="text-xs px-1.5 py-0 h-5 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            {/* Accent dot */}
+            <span
+              className="h-2 w-2 rounded-full flex-shrink-0"
+              style={{ backgroundColor: stage.accent }}
+            />
+            <span className="font-semibold text-sm text-foreground">{stage.label}</span>
+            <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">
               {opportunities.length}
-            </Badge>
+            </span>
           </div>
           {totalValue > 0 && (
-            <span className="text-xs font-semibold text-primary flex-shrink-0">
-              ${totalValue.toLocaleString()}
+            <span className="text-xs font-medium text-muted-foreground">
+              ${(totalValue / 1000).toFixed(0)}k
             </span>
           )}
         </div>
-        {avgProbability != null && (
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            ~{avgProbability}% avg probability
-          </p>
-        )}
       </div>
 
       {/* Cards */}
       <div className="p-2 flex flex-col gap-2 flex-1">
-        {opportunities.map((opportunity) => (
+        {opportunities.map(opp => (
           <OpportunityCard
-            key={opportunity.id}
-            opportunity={opportunity}
+            key={opp.id}
+            opportunity={opp}
             onEdit={onEditOpportunity}
           />
         ))}
         {opportunities.length === 0 && (
           <div className="flex-1 flex items-center justify-center py-8">
-            <p className="text-xs text-muted-foreground/60 italic">No deals</p>
+            <p className="text-xs text-muted-foreground/50 select-none">No deals</p>
           </div>
         )}
       </div>

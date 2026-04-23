@@ -33,7 +33,11 @@ function SectionHeader({
   );
 }
 
-export function TodayView() {
+interface TodayViewProps {
+  onOpenDetail?: (opp: TodayOpportunity) => void;
+}
+
+export function TodayView({ onOpenDetail }: TodayViewProps) {
   const { needsAttention, stale, onTrack, all, loading, refresh } = useToday();
   const [logTarget, setLogTarget] = useState<TodayOpportunity | null>(null);
   const [completeTarget, setCompleteTarget] = useState<TodayOpportunity | null>(null);
@@ -114,7 +118,7 @@ export function TodayView() {
                 <TodayOpportunityCard
                   key={opp.id}
                   opportunity={opp}
-                  onOpen={setDetailTarget}
+                  onOpen={opp => onOpenDetail ? onOpenDetail(opp) : setDetailTarget(opp)}
                   onLog={setLogTarget}
                   onComplete={setCompleteTarget}
                 />
@@ -141,7 +145,7 @@ export function TodayView() {
                 <TodayOpportunityCard
                   key={opp.id}
                   opportunity={opp}
-                  onOpen={setDetailTarget}
+                  onOpen={opp => onOpenDetail ? onOpenDetail(opp) : setDetailTarget(opp)}
                   onLog={setLogTarget}
                   onComplete={setCompleteTarget}
                 />
@@ -168,7 +172,7 @@ export function TodayView() {
                 <TodayOpportunityCard
                   key={opp.id}
                   opportunity={opp}
-                  onOpen={setDetailTarget}
+                  onOpen={opp => onOpenDetail ? onOpenDetail(opp) : setDetailTarget(opp)}
                   onLog={setLogTarget}
                   onComplete={setCompleteTarget}
                 />

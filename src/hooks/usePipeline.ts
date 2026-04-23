@@ -201,8 +201,14 @@ export function usePipeline() {
 
   const updateStage = async (opportunityId: string, newStage: string) => {
     if (!user) return;
+    const opp = opportunities.find(o => o.id === opportunityId);
+
+    // Optimistic update — moves the card instantly
+    setOpportunities(prev =>
+      prev.map(o => o.id === opportunityId ? { ...o, stage: newStage } : o)
+    );
+
     try {
-      const opp = opportunities.find(o => o.id === opportunityId);
       const updateData: any = { stage: newStage, updated_at: new Date().toISOString() };
       if (newStage === 'closed_won') updateData.actual_close_date = new Date().toISOString();
       if (newStage === 'lost') updateData.outcome = 'lost';
@@ -210,19 +216,19 @@ export function usePipeline() {
       const { error } = await supabase.from('opportunities').update(updateData).eq('id', opportunityId);
       if (error) throw error;
 
-      // Fire playbook task generation (non-fatal)
-      try {
-        const pipelineType = opp?.pipeline_type ?? 'buyer';
-        await supabase.functions.invoke('pipeline-stage-tasks', {
-          body: { opportunity_id: opportunityId, new_stage: newStage, pipeline_type: pipelineType, agent_id: user.id },
-        });
-      } catch (e) {
-        console.warn('Playbook task generation failed (non-fatal):', e);
-      }
+      // Non-fatal playbook task generation — fire and forget
+      const pipelineType = opp?.pipeline_type ?? 'buyer';
+      supabase.functions.invoke('pipeline-stage-tasks', {
+        body: { opportunity_id: opportunityId, new_stage: newStage, pipeline_type: pipelineType, agent_id: user.id },
+      }).catch(e => console.warn('Playbook task generation failed (non-fatal):', e));
 
-      await fetchOpportunities();
-      toast({ title: 'Stage updated', description: `Moved to ${newStage.replace(/_/g, ' ')}` });
+      // Re-fetch in background to sync computed columns
+      fetchOpportunities();
     } catch (error: any) {
+      // Revert on failure
+      setOpportunities(prev =>
+        prev.map(o => o.id === opportunityId ? { ...o, stage: opp?.stage ?? o.stage } : o)
+      );
       toast({ title: 'Error', description: 'Failed to update stage', variant: 'destructive' });
     }
   };
