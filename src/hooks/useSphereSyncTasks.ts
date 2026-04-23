@@ -27,6 +27,11 @@ export interface SphereSyncTask {
   updated_at: string;
   notes?: string;
   lead: Contact;
+  // AI fields — nullable; absent on tasks generated before AI was added
+  ai_priority_score?: number | null;   // 1–10
+  ai_reason?: string | null;
+  ai_talking_points?: string[] | null;
+  ai_scored_at?: string | null;
 }
 
 export interface WeeklyStats {
