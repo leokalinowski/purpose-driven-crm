@@ -1,95 +1,66 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
-import { useToast } from './use-toast';
 
-interface OpportunityActivity {
+export interface OpportunityActivity {
   id: string;
   opportunity_id: string;
   agent_id: string;
   activity_type: string;
-  description: string;
-  metadata?: any;
+  title: string | null;
+  description: string | null;
+  outcome: string | null;
+  note: string | null;
   activity_date: string;
   created_at: string;
 }
 
-export const useOpportunityActivities = (opportunityId: string) => {
+export function useOpportunityActivities(opportunityId: string | null) {
   const { user } = useAuth();
-  const { toast } = useToast();
   const [activities, setActivities] = useState<OpportunityActivity[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchActivities = async () => {
-    if (!user || !opportunityId) return;
-
+  const fetchActivities = useCallback(async () => {
+    if (!opportunityId) { setActivities([]); return; }
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('opportunity_activities')
-        .select('*')
+        .select('id, opportunity_id, agent_id, activity_type, title, description, outcome, note, activity_date, created_at')
         .eq('opportunity_id', opportunityId)
-        .order('activity_date', { ascending: false });
-
+        .order('activity_date', { ascending: false })
+        .limit(50);
       if (error) throw error;
-      setActivities(data || []);
-    } catch (error) {
-      console.error('Error fetching activities:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load activities",
-        variant: "destructive"
-      });
+      setActivities((data || []) as OpportunityActivity[]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [opportunityId]);
 
-  const addActivity = async (
-    activityType: string, 
-    description: string, 
-    metadata?: any,
-    activityDate?: string
-  ) => {
-    if (!user || !opportunityId) return false;
+  const logActivity = useCallback(async (data: {
+    activity_type: string;
+    title?: string;
+    description?: string;
+    outcome?: string;
+    note?: string;
+    activity_date?: string;
+  }) => {
+    if (!opportunityId || !user?.id) throw new Error('Missing opportunityId or user');
+    const { error } = await supabase.from('opportunity_activities').insert({
+      opportunity_id: opportunityId,
+      agent_id: user.id,
+      activity_type: data.activity_type,
+      title: data.title ?? null,
+      description: data.description ?? null,
+      outcome: data.outcome ?? null,
+      note: data.note ?? null,
+      activity_date: data.activity_date ?? new Date().toISOString(),
+    });
+    if (error) throw error;
+    await fetchActivities();
+  }, [opportunityId, user?.id, fetchActivities]);
 
-    try {
-      const { data, error } = await supabase
-        .from('opportunity_activities')
-        .insert({
-          opportunity_id: opportunityId,
-          agent_id: user.id,
-          activity_type: activityType,
-          description,
-          metadata,
-          activity_date: activityDate || new Date().toISOString()
-        })
-        .select()
-        .single();
+  useEffect(() => { fetchActivities(); }, [fetchActivities]);
 
-      if (error) throw error;
-
-      setActivities(prev => [data, ...prev]);
-      return true;
-    } catch (error) {
-      console.error('Error adding activity:', error);
-      toast({
-        title: "Error",
-        description: "Failed to add activity",
-        variant: "destructive"
-      });
-      return false;
-    }
-  };
-
-  useEffect(() => {
-    fetchActivities();
-  }, [user, opportunityId]);
-
-  return {
-    activities,
-    loading,
-    addActivity,
-    refetch: fetchActivities
-  };
-};
+  return { activities, loading, logActivity, refresh: fetchActivities };
+}

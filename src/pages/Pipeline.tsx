@@ -1,61 +1,39 @@
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Layout } from "@/components/layout/Layout";
+import { TodayView } from "@/components/pipeline/TodayView";
 import { PipelineBoard } from "@/components/pipeline/PipelineBoard";
-import { PipelineMetrics } from "@/components/pipeline/PipelineMetrics";
 import { AddOpportunityDialog } from "@/components/pipeline/AddOpportunityDialog";
-import { OpportunityDetailDrawer } from "@/components/pipeline/OpportunityDetailDrawer";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { usePipeline, Opportunity } from "@/hooks/usePipeline";
+import { usePipeline } from "@/hooks/usePipeline";
 import { usePipelineFilters } from "@/hooks/usePipelineFilters";
 import { useUserRole } from "@/hooks/useUserRole";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
-import { RefreshCcw, Brain, Lock } from "lucide-react";
+import { Lock, LayoutList, KanbanSquare, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+type Tab = 'today' | 'board';
 
 export default function Pipeline() {
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const [activeTab, setActiveTab] = useState<Tab>('today');
   const {
     opportunities,
-    metrics,
     loading,
     updateStage,
-    updateOpportunity,
-    refreshAIScores,
     refresh,
   } = usePipeline();
 
   const {
     filtered,
     boardStages,
-    aiStats,
     pipelineType,
     setPipelineType,
     showLost,
     setShowLost,
-    sortBy,
-    setSortBy,
   } = usePipelineFilters(opportunities);
 
-  const [detailOpportunity, setDetailOpportunity] = useState<Opportunity | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
-
-  const handleCardClick = (opp: Opportunity) => {
-    setDetailOpportunity(opp);
-    setDetailOpen(true);
-  };
-
-  // Admin gate
   if (!roleLoading && !isAdmin) {
     return (
       <Layout>
@@ -72,168 +50,94 @@ export default function Pipeline() {
     );
   }
 
-  const pipelineTypeOptions: { value: string; label: string }[] = [
+  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: 'today', label: 'Today', icon: <LayoutList className="h-4 w-4" /> },
+    { key: 'board', label: 'Board', icon: <KanbanSquare className="h-4 w-4" /> },
+  ];
+
+  const pipelineTypeOptions = [
     { value: 'all', label: 'All' },
     { value: 'buyer', label: 'Buyers' },
     { value: 'seller', label: 'Sellers' },
     { value: 'referral', label: 'Referrals' },
   ];
 
-  const sortOptions: { value: string; label: string }[] = [
-    { value: 'created_at', label: 'Newest' },
-    { value: 'deal_value', label: 'Deal Value' },
-    { value: 'close_date', label: 'Close Date' },
-    { value: 'ai_probability', label: 'AI Score' },
-    { value: 'days_stale', label: 'Days Stale' },
-  ];
-
   return (
     <>
       <Helmet>
-        <title>Pipeline - Real Estate on Purpose</title>
-        <meta
-          name="description"
-          content="AI-First deal management — track and close deals faster with AI-driven insights."
-        />
+        <title>Pipeline — Real Estate on Purpose</title>
       </Helmet>
-
       <Layout>
         <DndProvider backend={HTML5Backend}>
-          <div className="space-y-5">
-            {/* Page header */}
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">Pipeline</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  AI-First deal management
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => refreshAIScores()}
-                  title="Refresh AI scores"
-                >
-                  <Brain className="h-4 w-4 mr-1.5" />
-                  AI Score
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9"
-                  onClick={refresh}
-                  title="Refresh pipeline"
-                >
-                  <RefreshCcw className="h-4 w-4" />
-                </Button>
-                <AddOpportunityDialog onOpportunityCreated={refresh} />
-              </div>
+          <div className="space-y-4">
+            {/* Header */}
+            <div className="flex items-center justify-between gap-3">
+              <h1 className="text-2xl font-bold tracking-tight">Pipeline</h1>
+              <AddOpportunityDialog onOpportunityCreated={refresh} />
             </div>
 
-            {/* Filter / sort bar */}
-            <div className="flex items-center gap-3 flex-wrap">
-              {/* Pipeline type tabs */}
-              <div className="flex items-center bg-muted rounded-lg p-0.5 gap-0.5">
-                {pipelineTypeOptions.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setPipelineType(opt.value as any)}
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                      pipelineType === opt.value
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Sort */}
-              <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-                <SelectTrigger className="h-9 w-36 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {sortOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value} className="text-sm">
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Show Lost toggle */}
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="show-lost"
-                  checked={showLost}
-                  onCheckedChange={setShowLost}
-                  className="scale-90"
-                />
-                <Label htmlFor="show-lost" className="text-sm text-muted-foreground cursor-pointer">
-                  Show Lost
-                </Label>
-              </div>
+            {/* Tabs */}
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-fit">
+              {tabs.map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                    activeTab === tab.key
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
-            {/* AI Stats bar */}
-            {(aiStats.scored > 0 || aiStats.stale > 0) && (
-              <div className="flex items-center gap-3 flex-wrap px-3 py-2 rounded-lg bg-muted/50 border border-border/60 text-xs">
-                {aiStats.scored > 0 && (
-                  <span className="text-muted-foreground">
-                    <span className="font-semibold text-foreground">{aiStats.scored}</span> scored
-                  </span>
-                )}
-                {aiStats.avgProbability != null && (
-                  <span className="text-muted-foreground">
-                    Avg probability:{' '}
-                    <span
-                      className={`font-semibold ${
-                        aiStats.avgProbability >= 70
-                          ? 'text-green-600'
-                          : aiStats.avgProbability >= 40
-                          ? 'text-yellow-600'
-                          : 'text-red-600'
-                      }`}
+            {/* Board filter bar (only on Board tab) */}
+            {activeTab === 'board' && (
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center bg-muted rounded-lg p-0.5 gap-0.5">
+                  {pipelineTypeOptions.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setPipelineType(opt.value as any)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                        pipelineType === opt.value
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
                     >
-                      {aiStats.avgProbability}%
-                    </span>
-                  </span>
-                )}
-                {aiStats.stale > 0 && (
-                  <span className="text-amber-700 font-medium">
-                    {aiStats.stale} stale deal{aiStats.stale > 1 ? 's' : ''}
-                  </span>
-                )}
-                <span className="text-muted-foreground ml-auto">
-                  {aiStats.total} deal{aiStats.total !== 1 ? 's' : ''} shown
-                </span>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showLost}
+                    onChange={e => setShowLost(e.target.checked)}
+                    className="rounded"
+                  />
+                  Show Lost
+                </label>
               </div>
             )}
 
-            {/* Metrics */}
-            <PipelineMetrics metrics={metrics} loading={loading} />
-
-            {/* Board */}
-            <PipelineBoard
-              opportunities={filtered}
-              onStageUpdate={updateStage}
-              onEditOpportunity={handleCardClick}
-              loading={loading}
-              boardStages={boardStages}
-            />
-
-            {/* Detail drawer */}
-            <OpportunityDetailDrawer
-              opportunity={detailOpportunity}
-              open={detailOpen}
-              onOpenChange={setDetailOpen}
-              onStageUpdate={updateStage}
-              onUpdate={updateOpportunity}
-              onRefresh={refresh}
-            />
+            {/* Tab content */}
+            {activeTab === 'today' ? (
+              <TodayView />
+            ) : (
+              <PipelineBoard
+                opportunities={filtered}
+                onStageUpdate={updateStage}
+                onEditOpportunity={() => {}}
+                loading={loading}
+                boardStages={boardStages}
+              />
+            )}
           </div>
         </DndProvider>
       </Layout>

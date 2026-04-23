@@ -56,6 +56,10 @@ export interface Opportunity {
   ai_suggested_next_action: string | null;
   ai_risk_flags: string[] | null;
   ai_scored_at: string | null;
+  next_step_title: string | null;
+  next_step_due_date: string | null;
+  confidence: string | null;
+  last_activity_date: string | null;
   is_stale: boolean;
   stale_since: string | null;
   days_in_current_stage: number;
