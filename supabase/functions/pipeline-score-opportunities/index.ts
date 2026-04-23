@@ -40,15 +40,27 @@ Deno.serve(async (req: Request) => {
 
   if (!isCron) {
     if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Authentication required' }, 401);
-    const { data: role } = await createClient(supabaseUrl, supabaseKey, {
+    const callerClient = createClient(supabaseUrl, supabaseKey, {
       global: { headers: { Authorization: authHeader } },
-    }).rpc('get_current_user_role');
-    if (role !== 'admin') return json({ error: 'Admin access required' }, 403);
+    });
+    const { data: role } = await callerClient.rpc('get_current_user_role');
+    // Admins: score anyone. Agents: may only score their own deals (agent_id enforced below).
+    if (role !== 'admin' && role !== 'agent') return json({ error: 'Authentication required' }, 403);
+    // For agents, override targetAgentId to their own user_id so they can't score other agents.
+    if (role === 'agent') {
+      const { data: { user } } = await callerClient.auth.getUser();
+      if (!user) return json({ error: 'Could not resolve user' }, 401);
+      // body hasn't been parsed yet — parsed below; store for later override
+      (req as any)._agentUserId = user.id;
+    }
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey);
   const body = await req.json().catch(() => ({}));
-  const { agent_id: targetAgentId = null, opportunity_id: targetOppId = null } = body;
+  // If an agent triggered this, force agent_id to be their own id (security)
+  const agentOverride = (req as any)._agentUserId ?? null;
+  const { agent_id: _bodyAgentId = null, opportunity_id: targetOppId = null } = body;
+  const targetAgentId: string | null = agentOverride ?? _bodyAgentId;
 
   // ── Resolve agents ─────────────────────────────────────────────────────��──
   type AgentRow = { user_id: string; first_name: string; last_name: string };

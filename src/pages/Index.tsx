@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { buildAuthRedirectPath } from '@/utils/authRedirect';
 import { useDashboardBlocks } from '@/hooks/useDashboardBlocks';
 import { AgentIntelligenceWidget } from '@/components/dashboard/AgentIntelligenceWidget';
+import { PipelineLiveWidget } from '@/components/dashboard/PipelineLiveWidget';
 import { WeeklyTouchpoints } from '@/components/dashboard/WeeklyTouchpoints';
 import { WeeklyTasksBySystem } from '@/components/dashboard/WeeklyTasksBySystem';
 import { TransactionOpportunity } from '@/components/dashboard/TransactionOpportunity';
@@ -101,6 +102,7 @@ const Index = () => {
         {data && (
           <>
             <AgentIntelligenceWidget />
+            <PipelineLiveWidget />
             <WeeklyTouchpoints data={data.blockOne} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <WeeklyTasksBySystem data={data.blockTwo} />

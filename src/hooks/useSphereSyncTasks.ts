@@ -316,9 +316,40 @@ export function useSphereSyncTasks() {
 
       console.log('Task update successful:', data);
 
-      setTasks(prev => prev.map(task => 
+      setTasks(prev => prev.map(task =>
         task.id === taskId ? { ...task, ...updates } : task
       ));
+
+      // ── When a task is completed, mirror it into pipeline activity ──────────
+      if (updates.completed === true && user?.id) {
+        const task = tasks.find(t => t.id === taskId);
+        if (task?.lead_id) {
+          // Find the active opportunity for this contact (if any)
+          supabase
+            .from('opportunities')
+            .select('id')
+            .eq('contact_id', task.lead_id)
+            .eq('agent_id', user.id)
+            .is('actual_close_date', null)
+            .or('outcome.is.null,outcome.not.in.(lost,withdrawn)')
+            .limit(1)
+            .then(({ data: opps }) => {
+              if (opps && opps.length > 0) {
+                supabase.from('opportunity_activities').insert({
+                  opportunity_id: opps[0].id,
+                  agent_id: user.id,
+                  activity_type: task.task_type, // 'call' or 'text'
+                  title: `SphereSync ${task.task_type}`,
+                  note: 'Completed via SphereSync weekly tasks',
+                  activity_date: new Date().toISOString(),
+                }).then(({ error: actErr }) => {
+                  if (actErr) console.warn('Pipeline activity log failed (non-fatal):', actErr.message);
+                });
+              }
+            })
+            .catch(e => console.warn('Pipeline opportunity lookup failed (non-fatal):', e));
+        }
+      }
 
       toast({
         title: "Success",

@@ -58,6 +58,11 @@ export function useOpportunityActivities(opportunityId: string | null) {
     });
     if (error) throw error;
     await fetchActivities();
+
+    // Re-score this opportunity immediately after any activity — fire and forget
+    supabase.functions.invoke('pipeline-score-opportunities', {
+      body: { opportunity_id: opportunityId, agent_id: user.id },
+    }).catch(e => console.warn('Re-score after activity failed (non-fatal):', e));
   }, [opportunityId, user?.id, fetchActivities]);
 
   useEffect(() => { fetchActivities(); }, [fetchActivities]);
