@@ -114,9 +114,10 @@ Deno.serve(async (req: Request) => {
 
         supabase
           .from('opportunities')
-          .select('id, contact_id, stage, deal_value, expected_close_date, updated_at')
+          .select('id, contact_id, stage, deal_value, expected_close_date, updated_at, opportunity_type, ai_deal_probability, ai_suggested_next_action')
           .eq('agent_id', agent.user_id)
-          .is('actual_close_date', null),
+          .is('actual_close_date', null)
+          .not('outcome', 'in', '(lost,withdrawn)'),
 
         supabase
           .from('coaching_submissions')
@@ -142,6 +143,7 @@ Deno.serve(async (req: Request) => {
       const emailLogs = emailLogsRes.data ?? [];
       const opportunities = (opportunitiesRes.data ?? []) as Array<{
         id: string; stage: string; deal_value: number; updated_at: string;
+        opportunity_type?: string; ai_deal_probability?: number | null; ai_suggested_next_action?: string | null;
       }>;
       const coaching = coachingRes.data ?? [];
       const sphereTasks = sphereTasksRes.data ?? [];
@@ -222,7 +224,10 @@ Deno.serve(async (req: Request) => {
       // ── Pipeline context ───────────────────────────────────────────────
       const pipelineContext = opportunities.slice(0, 8).map(o => ({
         stage: o.stage,
+        opportunity_type: o.opportunity_type ?? 'buyer',
         deal_value: o.deal_value,
+        ai_deal_probability: o.ai_deal_probability ?? null,
+        ai_suggested_next_action: o.ai_suggested_next_action ?? null,
         days_since_update: Math.floor((now - new Date(o.updated_at).getTime()) / 86400000),
       }));
 
@@ -236,7 +241,7 @@ Generate a structured weekly intelligence snapshot for ${agentName}. Be concise,
 
 Return ONLY a valid JSON object with exactly these five keys:
 - sphere_health: { health_score (0-100 integer), summary (1-2 sentences about overall relationship health), key_stat (most urgent single fact, e.g. "47 contacts haven't been touched in 90+ days") }
-- top_opportunities: array of up to 3 objects: { contact_name (use "Unknown" if no name), stage, deal_value, days_since_update, next_action (1 specific AI-suggested action, max 12 words) }
+- top_opportunities: array of up to 3 objects: { contact_name (use "Unknown" if no name), stage, opportunity_type, deal_value, deal_probability (integer 0-100 if available from ai_deal_probability, else null), days_since_update, next_action (1 specific AI-suggested action, max 12 words — if ai_suggested_next_action is set use it verbatim, otherwise generate one) }
 - market_pulse: { summary (1-2 sentences citing specific stats like price or inventory), key_stats: array of { zip, median_price, trend ("up"/"down"/"flat") } }
 - weekly_priorities: array of up to 5 objects: { contact_name, task_type ("call" or "text"), priority_rank (1-5, 1=highest), reason (max 15 words, factual), talking_points (array of 2 short strings, each max 12 words) }
 - coaching_context: { week_trend ("improving"/"declining"/"steady"), observation (1 sentence citing specific numbers from coaching data) }
@@ -255,8 +260,10 @@ Avg days since last touch: ${avgDaysSince ?? 'N/A'}
 EMAIL ENGAGEMENT (last 90 days):
 ${engagedContacts.length > 0 ? JSON.stringify(engagedContacts) : 'No email engagement data'}
 
-PIPELINE (open opportunities):
-${pipelineContext.length > 0 ? JSON.stringify(pipelineContext) : 'No open opportunities'}
+PIPELINE (open opportunities — includes AI scoring where available):
+Total open: ${opportunities.length}
+Scored by AI: ${opportunities.filter(o => o.ai_deal_probability != null).length}
+${pipelineContext.length > 0 ? JSON.stringify(pipelineContext, null, 2) : 'No open opportunities'}
 
 MARKET DATA:
 ${marketStats.length > 0 ? JSON.stringify(marketStats.map(m => ({ zip: m.zip_code, period: m.period_month, median_price: m.median_sale_price, inventory: m.inventory, dom: m.median_dom }))) : 'No market data for this agent\'s zip codes'}

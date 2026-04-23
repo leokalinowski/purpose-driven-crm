@@ -10,6 +10,11 @@ import { Plus } from "lucide-react";
 import { usePipeline } from "@/hooks/usePipeline";
 import { useContacts } from "@/hooks/useContacts";
 import { useToast } from "@/hooks/use-toast";
+import {
+  OPPORTUNITY_TYPE_LABELS,
+  pipelineTypeFromOpportunityType,
+  getStagesForType,
+} from "@/config/pipelineStages";
 
 interface AddOpportunityDialogProps {
   onOpportunityCreated: () => void;
@@ -20,10 +25,12 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
   const [contactMode, setContactMode] = useState<"existing" | "new">("existing");
   const [formData, setFormData] = useState({
     contact_id: "",
-    stage: "lead",
+    opportunity_type: "buyer",
+    title: "",
+    stage: "new_lead",
     deal_value: "",
     expected_close_date: "",
-    notes: ""
+    notes: "",
   });
   const [newContactData, setNewContactData] = useState({
     first_name: "",
@@ -36,9 +43,9 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
     state: "",
     zip_code: "",
     tags: [] as string[],
-    notes: ""
+    notes: "",
   });
-  
+
   const { createOpportunity } = usePipeline();
   const { contacts, fetchContacts, addContact } = useContacts();
   const { toast } = useToast();
@@ -49,24 +56,37 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
     }
   }, [open, fetchContacts]);
 
+  // When opportunity_type changes, reset stage to the first stage of the new pipeline type
+  const handleOpportunityTypeChange = (value: string) => {
+    const pt = pipelineTypeFromOpportunityType(value);
+    const stages = getStagesForType(pt);
+    setFormData(prev => ({
+      ...prev,
+      opportunity_type: value,
+      stage: stages[0]?.key ?? 'new_lead',
+    }));
+  };
+
+  const availableStages = getStagesForType(
+    pipelineTypeFromOpportunityType(formData.opportunity_type)
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       let contactId = formData.contact_id;
-      
+
       if (contactMode === "new") {
-        // Validate required fields for new contact
         if (!newContactData.first_name || !newContactData.last_name || !newContactData.phone || !newContactData.email) {
           toast({
             title: "Missing Information",
             description: "Please fill in all required contact fields (First Name, Last Name, Phone, Email)",
-            variant: "destructive"
+            variant: "destructive",
           });
           return;
         }
-        
-        // Create new contact first
+
         const newContact = await addContact({
           first_name: newContactData.first_name,
           last_name: newContactData.last_name,
@@ -79,9 +99,9 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
           zip_code: newContactData.zip_code || null,
           tags: newContactData.tags.length > 0 ? newContactData.tags : null,
           notes: newContactData.notes || null,
-          dnc: false
+          dnc: false,
         });
-        
+
         contactId = newContact.id;
         toast({
           title: "Contact Created",
@@ -91,28 +111,30 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
         toast({
           title: "Contact Required",
           description: "Please select a contact for the opportunity.",
-          variant: "destructive"
+          variant: "destructive",
         });
         return;
       }
 
-      // Create opportunity
       const success = await createOpportunity({
         contact_id: contactId,
+        opportunity_type: formData.opportunity_type as any,
+        title: formData.title || null,
         stage: formData.stage as any,
         deal_value: formData.deal_value ? parseFloat(formData.deal_value) : 0,
         expected_close_date: formData.expected_close_date || null,
-        notes: formData.notes || null
-      });
+        notes: formData.notes || null,
+      } as any);
 
       if (success) {
-        // Reset form
         setFormData({
           contact_id: "",
-          stage: "lead",
+          opportunity_type: "buyer",
+          title: "",
+          stage: "new_lead",
           deal_value: "",
           expected_close_date: "",
-          notes: ""
+          notes: "",
         });
         setNewContactData({
           first_name: "",
@@ -125,23 +147,23 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
           state: "",
           zip_code: "",
           tags: [],
-          notes: ""
+          notes: "",
         });
         setContactMode("existing");
         setOpen(false);
         onOpportunityCreated();
-        
+
         toast({
           title: "Opportunity Created",
           description: "The opportunity has been added to your pipeline.",
         });
       }
     } catch (error) {
-      console.error('Error creating opportunity:', error);
+      console.error("Error creating opportunity:", error);
       toast({
         title: "Error",
         description: "Failed to create opportunity. Please try again.",
-        variant: "destructive"
+        variant: "destructive",
       });
     }
   };
@@ -154,14 +176,18 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
           Add Opportunity
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add New Opportunity</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Contact selection mode */}
           <div className="space-y-3">
             <Label>Contact Option</Label>
-            <RadioGroup value={contactMode} onValueChange={(value: "existing" | "new") => setContactMode(value)}>
+            <RadioGroup
+              value={contactMode}
+              onValueChange={(value: "existing" | "new") => setContactMode(value)}
+            >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="existing" id="existing" />
                 <Label htmlFor="existing">Select Existing Contact</Label>
@@ -178,7 +204,7 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
               <Label htmlFor="contact">Contact</Label>
               <Select
                 value={formData.contact_id}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, contact_id: value }))}
+                onValueChange={(value) => setFormData((prev) => ({ ...prev, contact_id: value }))}
                 required
               >
                 <SelectTrigger>
@@ -188,7 +214,7 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
                   {contacts.map((contact) => (
                     <SelectItem key={contact.id} value={contact.id}>
                       {contact.first_name} {contact.last_name}
-                      {contact.email && ` - ${contact.email}`}
+                      {contact.email && ` — ${contact.email}`}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -202,7 +228,7 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
                   <Input
                     id="first_name"
                     value={newContactData.first_name}
-                    onChange={(e) => setNewContactData(prev => ({ ...prev, first_name: e.target.value }))}
+                    onChange={(e) => setNewContactData((prev) => ({ ...prev, first_name: e.target.value }))}
                     required
                   />
                 </div>
@@ -211,12 +237,12 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
                   <Input
                     id="last_name"
                     value={newContactData.last_name}
-                    onChange={(e) => setNewContactData(prev => ({ ...prev, last_name: e.target.value }))}
+                    onChange={(e) => setNewContactData((prev) => ({ ...prev, last_name: e.target.value }))}
                     required
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone *</Label>
@@ -224,7 +250,7 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
                     id="phone"
                     type="tel"
                     value={newContactData.phone}
-                    onChange={(e) => setNewContactData(prev => ({ ...prev, phone: e.target.value }))}
+                    onChange={(e) => setNewContactData((prev) => ({ ...prev, phone: e.target.value }))}
                     required
                   />
                 </div>
@@ -234,7 +260,7 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
                     id="email"
                     type="email"
                     value={newContactData.email}
-                    onChange={(e) => setNewContactData(prev => ({ ...prev, email: e.target.value }))}
+                    onChange={(e) => setNewContactData((prev) => ({ ...prev, email: e.target.value }))}
                     required
                   />
                 </div>
@@ -246,7 +272,7 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
                   id="address_1"
                   placeholder="Street Address"
                   value={newContactData.address_1}
-                  onChange={(e) => setNewContactData(prev => ({ ...prev, address_1: e.target.value }))}
+                  onChange={(e) => setNewContactData((prev) => ({ ...prev, address_1: e.target.value }))}
                 />
               </div>
 
@@ -256,7 +282,7 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
                   <Input
                     id="city"
                     value={newContactData.city}
-                    onChange={(e) => setNewContactData(prev => ({ ...prev, city: e.target.value }))}
+                    onChange={(e) => setNewContactData((prev) => ({ ...prev, city: e.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">
@@ -264,7 +290,7 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
                   <Input
                     id="state"
                     value={newContactData.state}
-                    onChange={(e) => setNewContactData(prev => ({ ...prev, state: e.target.value }))}
+                    onChange={(e) => setNewContactData((prev) => ({ ...prev, state: e.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">
@@ -272,32 +298,65 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
                   <Input
                     id="zip_code"
                     value={newContactData.zip_code}
-                    onChange={(e) => setNewContactData(prev => ({ ...prev, zip_code: e.target.value }))}
+                    onChange={(e) => setNewContactData((prev) => ({ ...prev, zip_code: e.target.value }))}
                   />
                 </div>
               </div>
             </div>
           )}
 
+          {/* Opportunity Type */}
           <div className="space-y-2">
-            <Label htmlFor="stage">Stage</Label>
+            <Label htmlFor="opportunity_type">Opportunity Type</Label>
             <Select
-              value={formData.stage}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, stage: value }))}
+              value={formData.opportunity_type}
+              onValueChange={handleOpportunityTypeChange}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="lead">Lead</SelectItem>
-                <SelectItem value="qualified">Qualified</SelectItem>
-                <SelectItem value="appointment">Appointment</SelectItem>
-                <SelectItem value="contract">Contract</SelectItem>
-                <SelectItem value="closed">Closed</SelectItem>
+                {Object.entries(OPPORTUNITY_TYPE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
+          {/* Title (optional) */}
+          <div className="space-y-2">
+            <Label htmlFor="title">Title (Optional)</Label>
+            <Input
+              id="title"
+              placeholder="e.g. 123 Main St — First-time buyer"
+              value={formData.title}
+              onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
+            />
+          </div>
+
+          {/* Stage */}
+          <div className="space-y-2">
+            <Label htmlFor="stage">Stage</Label>
+            <Select
+              value={formData.stage}
+              onValueChange={(value) => setFormData((prev) => ({ ...prev, stage: value }))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableStages.map((stage) => (
+                  <SelectItem key={stage.key} value={stage.key}>
+                    {stage.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Deal Value */}
           <div className="space-y-2">
             <Label htmlFor="deal_value">Deal Value ($)</Label>
             <Input
@@ -307,38 +366,38 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
               min="0"
               placeholder="0.00"
               value={formData.deal_value}
-              onChange={(e) => setFormData(prev => ({ ...prev, deal_value: e.target.value }))}
+              onChange={(e) => setFormData((prev) => ({ ...prev, deal_value: e.target.value }))}
             />
           </div>
 
+          {/* Expected Close Date */}
           <div className="space-y-2">
             <Label htmlFor="expected_close_date">Expected Close Date</Label>
             <Input
               id="expected_close_date"
               type="date"
               value={formData.expected_close_date}
-              onChange={(e) => setFormData(prev => ({ ...prev, expected_close_date: e.target.value }))}
+              onChange={(e) => setFormData((prev) => ({ ...prev, expected_close_date: e.target.value }))}
             />
           </div>
 
+          {/* Notes */}
           <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
             <Textarea
               id="notes"
               placeholder="Add any notes about this opportunity..."
               value={formData.notes}
-              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
               rows={3}
             />
           </div>
 
-          <div className="flex justify-end space-x-2">
+          <div className="flex justify-end space-x-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">
-              Create Opportunity
-            </Button>
+            <Button type="submit">Create Opportunity</Button>
           </div>
         </form>
       </DialogContent>

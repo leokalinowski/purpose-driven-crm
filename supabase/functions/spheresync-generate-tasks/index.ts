@@ -51,7 +51,7 @@ async function scoreTasksWithAI(
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
   // Fetch enrichment data in parallel
-  const [activitiesResult, emailResult] = await Promise.all([
+  const [activitiesResult, emailResult, pipelineResult] = await Promise.all([
     supabase
       .from('contact_activities')
       .select('contact_id, activity_type, activity_date, outcome')
@@ -62,7 +62,13 @@ async function scoreTasksWithAI(
       .from('email_logs')
       .select('recipient_email, status')
       .gte('created_at', ninetyDaysAgo)
-      .in('status', ['opened', 'clicked'])
+      .in('status', ['opened', 'clicked']),
+    supabase
+      .from('opportunities')
+      .select('contact_id, stage, deal_value, opportunity_type, ai_deal_probability, ai_suggested_next_action')
+      .in('contact_id', contactIds)
+      .is('actual_close_date', null)
+      .not('outcome', 'in', '(lost,withdrawn)'),
   ]);
 
   // Build per-contact activity map (keep latest 3 per contact)
@@ -86,6 +92,20 @@ async function scoreTasksWithAI(
     emailEngMap.set(key, existing);
   }
 
+  // Build per-contact active pipeline opportunity map
+  const pipelineMap = new Map<string, { stage: string; deal_value: number | null; opportunity_type: string; ai_deal_probability: number | null; ai_suggested_next_action: string | null }>();
+  for (const opp of pipelineResult.data ?? []) {
+    if (!pipelineMap.has(opp.contact_id)) {
+      pipelineMap.set(opp.contact_id, {
+        stage: opp.stage,
+        deal_value: opp.deal_value ?? null,
+        opportunity_type: opp.opportunity_type ?? 'buyer',
+        ai_deal_probability: opp.ai_deal_probability ?? null,
+        ai_suggested_next_action: opp.ai_suggested_next_action ?? null,
+      });
+    }
+  }
+
   const today = new Date().toISOString().split('T')[0];
   const now = Date.now();
   const contactMap = new Map(inScopeContacts.map(c => [c.id, c]));
@@ -99,6 +119,7 @@ async function scoreTasksWithAI(
       : null;
     const emailKey = (contact.email ?? '').toLowerCase();
     const emailEng = emailEngMap.get(emailKey) ?? { opens: 0, clicks: 0 };
+    const activePipeline = pipelineMap.get(contact.id) ?? null;
     return [{
       task_id: task.id,
       full_name: `${contact.first_name ?? ''} ${contact.last_name}`.trim(),
@@ -108,6 +129,7 @@ async function scoreTasksWithAI(
       recent_activities: activitiesMap.get(contact.id) ?? [],
       email_opens_90d: emailEng.opens,
       email_clicks_90d: emailEng.clicks,
+      active_pipeline: activePipeline,  // null if not in pipeline
     }];
   });
 
@@ -120,11 +142,12 @@ Score each contact 1–10 (10 = most urgent to reach out to) based on:
 - Email engagement (opens/clicks in last 90 days) = strong interest signal — raise score
 - Activity count: low lifetime activity = relationship needs nurturing
 - Recent outcome: "no answer" or "voicemail" = follow-up needed
+- PIPELINE BOOST: if active_pipeline is not null, this is an active deal — score must be at least 7. If ai_deal_probability is high (>60), score 9–10. The talking points MUST reference the deal stage and context (e.g. "Following up on your home search at [stage]").
 
 For each contact provide:
 1. score (integer 1–10)
 2. reason (max 15 words, factual, e.g. "No contact in 73 days, opened 2 newsletters recently")
-3. talking_points (array of exactly 2 short strings, each max 12 words, conversational openers suited to the task_type)
+3. talking_points (array of exactly 2 short strings, each max 12 words, conversational openers suited to the task_type — for pipeline contacts, reference the deal stage or type)
 
 Return ONLY a JSON array. No markdown, no explanation outside the JSON.`;
 

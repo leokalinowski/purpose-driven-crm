@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Megaphone,
   Lock,
+  KanbanSquare,
   type LucideIcon,
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -177,6 +178,7 @@ export function AppSidebar() {
                 label="Operations"
                 icon={Settings}
                 items={[
+                  { title: 'Pipeline', url: '/pipeline', icon: KanbanSquare },
                   { title: 'Database Management', url: '/admin/database', icon: Database },
                   { title: 'SphereSync Recovery', url: '/admin/spheresync-recovery', icon: RotateCcw },
                   { title: 'SphereSync Management', url: '/admin/coaching', icon: TrendingUp },
