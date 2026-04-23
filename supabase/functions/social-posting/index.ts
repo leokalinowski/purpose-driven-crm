@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     }
 
     // Decrypt social account tokens
-    const encryptionKey = 'reop-social-tokens-2025';
+    const encryptionKey = Deno.env.get('SOCIAL_TOKEN_ENCRYPTION_KEY') ?? 'reop-social-tokens-2025';
     const { data: accountData, error: accountError } = await supabaseClient
       .rpc('decrypt_social_token', {
         p_agent_id: post.agent_id,

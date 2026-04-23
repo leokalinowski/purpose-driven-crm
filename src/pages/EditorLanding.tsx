@@ -1,16 +1,32 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
+import { useNavigate } from 'react-router-dom';
 
 import { AgentSelector } from '@/components/admin/AgentSelector';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function EditorLanding() {
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
+  const { isAdmin, isEditor, loading: roleLoading } = useUserRole();
+  const navigate = useNavigate();
   const [selectedAgentUserId, setSelectedAgentUserId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth', { replace: true });
+    } else if (!authLoading && !roleLoading && !isAdmin && !isEditor) {
+      navigate('/', { replace: true });
+    }
+  }, [user, isAdmin, isEditor, authLoading, roleLoading, navigate]);
+
+  if (authLoading || roleLoading) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

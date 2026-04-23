@@ -63,9 +63,8 @@ serve(async (req) => {
       return new Response(`Webhook Error: ${err.message}`, { status: 400 });
     }
   } else {
-    logStep("WARNING: No STRIPE_WEBHOOK_SECRET set, skipping signature verification");
-    const body = await req.text();
-    event = JSON.parse(body);
+    logStep("ERROR: STRIPE_WEBHOOK_SECRET not set — rejecting request");
+    return new Response("Webhook Error: missing webhook secret configuration", { status: 400 });
   }
 
   logStep("Event received", { type: event.type, id: event.id });

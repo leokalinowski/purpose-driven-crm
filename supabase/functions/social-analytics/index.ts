@@ -86,7 +86,7 @@ const handler = async (req: Request): Promise<Response> => {
         console.log(`Fetching real analytics for ${account.platform} account ${account.account_id}`);
 
         // Decrypt tokens for this account
-        const encryptionKey = 'reop-social-tokens-2025';
+        const encryptionKey = Deno.env.get('SOCIAL_TOKEN_ENCRYPTION_KEY') ?? 'reop-social-tokens-2025';
         const { data: accountData, error: decryptError } = await supabaseServiceClient
           .rpc('decrypt_social_token', {
             p_agent_id: account.agent_id,

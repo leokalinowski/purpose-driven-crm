@@ -221,7 +221,7 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('✅ Facebook profile retrieved:', { id: profileData.id, name: profileData.name });
 
         // Encrypt tokens with pgcrypto
-        const encryptionKey = 'reop-social-tokens-2025'; // Match migration key
+        const encryptionKey = Deno.env.get('SOCIAL_TOKEN_ENCRYPTION_KEY') ?? 'reop-social-tokens-2025';
         
         const { data: encryptedData, error: encryptError } = await supabaseServiceClient
           .rpc('encrypt_social_token', {
