@@ -1,5 +1,5 @@
 
-import React, { lazy, Suspense } from 'react';
+import React from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -44,15 +44,6 @@ import Welcome from "./pages/Welcome";
 import Resources from "./pages/Resources";
 import AdminResources from "./pages/AdminResources";
 
-// Lazy-loaded — Phase 2 of unified Hub. Other routes still eager (will migrate over time).
-const Today = lazy(() => import("./pages/Today"));
-
-const RouteFallback = () => (
-  <div className="flex items-center justify-center min-h-[60vh] text-muted-foreground text-sm">
-    Loading…
-  </div>
-);
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -84,14 +75,6 @@ const AppContent = () => {
         <Route path="/coaching" element={<Coaching />} />
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/pipeline" element={<Pipeline />} />
-        <Route
-          path="/today"
-          element={
-            <Suspense fallback={<RouteFallback />}>
-              <Today />
-            </Suspense>
-          }
-        />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/team-management" element={<AdminTeamManagement />} />
         <Route path="/admin/events" element={<AdminEventsManagement />} />

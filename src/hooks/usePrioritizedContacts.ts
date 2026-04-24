@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -130,43 +130,14 @@ export function usePrioritizedContacts(opts?: { limit?: number }) {
 
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
-/**
- * Trigger an on-demand rescore of either the agent's full sphere or specific contacts.
- * Use after an activity is logged, a stage changes, or the agent explicitly asks for a refresh.
- */
-export function useRescorePriorities() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async (params?: { contact_ids?: string[]; agent_id?: string }) => {
-      const { data, error } = await supabase.functions.invoke('compute-priority-scores', {
-        body: params ?? {},
-      });
-      if (error) throw error;
-      return data as { scored: number; ai_failures: number; ai_ms: number; model: string };
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['prioritized-contacts'] });
-      toast({
-        title: 'Priorities refreshed',
-        description: `${data.scored} contact${data.scored === 1 ? '' : 's'} rescored${data.ai_failures > 0 ? ` (${data.ai_failures} fell back to mechanical)` : ''}.`,
-      });
-    },
-    onError: (e) => {
-      toast({
-        title: 'Rescore failed',
-        description: (e as Error).message,
-        variant: 'destructive',
-      });
-    },
-  });
-}
+// Intentionally no user-triggered rescore — scoring happens via cron + triggers
+// only (event-driven on activity log / stage change). Blocking AI calls from the
+// UI produced bad UX and hit rate limits.
 
 /**
  * Toggle the agent-set "watch this one" flag. Optimistic — updates cache immediately,
- * rolls back on error. No rescore triggered automatically; the flag takes effect on
- * the next scoring run (which the UI can invoke separately if needed).
+ * rolls back on error. The trigger on contact state change will rescore on the
+ * next scoring tick; no blocking call here.
  */
 export function useToggleWatchFlag() {
   const queryClient = useQueryClient();
