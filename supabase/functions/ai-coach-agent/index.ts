@@ -345,9 +345,286 @@ function buildAlerts(inputs: CoachingInputs): Alert[] {
     .slice(0, 8);
 }
 
-// ─── Phase 3 — Prioritize (B4) — STUB ────────────────────────────────────────
-async function prioritize(_inputs: CoachingInputs, _xaiKey: string, _model: string): Promise<{ next_hour: unknown | null; today_list: unknown[]; tokens_in: number; tokens_out: number; }> {
-  return { next_hour: null, today_list: [], tokens_in: 0, tokens_out: 0 }; // B4 fills this
+// ─── Phase 3 — Prioritize (B4) — Grok call with voice-calibrated prompt ─────
+
+interface TodayItem {
+  contact_id: string;
+  contact_name: string;
+  opportunity_id?: string | null;
+  priority_score: number | null;
+  action: 'call' | 'text' | 'email' | 'meet' | 'send_listing' | 'follow_up' | 'write_note';
+  reasoning: string;
+  quick_actions: string[];
+}
+
+interface NextHour {
+  contact_id: string;
+  contact_name: string;
+  opportunity_id?: string | null;
+  action: TodayItem['action'];
+  urgency: 'overdue' | 'timely' | 'proactive';
+  reasoning: string;
+  first_sentence: string;
+  context_chips: string[];
+}
+
+interface Candidate {
+  contact_id: string;
+  name: string;
+  category: string | null;
+  priority_score: number | null;
+  priority_reasoning: string | null;
+  days_since_touch: number | null;
+  last_activity_type: string | null;
+  life_event: string | null;
+  zip_code: string | null;
+  market_pulse: MarketPulse | null;
+  active_opportunity: {
+    opportunity_id: string;
+    stage: string;
+    days_in_stage: number | null;
+    deal_value: number | null;
+    next_step: string | null;
+  } | null;
+  matched_alerts: string[]; // alert types this contact appears in
+}
+
+const COACH_VOICE_PROMPT = `You are a real-estate agent's coach. From a list of candidate contacts with priority scores, signals, and active alerts, produce today's prioritized action list (5-8 items) and designate ONE as next_hour — the single most time-critical action right now.
+
+VOICE RULES (follow all):
+- Specific over generic: "Call Maria — her daughter just graduated" beats "Reach out to Maria"
+- Coach, not commander: "If I were you, I'd lead with the comp" beats "Lead with the comp"
+- Brief: one sentence of reasoning per item. Agents read between showings.
+- Warm, never cute: no exclamation marks unless there's actual urgency. No "Hey there!"
+- No jargon. Banned: engagement, leverage, stakeholder, synergy, optimize, robust, journey, ecosystem.
+- First person sparingly: "I noticed her listing went pending" is fine occasionally.
+- Cite the signal: never assert without saying why.
+- Probabilistic about people: "She might be ready to list" not "She is ready to list".
+
+FIRST-SENTENCE OPENER — pick based on signal weight:
+- Strong fresh signal (life event, market move, listing change): lead with the signal.
+  Example: "Maria — saw your sister-in-law's place at 20012 just sold for $1.1M. Wanted you to hear first."
+- Cadence touch, no fresh signal: warm-relational with soft why.
+  Example: "Hi Maria — been thinking about you. The kids must be wrapping up the school year. Free for a quick coffee?"
+- Long-dormant contact: low-pressure, no agenda.
+  Example: "Hi Maria — it's been a minute. Hope life's good. No agenda, just wanted to say hi."
+
+OUTPUT STRICTLY this JSON:
+{
+  "next_hour": {
+    "contact_id": "<uuid>",
+    "contact_name": "<name>",
+    "opportunity_id": "<uuid or null>",
+    "action": "call" | "text" | "email" | "meet" | "send_listing" | "follow_up" | "write_note",
+    "urgency": "overdue" | "timely" | "proactive",
+    "reasoning": "<ONE sentence explaining why this is the next hour>",
+    "first_sentence": "<exact opener to use — 1-2 sentences max>",
+    "context_chips": ["<fact 1>", "<fact 2>", "<fact 3>"]
+  },
+  "today_list": [
+    {
+      "contact_id": "<uuid>",
+      "contact_name": "<name>",
+      "opportunity_id": "<uuid or null>",
+      "priority_score": <number>,
+      "action": "...",
+      "reasoning": "<ONE sentence>",
+      "quick_actions": ["call", "text", "log"]
+    }
+  ]
+}
+
+Rules:
+- Never invent data. If a signal isn't present in the input, don't cite it.
+- 5-8 items for today_list. Fewer is OK if only 3-4 are truly actionable today.
+- next_hour MUST be one of the today_list items (usually the most urgent).
+- If candidates list is empty or everyone is low-priority: return empty today_list and null next_hour.
+- Use the contact_id values from the input verbatim.
+- quick_actions depends on contact data — include "call" only if phone exists (assume yes unless input says otherwise), "text" same, "log" always.`;
+
+function buildCandidates(inputs: CoachingInputs, alerts: Alert[]): Candidate[] {
+  // Alerts indexed by contact_id for matching
+  const alertsByContact = new Map<string, string[]>();
+  for (const a of alerts) {
+    if (!a.contact_id) continue;
+    const list = alertsByContact.get(a.contact_id) ?? [];
+    list.push(a.type);
+    alertsByContact.set(a.contact_id, list);
+  }
+
+  // Opportunities indexed by contact_id (prefer most-progressed stage)
+  const oppByContact = new Map<string, OpportunityRow>();
+  for (const o of inputs.active_opportunities) {
+    const existing = oppByContact.get(o.contact_id);
+    if (!existing) oppByContact.set(o.contact_id, o);
+  }
+
+  const now = Date.now();
+  const candidates = inputs.contacts
+    .filter(c => !c.dnc) // Respect DNC — coaching doesn't drive calls to DNC contacts
+    .map<Candidate>(c => {
+      const daysSince = c.last_activity_date
+        ? Math.floor((now - new Date(c.last_activity_date).getTime()) / 86400_000)
+        : null;
+      const opp = oppByContact.get(c.id) ?? null;
+      return {
+        contact_id: c.id,
+        name: shortName(c),
+        category: c.category,
+        priority_score: c.priority_score,
+        priority_reasoning: c.priority_reasoning,
+        days_since_touch: daysSince,
+        last_activity_type: null,
+        life_event: c.life_event,
+        zip_code: c.zip_code,
+        market_pulse: c.zip_code ? (inputs.market_pulse[c.zip_code] ?? null) : null,
+        active_opportunity: opp ? {
+          opportunity_id: opp.id,
+          stage: opp.stage.replace(/_/g, ' '),
+          days_in_stage: opp.days_in_current_stage,
+          deal_value: opp.deal_value,
+          next_step: opp.next_step_title,
+        } : null,
+        matched_alerts: alertsByContact.get(c.id) ?? [],
+      };
+    })
+    // Rank by priority_score DESC (null last), then by matched_alerts count, then overdue touch
+    .sort((a, b) => {
+      const pa = a.priority_score ?? -1;
+      const pb = b.priority_score ?? -1;
+      if (pa !== pb) return pb - pa;
+      if (a.matched_alerts.length !== b.matched_alerts.length) return b.matched_alerts.length - a.matched_alerts.length;
+      const da = a.days_since_touch ?? -1;
+      const db = b.days_since_touch ?? -1;
+      return db - da;
+    })
+    .slice(0, 30); // Cap context: top-30 only. Cheaper Grok call, enough signal.
+
+  return candidates;
+}
+
+function mechanicalFallback(inputs: CoachingInputs, alerts: Alert[]): { next_hour: NextHour | null; today_list: TodayItem[] } {
+  // Used when Grok is unavailable. Deterministic top-8 by priority_score with templated reasoning.
+  const candidates = buildCandidates(inputs, alerts);
+  const top8 = candidates.slice(0, 8);
+  const today_list: TodayItem[] = top8.map(c => ({
+    contact_id: c.contact_id,
+    contact_name: c.name,
+    opportunity_id: c.active_opportunity?.opportunity_id ?? null,
+    priority_score: c.priority_score,
+    action: c.active_opportunity ? 'follow_up' : 'call',
+    reasoning: c.priority_reasoning ?? (c.days_since_touch !== null
+      ? `Priority ${c.priority_score ?? '?'}; last touch ${c.days_since_touch} days ago.`
+      : `Priority ${c.priority_score ?? '?'}; never contacted.`),
+    quick_actions: ['call', 'text', 'log'],
+  }));
+
+  const nextHour: NextHour | null = top8.length > 0 ? {
+    contact_id: top8[0].contact_id,
+    contact_name: top8[0].name,
+    opportunity_id: top8[0].active_opportunity?.opportunity_id ?? null,
+    action: top8[0].active_opportunity ? 'follow_up' : 'call',
+    urgency: (top8[0].days_since_touch ?? 0) > 30 ? 'overdue' : 'timely',
+    reasoning: today_list[0].reasoning,
+    first_sentence: `Hi ${top8[0].name.split(' ')[0]} — it's been a minute. Hope life's good.`,
+    context_chips: [
+      top8[0].category ? `Category ${top8[0].category}` : '',
+      top8[0].priority_score ? `Priority ${top8[0].priority_score}` : '',
+      top8[0].days_since_touch !== null ? `${top8[0].days_since_touch}d since touch` : '',
+    ].filter(Boolean),
+  } : null;
+
+  return { next_hour: nextHour, today_list };
+}
+
+async function prioritize(
+  inputs: CoachingInputs,
+  alerts: Alert[],
+  xaiKey: string,
+  model: string,
+): Promise<{ next_hour: NextHour | null; today_list: TodayItem[]; tokens_in: number; tokens_out: number; used_fallback: boolean; }> {
+  const candidates = buildCandidates(inputs, alerts);
+
+  if (candidates.length === 0) {
+    return { next_hour: null, today_list: [], tokens_in: 0, tokens_out: 0, used_fallback: false };
+  }
+
+  if (!xaiKey) {
+    console.warn('XAI_API_KEY not set — using mechanical fallback for prioritize');
+    return { ...mechanicalFallback(inputs, alerts), tokens_in: 0, tokens_out: 0, used_fallback: true };
+  }
+
+  try {
+    const userPayload = {
+      agent_name: inputs.agent_name,
+      current_time: new Date().toISOString(),
+      sphere_overview: {
+        total_contacts: inputs.aggregates.contact_count,
+        overdue_30d: inputs.aggregates.contacts_overdue_30d,
+        active_deals: inputs.aggregates.active_opportunity_count,
+        pipeline_value: inputs.aggregates.pipeline_value,
+      },
+      active_alerts: alerts.slice(0, 8),
+      candidates,
+    };
+
+    const response = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + xaiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: COACH_VOICE_PROMPT },
+          { role: 'user', content: JSON.stringify(userPayload) },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+        max_tokens: 3500,
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('Grok prioritize failed', response.status, text.slice(0, 200));
+      return { ...mechanicalFallback(inputs, alerts), tokens_in: 0, tokens_out: 0, used_fallback: true };
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content ?? '{}';
+    const usage = data.usage ?? {};
+
+    let parsed: { next_hour?: NextHour | null; today_list?: TodayItem[] };
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      console.error('Non-JSON Grok response', content.slice(0, 200));
+      return { ...mechanicalFallback(inputs, alerts), tokens_in: usage.prompt_tokens ?? 0, tokens_out: usage.completion_tokens ?? 0, used_fallback: true };
+    }
+
+    // Sanity check: ensure all contact_ids in the response exist in the input.
+    // Drop any invented items (paranoid against hallucinated UUIDs).
+    const validContactIds = new Set(candidates.map(c => c.contact_id));
+    const cleanedTodayList = (parsed.today_list ?? [])
+      .filter(item => item && validContactIds.has(item.contact_id))
+      .slice(0, 8);
+    const cleanedNextHour = parsed.next_hour && validContactIds.has(parsed.next_hour.contact_id)
+      ? parsed.next_hour
+      : null;
+
+    return {
+      next_hour: cleanedNextHour,
+      today_list: cleanedTodayList,
+      tokens_in: usage.prompt_tokens ?? 0,
+      tokens_out: usage.completion_tokens ?? 0,
+      used_fallback: false,
+    };
+  } catch (e) {
+    console.error('Prioritize threw', (e as Error).message);
+    return { ...mechanicalFallback(inputs, alerts), tokens_in: 0, tokens_out: 0, used_fallback: true };
+  }
 }
 
 // ─── Phase 4 — Weekly narrative (B5) — STUB ──────────────────────────────────
@@ -426,7 +703,7 @@ async function tickAgent(
     const inputs = await gather(supabase, agentId);
 
     const alerts = buildAlerts(inputs);
-    const prio = await prioritize(inputs, xaiKey, model);
+    const prio = await prioritize(inputs, alerts, xaiKey, model);
     const narr = await writeNarrative(inputs, xaiKey, model);
 
     // Stub chat_context — for now, a compact summary so we can verify gathering worked
@@ -540,7 +817,7 @@ Deno.serve(async (req: Request) => {
     succeeded: results.filter(r => r.status === 'ok').length,
     failed: results.filter(r => r.status === 'error').length,
     model,
-    phase: 'B3-alerts',
+    phase: 'B4-prioritize',
     results,
   });
 });
