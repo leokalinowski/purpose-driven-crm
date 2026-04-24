@@ -251,16 +251,122 @@ Each milestone is independently reviewable. Phase C starts when B8 passes.
 - **Don't write a "refresh now" UI button**. Dirty flag + the next
   scheduled tick is the only refresh path. (Lesson from Phase 2.)
 
-## Open questions (resolve before B4)
+## Voice — "senior agent texting a newer agent over coffee"
 
-1. **Voice style reference** — do you have an example of how you'd
-   phrase a reasoning line to an agent? (One paragraph from a past email
-   or coaching note would be gold for prompt tuning.)
-2. **First-sentence opener calibration** — should the Coach's
-   `first_sentence` be deferential ("Hi Maria, this is Leo — hope I'm
-   not catching you at a bad time") or punchy ("Maria — your place at
-   20012 just comped at $1.1M. Wanted you to see it first")? Probably
-   agent-configurable, but we need a default.
-3. **Does the Coach own any write paths?** (e.g. can it auto-add a
-   SphereSync task for an overdue touch?) My default: no — the Coach
-   recommends, the agent acts. Write paths stay explicit.
+The Coach's tone is calibrated, not improvised. The system prompt enforces:
+
+- **Specific over generic.** "Call Maria — her daughter just graduated"
+  beats "Reach out to Maria."
+- **Coach, not commander.** "If I were you, I'd lead with the comp" beats
+  "Lead with the comp."
+- **Brief.** One sentence per insight. Agents read between showings.
+- **Warm, never cute.** No exclamation marks unless there's actual
+  urgency. No "Hey there!"
+- **No jargon.** Banned vocabulary: engagement, leverage, stakeholder,
+  synergy, optimize, robust, journey, ecosystem.
+- **First person sparingly.** "I noticed her listing went pending"
+  occasionally — gives the Coach a personality without overdoing it.
+- **Cite the signal.** Never assert without saying why. "Worth a check-in
+  — Hot ZIP, life event, three opens last week." Builds trust.
+- **Probabilistic about people.** "She might be ready to list", not
+  "She is ready to list." Real-estate agents know certainty is a lie.
+
+Calibration example baked into the prompt:
+
+> "Maria's been quiet for 18 days, but her daughter just graduated and
+> her ZIP is up 6% MoM. Worth a check-in. I'd lead with the daughter,
+> not the market."
+
+## First sentence — context-adaptive, not a fixed style
+
+Pure deferential ("Hope I'm not catching you at a bad time") is bland.
+Pure punchy ("Your place just comped at $1.1M") is risky if the signal
+isn't strong. The Coach picks based on signal weight + relationship age:
+
+- **Strong fresh signal** (life event, market move, listing change) →
+  lead with the signal:
+  > "Maria — saw your sister-in-law's place at 20012 just sold for
+  > $1.1M. Wanted you to hear that comp first."
+
+- **Cadence touch, no fresh signal** → warm-relational with a soft why:
+  > "Hi Maria — been thinking about you. The kids must be wrapping up
+  > the school year. Free for a quick coffee?"
+
+- **Long-dormant contact** → low-pressure, no agenda:
+  > "Hi Maria — it's been a minute. Hope life's good. No agenda, just
+  > wanted to say hi."
+
+The Coach picks the style internally — the agent always gets a single
+ready-to-use opener.
+
+## Auto-task creation (Phase B includes write paths)
+
+The Coach is an *agent of action*, not just an advisor. It writes tasks
+directly into the existing task tables, with safeguards.
+
+**Where tasks land:**
+- Relationship touches (call / text / sphere keep-alive) → `spheresync_tasks`
+- Deal nudges (follow-up on stuck offer, prep for listing appt) →
+  `pipeline_tasks`
+
+**New columns on those tables (additive, all nullable):**
+```sql
+ALTER TABLE public.spheresync_tasks
+  ADD COLUMN IF NOT EXISTS source           TEXT,    -- 'agent' | 'coach' | 'system'
+  ADD COLUMN IF NOT EXISTS coach_reasoning  TEXT,    -- one-sentence why
+  ADD COLUMN IF NOT EXISTS coach_created_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS coach_dismissed_at TIMESTAMPTZ;
+
+ALTER TABLE public.pipeline_tasks
+  ADD COLUMN IF NOT EXISTS source           TEXT,
+  ADD COLUMN IF NOT EXISTS coach_reasoning  TEXT,
+  ADD COLUMN IF NOT EXISTS coach_created_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS coach_dismissed_at TIMESTAMPTZ;
+```
+
+**Behavior contract:**
+- A subtle ✨ badge marks Coach-created tasks in any task list UI.
+- **Dedup** — before inserting, the Coach checks for a similar task
+  (same `contact_id` + same task_type) created in the last 7 days. If
+  one exists, skip. No spam.
+- **Cap per tick** — max 5 new tasks per agent per nightly tick.
+  Workday-quick ticks don't create tasks at all (they only refresh state).
+- **Reversible** — dismissing a Coach task sets `coach_dismissed_at`
+  and removes it from the active list. Editing a Coach task clears
+  `source` (it becomes the agent's own). Completing it counts normally.
+- **TTL** — Coach tasks not acted on within 30 days auto-archive (set
+  `coach_dismissed_at = now()` via a daily cleanup cron). Prevents zombie
+  task lists.
+- **Learning loop** — the dismiss/complete signals feed back into the
+  next tick's prioritization (a contact whose Coach tasks the agent
+  consistently dismisses gets de-prioritized; one whose Coach tasks the
+  agent acts on gets reinforced). This is a Phase B+ refinement; for B6
+  we just record the signals.
+
+**RLS** — the new columns inherit row visibility from the parent table.
+No new policies needed.
+
+## Updated milestones
+
+Insert between B5 and B6:
+
+- **B5.5** — Migration: add `source` + `coach_*` columns to
+  `spheresync_tasks` and `pipeline_tasks`. Backfill nothing (all NULL =
+  agent-created, the existing default).
+- **B5.7** — Coach task-write phase: in the prioritize step, the Coach
+  decides which `today_list` items also warrant a written task. Dedup
+  query, cap-per-tick enforcement, write to the right table.
+- **B5.8** — Cleanup cron: daily TTL sweep that auto-dismisses Coach
+  tasks older than 30 days that were never acted on.
+
+UI changes (Phase C and beyond):
+- Task list components surface the ✨ badge + a "Why" tooltip with
+  `coach_reasoning`.
+- Quick-action: "Dismiss this Coach suggestion" with one undo.
+
+## Open questions — RESOLVED 2026-04-24
+
+1. ~~Voice style reference~~ → resolved above.
+2. ~~First-sentence opener calibration~~ → context-adaptive, see above.
+3. ~~Does the Coach own write paths?~~ → YES, with safeguards. See
+   "Auto-task creation" section.
