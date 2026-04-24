@@ -1,149 +1,56 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SphereSyncTaskCard } from '@/components/spheresync/SphereSyncTaskCard';
-import { UpcomingTasksPreview } from '@/components/spheresync/UpcomingTasksPreview';
-import { ContactForm } from '@/components/database/ContactForm';
-import { useSphereSyncTasks, SphereSyncTask } from '@/hooks/useSphereSyncTasks';
-import { useContacts } from '@/hooks/useContacts';
-import { useConfetti } from '@/hooks/useConfetti';
-import { useAuth } from '@/hooks/useAuth';
+import { useMemo, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
+import { useSearchParams } from 'react-router-dom';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
+import { Sparkles, Calendar, KanbanSquare } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Layout } from '@/components/layout/Layout';
-import { Phone, MessageSquare, Calendar, BarChart3 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
-import { getWeekRange, getCallCategoriesForWeek, getTextCategoryForWeek } from '@/utils/sphereSyncLogic';
+import { useAuth } from '@/hooks/useAuth';
+import { usePipeline, Opportunity } from '@/hooks/usePipeline';
+import { OpportunityDetailV2 } from '@/components/pipeline/OpportunityDetailV2';
+import { PrioritiesTab } from '@/components/spheresync/tabs/PrioritiesTab';
+import { SphereCadenceTab } from '@/components/spheresync/tabs/SphereCadenceTab';
+import { PipelineTab } from '@/components/spheresync/tabs/PipelineTab';
+import { cn } from '@/lib/utils';
+
+type Tab = 'priorities' | 'cadence' | 'pipeline';
+
+const VALID_TABS: Tab[] = ['priorities', 'cadence', 'pipeline'];
 
 export default function SphereSyncTasks() {
   const { user } = useAuth();
-  const { triggerConfetti, triggerCelebration } = useConfetti();
-  const {
-    callTasks,
-    textTasks,
-    contacts,
-    loading,
-    currentWeek,
-    historicalStats,
-    selectedWeek,
-    loadTasksForWeek,
-    updateTask,
-    refreshTasks
-  } = useSphereSyncTasks();
-  
-  const { updateContact, deleteContact } = useContacts();
-  const [editingContact, setEditingContact] = useState<any | null>(null);
-  const [contactFormOpen, setContactFormOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [detailOpp, setDetailOpp] = useState<Opportunity | null>(null);
 
-  const previousCompletionRate = useRef<number>(0);
-  const hasTriggeredConfetti = useRef<boolean>(false);
+  // Pipeline data lifted to page level so the drawer can refresh it
+  // even when opened from the Priorities tab.
+  const { opportunities, loading: pipelineLoading, updateStage, refresh: refreshPipeline } = usePipeline();
 
-  const totalTasks = callTasks.length + textTasks.length;
-  const completedTasks = [...callTasks, ...textTasks].filter(task => task.completed).length;
-  const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+  const activeTab: Tab = useMemo(() => {
+    const t = searchParams.get('tab');
+    return (VALID_TABS as string[]).includes(t ?? '') ? (t as Tab) : 'priorities';
+  }, [searchParams]);
 
-  const weekRange = getWeekRange(2); // Get current + 2 previous weeks
-  const selectedWeekInfo = weekRange.find(w => 
-    w.weekNumber === selectedWeek?.weekNumber && w.year === selectedWeek?.year
-  ) || weekRange[0];
-
-  // Get categories for selected week
-  const selectedWeekCategories = selectedWeek 
-    ? {
-        callCategories: getCallCategoriesForWeek(selectedWeek.weekNumber),
-        textCategory: getTextCategoryForWeek(selectedWeek.weekNumber)
-      }
-    : currentWeek;
-
-  const handleWeekChange = (value: string) => {
-    const [weekNum, year] = value.split('-').map(Number);
-    loadTasksForWeek(weekNum, year);
+  const setActiveTab = (tab: Tab) => {
+    const next = new URLSearchParams(searchParams);
+    if (tab === 'priorities') next.delete('tab');
+    else next.set('tab', tab);
+    setSearchParams(next, { replace: true });
   };
 
-  const handleEditContact = (task: SphereSyncTask) => {
-    const contactForEdit = {
-      id: task.lead_id,
-      first_name: task.lead.first_name,
-      last_name: task.lead.last_name,
-      phone: task.lead.phone,
-      email: '',
-      category: task.lead.category,
-      dnc: task.lead.dnc,
-      address_1: '',
-      address_2: '',
-      city: '',
-      state: '',
-      zip_code: '',
-      notes: '',
-      tags: [],
-      agent_id: user?.id
-    };
-    
-    setEditingContact(contactForEdit);
-    setContactFormOpen(true);
-  };
-
-  const handleContactUpdate = async (contactData: any) => {
-    try {
-      await updateContact(editingContact.id, contactData);
-      toast.success('Contact updated successfully');
-      setContactFormOpen(false);
-      setEditingContact(null);
-      await refreshTasks();
-    } catch (error) {
-      console.error('Error updating contact:', error);
-      toast.error('Failed to update contact');
-    }
-  };
-
-  const handleContactDelete = async () => {
-    if (!editingContact) return;
-
-    try {
-      await deleteContact(editingContact.id);
-      toast.success('Contact deleted successfully');
-      setContactFormOpen(false);
-      setEditingContact(null);
-      await refreshTasks();
-    } catch (error) {
-      console.error('Error deleting contact:', error);
-      toast.error('Failed to delete contact');
-      throw error; // Re-throw to prevent dialog from closing
-    }
-  };
-
-  // Trigger confetti when completion reaches 100%
-  useEffect(() => {
-    if (totalTasks > 0 && completionRate >= 100 && previousCompletionRate.current < 100) {
-      // Only trigger if we haven't already triggered confetti for this week
-      if (!hasTriggeredConfetti.current) {
-        triggerCelebration();
-        hasTriggeredConfetti.current = true;
-        
-        // Show a celebration message
-        setTimeout(() => {
-          // You could add a toast notification here if desired
-          console.log('🎉 Congratulations! All weekly tasks completed! 🎉');
-        }, 1000);
-      }
-    }
-    
-    // Reset confetti trigger when starting a new week or when tasks are regenerated
-    if (completionRate === 0 && previousCompletionRate.current > 0) {
-      hasTriggeredConfetti.current = false;
-    }
-    
-    previousCompletionRate.current = completionRate;
-  }, [completionRate, totalTasks, triggerCelebration]);
+  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: 'priorities', label: 'Priorities',     icon: <Sparkles className="h-3.5 w-3.5" /> },
+    { key: 'cadence',    label: 'Sphere Cadence', icon: <Calendar className="h-3.5 w-3.5" /> },
+    { key: 'pipeline',   label: 'Pipeline',       icon: <KanbanSquare className="h-3.5 w-3.5" /> },
+  ];
 
   if (!user) {
     return (
       <Layout>
         <Card>
           <CardContent className="p-6">
-            <p>Please sign in to access SphereSync tasks.</p>
+            <p>Please sign in to access SphereSync.</p>
           </CardContent>
         </Card>
       </Layout>
@@ -151,267 +58,65 @@ export default function SphereSyncTasks() {
   }
 
   return (
-    <Layout>
-      <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">SphereSync</h1>
-            <p className="text-muted-foreground">
-              Balanced contact assignment system based on surname frequency analysis
-            </p>
-          </div>
-          {/* Week Selector */}
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">View Week:</label>
-            <Select
-              value={selectedWeek ? `${selectedWeek.weekNumber}-${selectedWeek.year}` : undefined}
-              onValueChange={handleWeekChange}
-            >
-              <SelectTrigger className="w-[250px]">
-                <SelectValue placeholder="Select week" />
-              </SelectTrigger>
-              <SelectContent>
-                {weekRange.map((week) => (
-                  <SelectItem 
-                    key={`${week.weekNumber}-${week.year}`} 
-                    value={`${week.weekNumber}-${week.year}`}
-                  >
-                    {week.label} - {week.year}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Current Week Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                {selectedWeekInfo.label.split('(')[0].trim()}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">Week {selectedWeek?.weekNumber}</div>
-              <p className="text-xs text-muted-foreground">
-                Calls: {selectedWeekCategories.callCategories.join(', ')} | Text: {selectedWeekCategories.textCategory}
+    <>
+      <Helmet><title>SphereSync — Real Estate on Purpose</title></Helmet>
+      <Layout>
+        <DndProvider backend={HTML5Backend}>
+          <div className="space-y-6">
+            {/* Header */}
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">SphereSync</h1>
+              <p className="text-muted-foreground text-sm sm:text-base mt-1">
+                Your operational hub — what to do now, who to call this week, and where every deal stands.
               </p>
-            </CardContent>
-          </Card>
+            </div>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Phone className="h-4 w-4" />
-                Call Tasks
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{callTasks.length}</div>
-              <p className="text-xs text-muted-foreground">
-                {callTasks.filter(task => task.completed).length} completed
-              </p>
-            </CardContent>
-          </Card>
+            {/* Tab switcher */}
+            <div className="flex items-center bg-muted rounded-lg p-0.5 gap-0.5 w-fit">
+              {tabs.map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-4 md:px-3 py-2.5 md:py-1.5 min-h-[44px] md:min-h-0 rounded-md text-sm font-medium transition-all',
+                    activeTab === tab.key
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  aria-pressed={activeTab === tab.key}
+                >
+                  {tab.icon}{tab.label}
+                </button>
+              ))}
+            </div>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" />
-                Text Tasks
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{textTasks.length}</div>
-              <p className="text-xs text-muted-foreground">
-                {textTasks.filter(task => task.completed).length} completed
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <BarChart3 className="h-4 w-4" />
-                Progress
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold flex items-center gap-2">
-                {Math.round(completionRate)}%
-                {completionRate >= 100 && (
-                  <span className="text-primary text-lg">
-                    Complete!
-                  </span>
-                )}
-              </div>
-              <Progress 
-                value={completionRate} 
-                className="mt-2"
+            {/* Tab content */}
+            {activeTab === 'priorities' && (
+              <PrioritiesTab onOpenOpportunity={setDetailOpp} />
+            )}
+            {activeTab === 'cadence' && (
+              <SphereCadenceTab />
+            )}
+            {activeTab === 'pipeline' && (
+              <PipelineTab
+                opportunities={opportunities}
+                loading={pipelineLoading}
+                updateStage={updateStage}
+                refresh={refreshPipeline}
+                onOpenOpportunity={setDetailOpp}
               />
-              {completionRate >= 100 && (
-                <p className="text-xs text-muted-foreground mt-2 font-medium">
-                  Congratulations! All weekly tasks completed!
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+            )}
+          </div>
 
-      {/* Tasks Tabs */}
-      <Tabs defaultValue="calls" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="calls" className="flex items-center gap-2">
-            <Phone className="h-4 w-4" />
-            Calls ({callTasks.length})
-          </TabsTrigger>
-          <TabsTrigger value="texts" className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" />
-            Texts ({textTasks.length})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="calls">
-          {loading ? (
-            <Card>
-              <CardContent className="p-6">
-                <p>Loading call tasks...</p>
-              </CardContent>
-            </Card>
-          ) : callTasks.length === 0 ? (
-            <Card>
-              <CardContent className="p-6">
-                <div className="space-y-3">
-                  <p className="font-medium">No call tasks for this week</p>
-                  <p className="text-sm text-muted-foreground">
-                    Your contacts don't match this week's call categories ({selectedWeekCategories.callCategories.join(', ')}). 
-                  </p>
-                  {selectedWeek?.weekNumber !== currentWeek.weekNumber && (
-                    <p className="text-sm text-muted-foreground">
-                      This is a past week. You can still complete tasks here if you need to follow up.
-                    </p>
-                  )}
-                  {selectedWeek?.weekNumber === currentWeek.weekNumber && (
-                    <p className="text-sm text-muted-foreground">
-                      Tasks are assigned based on the first letter of your contacts' last names. Add more contacts or wait for the next week's rotation to see tasks here.
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {callTasks.map((task) => (
-                <SphereSyncTaskCard
-                  key={task.id}
-                  task={task}
-                  onUpdate={updateTask}
-                  onEditContact={() => handleEditContact(task)}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="texts">
-          {loading ? (
-            <Card>
-              <CardContent className="p-6">
-                <p>Loading text tasks...</p>
-              </CardContent>
-            </Card>
-          ) : textTasks.length === 0 ? (
-            <Card>
-              <CardContent className="p-6">
-                <div className="space-y-3">
-                  <p className="font-medium">No text tasks for this week</p>
-                  <p className="text-sm text-muted-foreground">
-                    Your contacts don't match this week's text category ({selectedWeekCategories.textCategory}). 
-                  </p>
-                  {selectedWeek?.weekNumber !== currentWeek.weekNumber && (
-                    <p className="text-sm text-muted-foreground">
-                      This is a past week. You can still complete tasks here if you need to follow up.
-                    </p>
-                  )}
-                  {selectedWeek?.weekNumber === currentWeek.weekNumber && (
-                    <p className="text-sm text-muted-foreground">
-                      Tasks are assigned based on the first letter of your contacts' last names. Add more contacts or wait for the next week's rotation to see tasks here.
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {textTasks.map((task) => (
-                <SphereSyncTaskCard
-                  key={task.id}
-                  task={task}
-                  onUpdate={updateTask}
-                  onEditContact={() => handleEditContact(task)}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
-
-      {/* Upcoming Tasks Preview */}
-      <UpcomingTasksPreview contacts={contacts} />
-
-      {/* Historical Performance */}
-      {historicalStats.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Historical Performance</CardTitle>
-            <CardDescription>Your SphereSync completion rates over the past weeks</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Accordion type="single" collapsible>
-              <AccordionItem value="historical-stats">
-                <AccordionTrigger>View Past Performance</AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-4">
-                    {historicalStats.map((stat) => (
-                      <div key={`${stat.year}-${stat.week}`} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center gap-4">
-                          <Badge variant="outline">
-                            Week {stat.week}, {stat.year}
-                          </Badge>
-                          <div className="text-sm text-muted-foreground">
-                            {stat.completedTasks}/{stat.totalTasks} tasks completed
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <div className="text-sm font-medium">{Math.round(stat.completionRate)}%</div>
-                            <Progress value={stat.completionRate} className="w-20 h-2" />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </CardContent>
-        </Card>
-      )}
-      </div>
-      
-      <ContactForm
-        open={contactFormOpen}
-        onOpenChange={setContactFormOpen}
-        contact={editingContact}
-        onSubmit={handleContactUpdate}
-        onDelete={handleContactDelete}
-        title="Edit Contact"
-      />
-    </Layout>
+          {/* Shared opportunity drawer — works from any tab */}
+          <OpportunityDetailV2
+            opportunity={detailOpp}
+            open={!!detailOpp}
+            onClose={() => setDetailOpp(null)}
+            onRefresh={refreshPipeline}
+          />
+        </DndProvider>
+      </Layout>
+    </>
   );
 }

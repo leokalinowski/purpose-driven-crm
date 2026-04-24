@@ -20,8 +20,6 @@ import {
   ClipboardList,
   ChevronRight,
   Megaphone,
-  Lock,
-  KanbanSquare,
   type LucideIcon,
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -86,7 +84,7 @@ function AdminSubGroup({ label, icon: Icon, items, pathname }: {
 }
 
 const menuItems = [
-  { title: 'Dashboard', url: '/', icon: Home },
+  { title: 'Dashboard', url: '/', icon: Home, adminOnly: true },
   { title: 'SphereSync', url: '/spheresync-tasks', icon: Phone },
   { title: 'Database', url: '/database', icon: Users },
   { title: 'Events', url: '/events', icon: Calendar },
@@ -131,7 +129,9 @@ export function AppSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.filter((item) => hasAccess(item.url)).map((item) => (
+              {menuItems
+                .filter((item) => (!item.adminOnly || isAdmin) && hasAccess(item.url))
+                .map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton 
                     asChild
@@ -178,7 +178,6 @@ export function AppSidebar() {
                 label="Operations"
                 icon={Settings}
                 items={[
-                  { title: 'Pipeline', url: '/pipeline', icon: KanbanSquare },
                   { title: 'Database Management', url: '/admin/database', icon: Database },
                   { title: 'SphereSync Recovery', url: '/admin/spheresync-recovery', icon: RotateCcw },
                   { title: 'SphereSync Management', url: '/admin/coaching', icon: TrendingUp },

@@ -4,9 +4,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-import { AuthProvider } from "@/hooks/useAuth";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import Auth from "./pages/Auth";
 import OAuthCallback from "./pages/OAuthCallback";
@@ -19,7 +20,6 @@ import NotFound from "./pages/NotFound";
 import Newsletter from "./pages/Newsletter";
 import Coaching from "./pages/Coaching";
 import Transactions from "./pages/Transactions";
-import Pipeline from "./pages/Pipeline";
 import AdminTeamManagement from "./pages/AdminTeamManagement";
 import AdminEventsManagement from "./pages/AdminEventsManagement";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -62,10 +62,21 @@ const queryClient = new QueryClient({
   },
 });
 
+// Dashboard is admin-only. Non-admins land directly on the SphereSync hub.
+// Wait for both auth and role to resolve before deciding so non-admins
+// don't flash the Dashboard while role is loading.
+const HomeRoute = () => {
+  const { user, loading: authLoading } = useAuth();
+  const { isAdmin, loading: roleLoading } = useUserRole();
+  if (authLoading || (user && roleLoading)) return null;
+  if (user && !isAdmin) return <Navigate to="/spheresync-tasks" replace />;
+  return <Index />;
+};
+
 const AppContent = () => {
   return (
     <Routes>
-        <Route path="/" element={<Index />} />
+        <Route path="/" element={<HomeRoute />} />
         <Route path="/auth" element={<Auth />} />
           <Route path="/auth/reset" element={<ResetPassword />} />
         <Route path="/spheresync-tasks" element={<SphereSyncTasks />} />
@@ -74,7 +85,7 @@ const AppContent = () => {
         <Route path="/newsletter" element={<Newsletter />} />
         <Route path="/coaching" element={<Coaching />} />
         <Route path="/transactions" element={<Transactions />} />
-        <Route path="/pipeline" element={<Pipeline />} />
+        <Route path="/pipeline" element={<Navigate to="/spheresync-tasks?tab=pipeline" replace />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/team-management" element={<AdminTeamManagement />} />
         <Route path="/admin/events" element={<AdminEventsManagement />} />
