@@ -200,9 +200,149 @@ async function gather(supabase: ReturnType<typeof createClient>, agentId: UUID):
   };
 }
 
-// ─── Phase 2 — Alerts (B3) — STUB ────────────────────────────────────────────
-function buildAlerts(_inputs: CoachingInputs): unknown[] {
-  return []; // B3 fills this
+// ─── Phase 2 — Alerts (B3) — rule-based proactive signals ────────────────────
+
+interface Alert {
+  level: 'info' | 'warning' | 'urgent';
+  type: 'overdue_touch' | 'stuck_deal' | 'life_event' | 'high_priority_ignored' | 'opportunity_no_next_step';
+  message: string;
+  contact_id?: string;
+  opportunity_id?: string;
+  count?: number;
+  created_at: string;
+}
+
+function shortName(c: ContactRow): string {
+  const f = (c.first_name ?? '').trim();
+  const l = (c.last_name ?? '').trim();
+  return `${f} ${l}`.trim() || 'Unknown';
+}
+
+const CATEGORY_CADENCE: Record<string, number> = {
+  'A-Plus': 14, 'A': 30, 'B': 60, 'C': 90, 'D': 180,
+  Hot: 14, Warm: 30, Cool: 60, Cold: 180,
+};
+
+function cadenceFor(category: string | null): number {
+  return CATEGORY_CADENCE[category ?? ''] ?? 60;
+}
+
+function daysSinceIso(iso: string | null): number | null {
+  if (!iso) return null;
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400_000);
+}
+
+function buildAlerts(inputs: CoachingInputs): Alert[] {
+  const now = new Date().toISOString();
+  const alerts: Alert[] = [];
+
+  // Aggregate: overdue_touch. Contacts past 2× their cadence, or A-cat never touched.
+  const overdueContacts = inputs.contacts.filter(c => {
+    const cadence = cadenceFor(c.category);
+    const d = daysSinceIso(c.last_activity_date);
+    if (d === null) return ['A-Plus', 'A', 'Hot'].includes(c.category ?? '');
+    return d > cadence * 2;
+  });
+  if (overdueContacts.length > 0) {
+    const aCategoryOverdue = overdueContacts.filter(c => ['A-Plus', 'A', 'Hot'].includes(c.category ?? ''));
+    const sample = aCategoryOverdue.slice(0, 2).map(shortName);
+    const suffix = sample.length > 0
+      ? ` Two A-category names on the list: ${sample.join(', ')}.`
+      : '';
+    alerts.push({
+      level: aCategoryOverdue.length >= 3 ? 'warning' : 'info',
+      type: 'overdue_touch',
+      message: `${overdueContacts.length} contacts haven't heard from you in a while.${suffix}`,
+      count: overdueContacts.length,
+      created_at: now,
+    });
+  }
+
+  // Individual: stuck_deal. Active opportunities > 21 days in stage. Cap 5.
+  const stuckDeals = inputs.active_opportunities
+    .filter(o => (o.days_in_current_stage ?? 0) > 21)
+    .sort((a, b) => (b.deal_value ?? 0) - (a.deal_value ?? 0))
+    .slice(0, 5);
+
+  for (const opp of stuckDeals) {
+    const contact = inputs.contacts.find(c => c.id === opp.contact_id);
+    const name = contact ? shortName(contact) : 'This deal';
+    const stageLabel = opp.stage.replace(/_/g, ' ');
+    const dealK = opp.deal_value ? ` ($${Math.round(opp.deal_value / 1000)}k)` : '';
+    alerts.push({
+      level: (opp.deal_value ?? 0) > 500_000 ? 'urgent' : 'warning',
+      type: 'stuck_deal',
+      message: `${name}${dealK} has been in ${stageLabel} for ${opp.days_in_current_stage} days. Worth a nudge or reclassify.`,
+      contact_id: opp.contact_id,
+      opportunity_id: opp.id,
+      created_at: now,
+    });
+  }
+
+  // Individual: life_event. Set AND no activity in 14d. Cap 3.
+  const lifeEventContacts = inputs.contacts
+    .filter(c => {
+      if (!c.life_event) return false;
+      const d = daysSinceIso(c.last_activity_date);
+      return d === null || d >= 14;
+    })
+    .slice(0, 3);
+
+  for (const c of lifeEventContacts) {
+    alerts.push({
+      level: ['A-Plus', 'A', 'Hot'].includes(c.category ?? '') ? 'urgent' : 'warning',
+      type: 'life_event',
+      message: `${shortName(c)} — ${c.life_event?.replace(/_/g, ' ')}. Window for a personal touch.`,
+      contact_id: c.id,
+      created_at: now,
+    });
+  }
+
+  // Individual: high_priority_ignored. score >= 70 but not recently touched. Cap 3.
+  const highPriorityIgnored = inputs.contacts
+    .filter(c => (c.priority_score ?? 0) >= 70)
+    .filter(c => {
+      const d = daysSinceIso(c.last_activity_date);
+      return d === null || d > 14;
+    })
+    .sort((a, b) => (b.priority_score ?? 0) - (a.priority_score ?? 0))
+    .slice(0, 3);
+
+  for (const c of highPriorityIgnored) {
+    const d = daysSinceIso(c.last_activity_date);
+    const touchPhrase = d === null ? 'never contacted' : `last touch ${d} days ago`;
+    alerts.push({
+      level: 'warning',
+      type: 'high_priority_ignored',
+      message: `Priority ${c.priority_score} — ${shortName(c)} — but ${touchPhrase}.`,
+      contact_id: c.id,
+      created_at: now,
+    });
+  }
+
+  // Individual: opportunity_no_next_step. Cap 3.
+  const noNextStep = inputs.active_opportunities
+    .filter(o => !o.next_step_title)
+    .slice(0, 3);
+
+  for (const opp of noNextStep) {
+    const contact = inputs.contacts.find(c => c.id === opp.contact_id);
+    const name = contact ? shortName(contact) : 'A deal';
+    alerts.push({
+      level: 'info',
+      type: 'opportunity_no_next_step',
+      message: `${name} has no next step set. Define one before the deal drifts.`,
+      contact_id: opp.contact_id,
+      opportunity_id: opp.id,
+      created_at: now,
+    });
+  }
+
+  // Rank by severity, cap at 8
+  const LEVEL_ORDER: Record<Alert['level'], number> = { urgent: 0, warning: 1, info: 2 };
+  return alerts
+    .sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level])
+    .slice(0, 8);
 }
 
 // ─── Phase 3 — Prioritize (B4) — STUB ────────────────────────────────────────
@@ -400,7 +540,7 @@ Deno.serve(async (req: Request) => {
     succeeded: results.filter(r => r.status === 'ok').length,
     failed: results.filter(r => r.status === 'error').length,
     model,
-    phase: 'B2-skeleton',
+    phase: 'B3-alerts',
     results,
   });
 });
