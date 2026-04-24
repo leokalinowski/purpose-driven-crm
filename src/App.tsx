@@ -43,7 +43,6 @@ import Pricing from "./pages/Pricing";
 import Welcome from "./pages/Welcome";
 import Resources from "./pages/Resources";
 import AdminResources from "./pages/AdminResources";
-import Commander from "./pages/Commander";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,8 +65,7 @@ const queryClient = new QueryClient({
 const AppContent = () => {
   return (
     <Routes>
-        <Route path="/" element={<Commander />} />
-        <Route path="/dashboard" element={<Index />} />
+        <Route path="/" element={<Index />} />
         <Route path="/auth" element={<Auth />} />
           <Route path="/auth/reset" element={<ResetPassword />} />
         <Route path="/spheresync-tasks" element={<SphereSyncTasks />} />
