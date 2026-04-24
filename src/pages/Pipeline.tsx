@@ -124,7 +124,6 @@ export default function Pipeline() {
                 onStageUpdate={updateStage}
                 onEditOpportunity={setDetailOpp}
                 loading={loading}
-                boardStages={boardStages}
               />
             )}
           </div>

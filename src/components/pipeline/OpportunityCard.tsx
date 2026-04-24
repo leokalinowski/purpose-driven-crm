@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { useDrag } from 'react-dnd';
 import { Opportunity } from "@/hooks/usePipeline";
-import { pipelineTypeFromOpportunityType, getStageAccent, getStagesForType, PipelineType } from "@/config/pipelineStages";
+import { pipelineTypeFromOpportunityType, getStageAccent, getStagesForType, getStageLabel, PipelineType } from "@/config/pipelineStages";
 import { Calendar, DollarSign, ArrowRight, AlertCircle, MoreHorizontal, Check } from "lucide-react";
 import { format, parseISO, isPast, isToday } from "date-fns";
 import { cn } from '@/lib/utils';
@@ -70,7 +70,7 @@ export function OpportunityCard({ opportunity, onEdit, onStageChange }: Opportun
       style={{ borderLeftColor: accent }}
     >
       {/* Top row: name + move-to menu */}
-      <div className="flex items-start justify-between gap-2 mb-1.5">
+      <div className="flex items-start justify-between gap-2 mb-1">
         <p className="font-medium text-sm text-foreground leading-tight flex-1 min-w-0">{contactName}</p>
         {onStageChange && (
           <div onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
@@ -110,6 +110,16 @@ export function OpportunityCard({ opportunity, onEdit, onStageChange }: Opportun
             </DropdownMenu>
           </div>
         )}
+      </div>
+
+      {/* Sub-status pill — the specific stage within the meta-stage column */}
+      <div className="mb-2">
+        <span
+          className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded"
+          style={{ backgroundColor: `${accent}1a`, color: accent }}
+        >
+          {getStageLabel(opportunity.stage, pipelineType)}
+        </span>
       </div>
 
       {/* Next step */}
