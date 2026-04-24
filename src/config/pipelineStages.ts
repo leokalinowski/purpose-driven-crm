@@ -121,3 +121,77 @@ export const OPPORTUNITY_TYPE_LABELS: Record<string, string> = {
   tenant:       'Tenant',
   investor:     'Investor',
 };
+
+// ── Meta-stages — unified 4-column board ─────────────────────────────────────
+// Phase 3 of the AI-first Hub: collapse 8+ per-type stages into 4 meta-stages.
+// The fine-grained `stage` column on opportunities is preserved (shown as a
+// sub-status pill on each card and editable via the Move-to-stage dropdown).
+
+export type MetaStage = 'nurturing' | 'active' | 'pending' | 'closed';
+
+export interface MetaStageDef {
+  key: MetaStage;
+  label: string;
+  description: string;
+  accent: string;                 // card left-border + accent dot
+  color: string;                  // Tailwind bg/border for the column
+  order: number;
+}
+
+export const META_STAGES: MetaStageDef[] = [
+  { key: 'nurturing', order: 0, label: 'Nurturing', description: 'Long-term relationship, not yet transacting',  accent: '#a855f7', color: 'bg-purple-50/40 border-purple-200' },
+  { key: 'active',    order: 1, label: 'Active',    description: 'Actively working with this client',             accent: '#3b82f6', color: 'bg-blue-50/40 border-blue-200' },
+  { key: 'pending',   order: 2, label: 'Pending',   description: 'Offer out or under contract, awaiting close',   accent: '#f97316', color: 'bg-orange-50/40 border-orange-200' },
+  { key: 'closed',    order: 3, label: 'Closed',    description: 'Deal complete',                                 accent: '#22c55e', color: 'bg-green-50/40 border-green-200' },
+];
+
+/** Map every specific stage key (all pipeline types) to its meta-stage. */
+export const STAGE_TO_META: Record<string, MetaStage> = {
+  // Nurturing — early / dormant
+  new_lead:           'nurturing',
+  nurturing:          'nurturing',
+  referral_received:  'nurturing',
+  // Active — working the deal
+  active_search:      'active',
+  showing:            'active',
+  pre_listing:        'active',
+  listing_appt:       'active',
+  listed_active:      'active',
+  contacted:          'active',
+  active:             'active',
+  referral_sent:      'active',
+  // Pending — negotiated, awaiting close
+  offer_submitted:    'pending',
+  offer_received:     'pending',
+  under_contract:     'pending',
+  // Closed
+  closed_won:         'closed',
+  // `lost` is intentionally NOT mapped — filtered out of the board by default
+};
+
+/**
+ * Default specific sub-stage to use when dragging a card INTO a meta-stage.
+ * Keyed by pipeline_type so a buyer card dropped in Pending becomes `offer_submitted`,
+ * a seller card becomes `offer_received`, etc.
+ */
+export const META_STAGE_DEFAULT_SUB: Record<PipelineType, Record<MetaStage, string>> = {
+  buyer:    { nurturing: 'nurturing',          active: 'active_search', pending: 'offer_submitted', closed: 'closed_won' },
+  seller:   { nurturing: 'nurturing',          active: 'pre_listing',   pending: 'offer_received',  closed: 'closed_won' },
+  referral: { nurturing: 'referral_received',  active: 'active',        pending: 'referral_sent',   closed: 'closed_won' },
+};
+
+export function getMetaStageForKey(stageKey: string | null | undefined): MetaStage | null {
+  if (!stageKey) return null;
+  return STAGE_TO_META[stageKey] ?? null;
+}
+
+/** Default sub-stage when the user drops a card into a meta-column. */
+export function defaultSubStage(meta: MetaStage, pipelineType: PipelineType): string {
+  return META_STAGE_DEFAULT_SUB[pipelineType][meta];
+}
+
+/** Human label for a specific stage — falls back to title-casing the key. */
+export function subStageLabel(stageKey: string | null | undefined, pipelineType?: PipelineType): string {
+  if (!stageKey) return '—';
+  return getStageLabel(stageKey, pipelineType);
+}

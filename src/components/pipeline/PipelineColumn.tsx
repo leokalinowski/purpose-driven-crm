@@ -1,21 +1,28 @@
 import { useDrop } from 'react-dnd';
 import { Opportunity } from "@/hooks/usePipeline";
-import { PipelineStage } from "@/config/pipelineStages";
+import { MetaStageDef, MetaStage } from "@/config/pipelineStages";
 import { OpportunityCard } from "./OpportunityCard";
 import { cn } from "@/lib/utils";
 
 interface PipelineColumnProps {
-  stage: PipelineStage;
+  metaStage: MetaStageDef;
   opportunities: Opportunity[];
+  onMetaStageUpdate: (opportunityId: string, newMeta: MetaStage) => Promise<void> | void;
   onStageUpdate: (opportunityId: string, newStage: string) => Promise<void>;
   onEditOpportunity: (opportunity: Opportunity) => void;
 }
 
-export function PipelineColumn({ stage, opportunities, onStageUpdate, onEditOpportunity }: PipelineColumnProps) {
+export function PipelineColumn({
+  metaStage,
+  opportunities,
+  onMetaStageUpdate,
+  onStageUpdate,
+  onEditOpportunity,
+}: PipelineColumnProps) {
   const [{ isOver }, drop] = useDrop({
     accept: 'opportunity',
     drop: (item: { id: string }) => {
-      if (item.id) onStageUpdate(item.id, stage.key);
+      if (item.id) onMetaStageUpdate(item.id, metaStage.key);
     },
     collect: monitor => ({ isOver: monitor.isOver() }),
   });
@@ -26,26 +33,26 @@ export function PipelineColumn({ stage, opportunities, onStageUpdate, onEditOppo
     <div
       ref={drop}
       className={cn(
-        'min-h-[480px] rounded-xl border flex flex-col transition-colors duration-100',
-        isOver ? 'border-primary/50 bg-primary/[0.03]' : 'border-border bg-background'
+        'min-h-[480px] rounded-xl border-2 flex flex-col transition-colors duration-100',
+        metaStage.color,
+        isOver && 'ring-2 ring-primary/40 ring-offset-1',
       )}
     >
       {/* Header */}
-      <div className="px-3 py-2.5 border-b border-border">
+      <div className="px-3 py-2.5 border-b border-border/50">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            {/* Accent dot */}
+          <div className="flex items-center gap-2 min-w-0">
             <span
-              className="h-2 w-2 rounded-full flex-shrink-0"
-              style={{ backgroundColor: stage.accent }}
+              className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+              style={{ backgroundColor: metaStage.accent }}
             />
-            <span className="font-semibold text-sm text-foreground">{stage.label}</span>
-            <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+            <span className="font-semibold text-sm text-foreground truncate">{metaStage.label}</span>
+            <span className="text-xs font-medium text-muted-foreground bg-background rounded-full px-2 py-0.5 shrink-0">
               {opportunities.length}
             </span>
           </div>
           {totalValue > 0 && (
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="text-xs font-semibold text-foreground shrink-0">
               ${(totalValue / 1000).toFixed(0)}k
             </span>
           )}
@@ -59,11 +66,14 @@ export function PipelineColumn({ stage, opportunities, onStageUpdate, onEditOppo
             key={opp.id}
             opportunity={opp}
             onEdit={onEditOpportunity}
+            onStageChange={onStageUpdate}
           />
         ))}
         {opportunities.length === 0 && (
           <div className="flex-1 flex items-center justify-center py-8">
-            <p className="text-xs text-muted-foreground/50 select-none">No deals</p>
+            <p className="text-xs text-muted-foreground/60 select-none text-center px-4">
+              Drop here — or use the menu on a card to move it to {metaStage.label.toLowerCase()}.
+            </p>
           </div>
         )}
       </div>
