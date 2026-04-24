@@ -182,6 +182,10 @@ function blend(c: {
 
 const INTENT_SYSTEM_PROMPT = `You score real-estate contacts on their CURRENT INTENT to transact (buy or sell a home) on a 0–100 scale.
 
+DATA-MODEL NOTES:
+- "category" is the SphereSync calendar bucket = last-name initial (A-Z). It schedules when the agent contacts them. It is NOT a priority grade. A "Category B" contact is not "B-tier" — they're just on the B-week rotation.
+- "engagement" inputs (last_30d / last_90d counts) reflect REAL logged conversations only (where the agent recorded an outcome). SphereSync task stubs are EXCLUDED from these counts. If last_30d == 0, it means no real conversation this month.
+
 Inputs (per contact): category, ZIP, life_event, recent engagement summary, market pulse for their ZIP, active opportunity summary if any.
 
 Output a JSON object with "results" being an ARRAY, one entry per contact, in the SAME ORDER as input:
@@ -344,10 +348,15 @@ Deno.serve(async (req: Request) => {
   const contactIds = contacts.map(c => c.id);
 
   // ── Gather inputs in parallel ──────────────────────────────────────────────
+  // NOTE: contact_activities mixes two very different row populations:
+  //   • REAL interactions — outcome IS NOT NULL (agent logged a conversation)
+  //   • SphereSync task STUBS — outcome IS NULL + notes 'SphereSync X task created'
+  // Only the real ones count as "engagement" for scoring purposes. Task stubs
+  // indicate SCHEDULED work, not completed work.
   const [activitiesRes, opportunitiesRes, marketRes] = await Promise.all([
     supabase
       .from('contact_activities')
-      .select('contact_id, activity_type, activity_date')
+      .select('contact_id, activity_type, activity_date, outcome, notes')
       .in('contact_id', contactIds)
       .gte('activity_date', new Date(Date.now() - 90 * 86400_000).toISOString()),
     supabase
@@ -362,13 +371,17 @@ Deno.serve(async (req: Request) => {
       .in('zip_code', Array.from(new Set(contacts.map(c => c.zip_code).filter((z): z is string => !!z)))),
   ]);
 
-  // ── Index lookups ──────────────────────────────────────────────────────────
+  // ── Index lookups — REAL interactions only ────────────────────────────────
+  // Task stubs (outcome IS NULL + notes starts with "SphereSync ") are excluded.
+  // They indicate the system scheduled a touch, not that the agent actually had one.
   const activityByContact = new Map<UUID, ActivitySummary>();
   const now = Date.now();
   for (const c of contactIds) {
     activityByContact.set(c, { last_90d_count: 0, last_30d_count: 0, most_recent_at: null, most_recent_type: null });
   }
-  for (const a of (activitiesRes.data ?? [])) {
+  for (const a of (activitiesRes.data ?? []) as Array<{ contact_id: UUID; activity_type: string; activity_date: string; outcome: string | null; notes: string | null }>) {
+    const isTaskStub = a.outcome === null && (a.notes?.startsWith('SphereSync ') ?? false);
+    if (isTaskStub) continue; // Skip — scheduled, not real.
     const s = activityByContact.get(a.contact_id);
     if (!s) continue;
     s.last_90d_count += 1;
