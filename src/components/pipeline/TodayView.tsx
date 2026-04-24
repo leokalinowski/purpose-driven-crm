@@ -96,8 +96,15 @@ export function TodayView({ onOpenDetail }: TodayViewProps) {
         <span className="text-xs text-muted-foreground whitespace-nowrap">
           {onTrackPct}% on track
         </span>
-        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={refresh} title="Refresh">
-          <RefreshCcw className="h-3.5 w-3.5" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-11 w-11 md:h-8 md:w-8 shrink-0"
+          onClick={refresh}
+          title="Refresh"
+          aria-label="Refresh today's deals"
+        >
+          <RefreshCcw className="h-4 w-4 md:h-3.5 md:w-3.5" />
         </Button>
       </div>
 
