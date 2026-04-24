@@ -22,6 +22,7 @@ import {
   Megaphone,
   Lock,
   KanbanSquare,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -86,7 +87,8 @@ function AdminSubGroup({ label, icon: Icon, items, pathname }: {
 }
 
 const menuItems = [
-  { title: 'Dashboard', url: '/', icon: Home },
+  { title: 'Today', url: '/', icon: Sparkles },
+  { title: 'Dashboard', url: '/dashboard', icon: Home },
   { title: 'SphereSync', url: '/spheresync-tasks', icon: Phone },
   { title: 'Database', url: '/database', icon: Users },
   { title: 'Events', url: '/events', icon: Calendar },
