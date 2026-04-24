@@ -39,8 +39,9 @@ interface CoachingInputs {
   agent_name: string;
   contacts: ContactRow[];
   active_opportunities: OpportunityRow[];
-  recent_activities: ActivityRow[];
-  market_pulse: Record<string, MarketPulse>;   // keyed by zip_code
+  real_activities: ActivityRow[];     // rows with outcome IS NOT NULL — actual logged interactions
+  scheduled_touches: ActivityRow[];   // rows from SphereSync task stubs — scheduled, not yet done
+  market_pulse: Record<string, MarketPulse>;
   aggregates: Aggregates;
 }
 
@@ -96,10 +97,13 @@ interface Aggregates {
   active_opportunity_count: number;
   pipeline_value: number;
   gci_estimated_open: number;
-  contacts_overdue_30d: number;
+  contacts_overdue_30d: number;          // based on contacts.last_activity_date — currently INCLUDES scheduled-touch updates
   contacts_overdue_90d: number;
-  stuck_deals_count: number;       // active opps with days_in_current_stage > 21
+  stuck_deals_count: number;
   unscored_contacts: number;
+  real_interactions_30d: number;         // count from contact_activities WHERE outcome IS NOT NULL
+  scheduled_touches_30d: number;         // count from contact_activities WHERE outcome IS NULL (SphereSync stubs)
+  contacts_with_real_interaction_ever: number;
 }
 
 // ─── Phase 1 — Gather (SQL only, no AI) ──────────────────────────────────────
@@ -132,8 +136,13 @@ async function gather(supabase: ReturnType<typeof createClient>, agentId: UUID):
       .is('actual_close_date', null)
       .or('outcome.is.null,outcome.not.in.(lost,withdrawn)'),
 
+    // Fetch ALL contact_activities (last 30d). We split into real_activities vs
+    // scheduled_touches downstream — they look the same in the schema but mean
+    // very different things in this product:
+    //   • outcome IS NOT NULL  → real interaction the agent logged
+    //   • outcome IS NULL with notes 'SphereSync ... task created' → just a task stub
     supabase.from('contact_activities')
-      .select('contact_id, activity_type, activity_date, outcome')
+      .select('contact_id, activity_type, activity_date, outcome, notes')
       .eq('agent_id', agentId)
       .gte('activity_date', since30d)
       .order('activity_date', { ascending: false }),
@@ -146,7 +155,15 @@ async function gather(supabase: ReturnType<typeof createClient>, agentId: UUID):
 
   const contacts = (contactsRes.data ?? []) as ContactRow[];
   const opportunities = (opportunitiesRes.data ?? []) as OpportunityRow[];
-  const activities = (activitiesRes.data ?? []) as ActivityRow[];
+  const allActivityRows = (activitiesRes.data ?? []) as Array<ActivityRow & { notes: string | null }>;
+
+  // Split: real interactions (agent logged outcome) vs SphereSync task stubs.
+  // The "task created" rows have outcome=NULL and notes starting with "SphereSync".
+  function isTaskStub(row: { outcome: string | null; notes: string | null }): boolean {
+    return row.outcome === null && (row.notes?.startsWith('SphereSync ') ?? false);
+  }
+  const realActivities = allActivityRows.filter(r => !isTaskStub(r));
+  const scheduledTouches = allActivityRows.filter(isTaskStub);
 
   // Top ZIPs in this agent's sphere — fetch market data only for those
   const zipCounts = new Map<string, number>();
@@ -169,13 +186,14 @@ async function gather(supabase: ReturnType<typeof createClient>, agentId: UUID):
     }
   }
 
-  // Aggregates — pure JS over what we already fetched
+  // Aggregates
   const now = Date.now();
+  const realActivityContactIds = new Set(realActivities.map(r => r.contact_id));
   const aggregates: Aggregates = {
     contact_count: contacts.length,
     active_opportunity_count: opportunities.length,
     pipeline_value: opportunities.reduce((s, o) => s + (o.deal_value ?? 0), 0),
-    gci_estimated_open: opportunities.reduce((s, o) => s + (o.deal_value ?? 0) * 0.025, 0), // rough — replace with gci_estimated when always set
+    gci_estimated_open: opportunities.reduce((s, o) => s + (o.deal_value ?? 0) * 0.025, 0),
     contacts_overdue_30d: contacts.filter(c => {
       if (!c.last_activity_date) return false;
       return now - new Date(c.last_activity_date).getTime() > 30 * 86400_000;
@@ -186,6 +204,9 @@ async function gather(supabase: ReturnType<typeof createClient>, agentId: UUID):
     }).length,
     stuck_deals_count: opportunities.filter(o => (o.days_in_current_stage ?? 0) > 21).length,
     unscored_contacts: contacts.filter(c => c.priority_score === null).length,
+    real_interactions_30d: realActivities.length,
+    scheduled_touches_30d: scheduledTouches.length,
+    contacts_with_real_interaction_ever: realActivityContactIds.size,
   };
 
   const profile = profileRes.data ?? { first_name: '', last_name: '' };
@@ -194,7 +215,8 @@ async function gather(supabase: ReturnType<typeof createClient>, agentId: UUID):
     agent_name: `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim() || 'Agent',
     contacts,
     active_opportunities: opportunities,
-    recent_activities: activities,
+    real_activities: realActivities,
+    scheduled_touches: scheduledTouches,
     market_pulse: marketPulse,
     aggregates,
   };
@@ -236,23 +258,36 @@ function buildAlerts(inputs: CoachingInputs): Alert[] {
   const now = new Date().toISOString();
   const alerts: Alert[] = [];
 
-  // Aggregate: overdue_touch. Contacts past 2× their cadence, or A-cat never touched.
+  // Build a per-contact real-interaction index once, used by multiple rules.
+  // "Real" = outcome IS NOT NULL (agent actually logged a conversation).
+  const nowMs = Date.now();
+  const realMostRecentByContact = new Map<string, number>();  // contact_id → latest real-activity timestamp
+  for (const a of inputs.real_activities) {
+    const ts = new Date(a.activity_date).getTime();
+    const prev = realMostRecentByContact.get(a.contact_id);
+    if (prev === undefined || ts > prev) realMostRecentByContact.set(a.contact_id, ts);
+  }
+  function daysSinceRealContact(contactId: string): number | null {
+    const ts = realMostRecentByContact.get(contactId);
+    return ts === undefined ? null : Math.floor((nowMs - ts) / 86400_000);
+  }
+
+  // Aggregate: overdue_touch. No REAL contact within 2× the SphereSync cadence.
+  // The category (A-Z last-name initial) maps to a roughly-yearly cadence — we
+  // treat >60d with no real interaction as overdue regardless of bucket letter.
   const overdueContacts = inputs.contacts.filter(c => {
-    const cadence = cadenceFor(c.category);
-    const d = daysSinceIso(c.last_activity_date);
-    if (d === null) return ['A-Plus', 'A', 'Hot'].includes(c.category ?? '');
-    return d > cadence * 2;
+    const d = daysSinceRealContact(c.id);
+    return d === null || d > 60;
   });
   if (overdueContacts.length > 0) {
-    const aCategoryOverdue = overdueContacts.filter(c => ['A-Plus', 'A', 'Hot'].includes(c.category ?? ''));
-    const sample = aCategoryOverdue.slice(0, 2).map(shortName);
-    const suffix = sample.length > 0
-      ? ` Two A-category names on the list: ${sample.join(', ')}.`
+    const neverContacted = overdueContacts.filter(c => daysSinceRealContact(c.id) === null).length;
+    const suffix = neverContacted > 0
+      ? ` ${neverContacted} have never had a real conversation logged.`
       : '';
     alerts.push({
-      level: aCategoryOverdue.length >= 3 ? 'warning' : 'info',
+      level: overdueContacts.length > inputs.contacts.length * 0.5 ? 'warning' : 'info',
       type: 'overdue_touch',
-      message: `${overdueContacts.length} contacts haven't heard from you in a while.${suffix}`,
+      message: `${overdueContacts.length} contacts haven't had a real conversation in a while.${suffix}`,
       count: overdueContacts.length,
       created_at: now,
     });
@@ -279,18 +314,18 @@ function buildAlerts(inputs: CoachingInputs): Alert[] {
     });
   }
 
-  // Individual: life_event. Set AND no activity in 14d. Cap 3.
+  // Individual: life_event. Set AND no real contact in 14d. Cap 3.
   const lifeEventContacts = inputs.contacts
     .filter(c => {
       if (!c.life_event) return false;
-      const d = daysSinceIso(c.last_activity_date);
+      const d = daysSinceRealContact(c.id);
       return d === null || d >= 14;
     })
     .slice(0, 3);
 
   for (const c of lifeEventContacts) {
     alerts.push({
-      level: ['A-Plus', 'A', 'Hot'].includes(c.category ?? '') ? 'urgent' : 'warning',
+      level: 'urgent',
       type: 'life_event',
       message: `${shortName(c)} — ${c.life_event?.replace(/_/g, ' ')}. Window for a personal touch.`,
       contact_id: c.id,
@@ -298,23 +333,23 @@ function buildAlerts(inputs: CoachingInputs): Alert[] {
     });
   }
 
-  // Individual: high_priority_ignored. score >= 70 but not recently touched. Cap 3.
+  // Individual: high_priority_ignored. score >= 70 with no recent REAL contact. Cap 3.
   const highPriorityIgnored = inputs.contacts
     .filter(c => (c.priority_score ?? 0) >= 70)
     .filter(c => {
-      const d = daysSinceIso(c.last_activity_date);
+      const d = daysSinceRealContact(c.id);
       return d === null || d > 14;
     })
     .sort((a, b) => (b.priority_score ?? 0) - (a.priority_score ?? 0))
     .slice(0, 3);
 
   for (const c of highPriorityIgnored) {
-    const d = daysSinceIso(c.last_activity_date);
-    const touchPhrase = d === null ? 'never contacted' : `last touch ${d} days ago`;
+    const d = daysSinceRealContact(c.id);
+    const touchPhrase = d === null ? 'no real conversation logged' : `last real conversation ${d} days ago`;
     alerts.push({
       level: 'warning',
       type: 'high_priority_ignored',
-      message: `Priority ${c.priority_score} — ${shortName(c)} — but ${touchPhrase}.`,
+      message: `Priority ${c.priority_score} — ${shortName(c)} — ${touchPhrase}.`,
       contact_id: c.id,
       created_at: now,
     });
@@ -371,11 +406,16 @@ interface NextHour {
 interface Candidate {
   contact_id: string;
   name: string;
-  category: string | null;
+  category: string | null;           // SphereSync calendar bucket = last-name initial (A-Z), drives cadence
   priority_score: number | null;
   priority_reasoning: string | null;
-  days_since_touch: number | null;
-  last_activity_type: string | null;
+  // Real interaction history (outcome logged). Never confuse with scheduled touches.
+  real_interaction_count_30d: number;
+  real_interaction_count_90d: number;
+  last_real_interaction_date: string | null;
+  days_since_real_interaction: number | null;
+  // SphereSync scheduled touches (task stubs — NOT real conversations)
+  scheduled_touch_count_30d: number;
   life_event: string | null;
   zip_code: string | null;
   market_pulse: MarketPulse | null;
@@ -386,10 +426,22 @@ interface Candidate {
     deal_value: number | null;
     next_step: string | null;
   } | null;
-  matched_alerts: string[]; // alert types this contact appears in
+  matched_alerts: string[];
 }
 
 const COACH_VOICE_PROMPT = `You are a real-estate agent's coach. From a list of candidate contacts with priority scores, signals, and active alerts, produce today's prioritized action list (5-8 items) and designate ONE as next_hour — the single most time-critical action right now.
+
+CRITICAL DATA-MODEL RULES (read first, these prevent hallucination):
+
+1. "category" is the SphereSync CALENDAR-CADENCE bucket = the contact's last-name initial (A-Z). It schedules when they're called during the year. It is NOT a priority grade. Never describe a "Category B" contact as "B-tier" or "warm" — it just means their last name starts with B and they're on the B-week rotation.
+
+2. "real_interaction_count_30d/90d" = interactions where the agent actually TALKED to the person and logged an outcome. This is the ONLY source of truth for "engagement."
+
+3. "scheduled_touch_count_30d" = SphereSync TASK STUBS created by the system — these are NOT real conversations. A scheduled touch means "the system queued a call/text for this week." It does NOT mean the agent has contacted the person. NEVER describe a contact as "engaged" or "active" or "interested" based on scheduled_touch_count alone.
+
+4. If real_interaction_count_90d == 0: the agent has never really spoken to this person. Your coaching must reflect that ("worth a first call", "no history yet", "fresh conversation"). Do NOT say "recent call" or "recently engaged" — those are system-generated task rows, not real contact.
+
+5. "days_since_real_interaction" is null when no real conversation has ever been logged. Cite accordingly.
 
 VOICE RULES (follow all):
 - Specific over generic: "Call Maria — her daughter just graduated" beats "Reach out to Maria"
@@ -437,13 +489,13 @@ OUTPUT STRICTLY this JSON:
 Rules:
 - Never invent data. If a signal isn't present in the input, don't cite it.
 - 5-8 items for today_list. Fewer is OK if only 3-4 are truly actionable today.
-- next_hour MUST be one of the today_list items (usually the most urgent).
-- If candidates list is empty or everyone is low-priority: return empty today_list and null next_hour.
-- Use the contact_id values from the input verbatim.
-- quick_actions depends on contact data — include "call" only if phone exists (assume yes unless input says otherwise), "text" same, "log" always.`;
+- **next_hour MUST be populated whenever today_list has ≥1 item.** Pick the most urgent one.
+- If candidates list is empty: return empty today_list AND null next_hour.
+- Use contact_id values from the input verbatim.
+- quick_actions: ["call", "text", "log"] is the standard set.
+- Banned words check before finalizing output: scan your reasoning + first_sentence for banned vocabulary (engagement, leverage, stakeholder, synergy, optimize, robust, journey, ecosystem). If found, rewrite that line.`;
 
 function buildCandidates(inputs: CoachingInputs, alerts: Alert[]): Candidate[] {
-  // Alerts indexed by contact_id for matching
   const alertsByContact = new Map<string, string[]>();
   for (const a of alerts) {
     if (!a.contact_id) continue;
@@ -452,19 +504,48 @@ function buildCandidates(inputs: CoachingInputs, alerts: Alert[]): Candidate[] {
     alertsByContact.set(a.contact_id, list);
   }
 
-  // Opportunities indexed by contact_id (prefer most-progressed stage)
+  // Real interactions per contact (last 30d and last 90d)
+  const realByContact30d = new Map<string, ActivityRow[]>();
+  const realByContact90d = new Map<string, ActivityRow[]>();
+  const now = Date.now();
+  const cutoff90d = now - 90 * 86400_000;
+  const cutoff30d = now - 30 * 86400_000;
+  for (const a of inputs.real_activities) {
+    const ts = new Date(a.activity_date).getTime();
+    if (ts >= cutoff90d) {
+      const list90 = realByContact90d.get(a.contact_id) ?? [];
+      list90.push(a);
+      realByContact90d.set(a.contact_id, list90);
+      if (ts >= cutoff30d) {
+        const list30 = realByContact30d.get(a.contact_id) ?? [];
+        list30.push(a);
+        realByContact30d.set(a.contact_id, list30);
+      }
+    }
+  }
+
+  const scheduledByContact30d = new Map<string, number>();
+  for (const s of inputs.scheduled_touches) {
+    scheduledByContact30d.set(s.contact_id, (scheduledByContact30d.get(s.contact_id) ?? 0) + 1);
+  }
+
   const oppByContact = new Map<string, OpportunityRow>();
   for (const o of inputs.active_opportunities) {
     const existing = oppByContact.get(o.contact_id);
     if (!existing) oppByContact.set(o.contact_id, o);
   }
 
-  const now = Date.now();
-  const candidates = inputs.contacts
-    .filter(c => !c.dnc) // Respect DNC — coaching doesn't drive calls to DNC contacts
+  return inputs.contacts
+    .filter(c => !c.dnc)
     .map<Candidate>(c => {
-      const daysSince = c.last_activity_date
-        ? Math.floor((now - new Date(c.last_activity_date).getTime()) / 86400_000)
+      const real90 = realByContact90d.get(c.id) ?? [];
+      const real30 = realByContact30d.get(c.id) ?? [];
+      const mostRecentReal = real90.reduce<string | null>((latest, a) => {
+        if (!latest) return a.activity_date;
+        return new Date(a.activity_date).getTime() > new Date(latest).getTime() ? a.activity_date : latest;
+      }, null);
+      const daysSinceReal = mostRecentReal
+        ? Math.floor((now - new Date(mostRecentReal).getTime()) / 86400_000)
         : null;
       const opp = oppByContact.get(c.id) ?? null;
       return {
@@ -473,8 +554,11 @@ function buildCandidates(inputs: CoachingInputs, alerts: Alert[]): Candidate[] {
         category: c.category,
         priority_score: c.priority_score,
         priority_reasoning: c.priority_reasoning,
-        days_since_touch: daysSince,
-        last_activity_type: null,
+        real_interaction_count_30d: real30.length,
+        real_interaction_count_90d: real90.length,
+        last_real_interaction_date: mostRecentReal,
+        days_since_real_interaction: daysSinceReal,
+        scheduled_touch_count_30d: scheduledByContact30d.get(c.id) ?? 0,
         life_event: c.life_event,
         zip_code: c.zip_code,
         market_pulse: c.zip_code ? (inputs.market_pulse[c.zip_code] ?? null) : null,
@@ -488,23 +572,19 @@ function buildCandidates(inputs: CoachingInputs, alerts: Alert[]): Candidate[] {
         matched_alerts: alertsByContact.get(c.id) ?? [],
       };
     })
-    // Rank by priority_score DESC (null last), then by matched_alerts count, then overdue touch
     .sort((a, b) => {
       const pa = a.priority_score ?? -1;
       const pb = b.priority_score ?? -1;
       if (pa !== pb) return pb - pa;
       if (a.matched_alerts.length !== b.matched_alerts.length) return b.matched_alerts.length - a.matched_alerts.length;
-      const da = a.days_since_touch ?? -1;
-      const db = b.days_since_touch ?? -1;
-      return db - da;
+      const da = a.days_since_real_interaction ?? 9999;
+      const db = b.days_since_real_interaction ?? 9999;
+      return db - da; // most-overdue first
     })
-    .slice(0, 30); // Cap context: top-30 only. Cheaper Grok call, enough signal.
-
-  return candidates;
+    .slice(0, 30);
 }
 
 function mechanicalFallback(inputs: CoachingInputs, alerts: Alert[]): { next_hour: NextHour | null; today_list: TodayItem[] } {
-  // Used when Grok is unavailable. Deterministic top-8 by priority_score with templated reasoning.
   const candidates = buildCandidates(inputs, alerts);
   const top8 = candidates.slice(0, 8);
   const today_list: TodayItem[] = top8.map(c => ({
@@ -513,9 +593,11 @@ function mechanicalFallback(inputs: CoachingInputs, alerts: Alert[]): { next_hou
     opportunity_id: c.active_opportunity?.opportunity_id ?? null,
     priority_score: c.priority_score,
     action: c.active_opportunity ? 'follow_up' : 'call',
-    reasoning: c.priority_reasoning ?? (c.days_since_touch !== null
-      ? `Priority ${c.priority_score ?? '?'}; last touch ${c.days_since_touch} days ago.`
-      : `Priority ${c.priority_score ?? '?'}; never contacted.`),
+    reasoning: c.real_interaction_count_90d === 0
+      ? `Never had a real conversation — SphereSync queued ${c.scheduled_touch_count_30d} touches. Good time to start.`
+      : c.days_since_real_interaction !== null
+        ? `Priority ${c.priority_score ?? '?'}; last real conversation ${c.days_since_real_interaction} days ago.`
+        : `Priority ${c.priority_score ?? '?'}; SphereSync category ${c.category ?? '?'} bucket.`,
     quick_actions: ['call', 'text', 'log'],
   }));
 
@@ -524,13 +606,15 @@ function mechanicalFallback(inputs: CoachingInputs, alerts: Alert[]): { next_hou
     contact_name: top8[0].name,
     opportunity_id: top8[0].active_opportunity?.opportunity_id ?? null,
     action: top8[0].active_opportunity ? 'follow_up' : 'call',
-    urgency: (top8[0].days_since_touch ?? 0) > 30 ? 'overdue' : 'timely',
+    urgency: (top8[0].days_since_real_interaction ?? 9999) > 30 ? 'overdue' : 'timely',
     reasoning: today_list[0].reasoning,
     first_sentence: `Hi ${top8[0].name.split(' ')[0]} — it's been a minute. Hope life's good.`,
     context_chips: [
       top8[0].category ? `Category ${top8[0].category}` : '',
       top8[0].priority_score ? `Priority ${top8[0].priority_score}` : '',
-      top8[0].days_since_touch !== null ? `${top8[0].days_since_touch}d since touch` : '',
+      top8[0].real_interaction_count_90d === 0
+        ? 'No real contact yet'
+        : `${top8[0].days_since_real_interaction}d since real contact`,
     ].filter(Boolean),
   } : null;
 
@@ -706,7 +790,6 @@ async function tickAgent(
     const prio = await prioritize(inputs, alerts, xaiKey, model);
     const narr = await writeNarrative(inputs, xaiKey, model);
 
-    // Stub chat_context — for now, a compact summary so we can verify gathering worked
     const chatContext = {
       agent_name: inputs.agent_name,
       sphere_size: inputs.aggregates.contact_count,
@@ -715,7 +798,10 @@ async function tickAgent(
       overdue_30d: inputs.aggregates.contacts_overdue_30d,
       stuck_deals: inputs.aggregates.stuck_deals_count,
       top_zips: Object.keys(inputs.market_pulse).slice(0, 5),
-      recent_activity_count: inputs.recent_activities.length,
+      real_interactions_30d: inputs.aggregates.real_interactions_30d,
+      scheduled_touches_30d: inputs.aggregates.scheduled_touches_30d,
+      contacts_with_real_interaction_ever: inputs.aggregates.contacts_with_real_interaction_ever,
+      used_fallback: prio.used_fallback,
       generated_at: new Date().toISOString(),
     };
 
@@ -817,7 +903,7 @@ Deno.serve(async (req: Request) => {
     succeeded: results.filter(r => r.status === 'ok').length,
     failed: results.filter(r => r.status === 'error').length,
     model,
-    phase: 'B4-prioritize',
+    phase: 'B4.1-real-vs-scheduled',
     results,
   });
 });
