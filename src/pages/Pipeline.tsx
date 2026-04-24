@@ -73,7 +73,7 @@ export default function Pipeline() {
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
                     className={cn(
-                      'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                      'flex items-center gap-1.5 px-4 md:px-3 py-2.5 md:py-1.5 min-h-[44px] md:min-h-0 rounded-md text-sm font-medium transition-all',
                       activeTab === tab.key
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
@@ -92,7 +92,7 @@ export default function Pipeline() {
                         key={opt.value}
                         onClick={() => setPipelineType(opt.value as any)}
                         className={cn(
-                          'px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                          'px-4 md:px-3 py-2.5 md:py-1.5 min-h-[44px] md:min-h-0 rounded-md text-sm font-medium transition-all',
                           pipelineType === opt.value
                             ? 'bg-background text-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground'

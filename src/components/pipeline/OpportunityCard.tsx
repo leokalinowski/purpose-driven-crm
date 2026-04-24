@@ -1,17 +1,26 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { useDrag } from 'react-dnd';
 import { Opportunity } from "@/hooks/usePipeline";
-import { pipelineTypeFromOpportunityType, getStageAccent } from "@/config/pipelineStages";
-import { Calendar, DollarSign, ArrowRight, AlertCircle } from "lucide-react";
+import { pipelineTypeFromOpportunityType, getStageAccent, getStagesForType, PipelineType } from "@/config/pipelineStages";
+import { Calendar, DollarSign, ArrowRight, AlertCircle, MoreHorizontal, Check } from "lucide-react";
 import { format, parseISO, isPast, isToday } from "date-fns";
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
   onEdit: (opportunity: Opportunity) => void;
+  onStageChange?: (opportunityId: string, newStage: string) => void;
 }
 
-export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
+export function OpportunityCard({ opportunity, onEdit, onStageChange }: OpportunityCardProps) {
   const dragMoved = useRef(false);
   const mouseStart = useRef({ x: 0, y: 0 });
 
@@ -34,14 +43,14 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
     if (!dragMoved.current) onEdit(opportunity);
   };
 
-  const pipelineType = (opportunity.pipeline_type ?? pipelineTypeFromOpportunityType(opportunity.opportunity_type ?? 'buyer')) as 'buyer' | 'seller' | 'referral';
+  const pipelineType = (opportunity.pipeline_type ?? pipelineTypeFromOpportunityType(opportunity.opportunity_type ?? 'buyer')) as PipelineType;
   const accent = getStageAccent(opportunity.stage, pipelineType);
+  const stages = getStagesForType(pipelineType);
 
   const contactName = opportunity.contact?.first_name || opportunity.contact?.last_name
     ? `${opportunity.contact?.first_name ?? ''} ${opportunity.contact?.last_name ?? ''}`.trim()
     : opportunity.title ?? 'Unknown';
 
-  // Next step due status
   const hasDue = !!opportunity.next_step_due_date;
   const dueDate = hasDue ? parseISO(opportunity.next_step_due_date!) : null;
   const isDueOverdue = dueDate && isPast(dueDate) && !isToday(dueDate);
@@ -53,15 +62,55 @@ export function OpportunityCard({ opportunity, onEdit }: OpportunityCardProps) {
       onMouseMove={handleMouseMove}
       onClick={handleClick}
       className={cn(
-        'bg-card border border-border rounded-lg p-3 cursor-pointer select-none',
+        'bg-card border border-border rounded-lg p-3 cursor-pointer select-none relative',
         'hover:border-foreground/20 hover:shadow-sm transition-all duration-100',
         'border-l-[3px]',
         isDragging && 'opacity-40 shadow-lg scale-[0.98]'
       )}
       style={{ borderLeftColor: accent }}
     >
-      {/* Name */}
-      <p className="font-medium text-sm text-foreground leading-tight mb-1.5">{contactName}</p>
+      {/* Top row: name + move-to menu */}
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <p className="font-medium text-sm text-foreground leading-tight flex-1 min-w-0">{contactName}</p>
+        {onStageChange && (
+          <div onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="h-8 w-8 md:h-7 md:w-7 -mt-1 -mr-1 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
+                  aria-label="Move to stage"
+                  title="Move to stage"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>Move to stage</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {stages.map(s => (
+                  <DropdownMenuItem
+                    key={s.key}
+                    onClick={() => {
+                      if (s.key !== opportunity.stage) onStageChange(opportunity.id, s.key);
+                    }}
+                    className="gap-2"
+                  >
+                    <span
+                      className="h-2 w-2 rounded-full shrink-0"
+                      style={{ backgroundColor: s.accent }}
+                    />
+                    <span className="flex-1">{s.label}</span>
+                    {s.key === opportunity.stage && (
+                      <Check className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+      </div>
 
       {/* Next step */}
       {opportunity.next_step_title ? (
