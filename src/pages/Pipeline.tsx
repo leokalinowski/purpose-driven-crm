@@ -8,6 +8,7 @@ import { OpportunityDetailV2 } from "@/components/pipeline/OpportunityDetailV2";
 import { usePipeline, Opportunity } from "@/hooks/usePipeline";
 import { usePipelineFilters } from "@/hooks/usePipelineFilters";
 import { useUserRole } from "@/hooks/useUserRole";
+import { CoachContextBanner } from "@/components/commander/CoachContextBanner";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { Lock, LayoutList, KanbanSquare } from "lucide-react";
@@ -64,6 +65,10 @@ export default function Pipeline() {
               <h1 className="text-2xl font-bold tracking-tight">Pipeline</h1>
               <AddOpportunityDialog onOpportunityCreated={refresh} />
             </div>
+
+            {/* Coach lens — Phase D: shows Coach's pipeline_story + stuck-deal
+                / no-next-step alerts at the top of the pipeline page. */}
+            <CoachContextBanner context="pipeline" />
 
             {/* Tab switcher + board filters */}
             <div className="flex items-center gap-3 flex-wrap">
