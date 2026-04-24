@@ -1055,6 +1055,7 @@ async function tickAgent(
   agentId: UUID,
   xaiKey: string,
   model: string,
+  opts: { writeTasks: boolean },
 ): Promise<{ agent_id: UUID; status: 'ok' | 'error'; message?: string; ms: number }> {
   const start = Date.now();
   try {
@@ -1065,12 +1066,11 @@ async function tickAgent(
     const prio = await prioritize(inputs, alerts, xaiKey, model);
     const narr = await writeNarrative(inputs, xaiKey, model);
 
-    // B5.7 — write tasks from today_list. Cap 5 per tick, dedup via 7-day
-    // Coach-task window. Gated via coachWriteTasks flag so B6 can disable on
-    // workday-quick ticks and only let the nightly-full tick create tasks.
+    // B6 gating: nightly-full tick writes tasks; workday-quick ticks don't
+    // (set by the body.write_tasks flag → opts.writeTasks here).
     const coachTasks = await writeCoachTasks(
       supabase, agentId, prio.today_list as TodayItem[],
-      { enabled: true, maxNewTasks: 5 },
+      { enabled: opts.writeTasks, maxNewTasks: 5 },
     );
 
     const chatContext = {
@@ -1155,6 +1155,9 @@ Deno.serve(async (req: Request) => {
   const body = await req.json().catch(() => ({}));
   const targetAgentId: UUID | null = body.agent_id ?? null;
   const force: boolean = body.force === true;
+  // Default true for manual/admin calls; cron passes explicit values.
+  // Set to false for workday-quick ticks to prevent task creation loops.
+  const writeTasks: boolean = body.write_tasks !== false;
 
   // Authorization guardrails
   if (!isCron && !callerIsAdmin && targetAgentId && targetAgentId !== callerAgentId) {
@@ -1179,10 +1182,10 @@ Deno.serve(async (req: Request) => {
     return json({ message: 'No agents to refresh', ticked: 0 });
   }
 
-  // Tick agents serially. (Parallelism deferred to B6 cron tuning.)
+  // Tick agents serially. Parallelism deferred; current agent count fits.
   const results = [];
   for (const aid of agentIds) {
-    results.push(await tickAgent(supabase, aid, xaiKey, model));
+    results.push(await tickAgent(supabase, aid, xaiKey, model, { writeTasks }));
   }
 
   return json({
@@ -1190,7 +1193,7 @@ Deno.serve(async (req: Request) => {
     succeeded: results.filter(r => r.status === 'ok').length,
     failed: results.filter(r => r.status === 'error').length,
     model,
-    phase: 'B5.7-coach-tasks',
+    phase: 'B6-scheduling',
     results,
   });
 });
