@@ -4,6 +4,7 @@
  */
 import { useState, useEffect } from 'react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { CoachContactBlurb } from '@/components/commander/CoachContactBlurb';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -264,6 +265,13 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
 
             {/* ── Overview ── */}
             <TabsContent value="overview" className="flex-1 overflow-y-auto px-5 pt-4 pb-8 space-y-4 mt-0">
+
+              {/* Phase E — Coach's take on this specific opportunity/contact.
+                  Silently suppresses when the Coach has nothing to say. */}
+              <CoachContactBlurb
+                contactId={opp.contact_id}
+                opportunityId={opp.id}
+              />
 
               {/* Next step */}
               <div className={cn('rounded-xl border p-4',

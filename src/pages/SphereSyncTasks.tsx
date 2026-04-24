@@ -13,6 +13,7 @@ import { useConfetti } from '@/hooks/useConfetti';
 import { useAuth } from '@/hooks/useAuth';
 import { Layout } from '@/components/layout/Layout';
 import { Phone, MessageSquare, Calendar, BarChart3 } from 'lucide-react';
+import { CoachContextBanner } from '@/components/commander/CoachContextBanner';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { getWeekRange, getCallCategoriesForWeek, getTextCategoryForWeek } from '@/utils/sphereSyncLogic';
@@ -162,6 +163,8 @@ export default function SphereSyncTasks() {
               Balanced contact assignment system based on surname frequency analysis
             </p>
           </div>
+          {/* Coach lens — sphere_story + relationship-health alerts. */}
+          <CoachContextBanner context="sphere" className="w-full md:w-auto md:min-w-[340px]" />
           
           {/* Week Selector */}
           <div className="flex items-center gap-2">
