@@ -880,6 +880,117 @@ async function writeNarrative(
   }
 }
 
+// ─── Phase 4.5 — writeCoachTasks (B5.7) ──────────────────────────────────────
+// Turns today_list items into real task rows in spheresync_tasks (relationship
+// touches) or pipeline_tasks (deal nudges). Dedup against Coach tasks in the
+// last 7 days for same contact + task_type. Cap at maxNewTasks per tick.
+// Uses the source + coach_* columns added in B5.5.
+
+function normalizeTaskType(action: string): string {
+  const map: Record<string, string> = {
+    call: 'call', text: 'text', email: 'email',
+    meet: 'meeting', send_listing: 'email', follow_up: 'call',
+    write_note: 'note',
+  };
+  return map[action] ?? 'call';
+}
+
+function truncate(s: string, n: number): string {
+  return s.length <= n ? s : s.slice(0, n - 1) + '…';
+}
+
+function isoWeekFor(d: Date): { weekNumber: number; year: number } {
+  const target = new Date(d);
+  target.setUTCHours(0, 0, 0, 0);
+  target.setUTCDate(target.getUTCDate() + 4 - (target.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+  const weekNumber = Math.ceil((((target.getTime() - yearStart.getTime()) / 86400_000) + 1) / 7);
+  return { weekNumber, year: target.getUTCFullYear() };
+}
+
+interface WriteCoachTasksResult { created: number; skipped_dedup: number; skipped_cap: number; errors: number; }
+
+async function writeCoachTasks(
+  supabase: ReturnType<typeof createClient>,
+  agentId: UUID,
+  todayList: TodayItem[],
+  opts: { enabled: boolean; maxNewTasks: number },
+): Promise<WriteCoachTasksResult> {
+  const result: WriteCoachTasksResult = { created: 0, skipped_dedup: 0, skipped_cap: 0, errors: 0 };
+  if (!opts.enabled || todayList.length === 0) return result;
+
+  const since7d = new Date(Date.now() - 7 * 86400_000).toISOString();
+  const [sphereRes, pipeRes] = await Promise.all([
+    supabase.from('spheresync_tasks').select('lead_id, task_type').eq('agent_id', agentId).eq('source', 'coach').gte('coach_created_at', since7d).is('coach_dismissed_at', null),
+    supabase.from('pipeline_tasks').select('contact_id, task_type').eq('agent_id', agentId).eq('source', 'coach').gte('coach_created_at', since7d).is('coach_dismissed_at', null),
+  ]);
+
+  const existingKeys = new Set<string>();
+  for (const t of (sphereRes.data ?? [])) existingKeys.add(`sphere:${t.lead_id}:${t.task_type}`);
+  for (const t of (pipeRes.data ?? [])) existingKeys.add(`pipeline:${t.contact_id}:${t.task_type}`);
+
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const { weekNumber, year } = isoWeekFor(now);
+
+  for (const item of todayList) {
+    if (result.created >= opts.maxNewTasks) {
+      result.skipped_cap++;
+      continue;
+    }
+    const taskType = normalizeTaskType(item.action);
+    const isPipeline = !!item.opportunity_id;
+    const dedupKey = isPipeline
+      ? `pipeline:${item.contact_id}:${taskType}`
+      : `sphere:${item.contact_id}:${taskType}`;
+    if (existingKeys.has(dedupKey)) {
+      result.skipped_dedup++;
+      continue;
+    }
+
+    try {
+      if (isPipeline) {
+        const { error } = await supabase.from('pipeline_tasks').insert({
+          agent_id: agentId,
+          opportunity_id: item.opportunity_id,
+          contact_id: item.contact_id,
+          task_type: taskType,
+          title: truncate(item.reasoning, 120),
+          description: item.reasoning,
+          due_date: today,
+          priority: 2,
+          source: 'coach',
+          coach_reasoning: item.reasoning,
+          coach_created_at: now.toISOString(),
+          ai_suggested: true,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('spheresync_tasks').insert({
+          agent_id: agentId,
+          lead_id: item.contact_id,
+          task_type: taskType,
+          week_number: weekNumber,
+          year,
+          completed: false,
+          source: 'coach',
+          coach_reasoning: item.reasoning,
+          coach_created_at: now.toISOString(),
+          notes: '[Coach] ' + truncate(item.reasoning, 200),
+        });
+        if (error) throw error;
+      }
+      result.created++;
+      existingKeys.add(dedupKey);
+    } catch (e) {
+      result.errors++;
+      console.error('writeCoachTasks insert failed:', (e as Error).message);
+    }
+  }
+
+  return result;
+}
+
 // ─── Phase 5 — Persist ───────────────────────────────────────────────────────
 
 interface CoachState {
@@ -954,6 +1065,14 @@ async function tickAgent(
     const prio = await prioritize(inputs, alerts, xaiKey, model);
     const narr = await writeNarrative(inputs, xaiKey, model);
 
+    // B5.7 — write tasks from today_list. Cap 5 per tick, dedup via 7-day
+    // Coach-task window. Gated via coachWriteTasks flag so B6 can disable on
+    // workday-quick ticks and only let the nightly-full tick create tasks.
+    const coachTasks = await writeCoachTasks(
+      supabase, agentId, prio.today_list as TodayItem[],
+      { enabled: true, maxNewTasks: 5 },
+    );
+
     const chatContext = {
       agent_name: inputs.agent_name,
       sphere_size: inputs.aggregates.contact_count,
@@ -966,6 +1085,10 @@ async function tickAgent(
       scheduled_touches_30d: inputs.aggregates.scheduled_touches_30d,
       contacts_with_real_interaction_ever: inputs.aggregates.contacts_with_real_interaction_ever,
       used_fallback: prio.used_fallback,
+      coach_tasks_created: coachTasks.created,
+      coach_tasks_skipped_dedup: coachTasks.skipped_dedup,
+      coach_tasks_skipped_cap: coachTasks.skipped_cap,
+      coach_task_errors: coachTasks.errors,
       generated_at: new Date().toISOString(),
     };
 
@@ -1067,7 +1190,7 @@ Deno.serve(async (req: Request) => {
     succeeded: results.filter(r => r.status === 'ok').length,
     failed: results.filter(r => r.status === 'error').length,
     model,
-    phase: 'B5-narrative',
+    phase: 'B5.7-coach-tasks',
     results,
   });
 });
