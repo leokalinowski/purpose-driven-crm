@@ -127,11 +127,11 @@ export function SphereCadenceTab() {
       <div className="space-y-6">
         {/* Week selector */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <p className="text-sm text-muted-foreground">
-            Weekly calls and texts, balanced by the first letter of each contact's last name.
+          <p className="text-sm text-muted-foreground leading-relaxed max-w-lg">
+            Weekly calls and texts — balanced by the first letter of each contact's last name.
           </p>
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">View Week:</label>
+            <label className="text-sm font-medium text-muted-foreground">Week:</label>
             <Select
               value={selectedWeek ? `${selectedWeek.weekNumber}-${selectedWeek.year}` : undefined}
               onValueChange={handleWeekChange}
@@ -151,72 +151,47 @@ export function SphereCadenceTab() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                {selectedWeekInfo.label.split('(')[0].trim()}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">Week {selectedWeek?.weekNumber}</div>
-              <p className="text-xs text-muted-foreground">
-                Calls: {selectedWeekCategories.callCategories.join(', ')} | Text: {selectedWeekCategories.textCategory}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Phone className="h-4 w-4" />
-                Call Tasks
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{callTasks.length}</div>
-              <p className="text-xs text-muted-foreground">
-                {callTasks.filter(task => task.completed).length} completed
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" />
-                Text Tasks
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{textTasks.length}</div>
-              <p className="text-xs text-muted-foreground">
-                {textTasks.filter(task => task.completed).length} completed
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <BarChart3 className="h-4 w-4" />
-                Progress
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold flex items-center gap-2">
-                {Math.round(completionRate)}%
-                {completionRate >= 100 && <span className="text-primary text-lg">Complete!</span>}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            {
+              icon: <Calendar className="h-4 w-4 text-primary" />,
+              label: selectedWeekInfo.label.split('(')[0].trim(),
+              value: `Week ${selectedWeek?.weekNumber}`,
+              sub: `Calls: ${selectedWeekCategories.callCategories.join(', ')} · Text: ${selectedWeekCategories.textCategory}`,
+            },
+            {
+              icon: <Phone className="h-4 w-4 text-primary" />,
+              label: 'Call Tasks',
+              value: String(callTasks.length),
+              sub: `${callTasks.filter(t => t.completed).length} completed`,
+            },
+            {
+              icon: <MessageSquare className="h-4 w-4 text-primary" />,
+              label: 'Text Tasks',
+              value: String(textTasks.length),
+              sub: `${textTasks.filter(t => t.completed).length} completed`,
+            },
+            {
+              icon: <BarChart3 className="h-4 w-4 text-primary" />,
+              label: 'Progress',
+              value: `${Math.round(completionRate)}%`,
+              sub: completionRate >= 100 ? 'All done — great week!' : `${completedTasks} of ${totalTasks} tasks`,
+              accent: completionRate >= 100,
+            },
+          ].map(({ icon, label, value, sub, accent }) => (
+            <div key={label} className="rounded-xl border border-border bg-card px-4 py-3.5">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground mb-2">
+                {icon}{label}
               </div>
-              <Progress value={completionRate} className="mt-2" />
-              {completionRate >= 100 && (
-                <p className="text-xs text-muted-foreground mt-2 font-medium">
-                  Congratulations! All weekly tasks completed!
-                </p>
+              <div className={`text-2xl font-semibold leading-none mb-1 ${accent ? 'text-reop-green' : 'text-foreground'}`}>{value}</div>
+              <p className="text-[11px] text-muted-foreground leading-snug">{sub}</p>
+              {label === 'Progress' && (
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, completionRate)}%` }} />
+                </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          ))}
         </div>
 
         {/* Calls / Texts */}
