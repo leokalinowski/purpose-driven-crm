@@ -47,12 +47,10 @@ export default function Resources() {
     <Layout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <FolderOpen className="h-8 w-8 text-primary" />
-            Resources
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Templates, forms, scripts, and guides for your day-to-day
+          <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.09em] text-primary">Resources</span>
+          <h1 className="text-2xl sm:text-3xl font-medium tracking-tight">Everything you need to execute.</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Templates, forms, scripts, and guides for your day-to-day.
           </p>
         </div>
 

@@ -2,72 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* REOP Design System — source of truth.
+   All shadcn tokens are HSL triplets (no wrapper). Custom REOP tokens follow the same pattern.
 */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 220 9% 15%;
+    /* ── REOP brand tokens ─────────────────────────────────────────────────── */
+    --reop-teal:        184 100% 34%;   /* #00a2ad — primary */
+    --reop-teal-hover:  184 100% 29%;   /* #008a94 */
+    --reop-teal-soft:   183 59% 87%;    /* #cdeef0 */
+    --reop-dark-blue:   188 100% 21%;   /* #005d6c */
+    --reop-dark-blue-2: 189 100% 14%;   /* #003d47 */
+    --reop-green:       74 61% 52%;     /* #99ca3c */
+
+    /* ── Semantic tokens ───────────────────────────────────────────────────── */
+    --background: 210 20% 98%;
+    --foreground: 188 100% 21%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 9% 15%;
+    --card-foreground: 188 100% 21%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 9% 15%;
+    --popover-foreground: 188 100% 21%;
 
-    --primary: 180 100% 25%;
+    --primary: 184 100% 34%;
     --primary-foreground: 0 0% 98%;
 
     --secondary: 180 15% 92%;
-    --secondary-foreground: 180 100% 15%;
+    --secondary-foreground: 188 100% 21%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 210 20% 98%;
+    --muted-foreground: 188 30% 48%;
 
-    --accent: 180 25% 85%;
-    --accent-foreground: 180 100% 20%;
+    --accent: 74 61% 52%;
+    --accent-foreground: 0 0% 10%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 220 9% 15%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 184 100% 34%;
 
     --radius: 0.5rem;
 
+    /* ── Sidebar ───────────────────────────────────────────────────────────── */
     --sidebar-background: 180 100% 25%;
-
     --sidebar-foreground: 0 0% 98%;
-
     --sidebar-primary: 0 0% 98%;
-
     --sidebar-primary-foreground: 180 100% 25%;
-
     --sidebar-accent: 180 100% 30%;
-
     --sidebar-accent-foreground: 0 0% 98%;
-
     --sidebar-border: 180 100% 30%;
+    --sidebar-ring: 184 100% 34%;
+    --sidebar-width: 15.5rem; /* 248px */
 
-    --sidebar-ring: 180 100% 35%;
-
-    /* Chart colors */
-    --chart-1: 180 100% 25%;
-    --chart-2: 180 80% 35%;
-    --chart-3: 180 60% 45%;
+    /* ── Charts ────────────────────────────────────────────────────────────── */
+    --chart-1: 184 100% 34%;
+    --chart-2: 74 61% 52%;
+    --chart-3: 188 100% 21%;
+    --chart-4: 35 85% 50%;
+    --chart-5: 280 60% 55%;
   }
-
 }
 
 @layer base {
   * {
     @apply border-border;
   }
-
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.025em;
   }
 }

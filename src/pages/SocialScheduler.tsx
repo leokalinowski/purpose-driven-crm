@@ -38,9 +38,10 @@ export default function SocialScheduler() {
 
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Social Media Management</h1>
-            <p className="text-muted-foreground text-sm sm:text-base">
-              Access your dashboard to manage your social media accounts and campaigns
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.09em] text-primary">Social Media</span>
+            <h1 className="text-2xl sm:text-3xl font-medium tracking-tight">Show up where your clients are.</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Schedule posts, track analytics, and grow your presence.
             </p>
           </div>
         </div>

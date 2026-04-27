@@ -1,7 +1,4 @@
 import { Brain, TrendingUp, TrendingDown, Minus, Target, Phone, MessageSquare } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { useAgentIntelligence } from '@/hooks/useAgentIntelligence';
 import { cn } from '@/lib/utils';
@@ -11,32 +8,26 @@ export function AgentIntelligenceWidget() {
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader className="pb-3">
-          <Skeleton className="h-5 w-44" />
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-xl border border-border bg-card p-5 animate-pulse">
+        <div className="h-4 w-44 bg-muted rounded mb-5" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => <div key={i} className="h-24 bg-muted rounded-lg" />)}
+        </div>
+      </div>
     );
   }
 
   if (!snapshot) {
     return (
-      <Card className="border-dashed bg-muted/30">
-        <CardContent className="p-5 flex items-center gap-4">
-          <Brain className="h-9 w-9 text-muted-foreground/30 shrink-0" />
-          <div>
-            <p className="font-medium text-sm">AI Weekly Intelligence</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Your personalized insights — sphere health, priorities, and market signals — will appear here once your first snapshot is generated. It runs automatically every Monday morning.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-xl border border-dashed border-border bg-muted/20 p-5 flex items-start gap-3">
+        <Brain className="h-8 w-8 text-muted-foreground/30 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-semibold text-sm text-foreground">AI Weekly Intelligence</p>
+          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+            Sphere health, priorities, and market signals — generated every Monday. Check back then.
+          </p>
+        </div>
+      </div>
     );
   }
 
@@ -58,19 +49,18 @@ export function AgentIntelligenceWidget() {
     'text-red-500';
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base font-semibold">
+    <div className="rounded-xl border border-border bg-card p-5 md:p-6">
+      <div className="flex items-center justify-between gap-2 mb-5">
+        <div className="flex items-center gap-2 font-semibold text-sm">
           <Brain className="h-4 w-4 text-primary" />
           AI Weekly Intelligence
-          <Badge variant="secondary" className="ml-auto text-xs font-normal">
-            Week {snapshot.week_number}
-          </Badge>
-        </CardTitle>
-      </CardHeader>
+        </div>
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+          Week {snapshot.week_number}
+        </span>
+      </div>
 
-      <CardContent>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* ── Sphere Health ── */}
           <div className="space-y-2">
@@ -148,7 +138,7 @@ export function AgentIntelligenceWidget() {
           </div>
 
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

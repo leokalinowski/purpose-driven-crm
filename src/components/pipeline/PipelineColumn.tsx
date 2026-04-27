@@ -33,27 +33,26 @@ export function PipelineColumn({
     <div
       ref={drop}
       className={cn(
-        'min-h-[480px] rounded-xl border-2 flex flex-col transition-colors duration-100',
-        metaStage.color,
+        'min-h-[480px] rounded-xl border border-border bg-card/50 flex flex-col transition-colors duration-100',
+        'border-t-[3px]',
         isOver && 'ring-2 ring-primary/40 ring-offset-1',
       )}
+      style={{ borderTopColor: metaStage.accent }}
     >
       {/* Header */}
       <div className="px-3 py-2.5 border-b border-border/50">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <span
-              className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-              style={{ backgroundColor: metaStage.accent }}
-            />
             <span className="font-semibold text-sm text-foreground truncate">{metaStage.label}</span>
-            <span className="text-xs font-medium text-muted-foreground bg-background rounded-full px-2 py-0.5 shrink-0">
+            <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5 shrink-0">
               {opportunities.length}
             </span>
           </div>
           {totalValue > 0 && (
-            <span className="text-xs font-semibold text-foreground shrink-0">
-              ${(totalValue / 1000).toFixed(0)}k
+            <span className="text-xs font-semibold shrink-0" style={{ color: metaStage.accent }}>
+              {totalValue >= 1_000_000
+                ? `$${(totalValue / 1_000_000).toFixed(1)}M`
+                : `$${Math.round(totalValue / 1000)}K`}
             </span>
           )}
         </div>

@@ -19,9 +19,10 @@ export default function Newsletter() {
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">E-Newsletter</h1>
-            <p className="text-muted-foreground text-sm sm:text-base">
-              Build templates and track campaign performance
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.09em] text-primary">E-Newsletter</span>
+            <h1 className="text-2xl sm:text-3xl font-medium tracking-tight">Stay top of mind at scale.</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Build templates and track campaign performance.
             </p>
           </div>
           <NewsletterScheduleSettings />
