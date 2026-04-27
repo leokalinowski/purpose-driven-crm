@@ -50,7 +50,7 @@ export function FocusCard({ nextHour, loading }: FocusCardProps) {
     );
   }
 
-  const urgency = URGENCY_META[nextHour.urgency];
+  const urgency = URGENCY_META[nextHour.urgency] ?? URGENCY_META['proactive'];
   const actionVerb =
     nextHour.action === 'call' ? 'Call' :
     nextHour.action === 'text' ? 'Text' :

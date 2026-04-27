@@ -258,7 +258,7 @@ const Index = () => {
                 Signals
               </h2>
               {coachState.alerts.slice(0, 4).map((alert, i) => {
-                const meta = ALERT_META[alert.level];
+                const meta = ALERT_META[alert.level] ?? ALERT_META['info'];
                 return (
                   <div key={i} className={cn('rounded-lg p-3 flex items-start gap-2.5', meta.bg)}>
                     <span className={cn('h-2 w-2 rounded-full mt-1.5 shrink-0', meta.dot)} />

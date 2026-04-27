@@ -335,7 +335,7 @@ export function PrioritiesTab({ onOpenOpportunity }: PrioritiesTabProps) {
             <span className="text-xs text-muted-foreground font-normal">— what the Coach noticed</span>
           </h3>
           {alerts.slice(0, 6).map((alert, i) => {
-            const meta = ALERT_META[alert.level];
+            const meta = ALERT_META[alert.level] ?? ALERT_META['info'];
             return (
               <div key={i} className={cn('flex items-start gap-2.5 rounded-lg p-3', meta.bg)}>
                 <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', meta.dot)} />
