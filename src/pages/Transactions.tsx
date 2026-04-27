@@ -38,9 +38,10 @@ export default function Transactions() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Transaction Coordination</h1>
-              <p className="text-muted-foreground">
-                Track your deals, monitor performance, and sync with OpenToClose
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.09em] text-primary">Transactions</span>
+              <h1 className="text-2xl sm:text-3xl font-medium tracking-tight">Track every deal to close.</h1>
+              <p className="text-muted-foreground text-sm mt-1">
+                Monitor performance and sync with OpenToClose.
               </p>
             </div>
             <SyncButton onSync={syncWithOpenToClose} loading={loading} />

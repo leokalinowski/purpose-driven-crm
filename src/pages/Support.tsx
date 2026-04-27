@@ -81,12 +81,10 @@ const Support = () => {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-            <LifeBuoy className="h-8 w-8" />
-            Support Hub
-          </h1>
-          <p className="text-muted-foreground text-sm sm:text-base">
-            Get help, track your requests, and complete action items to maximize your platform experience.
+          <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.09em] text-primary">Support Hub</span>
+          <h1 className="text-2xl sm:text-3xl font-medium tracking-tight">We're here when you need us.</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Get help, track your requests, and complete action items.
           </p>
         </div>
 

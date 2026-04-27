@@ -125,8 +125,9 @@ const Settings = () => {
     <Layout>
       <div className="space-y-6 max-w-4xl">
         <div>
-          <h1 className="text-2xl font-bold">Account Settings</h1>
-          <p className="text-muted-foreground">Manage your profile information and branding</p>
+          <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.09em] text-primary">Settings</span>
+          <h1 className="text-2xl sm:text-3xl font-medium tracking-tight">Your account.</h1>
+          <p className="text-muted-foreground text-sm mt-1">Manage your profile, branding, and subscription.</p>
         </div>
 
         <Tabs defaultValue="profile" className="w-full">

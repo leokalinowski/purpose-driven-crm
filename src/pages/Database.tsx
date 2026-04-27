@@ -432,9 +432,10 @@ const Database = () => {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex-1">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Contact Database</h1>
-            <p className="text-muted-foreground text-sm sm:text-base">
-              Manage your contacts and leads
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.09em] text-primary">Database</span>
+            <h1 className="text-2xl sm:text-3xl font-medium tracking-tight">Your sphere of influence.</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Manage your contacts, track interactions, and keep your database clean.
             </p>
             {/* Contact capacity indicator */}
             {contactLimit != null && (

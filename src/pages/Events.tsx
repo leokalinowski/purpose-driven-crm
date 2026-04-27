@@ -107,9 +107,10 @@ const Events = () => {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Events</h1>
-            <p className="text-muted-foreground">
-              Track your event preparation progress and manage RSVPs.
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.09em] text-primary">Events</span>
+            <h1 className="text-2xl sm:text-3xl font-medium tracking-tight">Events that build relationships.</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Track preparation progress and manage RSVPs.
             </p>
           </div>
           <Button onClick={() => setShowEventForm(true)}>
