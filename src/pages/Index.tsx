@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import {
   RefreshCw, Sparkles, TrendingUp, Briefcase, Users, Shield, Award,
-  AlertCircle, ChevronRight,
+  AlertCircle, ChevronRight, Phone, Mail, KanbanSquare, GraduationCap, Gift,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Layout } from '@/components/layout/Layout';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -93,27 +95,98 @@ const Index = () => {
   return (
     <Layout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Sparkles className="h-6 w-6 text-purple-500" aria-hidden="true" />
-              Dashboard
-            </h1>
-            <p className="text-muted-foreground text-sm sm:text-base mt-1">
-              {greeting} Here's what matters right now — and how this week is landing.
-            </p>
+        {/* Dark hero card */}
+        <div
+          className="relative overflow-hidden rounded-2xl p-7 sm:p-9"
+          style={{ background: 'linear-gradient(135deg, hsl(188 100% 21%), hsl(189 100% 14%))' }}
+        >
+          {/* Radial glow */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute right-0 top-0 h-72 w-72 rounded-full"
+            style={{ background: 'radial-gradient(circle at top right, hsl(184 100% 34% / 0.25), transparent 65%)' }}
+          />
+
+          {/* Header row */}
+          <div className="relative flex items-start justify-between gap-4 mb-7">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.09em] text-reop-teal mb-1.5">
+                Real Estate on Purpose
+              </p>
+              <h1 className="text-2xl sm:text-3xl font-medium tracking-tight text-white leading-tight">
+                {greeting}
+              </h1>
+              <p className="text-sm text-white/60 mt-1">
+                Here's how this month is landing.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {coachUpdatedRelative && (
+                <span className="text-xs text-white/40 hidden sm:inline">
+                  Coach {coachUpdatedRelative}
+                </span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                className="border-white/20 text-white/70 hover:bg-white/10 hover:text-white bg-transparent"
+              >
+                <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {coachUpdatedRelative && (
-              <span className="text-xs text-muted-foreground hidden sm:inline">
-                Coach updated {coachUpdatedRelative}
-              </span>
-            )}
-            <Button variant="outline" size="sm" onClick={handleRefresh}>
-              <RefreshCw className="h-4 w-4 mr-1" /> Refresh
-            </Button>
-          </div>
+
+          {/* 4-stat strip */}
+          {data && (
+            <div className="relative grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                {
+                  label: 'Touches this month',
+                  value: data.blockOne.totalTouchpoints,
+                  icon: <Phone className="h-4 w-4" />,
+                  fmt: (v: number) => v.toLocaleString(),
+                },
+                {
+                  label: 'Database contacts',
+                  value: data.blockThree.databaseSize,
+                  icon: <Users className="h-4 w-4" />,
+                  fmt: (v: number) => v.toLocaleString(),
+                },
+                {
+                  label: 'Closed this year',
+                  value: data.blockThree.currentYearTransactions,
+                  icon: <Award className="h-4 w-4" />,
+                  fmt: (v: number) => v.toLocaleString(),
+                },
+                {
+                  label: 'Potential GCI',
+                  value: data.blockThree.potentialGCI,
+                  icon: <TrendingUp className="h-4 w-4" />,
+                  fmt: (v: number) =>
+                    v >= 1_000_000
+                      ? `$${(v / 1_000_000).toFixed(1)}M`
+                      : v >= 1_000
+                      ? `$${Math.round(v / 1_000)}K`
+                      : `$${v.toLocaleString()}`,
+                },
+              ].map(({ label, value, icon, fmt }) => (
+                <div
+                  key={label}
+                  className="rounded-xl px-4 py-3.5"
+                  style={{ background: 'hsl(184 100% 34% / 0.12)', border: '1px solid hsl(184 100% 34% / 0.2)' }}
+                >
+                  <div className="flex items-center gap-1.5 text-reop-teal mb-2 text-[11px] font-semibold uppercase tracking-[0.05em]">
+                    {icon}
+                    {label}
+                  </div>
+                  <div className="text-2xl font-semibold text-white leading-none">
+                    {fmt(value)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {error && (
@@ -228,6 +301,33 @@ const Index = () => {
             </div>
             <TaskPerformance data={data.blockFour} />
             <OverdueTasks data={data.blockFive} />
+
+            {/* Shortcuts panel */}
+            <section className="pt-2">
+              <div className="flex items-center gap-2 border-t border-border pt-6 mb-4">
+                <h2 className="text-lg font-semibold tracking-tight">Quick access</h2>
+                <span className="text-xs text-muted-foreground">Jump to key workflows</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {[
+                  { label: 'SphereSync', icon: <Sparkles className="h-5 w-5" />, to: '/spheresync-tasks' },
+                  { label: 'Pipeline', icon: <KanbanSquare className="h-5 w-5" />, to: '/spheresync-tasks?tab=pipeline' },
+                  { label: 'Database', icon: <Users className="h-5 w-5" />, to: '/database' },
+                  { label: 'Transactions', icon: <Briefcase className="h-5 w-5" />, to: '/transactions' },
+                  { label: 'Coaching', icon: <GraduationCap className="h-5 w-5" />, to: '/coaching' },
+                  { label: 'Events', icon: <Gift className="h-5 w-5" />, to: '/events' },
+                ].map(({ label, icon, to }) => (
+                  <Link
+                    key={label}
+                    to={to}
+                    className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card px-3 py-4 text-center transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary group"
+                  >
+                    <span className="text-muted-foreground group-hover:text-primary transition-colors">{icon}</span>
+                    <span className="text-[12px] font-medium text-foreground group-hover:text-primary transition-colors">{label}</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
           </section>
         )}
       </div>
