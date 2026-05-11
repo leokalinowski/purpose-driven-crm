@@ -50,7 +50,7 @@ export function TransactionMetrics({ metrics, loading }: TransactionMetricsProps
       trend: null,
     },
     {
-      title: "Ongoing Deals",
+      title: "Active Transactions",
       value: metrics.ongoing.toString(),
       icon: BarChart3,
       trend: null,
@@ -62,7 +62,7 @@ export function TransactionMetrics({ metrics, loading }: TransactionMetricsProps
       trend: null,
     },
     {
-      title: "Avg Deal Value",
+      title: "Avg Sale Price",
       value: formatCurrency(metrics.avgDealValue),
       icon: DollarSign,
       trend: null,

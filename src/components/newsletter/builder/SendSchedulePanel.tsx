@@ -46,19 +46,37 @@ export function SendSchedulePanel({ open, onClose, templateId, templateName, age
 
   const effectiveAgentId = agentId || user?.id;
 
-  // Load agent profile for sender name
+  // Default sender name: prefer the per-agent override on
+  // `agent_marketing_settings.sender_name` (set in /settings → Brand →
+  // Outbound defaults). Fall back to the agent's display name on
+  // `profiles`. The agent can still edit the field before sending.
   useEffect(() => {
     if (!effectiveAgentId) return;
+    let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('first_name, last_name, full_name')
-        .eq('user_id', effectiveAgentId)
-        .single();
-      if (data) {
-        setSenderName((data as any).full_name || `${data.first_name || ''} ${data.last_name || ''}`.trim());
-      }
+      const [marketingRes, profileRes] = await Promise.all([
+        supabase
+          .from('agent_marketing_settings')
+          .select('sender_name')
+          .eq('user_id', effectiveAgentId)
+          .maybeSingle(),
+        supabase
+          .from('profiles')
+          .select('first_name, last_name, full_name')
+          .eq('user_id', effectiveAgentId)
+          .maybeSingle(),
+      ]);
+      if (cancelled) return;
+      const override = marketingRes.data?.sender_name?.trim();
+      const profile = profileRes.data;
+      const fallback =
+        (profile as { full_name?: string | null } | null)?.full_name ||
+        `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim();
+      setSenderName(override || fallback || '');
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [effectiveAgentId]);
 
   // Load available tags from agent's contacts

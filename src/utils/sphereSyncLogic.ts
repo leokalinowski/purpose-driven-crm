@@ -1,3 +1,5 @@
+import { addWeeks, format, startOfWeek, endOfWeek } from 'date-fns';
+
 // SphereSync Method - Balanced letter distribution for weekly contact assignments
 // Based on English surname frequency analysis for more even task distribution
 
@@ -146,6 +148,41 @@ export function getWeekRange(weeksBack: number = 2): Array<{ weekNumber: number;
       label: `Week ${prevWeek.weekNumber} (${i === 1 ? '1 week ago' : `${i} weeks ago`})`
     });
   }
-  
+
   return weeks;
+}
+
+/**
+ * Build options for the "Jump to week" selector — current week + 3 prior so
+ * agents can rewind to follow up with contacts they couldn't reach. Returns
+ * options sorted with current week first, then the most recent past weeks.
+ *
+ * Uses date-fns to format human-readable date ranges. The value is the ISO
+ * week number (string) which matches the rotation tables in this file.
+ */
+export interface WeekPickerOption {
+  value: string;        // ISO week number as a string
+  weekNumber: number;
+  year: number;
+  label: string;        // "Week 17 — Apr 20 – Apr 26 (this week)"
+}
+
+export function buildWeekOptions(now: Date = new Date()): WeekPickerOption[] {
+  const options: WeekPickerOption[] = [];
+  for (let offset = -3; offset <= 0; offset++) {
+    const d = addWeeks(now, offset);
+    const { week, year } = getISOWeekNumber(d);
+    const start = startOfWeek(d, { weekStartsOn: 1 });
+    const end = endOfWeek(d, { weekStartsOn: 1 });
+    const range = `${format(start, 'MMM d')} – ${format(end, 'MMM d')}`;
+    const tag = offset === 0 ? ' (this week)' : offset === -1 ? ' (last week)' : '';
+    options.push({
+      value: String(week),
+      weekNumber: week,
+      year,
+      label: `Week ${week} — ${range}${tag}`,
+    });
+  }
+  // Current week first, then most-recent-past first.
+  return options.sort((a, b) => b.weekNumber - a.weekNumber);
 }

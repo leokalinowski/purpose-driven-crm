@@ -1,19 +1,23 @@
-import { Phone, MessageCircle, Copy, Clock, Sparkles, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Phone, Copy, Clock, Sparkles, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { NextHour, URGENCY_META } from '@/hooks/useCoachingState';
+import { useAuth } from '@/hooks/useAuth';
+import { useContactSheet } from '@/components/spheresync/ContactSheetProvider';
+import { placeCall } from '@/lib/comm';
+import { supabase } from '@/integrations/supabase/client';
 
 interface HeroCardProps {
   nextHour: NextHour | null;
   loading?: boolean;
 }
 
-function stripPhone(phone: string): string {
-  return phone.replace(/[^\d+]/g, '');
-}
-
 export function HeroCard({ nextHour, loading }: HeroCardProps) {
+  const { user } = useAuth();
+  const { openContact } = useContactSheet();
+  const [calling, setCalling] = useState(false);
   if (loading) {
     return (
       <div className="rounded-2xl border-2 border-border bg-card p-6 md:p-8 animate-pulse">
@@ -59,6 +63,28 @@ export function HeroCard({ nextHour, loading }: HeroCardProps) {
     }
   };
 
+  const handleCall = async () => {
+    if (!user?.id || calling) return;
+    setCalling(true);
+    try {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, phone, email, dnc')
+        .eq('id', nextHour.contact_id)
+        .maybeSingle();
+      if (error || !data) {
+        toast.error('Could not load contact');
+        openContact(nextHour.contact_id);
+        return;
+      }
+      await placeCall(user.id, data);
+    } finally {
+      setCalling(false);
+    }
+  };
+
+  const handleOpenSheet = () => openContact(nextHour.contact_id);
+
   return (
     <div className="rounded-2xl border-2 border-primary/20 bg-card p-5 md:p-7 shadow-sm">
       {/* Label + urgency */}
@@ -74,7 +100,14 @@ export function HeroCard({ nextHour, loading }: HeroCardProps) {
 
       {/* Action + name */}
       <h1 className="text-2xl md:text-3xl font-bold tracking-tight leading-tight mb-2">
-        {actionLabel} {nextHour.contact_name}
+        {actionLabel}{' '}
+        <button
+          type="button"
+          onClick={handleOpenSheet}
+          className="hover:text-primary hover:underline underline-offset-2 transition"
+        >
+          {nextHour.contact_name}
+        </button>
       </h1>
 
       {/* Reasoning */}
@@ -108,17 +141,13 @@ export function HeroCard({ nextHour, loading }: HeroCardProps) {
       {/* Actions */}
       <div className="flex flex-wrap gap-2">
         <Button
-          asChild
           size="lg"
+          disabled={calling || !user?.id}
+          onClick={handleCall}
           className="h-12 gap-2 flex-1 md:flex-initial md:min-w-[140px] bg-green-600 hover:bg-green-700 text-white"
         >
-          <a href={`tel:_coach_placeholder`} onClick={(e) => {
-            e.preventDefault();
-            toast.info('Tap Call on the contact card to dial — we do not have the phone cached in the Coach payload yet.');
-          }}>
-            <Phone className="h-5 w-5" />
-            Call now
-          </a>
+          <Phone className="h-5 w-5" />
+          {calling ? 'Calling…' : 'Call now'}
         </Button>
         <Button
           variant="outline"
@@ -128,6 +157,14 @@ export function HeroCard({ nextHour, loading }: HeroCardProps) {
         >
           <Copy className="h-4 w-4" />
           Copy opener
+        </Button>
+        <Button
+          variant="ghost"
+          size="lg"
+          className="h-12 gap-2 flex-1 md:flex-initial"
+          onClick={handleOpenSheet}
+        >
+          Open contact
         </Button>
       </div>
 

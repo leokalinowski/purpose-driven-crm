@@ -53,7 +53,7 @@ const STEPS = [
     subtitle: 'Track your weekly wins',
     description:
       "Every week, submit your Success Scoreboard to track your key activities: conversations held, appointments set, agreements signed, closings, and database growth.\n\n**Your goal: 25 conversations per week.**\n\nThe scoreboard feeds your dashboard metrics and builds your performance streak. It's the heartbeat of your accountability system — the more consistently you submit, the clearer your growth trajectory becomes.",
-    cta: { label: 'Submit Your First Check-In', path: '/coaching' },
+    cta: { label: 'Submit Your First Check-In', path: '/scoreboard' },
   },
   {
     icon: Mail,

@@ -71,11 +71,12 @@ serve(async (req) => {
 
     console.log('Generating action items', targetAgentId ? `for agent: ${targetAgentId}` : 'for all agents');
 
-    // Get all active agents (or specific agent)
+    // Get all active agents (or specific agent). `headshot_url` lives on
+    // agent_marketing_settings — see below for the joined lookup.
     let profilesQuery = supabase
       .from('profiles')
-      .select('user_id, first_name, last_name, headshot_url, phone_number, created_at');
-    
+      .select('user_id, first_name, last_name, phone_number, created_at');
+
     if (targetAgentId) {
       profilesQuery = profilesQuery.eq('user_id', targetAgentId);
     }
@@ -88,6 +89,23 @@ serve(async (req) => {
         JSON.stringify({ error: 'Failed to fetch profiles' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Single bulk lookup for headshot_url across all agents we're processing.
+    const agentIds = (profiles || []).map((p) => p.user_id);
+    const headshotByAgent = new Map<string, string | null>();
+    if (agentIds.length > 0) {
+      const { data: marketingRows, error: marketingErr } = await supabase
+        .from('agent_marketing_settings')
+        .select('user_id, headshot_url')
+        .in('user_id', agentIds);
+      if (marketingErr) {
+        console.warn('Failed to fetch agent_marketing_settings (continuing):', marketingErr.message);
+      } else {
+        for (const row of marketingRows ?? []) {
+          headshotByAgent.set(row.user_id, row.headshot_url ?? null);
+        }
+      }
     }
 
     let itemsCreated = 0;
@@ -133,7 +151,8 @@ serve(async (req) => {
       if ((recentCoaching || 0) === 0) itemsCreated++; else itemsResolved++;
 
       // 4. Incomplete profile check (missing headshot or phone)
-      const isProfileIncomplete = !profile.headshot_url || !profile.phone_number;
+      const headshotUrl = headshotByAgent.get(agentId) ?? null;
+      const isProfileIncomplete = !headshotUrl || !profile.phone_number;
       await processActionItem(supabase, agentId, 'incomplete_profile', isProfileIncomplete);
       if (isProfileIncomplete) itemsCreated++; else itemsResolved++;
     }

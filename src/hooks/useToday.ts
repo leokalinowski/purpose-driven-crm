@@ -5,6 +5,18 @@ import { Opportunity } from './usePipeline';
 
 export type AttentionState = 'overdue' | 'no_next_step' | 'stale' | 'on_track';
 
+/**
+ * `TodayOpportunity` extends `Opportunity` with two CLIENT-COMPUTED fields:
+ *   - `attention_state` — derived from next-step due date + opportunity flags
+ *     by `computeAttentionState` below. Used to drive the Today view's
+ *     "Needs attention / Stale / On track" buckets and the per-card chip.
+ *     NOT a DB column. NEVER include in an UPDATE payload.
+ *   - `contact_name` — convenience join shortcut so card components don't
+ *     have to dig through `opportunity.contact?.{first,last}_name`.
+ *
+ * The `OpportunityDetailV2.saveDeal` blocklist explicitly strips both keys
+ * before sending the patch (Phase 4.2 of the Pipeline fix sweep).
+ */
 export interface TodayOpportunity extends Opportunity {
   attention_state: AttentionState;
   contact_name: string;

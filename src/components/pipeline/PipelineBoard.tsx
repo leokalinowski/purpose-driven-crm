@@ -5,8 +5,7 @@ import {
   META_STAGES,
   getMetaStageForKey,
   defaultSubStage,
-  pipelineTypeFromOpportunityType,
-  PipelineType,
+  getEffectivePipelineType,
 } from "@/config/pipelineStages";
 import { PipelineColumn } from "./PipelineColumn";
 
@@ -24,12 +23,15 @@ export function PipelineBoard({
   loading,
 }: PipelineBoardProps) {
 
-  // Group opportunities by meta-stage. Skip rows mapped to a non-meta (e.g. 'lost').
+  // Group opportunities by meta-stage. Init from META_STAGES so adding a
+  // new meta (e.g. `closed_lost`) doesn't need a literal map update here.
   const byMeta = useMemo(() => {
-    const map: Record<MetaStage, Opportunity[]> = { nurturing: [], active: [], pending: [], closed: [] };
+    const map = Object.fromEntries(
+      META_STAGES.map(m => [m.key, [] as Opportunity[]])
+    ) as Record<MetaStage, Opportunity[]>;
     for (const o of opportunities) {
       const meta = getMetaStageForKey(o.stage);
-      if (meta) map[meta].push(o);
+      if (meta && map[meta]) map[meta].push(o);
     }
     return map;
   }, [opportunities]);
@@ -42,7 +44,7 @@ export function PipelineBoard({
     const currentMeta = getMetaStageForKey(opp.stage);
     if (currentMeta === meta) return;
 
-    const pipelineType = (opp.pipeline_type ?? pipelineTypeFromOpportunityType(opp.opportunity_type ?? 'buyer')) as PipelineType;
+    const pipelineType = getEffectivePipelineType(opp);
     const newStage = defaultSubStage(meta, pipelineType);
     await onStageUpdate(opportunityId, newStage);
   };

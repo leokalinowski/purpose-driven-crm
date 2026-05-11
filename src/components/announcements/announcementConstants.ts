@@ -16,7 +16,7 @@ export const APP_PAGES = [
   { label: 'Events', value: '/events' },
   { label: 'Newsletter', value: '/newsletter' },
   { label: 'Newsletter Builder', value: '/newsletter-builder' },
-  { label: 'Coaching', value: '/coaching' },
+  { label: 'Success Scoreboard', value: '/scoreboard' },
   { label: 'Transactions', value: '/transactions' },
   { label: 'Pipeline', value: '/pipeline' },
   { label: 'Social Scheduler', value: '/social-scheduler' },

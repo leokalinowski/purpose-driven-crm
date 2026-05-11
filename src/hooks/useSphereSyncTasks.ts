@@ -320,11 +320,27 @@ export function useSphereSyncTasks() {
         task.id === taskId ? { ...task, ...updates } : task
       ));
 
-      // ── When a task is completed, mirror it into pipeline activity ──────────
+      // ── When a task is completed, log activity + re-score so Coach + last-touch refresh ──
       if (updates.completed === true && user?.id) {
         const task = tasks.find(t => t.id === taskId);
         if (task?.lead_id) {
-          // Find the active opportunity for this contact (if any)
+          // 1. Log to contact_activities — fires trg_refresh_contact_channel_last_touch.
+          supabase.from('contact_activities').insert({
+            contact_id: task.lead_id,
+            agent_id: user.id,
+            activity_type: task.task_type, // 'call' or 'text'
+            activity_date: new Date().toISOString(),
+            notes: 'Completed via SphereSync weekly tasks',
+          }).then(({ error: actErr }) => {
+            if (actErr) console.warn('Contact activity log failed (non-fatal):', actErr.message);
+          });
+
+          // 2. Re-score this contact so Coach reflects the fresh touch.
+          supabase.functions
+            .invoke('compute-priority-scores', { body: { contact_id: task.lead_id } })
+            .catch((e) => console.warn('Priority re-score failed (non-fatal):', e));
+
+          // 3. If contact has an active opportunity, mirror to opportunity_activities too.
           supabase
             .from('opportunities')
             .select('id')

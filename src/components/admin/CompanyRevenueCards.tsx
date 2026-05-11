@@ -63,7 +63,7 @@ export function CompanyRevenueCards() {
       title: 'MTD GCI',
       value: formatCurrency(metrics.mtdGCI),
       icon: Target,
-      subtext: `${metrics.mtdTransactions} deals`,
+      subtext: `${metrics.mtdTransactions} transactions`,
       trend: metrics.mtdVsPriorMonth,
       trendLabel: 'vs last month',
     },
@@ -75,7 +75,7 @@ export function CompanyRevenueCards() {
       trend: null,
     },
     {
-      title: 'Avg Deal Size',
+      title: 'Avg Sale Size',
       value: formatCurrency(metrics.avgDealSize),
       icon: TrendingUp,
       subtext: 'Per transaction',

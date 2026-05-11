@@ -1,38 +1,175 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Upload, Search, ChevronLeft, ChevronRight, Users, RefreshCw, Download, AlertTriangle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Layout } from '@/components/layout/Layout';
-import { ContactTable } from '@/components/database/ContactTable';
+import {
+  Upload,
+  Download,
+  UserPlus,
+  Search,
+  Phone,
+  Mail,
+  MoreHorizontal,
+  ChevronLeft,
+  ChevronRight,
+  ShieldOff,
+  Filter as FilterIcon,
+  X,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { useContacts, type Contact, type ContactInput } from '@/hooks/useContacts';
+import { usePrioritizedContacts, tierFor } from '@/hooks/usePrioritizedContacts';
+import { useDatabaseStats } from '@/hooks/useDatabaseStats';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
+import { useContactSheet } from '@/components/spheresync/ContactSheetProvider';
 import { ContactForm } from '@/components/database/ContactForm';
 import { ImprovedCSVUpload } from '@/components/database/ImprovedCSVUpload';
-import { DNCStatsCard } from '@/components/database/DNCStatsCard';
-import { ContactActivitiesDialog } from '@/components/database/ContactActivitiesDialog';
-import { DuplicateCleanup } from '@/components/database/DuplicateCleanup';
-import { DNCCheckButton } from '@/components/database/DNCCheckButton';
-import { DataQualityDashboard } from '@/components/database/DataQualityDashboard';
-import { BulkContactEditor } from '@/components/database/BulkContactEditor';
-import { EnrichedContact } from '@/utils/dataEnrichment';
+import { placeCall, sendEmail, type CommContact } from '@/lib/comm';
+import { trackBulkDNCProgress } from '@/lib/dncProgress';
+import { toast } from 'sonner';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
-import { useContacts, Contact, ContactInput } from '@/hooks/useContacts';
-import { useDNCStats } from '@/hooks/useDNCStats';
-import { useUserRole } from '@/hooks/useUserRole';
-import { useAuth } from '@/hooks/useAuth';
-import { useFeatureAccess } from '@/hooks/useFeatureAccess';
-import { useToast } from '@/components/ui/use-toast';
-import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
-import { supabase } from '@/integrations/supabase/client';
+type Temp = 'urgent' | 'hot' | 'warm' | 'cool' | 'cold' | 'unscored';
 
-const Database = () => {
+const TEMP_COLORS: Record<Temp, { dot: string; text: string }> = {
+  urgent: { dot: 'hsl(0 80% 45%)', text: 'hsl(0 80% 40%)' },
+  hot:    { dot: 'hsl(0 70% 55%)', text: 'hsl(0 70% 50%)' },
+  warm:   { dot: 'hsl(35 80% 55%)', text: 'hsl(35 80% 45%)' },
+  cool:   { dot: 'hsl(200 40% 60%)', text: 'hsl(200 40% 50%)' },
+  cold:   { dot: 'hsl(210 10% 70%)', text: 'hsl(215 16% 47%)' },
+  unscored: { dot: 'hsl(210 10% 80%)', text: 'hsl(215 16% 47%)' },
+};
+
+const TEMP_LABEL: Record<Temp, string> = {
+  urgent: 'Urgent',
+  hot: 'Hot',
+  warm: 'Warm',
+  cool: 'Cool',
+  cold: 'Cold',
+  unscored: 'Unscored',
+};
+
+const TEMP_ORDER: Temp[] = ['urgent', 'hot', 'warm', 'cool', 'cold', 'unscored'];
+
+type LastTouchRange = 'all' | '7d' | '30d' | '30-90d' | '90d+' | 'never';
+
+const LAST_TOUCH_OPTIONS: { value: LastTouchRange; label: string }[] = [
+  { value: 'all',     label: 'Any time' },
+  { value: '7d',      label: 'Past 7 days' },
+  { value: '30d',     label: 'Past 30 days' },
+  { value: '30-90d',  label: '30–90 days' },
+  // The "Never touched" cohort is split out so it has a clear filter of its
+  // own. Previously NULL last_activity_date was silently lumped under "90+
+  // days" only, while being filtered OUT of the other ranges — confusing
+  // when paired with the "No touch 90d+" stat tile.
+  { value: '90d+',    label: '90+ days (touched but stale)' },
+  { value: 'never',   label: 'Never touched' },
+];
+
+type CallingStatus = 'callable' | 'dnc' | 'email_only' | 'text_only' | 'no_contact_info';
+
+function TempPill({ temp, label }: { temp: Temp; label?: string }) {
+  const colors = TEMP_COLORS[temp];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold"
+      style={{ color: colors.text }}
+    >
+      <span className="inline-block w-2 h-2 rounded-full" style={{ background: colors.dot }} />
+      {label ?? TEMP_LABEL[temp]}
+    </span>
+  );
+}
+
+function StatTile({
+  label,
+  value,
+  delta,
+  positive,
+  danger,
+}: {
+  label: string;
+  value: string;
+  delta: string;
+  positive?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <div className="bg-card border border-border rounded-[10px] p-4 flex flex-col gap-1">
+      <span className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground font-semibold">
+        {label}
+      </span>
+      <span
+        className="text-[28px] font-semibold leading-none -tracking-[0.02em]"
+        style={{ color: danger ? 'hsl(0 70% 55%)' : undefined }}
+      >
+        {value}
+      </span>
+      <span
+        className="text-[11.5px]"
+        style={{ color: positive ? 'hsl(142 50% 40%)' : 'var(--muted-foreground)' }}
+      >
+        {delta}
+      </span>
+    </div>
+  );
+}
+
+function formatRelativeTouch(date: string | null): string {
+  if (!date) return 'Never';
+  const ms = Date.now() - new Date(date).getTime();
+  if (ms < 0) return 'Just now';
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 30) return `${days} days ago`;
+  if (days < 365) return `${Math.floor(days / 30)} mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+
+function initialsFor(c: Pick<Contact, 'first_name' | 'last_name'>): string {
+  const f = (c.first_name ?? '').trim();
+  const l = (c.last_name ?? '').trim();
+  return ((f[0] ?? '') + (l[0] ?? '')).toUpperCase() || '?';
+}
+
+function fullNameFor(c: Pick<Contact, 'first_name' | 'last_name'>): string {
+  return [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || 'Unnamed contact';
+}
+
+function metaFor(c: Pick<Contact, 'email' | 'phone'>): string {
+  return c.email || c.phone || '—';
+}
+
+function callingStatusFor(c: Contact): CallingStatus {
+  if (c.dnc) return 'dnc';
+  // Order matters: check no-contact-method BEFORE the channel-specific cases
+  // so a contact with neither phone nor email never gets miscounted as
+  // "callable." Previously the trailing `return 'callable'` swallowed those.
+  if (!c.phone && !c.email) return 'no_contact_info';
+  if (c.phone && !c.email) return 'text_only';
+  if (c.email && !c.phone) return 'email_only';
+  return 'callable';
+}
+
+function csvEscape(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  const s = Array.isArray(v) ? v.join('; ') : String(v);
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+export default function Database() {
   const { user, loading: authLoading } = useAuth();
-  const { isAdmin, loading: roleLoading } = useUserRole();
   const { getContactLimit } = useFeatureAccess();
-  const contactLimit = getContactLimit();
+  const { openContact } = useContactSheet();
 
   const {
     contacts,
@@ -42,692 +179,1050 @@ const Database = () => {
     currentPage,
     totalPages,
     searchTerm,
-    sortBy,
-    sortOrder,
     addContact,
     updateContact,
     deleteContact,
     uploadCSV,
-    handleSort,
     handleSearch,
     goToPage,
     fetchContacts,
   } = useContacts();
 
-  const {
-    stats,
-    loading: dncLoading,
-    checking: dncChecking,
-    fetchDNCStats,
-    triggerDNCCheck,
-  } = useDNCStats();
+  const { groups: priorityGroups } = usePrioritizedContacts({ limit: 5000 });
+  const { stats: dbStats } = useDatabaseStats();
 
-  const handleDNCCheck = async (forceRecheck: boolean) => {
-    try {
-      await triggerDNCCheck(forceRecheck);
-      toast({
-        title: 'DNC Check Started',
-        description: forceRecheck 
-          ? 'Rechecking all contacts against DNC lists. This may take a few minutes.'
-          : 'Checking new contacts against DNC lists. This may take a few minutes.',
-      });
-      setTimeout(() => { fetchDNCStats(); }, 5000);
-    } catch (error: any) {
-      console.error('DNC check failed:', error);
-      toast({
-        title: 'DNC Check Failed',
-        description: error?.message || 'Failed to start DNC check. Please try again.',
-        variant: 'destructive',
-      });
-    }
-  };
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [selectedRelationships, setSelectedRelationships] = useState<Set<string>>(new Set());
+  const [selectedTemps, setSelectedTemps] = useState<Set<Temp>>(new Set());
+  const [lastTouchRange, setLastTouchRange] = useState<LastTouchRange>('all');
+  const [selectedCallingStatuses, setSelectedCallingStatuses] = useState<Set<CallingStatus>>(new Set());
 
-  const { toast } = useToast();
-  const { generateTasksForNewContacts } = useSphereSyncTasks();
-
-  const scrollPositionRef = useRef<number>(0);
-
-  const handleSearchNoScroll = useCallback((term: string) => {
-    scrollPositionRef.current = window.scrollY;
-    handleSearch(term);
-  }, [handleSearch]);
-
-  useEffect(() => {
-    if (!loading && scrollPositionRef.current > 0) {
-      const timeoutId = setTimeout(() => {
-        window.scrollTo({ top: scrollPositionRef.current, behavior: 'instant' });
-        scrollPositionRef.current = 0;
-      }, 100);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [loading]);
-
-  const [showContactForm, setShowContactForm] = useState(false);
-  const [showCSVUpload, setShowCSVUpload] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
-  const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
-  const [viewingTouchpointsContact, setViewingTouchpointsContact] = useState<Contact | null>(null);
-  const [showDuplicateCleanup, setShowDuplicateCleanup] = useState(false);
-  const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
-  const [showBulkEditor, setShowBulkEditor] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
-  const isAtLimit = contactLimit != null && totalContacts >= contactLimit;
+  // Build a fast lookup for priority_score by contact id from the prioritized cache
+  const priorityById = useMemo(() => {
+    const map = new Map<string, number | null>();
+    priorityGroups?.all.forEach((c) => map.set(c.id, c.priority_score));
+    return map;
+  }, [priorityGroups]);
 
-  const handleExportCSV = useCallback(() => {
-    if (!allContacts || allContacts.length === 0) {
-      toast({ title: 'No contacts to export', variant: 'destructive' });
-      return;
-    }
-    const headers = ['First Name', 'Last Name', 'Email', 'Phone', 'Address', 'City', 'State', 'Zip Code', 'Tags', 'DNC', 'Notes'];
-    const rows = allContacts.map(c => [
-      c.first_name || '', c.last_name, c.email || '', c.phone || '',
-      c.address_1 || '', c.city || '', c.state || '', c.zip_code || '',
-      (c.tags || []).join('; '), c.dnc ? 'Yes' : 'No', (c.notes || '').replace(/"/g, '""'),
-    ].map(v => `"${v}"`).join(','));
-    const csv = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `contacts-export-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: 'Export Complete', description: `Exported ${allContacts.length} contacts.` });
-  }, [allContacts, toast]);
+  const tempForContact = (c: Contact): Temp => {
+    const score = priorityById.get(c.id);
+    return tierFor(score ?? null) as Temp;
+  };
 
-  const handleAddContact = async (contactData: ContactInput) => {
-    try {
-      const newContact = await addContact(contactData, contactLimit);
-      toast({
-        title: "Success",
-        description: "Contact added successfully",
-      });
-      setShowContactForm(false);
+  // Counts for the filter rail are computed off allContacts (full-set, not just current page)
+  const relationshipCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    allContacts.forEach((c) => {
+      const key = c.contact_type?.trim() || 'Unspecified';
+      m.set(key, (m.get(key) ?? 0) + 1);
+    });
+    return Array.from(m.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8);
+  }, [allContacts]);
 
-      // Fire DNC check for the new contact if it has a valid phone
-      if (newContact && contactData.phone && contactData.phone.replace(/\D/g, '').length >= 10) {
-        supabase.functions.invoke('dnc-single-check', {
-          body: { phone: contactData.phone, contactId: newContact.id }
-        }).then(() => {
-          console.log('[DNC] Single check completed for new contact');
-          fetchDNCStats();
-        }).catch(error => {
-          console.error('[DNC] Single check failed for new contact:', error);
-        });
+  const tempCounts = useMemo(() => {
+    if (!priorityGroups) return null;
+    return {
+      urgent: priorityGroups.urgent.length,
+      hot: priorityGroups.hot.length,
+      warm: priorityGroups.warm.length,
+      cool: priorityGroups.cool.length,
+      cold: priorityGroups.cold.length,
+      unscored: priorityGroups.unscored.length,
+    };
+  }, [priorityGroups]);
+
+  const callingStatusCounts = useMemo(() => {
+    let callable = 0;
+    let dnc = 0;
+    let emailOnly = 0;
+    let textOnly = 0;
+    let noContactInfo = 0;
+    allContacts.forEach((c) => {
+      if (c.dnc) dnc++;
+      else if (!c.phone && !c.email) noContactInfo++;
+      else if (c.phone && !c.email) textOnly++;
+      else if (c.email && !c.phone) emailOnly++;
+      else callable++;
+    });
+    return {
+      callable,
+      dnc,
+      email_only: emailOnly,
+      text_only: textOnly,
+      no_contact_info: noContactInfo,
+    };
+  }, [allContacts]);
+
+  // Stat tiles — sourced from server-side COUNT queries (`useDatabaseStats`)
+  // so they always reflect the agent's full contact set, not the search-
+  // filtered or page-capped client array. Fall back to `totalContacts` from
+  // useContacts only while dbStats is still loading.
+  const stats = useMemo(() => {
+    const total = dbStats?.totalContacts ?? totalContacts;
+    const recentNew = dbStats?.recentNew ?? 0;
+    const pastClients = dbStats?.pastClients ?? 0;
+    const hotLeads = dbStats?.hotLeads ?? 0;
+    const noTouch90d = dbStats?.noTouch90d ?? 0;
+
+    return [
+      {
+        label: 'Total contacts',
+        value: total.toLocaleString(),
+        delta: recentNew > 0 ? `+${recentNew} this month` : 'No new this month',
+        positive: recentNew > 0,
+      },
+      {
+        label: 'Past clients',
+        value: pastClients.toLocaleString(),
+        delta: total > 0
+          ? `${Math.round((pastClients / total) * 100)}% of sphere`
+          : '—',
+      },
+      {
+        label: 'Hot leads',
+        value: hotLeads.toLocaleString(),
+        delta: hotLeads > 0 ? 'Score 60+' : 'No hot leads',
+        positive: hotLeads > 0,
+      },
+      {
+        label: 'No touch 90d+',
+        value: noTouch90d.toLocaleString(),
+        delta: noTouch90d > 0 ? 'Needs attention' : 'All in cadence',
+        danger: noTouch90d > 0,
+      },
+    ];
+  }, [dbStats, totalContacts]);
+
+  // True when any filter chip is active. When ON, we page through the full
+  // `allContacts` set client-side so the visible rows and the chip counts
+  // agree (previous bug: chip said "Hot=12" but page 1 showed 0 because all
+  // 12 hot contacts lived on page 5 of the server-paged set).
+  const hasActiveFilters =
+    selectedRelationships.size > 0 ||
+    selectedTemps.size > 0 ||
+    selectedCallingStatuses.size > 0 ||
+    lastTouchRange !== 'all';
+
+  // Reset to page 1 whenever the filter set changes — otherwise the agent can
+  // land on an empty page (e.g. they're on page 4 of unfiltered, then filter
+  // to "Hot" with only 8 matches = 1 page, and see nothing).
+  useEffect(() => {
+    if (currentPage !== 1) goToPage(1);
+    // We intentionally only depend on the filter values, not currentPage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRelationships, selectedTemps, selectedCallingStatuses, lastTouchRange]);
+
+  // Predicate that combines every active filter. Used both for the visible
+  // page and the filtered-total count below.
+  const matchesAllFilters = useMemo(() => {
+    return (c: Contact): boolean => {
+      if (selectedRelationships.size > 0) {
+        const key = c.contact_type?.trim() || 'Unspecified';
+        if (!selectedRelationships.has(key)) return false;
       }
+      if (selectedTemps.size > 0) {
+        const t = tempForContact(c);
+        if (!selectedTemps.has(t)) return false;
+      }
+      if (selectedCallingStatuses.size > 0) {
+        if (!selectedCallingStatuses.has(callingStatusFor(c))) return false;
+      }
+      if (lastTouchRange !== 'all') {
+        // Split NULL last_activity_date into its own "never" bucket so the
+        // four time-window filters (7d / 30d / 30-90d / 90d+) only count
+        // contacts who HAVE been touched. Prevents NULL contacts from
+        // double-counting between "90+ days" and "Never touched."
+        const hasTouch = !!c.last_activity_date;
+        if (lastTouchRange === 'never') {
+          if (hasTouch) return false;
+        } else {
+          if (!hasTouch) return false;
+          const last = new Date(c.last_activity_date!).getTime();
+          const ageDays = (Date.now() - last) / (1000 * 60 * 60 * 24);
+          if (lastTouchRange === '7d'     && ageDays > 7) return false;
+          if (lastTouchRange === '30d'    && ageDays > 30) return false;
+          if (lastTouchRange === '30-90d' && (ageDays < 30 || ageDays > 90)) return false;
+          if (lastTouchRange === '90d+'   && ageDays < 90) return false;
+        }
+      }
+      return true;
+    };
+    // priorityById is a dep because tempForContact uses it via closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRelationships, selectedTemps, lastTouchRange, selectedCallingStatuses, priorityById]);
 
-      await fetchDNCStats();
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to add contact",
-        variant: "destructive",
+  // Filtered full set when any chip is active, otherwise empty (we use the
+  // server-paged `contacts` instead).
+  const filteredAllContacts = useMemo(() => {
+    if (!hasActiveFilters) return [] as Contact[];
+    return allContacts.filter(matchesAllFilters);
+  }, [hasActiveFilters, allContacts, matchesAllFilters]);
+
+  const ITEMS_PER_PAGE = 25;
+
+  // Visible rows: server-paged when no filters are active, client-paged from
+  // the filtered full set when filters are on.
+  const visibleContacts = useMemo(() => {
+    if (!hasActiveFilters) {
+      // No client-side filter mode — server-side pagination handles the slice.
+      return contacts;
+    }
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredAllContacts.slice(start, start + ITEMS_PER_PAGE);
+  }, [hasActiveFilters, contacts, filteredAllContacts, currentPage]);
+
+  // Effective totals for the footer + pagination — switch source when filters
+  // are active so "X of N" reflects the filtered cohort, not the full DB.
+  const effectiveTotal = hasActiveFilters ? filteredAllContacts.length : totalContacts;
+  const effectiveTotalPages = Math.max(
+    1,
+    Math.ceil(effectiveTotal / ITEMS_PER_PAGE),
+  );
+
+  const handleAddContact = async (data: ContactInput) => {
+    try {
+      await addContact(data, getContactLimit());
+      toast.success('Contact added');
+      setAddOpen(false);
+    } catch (err) {
+      toast.error('Failed to add contact', {
+        description: err instanceof Error ? err.message : 'Unknown error',
       });
+      throw err;
     }
   };
 
-  const handleEditContact = async (contactData: Partial<ContactInput>) => {
+  const handleEditContact = async (data: ContactInput) => {
     if (!editingContact) return;
-   
     try {
-      await updateContact(editingContact.id, contactData);
-      await fetchContacts();
-      toast({
-        title: "Success",
-        description: "Contact updated successfully",
+      await updateContact(editingContact.id, data);
+      toast.success('Contact updated');
+      setEditingContact(null);
+      fetchContacts();
+    } catch (err) {
+      toast.error('Failed to update contact', {
+        description: err instanceof Error ? err.message : 'Unknown error',
       });
-      closeContactForm();
-      await fetchDNCStats();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update contact",
-        variant: "destructive",
-      });
+      throw err;
     }
   };
 
   const handleDeleteContact = async () => {
-    if (!deletingContact) return;
-
+    if (!editingContact) return;
+    if (!confirm(`Delete ${fullNameFor(editingContact)}? This cannot be undone.`)) return;
     try {
-      await deleteContact(deletingContact.id);
-      setDeletingContact(null);
-      toast({ title: "Success", description: "Contact deleted successfully" });
-      await fetchDNCStats();
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to delete contact", variant: "destructive" });
-    }
-  };
-
-  const handleContactEnriched = async (enrichedContact: EnrichedContact) => {
-    try {
-      const contactInput: ContactInput = {
-        first_name: enrichedContact.first_name,
-        last_name: enrichedContact.last_name,
-        phone: enrichedContact.phone,
-        email: enrichedContact.email,
-        address_1: enrichedContact.address_1,
-        address_2: enrichedContact.address_2,
-        city: enrichedContact.city,
-        state: enrichedContact.state,
-        zip_code: enrichedContact.zip_code,
-        tags: enrichedContact.tags,
-        dnc: enrichedContact.dnc,
-        notes: enrichedContact.notes,
-      };
-
-      await updateContact(enrichedContact.id, contactInput);
-      await fetchContacts();
-
-      toast({
-        title: "Contact Updated",
-        description: "Contact data has been enriched and saved.",
+      await deleteContact(editingContact.id);
+      toast.success('Contact deleted');
+      setEditingContact(null);
+      fetchContacts();
+    } catch (err) {
+      toast.error('Failed to delete contact', {
+        description: err instanceof Error ? err.message : 'Unknown error',
       });
-    } catch (error) {
-      console.error('Error updating enriched contact:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save enriched contact data.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleBulkContactsEnriched = async (enrichedContacts: EnrichedContact[]) => {
-    try {
-      const updatePromises = enrichedContacts.map(async (enrichedContact) => {
-        const contactInput: ContactInput = {
-          first_name: enrichedContact.first_name,
-          last_name: enrichedContact.last_name,
-          phone: enrichedContact.phone,
-          email: enrichedContact.email,
-          address_1: enrichedContact.address_1,
-          address_2: enrichedContact.address_2,
-          city: enrichedContact.city,
-          state: enrichedContact.state,
-          zip_code: enrichedContact.zip_code,
-          tags: enrichedContact.tags,
-          dnc: enrichedContact.dnc,
-          notes: enrichedContact.notes,
-        };
-        return updateContact(enrichedContact.id, contactInput);
-      });
-
-      await Promise.all(updatePromises);
-      await fetchContacts();
-
-      toast({
-        title: "Bulk Update Complete",
-        description: `${enrichedContacts.length} contacts have been enriched and saved.`,
-      });
-    } catch (error) {
-      console.error('Error updating bulk enriched contacts:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save some enriched contact data.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleBulkUpdate = async (updates: Partial<Contact>, contactIds: string[]) => {
-    try {
-      const updatePromises = contactIds.map(contactId => updateContact(contactId, updates));
-      await Promise.all(updatePromises);
-      await fetchContacts();
-      await fetchDNCStats();
-      setSelectedContacts([]);
-    } catch (error) {
-      console.error('Bulk update error:', error);
-      throw error;
-    }
-  };
-
-  const handleBulkDelete = async (contactIds: string[]) => {
-    try {
-      const deletePromises = contactIds.map(contactId => deleteContact(contactId));
-      await Promise.all(deletePromises);
-      await fetchContacts();
-      await fetchDNCStats();
-      setSelectedContacts([]);
-      toast({
-        title: "Bulk Delete Complete",
-        description: `Successfully deleted ${contactIds.length} contacts.`,
-      });
-    } catch (error) {
-      console.error('Bulk delete error:', error);
-      toast({
-        title: "Delete Failed",
-        description: "Failed to delete some contacts. Please try again.",
-        variant: "destructive",
-      });
-      throw error;
     }
   };
 
   const handleCSVUpload = async (csvData: ContactInput[]) => {
-    try {
-      const insertedContacts = await uploadCSV(csvData, contactLimit);
+    if (!user) return;
+    const limit = getContactLimit();
+    const startedAt = new Date().toISOString();
+    const inserted = await uploadCSV(csvData, limit);
+    toast.success(`Imported ${csvData.length} contacts`);
+    fetchContacts();
 
-      toast({
-        title: 'Success',
-        description: `${insertedContacts.length} contacts uploaded successfully. DNC checks will run separately.`,
-      });
-
-      await fetchContacts();
-      await generateTasksForNewContacts(insertedContacts);
-      
-      setShowCSVUpload(false);
-      goToPage(1);
-      
-      await fetchDNCStats();
-
-      // Trigger DNC check after bulk upload
-      if (user?.id) {
-        try {
-          await triggerDNCCheck(false);
-          toast({
-            title: 'DNC Check Started',
-            description: 'DNC check is running in the background. Contacts will be updated shortly.',
-          });
-        } catch (dncError: any) {
-          console.error('DNC check failed:', dncError);
-          // Non-admins won't be able to trigger, which is expected - the monthly cron handles it
-        }
-      }
-    } catch (error: any) {
-      console.error('CSV Upload error:', error);
-      
-      let errorMessage = 'Failed to upload contacts';
-      if (error?.message?.includes('Duplicate contacts found')) {
-        errorMessage = error.message;
-      } else if (error?.message?.includes('duplicate key value')) {
-        errorMessage = 'Some contacts already exist in the database. Please check for duplicates and try again.';
-      } else if (error?.message?.includes('Contact limit') || error?.message?.includes('contact limit')) {
-        errorMessage = error.message;
-      } else if (error?.message) {
-        errorMessage = error.message;
-      }
-      
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive',
+    // useContacts.uploadCSV already kicks off the bulk DNC sweep edge
+    // function. Mount a live-progress toast that polls the DB until each
+    // imported contact has a fresh `dnc_last_checked`. Auto-resolves on
+    // completion; user can keep working in the background.
+    if (inserted && inserted.length > 0) {
+      trackBulkDNCProgress({
+        contactIds: inserted.map((c) => c.id),
+        agentId: user.id,
+        startedAt,
       });
     }
   };
 
-  const handleRecheckContactDNC = async (contact: Contact) => {
-    if (!contact.phone) {
-      toast({ title: 'No Phone', description: 'Contact has no phone number to check.', variant: 'destructive' });
+  const handleExportCSV = () => {
+    if (allContacts.length === 0) {
+      toast.error('No contacts to export');
       return;
     }
-    try {
-      toast({ title: 'Checking DNC...', description: `Rechecking ${contact.first_name} ${contact.last_name}` });
-      const { data, error } = await supabase.functions.invoke('dnc-single-check', {
-        body: { phone: contact.phone, contactId: contact.id }
-      });
-      if (error) throw error;
-      await fetchContacts();
-      await fetchDNCStats();
-      toast({
-        title: data?.isDNC ? '⚠️ DNC Flagged' : '✅ Safe to Call',
-        description: `${contact.first_name} ${contact.last_name} has been rechecked.`,
-      });
-    } catch (error: any) {
-      console.error('DNC recheck failed:', error);
-      toast({ title: 'Recheck Failed', description: error?.message || 'Failed to recheck contact.', variant: 'destructive' });
-    }
+    const headers = [
+      'first_name',
+      'last_name',
+      'email',
+      'phone',
+      'address_1',
+      'address_2',
+      'city',
+      'state',
+      'zip_code',
+      'tags',
+      'dnc',
+      'notes',
+      'category',
+      'contact_type',
+      'last_activity_date',
+    ];
+    const rows = allContacts.map((c) =>
+      headers.map((h) => csvEscape((c as unknown as Record<string, unknown>)[h])).join(','),
+    );
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${allContacts.length} contacts`);
   };
 
-  const openEditForm = (contact: Contact) => {
-    setEditingContact(contact);
-    setShowContactForm(true);
+  const toggleSetItem = <T,>(set: Set<T>, value: T): Set<T> => {
+    const next = new Set(set);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    return next;
   };
 
-  const closeContactForm = () => {
-    setShowContactForm(false);
-    setEditingContact(null);
+  // Helper for action click on a contact row
+  const handleCallContact = (c: Contact) => {
+    if (!user) return;
+    const cc: CommContact = {
+      id: c.id,
+      first_name: c.first_name,
+      last_name: c.last_name,
+      phone: c.phone,
+      email: c.email,
+      dnc: c.dnc,
+    };
+    placeCall(user.id, cc);
   };
 
-  const generatePageNumbers = () => {
-    const pages = [];
-    const maxVisible = 5;
-    let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
-    const end = Math.min(totalPages, start + maxVisible - 1);
-   
-    if (end - start + 1 < maxVisible) {
-      start = Math.max(1, end - maxVisible + 1);
-    }
-   
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
-   
-    return pages;
+  const handleEmailContact = (c: Contact) => {
+    if (!user) return;
+    const cc: CommContact = {
+      id: c.id,
+      first_name: c.first_name,
+      last_name: c.last_name,
+      phone: c.phone,
+      email: c.email,
+      dnc: c.dnc,
+    };
+    sendEmail(user.id, cc);
   };
 
+  const filterRail = (
+    <>
+      <div className="py-4 pt-0 border-b border-border">
+        <h4 className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground font-bold mb-2.5">
+          Relationship
+        </h4>
+        {relationshipCounts.length === 0 ? (
+          <p className="text-[12px] text-muted-foreground">No relationships yet.</p>
+        ) : (
+          relationshipCounts.map(([label, count]) => (
+            <label
+              key={label}
+              className="flex items-center gap-2.5 py-2.5 text-sm cursor-pointer text-reop-dark-blue hover:text-primary transition"
+            >
+              <input
+                type="checkbox"
+                checked={selectedRelationships.has(label)}
+                onChange={() => setSelectedRelationships((s) => toggleSetItem(s, label))}
+                className="w-[15px] h-[15px] accent-primary"
+              />
+              <span className="flex-1">{label}</span>
+              <span className="text-[11px] px-1.5 rounded-full bg-[hsl(210_20%_96%)] text-muted-foreground">
+                {count}
+              </span>
+            </label>
+          ))
+        )}
+      </div>
+
+      <div className="py-4 border-b border-border">
+        <h4 className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground font-bold mb-2.5">
+          Temperature
+        </h4>
+        {!tempCounts ? (
+          <p className="text-[12px] text-muted-foreground">Loading…</p>
+        ) : (
+          TEMP_ORDER.map((t) => (
+            <label
+              key={t}
+              className="flex items-center gap-2.5 py-2.5 text-sm cursor-pointer text-reop-dark-blue hover:text-primary transition"
+            >
+              <input
+                type="checkbox"
+                checked={selectedTemps.has(t)}
+                onChange={() => setSelectedTemps((s) => toggleSetItem(s, t))}
+                className="w-[15px] h-[15px] accent-primary"
+              />
+              <span className="flex-1">
+                <TempPill temp={t} />
+              </span>
+              <span className="text-[11px] px-1.5 rounded-full bg-[hsl(210_20%_96%)] text-muted-foreground">
+                {tempCounts[t]}
+              </span>
+            </label>
+          ))
+        )}
+      </div>
+
+      <div className="py-4 border-b border-border">
+        <h4 className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground font-bold mb-2.5">
+          Last touch
+        </h4>
+        {LAST_TOUCH_OPTIONS.map((o) => (
+          <label
+            key={o.value}
+            className="flex items-center gap-2.5 py-1.5 text-sm cursor-pointer text-reop-dark-blue hover:text-primary transition"
+          >
+            <input
+              type="radio"
+              name="last-touch"
+              checked={lastTouchRange === o.value}
+              onChange={() => setLastTouchRange(o.value)}
+              className="w-[15px] h-[15px] accent-primary"
+            />
+            <span className="flex-1">{o.label}</span>
+          </label>
+        ))}
+      </div>
+
+      <div className="py-4">
+        <h4 className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground font-bold mb-2.5">
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldOff className="w-[13px] h-[13px] text-[hsl(0_72%_45%)]" />
+            Calling status
+          </span>
+        </h4>
+        {([
+          { v: 'callable' as const, label: 'Callable', count: callingStatusCounts.callable, danger: false },
+          { v: 'dnc' as const, label: 'DNC registered', count: callingStatusCounts.dnc, danger: true },
+          { v: 'email_only' as const, label: 'Email only', count: callingStatusCounts.email_only, danger: false },
+          { v: 'text_only' as const, label: 'Text only', count: callingStatusCounts.text_only, danger: false },
+          { v: 'no_contact_info' as const, label: 'No phone or email', count: callingStatusCounts.no_contact_info, danger: false },
+        ]).map((row) => (
+          <label
+            key={row.v}
+            className="flex items-center gap-2.5 py-1.5 text-sm cursor-pointer text-reop-dark-blue hover:text-primary transition"
+          >
+            <input
+              type="checkbox"
+              checked={selectedCallingStatuses.has(row.v)}
+              onChange={() => setSelectedCallingStatuses((s) => toggleSetItem(s, row.v))}
+              className="w-[15px] h-[15px] accent-primary"
+            />
+            <span
+              className={cn(
+                'flex-1',
+                row.danger && 'text-[hsl(0_72%_45%)] font-semibold',
+              )}
+            >
+              {row.label}
+            </span>
+            <span
+              className={cn(
+                'text-[11px] px-1.5 rounded-full',
+                row.danger
+                  ? 'bg-[hsl(0_84%_95%)] text-[hsl(0_72%_45%)]'
+                  : 'bg-[hsl(210_20%_96%)] text-muted-foreground',
+              )}
+            >
+              {row.count}
+            </span>
+          </label>
+        ))}
+      </div>
+
+      {(selectedRelationships.size > 0 ||
+        selectedTemps.size > 0 ||
+        lastTouchRange !== 'all' ||
+        selectedCallingStatuses.size > 0) && (
+        <button
+          onClick={() => {
+            setSelectedRelationships(new Set());
+            setSelectedTemps(new Set());
+            setLastTouchRange('all');
+            setSelectedCallingStatuses(new Set());
+          }}
+          className="mt-3 w-full text-xs text-primary font-semibold hover:underline"
+        >
+          Clear filters
+        </button>
+      )}
+    </>
+  );
+
+  // Wait for auth to resolve before deciding to render the not-signed-in
+  // fallback — without this, the page flashes "Please sign in" on hard refresh
+  // because `user` is briefly null while `useAuth().loading` is true.
   if (authLoading) {
     return (
       <Layout>
-        <div className="space-y-6">
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-sm text-muted-foreground">Loading database...</p>
-            </div>
-          </div>
+        <div className="flex items-center justify-center py-24 text-sm text-muted-foreground">
+          Loading database…
         </div>
       </Layout>
     );
   }
 
   if (!user) {
-    return null;
+    return (
+      <Layout>
+        <div className="bg-card border border-border rounded-lg p-6">
+          <p className="text-sm">Please sign in to view your database.</p>
+        </div>
+      </Layout>
+    );
   }
 
+  // Footer + pagination work off the EFFECTIVE total — the filtered set
+  // size when any chip is active, otherwise the full DB count.
+  const showStart = effectiveTotal === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const showEnd = Math.min(currentPage * ITEMS_PER_PAGE, effectiveTotal);
+
   return (
-    <Layout>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="flex-1">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Contact Database</h1>
-            <p className="text-muted-foreground text-sm sm:text-base">
-              Manage your contacts and leads
+    <>
+      <Helmet><title>Database — Real Estate on Purpose</title></Helmet>
+      <Layout>
+        <div className="flex flex-col md:flex-row md:flex-wrap md:items-start md:justify-between gap-4 mb-6 md:mb-7">
+          <div>
+            <span className="eye-label block mb-1.5">Database</span>
+            <h1 className="text-[clamp(1.5rem,2vw+1rem,2rem)] font-medium tracking-tighter leading-[1.15] mb-1.5">
+              {totalContacts.toLocaleString()} relationships, one source of truth.
+            </h1>
+            <p className="text-sm text-muted-foreground max-w-[640px] leading-[1.55]">
+              Everyone in your world — tagged, dated, and searchable. Click any row to open the full file.
             </p>
-            {/* Contact capacity indicator */}
-            {contactLimit != null && (
-              <div className="flex items-center gap-2 mt-1">
-                <Badge variant={isAtLimit ? "destructive" : "secondary"} className="text-xs">
-                  {totalContacts} / {contactLimit} contacts
-                </Badge>
-                {isAtLimit && (
-                  <span className="text-xs text-destructive flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" />
-                    Limit reached
-                  </span>
+          </div>
+          <div className="flex flex-wrap gap-2 md:gap-2.5">
+            <button
+              onClick={() => setImportOpen(true)}
+              className="inline-flex items-center gap-1.5 h-[38px] px-3 md:px-3.5 rounded-lg border border-border bg-card text-sm font-semibold text-reop-dark-blue hover:bg-reop-teal-soft hover:border-primary hover:text-primary transition"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              Import
+            </button>
+            <button
+              onClick={handleExportCSV}
+              className="inline-flex items-center gap-1.5 h-[38px] px-3 md:px-3.5 rounded-lg border border-border bg-card text-sm font-semibold text-reop-dark-blue hover:bg-reop-teal-soft hover:border-primary hover:text-primary transition"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export
+            </button>
+            <button
+              onClick={() => setAddOpen(true)}
+              className="inline-flex items-center gap-1.5 h-[38px] px-3 md:px-3.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-reop-teal-hover transition flex-1 sm:flex-initial justify-center"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Add contact
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-3.5 mb-6">
+          {stats.map((s) => (
+            <StatTile
+              key={s.label}
+              label={s.label}
+              value={s.value}
+              delta={s.delta}
+              positive={s.positive}
+              danger={s.danger}
+            />
+          ))}
+        </div>
+
+        <div className="grid gap-5 lg:[grid-template-columns:minmax(0,260px)_minmax(0,1fr)]">
+          <aside className="hidden lg:block bg-card border border-border rounded-xl p-[18px] sticky top-5 self-start">
+            {filterRail}
+          </aside>
+
+          {/* Mobile filter drawer */}
+          {mobileFiltersOpen && (
+            <>
+              <div
+                className="lg:hidden fixed inset-0 bg-black/40 z-[100]"
+                onClick={() => setMobileFiltersOpen(false)}
+              />
+              <aside className="lg:hidden fixed top-0 bottom-0 left-0 w-[85%] max-w-[340px] bg-card z-[101] overflow-y-auto p-5 shadow-2xl">
+                <div className="flex items-center justify-between mb-4 sticky top-0 bg-card -mx-5 px-5 -mt-5 pt-5 pb-3 border-b border-border">
+                  <h3 className="text-base font-semibold inline-flex items-center gap-2">
+                    <FilterIcon className="w-4 h-4 text-primary" />
+                    Filters
+                  </h3>
+                  <button
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="w-8 h-8 rounded-md border border-border bg-card text-reop-dark-blue inline-flex items-center justify-center hover:bg-reop-teal-soft hover:border-primary hover:text-primary transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {filterRail}
+              </aside>
+            </>
+          )}
+
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 mb-4">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  placeholder="Search contacts…"
+                  className="w-full h-[42px] pl-10 pr-3.5 rounded-[10px] border border-border bg-card text-sm text-reop-dark-blue focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+                />
+              </div>
+              <button
+                onClick={() => setMobileFiltersOpen(true)}
+                className="lg:hidden inline-flex items-center gap-1.5 h-[42px] px-3 rounded-lg border border-border bg-card text-sm font-semibold text-reop-dark-blue hover:bg-reop-teal-soft hover:border-primary hover:text-primary transition"
+              >
+                <FilterIcon className="w-3.5 h-3.5" />
+                Filters
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 py-2.5 mb-3 text-[12.5px] text-muted-foreground">
+              <span>
+                {effectiveTotal > 0 ? (
+                  <>
+                    Showing <b className="text-reop-dark-blue font-semibold">{showStart}–{showEnd}</b> of{' '}
+                    <b className="text-reop-dark-blue font-semibold">{effectiveTotal.toLocaleString()}</b>{' '}
+                    {hasActiveFilters ? 'matching ' : ''}contacts · sorted by{' '}
+                    <b className="text-reop-dark-blue font-semibold">Last name</b>
+                  </>
+                ) : loading ? (
+                  'Loading contacts…'
+                ) : hasActiveFilters ? (
+                  'No contacts match your filters.'
+                ) : (
+                  'No contacts yet — import a CSV or add one to begin.'
+                )}
+              </span>
+            </div>
+
+            <div className="bg-card border border-border rounded-xl overflow-hidden">
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-[hsl(210_20%_97%)] border-b border-border">
+                      {[
+                        { label: 'Name' },
+                        { label: 'Relationship' },
+                        { label: 'Temp' },
+                        { label: 'Last touch' },
+                        { label: 'Tags' },
+                        { label: '', srOnly: 'Actions' },
+                      ].map((h, hi) => (
+                        <th
+                          key={hi}
+                          className="text-left text-[11px] uppercase tracking-[0.06em] text-muted-foreground font-bold py-3.5 px-4 whitespace-nowrap"
+                        >
+                          {h.srOnly ? <span className="sr-only">{h.srOnly}</span> : h.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleContacts.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-10 px-4 text-center text-sm text-muted-foreground">
+                          {loading ? 'Loading…' : 'No contacts match your filters.'}
+                        </td>
+                      </tr>
+                    ) : (
+                      visibleContacts.map((c) => {
+                        const t = tempForContact(c);
+                        const tags = (c.tags ?? []).slice(0, 3);
+                        const callable = !c.dnc && !!c.phone;
+                        return (
+                          <tr
+                            key={c.id}
+                            className="border-b border-border last:border-b-0 hover:bg-[hsl(210_20%_98.5%)] transition cursor-pointer"
+                            style={c.dnc ? { background: 'hsl(0 84% 98%)' } : undefined}
+                            onClick={() => openContact(c.id)}
+                          >
+                            <td className="py-3 px-4 align-middle">
+                              <div className="flex items-center gap-3 min-w-[220px]">
+                                <div
+                                  className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-[12px] font-bold shrink-0"
+                                  style={{
+                                    background: c.dnc ? 'hsl(0 60% 90%)' : 'hsl(184 30% 90%)',
+                                    color: c.dnc ? 'hsl(0 72% 40%)' : 'var(--reop-dark-blue)',
+                                  }}
+                                >
+                                  {initialsFor(c)}
+                                </div>
+                                <div>
+                                  <b className="font-semibold block">{fullNameFor(c)}</b>
+                                  <span className="text-[12px] text-muted-foreground inline-flex items-center gap-1.5">
+                                    {metaFor(c)}
+                                    {c.dnc && (
+                                      <span className="inline-flex items-center gap-1 bg-[hsl(0_84%_95%)] text-[hsl(0_72%_45%)] text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                        <ShieldOff className="w-2.5 h-2.5" />
+                                        DNC
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 align-middle">
+                              {c.contact_type || <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="py-3 px-4 align-middle">
+                              <TempPill temp={t} />
+                            </td>
+                            <td className="py-3 px-4 align-middle whitespace-nowrap text-muted-foreground text-[12.5px]">
+                              {formatRelativeTouch(c.last_activity_date)}
+                            </td>
+                            <td className="py-3 px-4 align-middle">
+                              <div className="flex gap-1 flex-wrap">
+                                {tags.map((t, ti) => (
+                                  <span
+                                    key={ti}
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full bg-[hsl(210_20%_94%)] text-reop-dark-blue text-[11px] font-medium"
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 align-middle" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex gap-1 justify-end">
+                                {callable ? (
+                                  <button
+                                    onClick={() => handleCallContact(c)}
+                                    title="Call"
+                                    className="w-[30px] h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center hover:bg-reop-teal-soft hover:text-primary hover:border-primary transition"
+                                  >
+                                    <Phone className="w-3.5 h-3.5" />
+                                  </button>
+                                ) : c.dnc ? (
+                                  <button
+                                    title="DNC — cannot call"
+                                    disabled
+                                    className="w-[30px] h-[30px] rounded-md border border-[hsl(0_60%_85%)] bg-[hsl(0_84%_95%)] text-[hsl(0_72%_45%)] flex items-center justify-center cursor-not-allowed"
+                                  >
+                                    <ShieldOff className="w-3.5 h-3.5" />
+                                  </button>
+                                ) : (
+                                  <button
+                                    title="No phone on file"
+                                    disabled
+                                    className="w-[30px] h-[30px] rounded-md border border-border bg-card text-muted-foreground flex items-center justify-center cursor-not-allowed opacity-50"
+                                  >
+                                    <Phone className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleEmailContact(c)}
+                                  disabled={!c.email}
+                                  title={c.email ? 'Email' : 'No email on file'}
+                                  className={cn(
+                                    'w-[30px] h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center transition',
+                                    c.email
+                                      ? 'hover:bg-reop-teal-soft hover:text-primary hover:border-primary'
+                                      : 'opacity-50 cursor-not-allowed',
+                                  )}
+                                >
+                                  <Mail className="w-3.5 h-3.5" />
+                                </button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      className="w-[30px] h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center hover:bg-reop-teal-soft hover:text-primary hover:border-primary transition"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <MoreHorizontal className="w-3.5 h-3.5" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => openContact(c.id)}>
+                                      <Search className="w-3.5 h-3.5 mr-2" />
+                                      Open file
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setEditingContact(c)}>
+                                      <Pencil className="w-3.5 h-3.5 mr-2" />
+                                      Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setEditingContact(c);
+                                        setTimeout(() => handleDeleteContact(), 0);
+                                      }}
+                                      className="text-[hsl(0_72%_45%)] focus:text-[hsl(0_72%_45%)]"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="md:hidden divide-y divide-border">
+                {visibleContacts.length === 0 ? (
+                  <div className="p-6 text-center text-sm text-muted-foreground">
+                    {loading ? 'Loading…' : 'No contacts match your filters.'}
+                  </div>
+                ) : (
+                  visibleContacts.map((c) => {
+                    const t = tempForContact(c);
+                    const tags = (c.tags ?? []).slice(0, 4);
+                    const callable = !c.dnc && !!c.phone;
+                    return (
+                      <div
+                        key={c.id}
+                        className="p-4"
+                        style={c.dnc ? { background: 'hsl(0 84% 98%)' } : undefined}
+                      >
+                        <div className="flex items-start gap-3">
+                          <button
+                            onClick={() => openContact(c.id)}
+                            className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-[12px] font-bold shrink-0"
+                            style={{
+                              background: c.dnc ? 'hsl(0 60% 90%)' : 'hsl(184 30% 90%)',
+                              color: c.dnc ? 'hsl(0 72% 40%)' : 'var(--reop-dark-blue)',
+                            }}
+                          >
+                            {initialsFor(c)}
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            <button onClick={() => openContact(c.id)} className="text-left w-full">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <b className="font-semibold block text-sm truncate">{fullNameFor(c)}</b>
+                                  <span className="text-[12px] text-muted-foreground line-clamp-1">{metaFor(c)}</span>
+                                </div>
+                                <TempPill temp={t} />
+                              </div>
+                              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-muted-foreground">
+                                <span>{c.contact_type || 'Unspecified'}</span>
+                                <span>·</span>
+                                <span>{formatRelativeTouch(c.last_activity_date)}</span>
+                                {c.dnc && (
+                                  <span className="inline-flex items-center gap-1 bg-[hsl(0_84%_95%)] text-[hsl(0_72%_45%)] text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                    <ShieldOff className="w-2.5 h-2.5" />
+                                    DNC
+                                  </span>
+                                )}
+                              </div>
+                              {tags.length > 0 && (
+                                <div className="mt-2 flex gap-1 flex-wrap">
+                                  {tags.map((tag, ti) => (
+                                    <span
+                                      key={ti}
+                                      className="inline-flex items-center px-2 py-0.5 rounded-full bg-[hsl(210_20%_94%)] text-reop-dark-blue text-[11px] font-medium"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </button>
+                            <div className="mt-3 flex gap-1.5">
+                              {callable ? (
+                                <button
+                                  onClick={() => handleCallContact(c)}
+                                  className="flex-1 h-11 rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center gap-1.5 text-xs font-semibold hover:bg-reop-teal-soft hover:text-primary hover:border-primary transition"
+                                >
+                                  <Phone className="w-3.5 h-3.5" />
+                                  Call
+                                </button>
+                              ) : c.dnc ? (
+                                <button
+                                  disabled
+                                  title="DNC — cannot call"
+                                  className="flex-1 h-11 rounded-md border border-[hsl(0_60%_85%)] bg-[hsl(0_84%_95%)] text-[hsl(0_72%_45%)] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-not-allowed"
+                                >
+                                  <ShieldOff className="w-3.5 h-3.5" />
+                                  DNC
+                                </button>
+                              ) : (
+                                <button
+                                  disabled
+                                  className="flex-1 h-11 rounded-md border border-border bg-card text-muted-foreground flex items-center justify-center gap-1.5 text-xs font-semibold opacity-50 cursor-not-allowed"
+                                >
+                                  <Phone className="w-3.5 h-3.5" />
+                                  Call
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleEmailContact(c)}
+                                disabled={!c.email}
+                                className={cn(
+                                  'flex-1 h-11 rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center gap-1.5 text-xs font-semibold transition',
+                                  c.email
+                                    ? 'hover:bg-reop-teal-soft hover:text-primary hover:border-primary'
+                                    : 'opacity-50 cursor-not-allowed',
+                                )}
+                              >
+                                <Mail className="w-3.5 h-3.5" />
+                                Email
+                              </button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="w-11 h-11 rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center hover:bg-reop-teal-soft hover:text-primary hover:border-primary transition flex-shrink-0">
+                                    <MoreHorizontal className="w-3.5 h-3.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => openContact(c.id)}>
+                                    <Search className="w-3.5 h-3.5 mr-2" />
+                                    Open file
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setEditingContact(c)}>
+                                    <Pencil className="w-3.5 h-3.5 mr-2" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setEditingContact(c);
+                                      setTimeout(() => handleDeleteContact(), 0);
+                                    }}
+                                    className="text-[hsl(0_72%_45%)] focus:text-[hsl(0_72%_45%)]"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
-            )}
-          </div>
-         
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 self-start sm:self-auto">
-            <div className="flex flex-col sm:flex-row gap-2">
-            <Button
-                onClick={() => setShowContactForm(true)}
-                className="sm:w-auto"
-                disabled={isAtLimit}
-                title={isAtLimit ? `Contact limit reached (${contactLimit})` : undefined}
-            >
-                <Plus className="h-4 w-4 mr-2" />
-                <span className="hidden xs:inline">Add Contact</span>
-                <span className="xs:hidden">Add</span>
-            </Button>
-            <Button
-              onClick={() => setShowCSVUpload(true)}
-              variant="outline"
-                className="sm:w-auto"
-                disabled={isAtLimit}
-                title={isAtLimit ? `Contact limit reached (${contactLimit})` : undefined}
-            >
-              <Upload className="h-4 w-4 mr-2" />
-                <span className="hidden xs:inline">Upload CSV</span>
-                <span className="xs:hidden">Upload</span>
-            </Button>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button
-                onClick={() => setShowDuplicateCleanup(true)}
-                variant="outline"
-                className="sm:w-auto"
-              >
-                <Users className="h-4 w-4 mr-2" />
-                <span className="hidden xs:inline">Clean Duplicates</span>
-                <span className="xs:hidden">Clean</span>
-            </Button>
-            <Button
-              onClick={() => setShowBulkEditor(true)}
-              disabled={selectedContacts.length === 0}
-              variant="outline"
-                className="sm:w-auto"
-              title="Edit multiple selected contacts at once"
-            >
-              <Users className="h-4 w-4 mr-2" />
-                <span className="hidden xs:inline">Bulk Edit ({selectedContacts.length})</span>
-                <span className="xs:hidden">Bulk ({selectedContacts.length})</span>
-            </Button>
-            <Button
-              onClick={handleExportCSV}
-              variant="outline"
-              className="sm:w-auto"
-              title="Download all contacts as CSV"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              <span className="hidden xs:inline">Export CSV</span>
-              <span className="xs:hidden">Export</span>
-            </Button>
+
+              {/* Sticky on mobile so page nav is reachable without scrolling
+                  past every row in the page. Static on lg+ where the table
+                  fits without scrolling. */}
+              <div className="md:relative sticky bottom-0 z-10 bg-card flex justify-between items-center px-4 py-3.5 border-t border-border">
+                <span className="text-[12.5px] text-muted-foreground">
+                  {effectiveTotal > 0
+                    ? `${showStart}–${showEnd} of ${effectiveTotal.toLocaleString()}`
+                    : '0 contacts'}
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => goToPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="w-[30px] h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center hover:bg-reop-teal-soft transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <PaginationDots
+                    currentPage={currentPage}
+                    totalPages={effectiveTotalPages}
+                    onPageChange={goToPage}
+                  />
+                  <button
+                    onClick={() => goToPage(Math.min(effectiveTotalPages, currentPage + 1))}
+                    disabled={currentPage >= effectiveTotalPages}
+                    className="w-[30px] h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center hover:bg-reop-teal-soft transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        
-        {/* DNC Statistics Dashboard - Admin Only */}
-        {isAdmin && (
-          <>
-            {dncChecking && (
-              <Alert className="border-primary/50 bg-primary/10">
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                <AlertDescription>
-                  DNC check in progress. Stats will update automatically when complete.
-                </AlertDescription>
-              </Alert>
-            )}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <DNCCheckButton 
-                  variant="default" 
-                  size="default" 
-                  onRun={handleDNCCheck}
-                  checking={dncChecking}
-                />
-                <DNCCheckButton 
-                  variant="destructive" 
-                  size="default" 
-                  forceRecheck={true}
-                  onRun={handleDNCCheck}
-                  checking={dncChecking}
-                />
-              </div>
-              <DNCStatsCard 
-                stats={stats || {
-                  totalContacts: 0,
-                  dncContacts: 0,
-                  nonDncContacts: 0,
-                  neverChecked: 0,
-                  missingPhone: 0,
-                  needsRecheck: 0,
-                  lastChecked: null,
-                }} 
-                loading={dncLoading} 
-              />
-            </div>
-          </>
-        )}
-        
-        {/* DNC Stats (read-only) for non-admins */}
-        {!isAdmin && (
-          <DNCStatsCard 
-            stats={stats || {
-              totalContacts: 0,
-              dncContacts: 0,
-              nonDncContacts: 0,
-              neverChecked: 0,
-              missingPhone: 0,
-              needsRecheck: 0,
-              lastChecked: null,
-            }} 
-            loading={dncLoading} 
-          />
-        )}
-        
-        <DataQualityDashboard
-          contacts={allContacts || []}
-          onBulkEnriched={handleBulkContactsEnriched}
-        />
+      </Layout>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Contacts</span>
-              <Badge variant="secondary">{totalContacts} contacts</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center space-x-2 w-full sm:w-auto">
-              <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <Input
-                placeholder="Search by name, email, phone, city, state, address, or tag..."
-                value={searchTerm}
-                onChange={(e) => handleSearchNoScroll(e.target.value)}
-                className="flex-1 sm:max-w-sm"
-              />
-            </div>
-            {loading ? (
-              <div className="text-center py-8">Loading contacts...</div>
-            ) : (
-              <>
-                <div className="w-full overflow-x-auto">
-                      <ContactTable
-                        contacts={contacts || []}
-                        sortBy={sortBy}
-                        sortOrder={sortOrder}
-                        onSort={handleSort}
-                        onOpenEdit={openEditForm}
-                        onDelete={setDeletingContact}
-                        onViewActivities={setViewingTouchpointsContact}
-                        onEnriched={handleContactEnriched}
-                        showSelection={true}
-                        selectedContacts={selectedContacts || []}
-                        onSelectionChange={setSelectedContacts}
-                        isAdmin={isAdmin}
-                        onRecheckDNC={isAdmin ? handleRecheckContactDNC : undefined}
-                      />
-                </div>
-                {totalPages > 1 && (
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="text-sm text-muted-foreground text-center sm:text-left">
-                      Page {currentPage} of {totalPages}
-                    </div>
-                   
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => { goToPage(currentPage - 1); setSelectedContacts([]); }}
-                        disabled={currentPage === 1}
-                        className="flex-shrink-0"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        <span className="hidden sm:inline ml-1">Previous</span>
-                      </Button>
-                     
-                      <div className="hidden sm:flex items-center space-x-1">
-                      {generatePageNumbers().map((page) => (
-                        <Button
-                          key={page}
-                          variant={page === currentPage ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => { goToPage(page); setSelectedContacts([]); }}
-                          className="min-w-[2.5rem]"
-                        >
-                          {page}
-                        </Button>
-                      ))}
-                      </div>
+      <ContactForm
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        onSubmit={handleAddContact}
+        title="Add contact"
+      />
 
-                      <div className="sm:hidden flex items-center space-x-2">
-                        <span className="text-sm font-medium px-3 py-1 bg-muted rounded">
-                          {currentPage}
-                        </span>
-                      </div>
-                     
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => { goToPage(currentPage + 1); setSelectedContacts([]); }}
-                        disabled={currentPage === totalPages}
-                        className="flex-shrink-0"
-                      >
-                        <span className="hidden sm:inline mr-1">Next</span>
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </CardContent>
-        </Card>
-        <ContactForm
-          open={showContactForm}
-          onOpenChange={closeContactForm}
-          contact={editingContact}
-          onSubmit={editingContact ? handleEditContact : handleAddContact}
-          title={editingContact ? "Edit Contact" : "Add New Contact"}
-        />
-        {showCSVUpload && (
-          <ImprovedCSVUpload
-            open={showCSVUpload}
-            onOpenChange={setShowCSVUpload}
-            onUpload={handleCSVUpload}
-          />
-        )}
-        
-        <Dialog open={showDuplicateCleanup} onOpenChange={setShowDuplicateCleanup}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Duplicate Contact Cleanup</DialogTitle>
-            </DialogHeader>
-            <DuplicateCleanup onComplete={() => { fetchContacts(); setShowDuplicateCleanup(false); }} />
-          </DialogContent>
-        </Dialog>
-        
-        {viewingTouchpointsContact && (
-          <ContactActivitiesDialog
-            open={!!viewingTouchpointsContact}
-            onOpenChange={() => setViewingTouchpointsContact(null)}
-            contact={viewingTouchpointsContact}
-          />
-        )}
-        
-        <AlertDialog open={!!deletingContact} onOpenChange={() => setDeletingContact(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete Contact</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete {deletingContact?.first_name} {deletingContact?.last_name}?
-                This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteContact} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+      <ContactForm
+        open={!!editingContact}
+        onOpenChange={(open) => !open && setEditingContact(null)}
+        contact={editingContact}
+        onSubmit={handleEditContact}
+        title="Edit contact"
+      />
 
-        <BulkContactEditor
-          open={showBulkEditor}
-          onOpenChange={setShowBulkEditor}
-          selectedContacts={selectedContacts}
-          onBulkUpdate={handleBulkUpdate}
-          onBulkDelete={handleBulkDelete}
-        />
-      </div>
-    </Layout>
+      <ImprovedCSVUpload
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onUpload={handleCSVUpload}
+      />
+    </>
   );
-};
+}
 
-export default Database;
+function PaginationDots({
+  currentPage,
+  totalPages,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (n: number) => void;
+}) {
+  const pages: (number | '…')[] = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (currentPage > 4) pages.push('…');
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (currentPage < totalPages - 3) pages.push('…');
+    pages.push(totalPages);
+  }
+  return (
+    <>
+      {pages.map((p, i) =>
+        p === '…' ? (
+          <span key={`gap-${i}`} className="w-[30px] h-[30px] flex items-center justify-center text-muted-foreground text-xs">
+            …
+          </span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => onPageChange(p)}
+            className={cn(
+              'w-[30px] h-[30px] rounded-md border border-border text-xs font-medium transition',
+              p === currentPage
+                ? 'bg-reop-dark-blue text-white border-reop-dark-blue'
+                : 'bg-card text-reop-dark-blue hover:bg-reop-teal-soft',
+            )}
+          >
+            {p}
+          </button>
+        ),
+      )}
+    </>
+  );
+}

@@ -1,264 +1,344 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { formatDistanceToNow, parseISO } from 'date-fns';
-import {
-  RefreshCw, Sparkles, TrendingUp, Briefcase, Users, Shield, Award,
-  AlertCircle, ChevronRight,
-} from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
+/**
+ * Dashboard (route `/`) — agent's home page.
+ *
+ * Layout reference: design/dashboard-v2.html. Top-to-bottom:
+ *   1. Hero band + Streak card  (grid 1.65fr / 1fr)
+ *   2. Modules row              (3 columns: Sphere touches, Pipeline value, Delight sent)
+ *   3. Recent activity + Upcoming  (split 1.1fr / 1fr)
+ *   4. Jump back in             (shortcuts grid)
+ *
+ * Every number is a real query. No fabricated trends, no
+ * Coach-recommended contact bleeding into the agent's greeting.
+ */
+
+import { Helmet } from 'react-helmet-async';
+import { useEffect, useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { buildAuthRedirectPath } from '@/utils/authRedirect';
-import { useDashboardBlocks } from '@/hooks/useDashboardBlocks';
-import { useCoachingState, ALERT_META } from '@/hooks/useCoachingState';
-import { HeroCard } from '@/components/commander/HeroCard';
-import { AgentIntelligenceWidget } from '@/components/dashboard/AgentIntelligenceWidget';
-import { PipelineLiveWidget } from '@/components/dashboard/PipelineLiveWidget';
-import { WeeklyTouchpoints } from '@/components/dashboard/WeeklyTouchpoints';
-import { WeeklyTasksBySystem } from '@/components/dashboard/WeeklyTasksBySystem';
-import { TransactionOpportunity } from '@/components/dashboard/TransactionOpportunity';
-import { TaskPerformance } from '@/components/dashboard/TaskPerformance';
-import { OverdueTasks } from '@/components/dashboard/OverdueTasks';
-import { OnboardingWelcome } from '@/components/onboarding/OnboardingWelcome';
+import { useAuth } from '@/hooks/useAuth';
 import { useUserProfile } from '@/hooks/useUserProfile';
-import { cn } from '@/lib/utils';
+import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
+import { usePipeline } from '@/hooks/usePipeline';
+import { useDelightOpportunities } from '@/hooks/useDelight';
+import { supabase } from '@/integrations/supabase/client';
 
-const Index = () => {
-  const { user, loading: authLoading } = useAuth();
-  const navigate = useNavigate();
-  const { data, loading, error, refresh } = useDashboardBlocks();
-  const { profile } = useUserProfile();
-  const { state: coachState, loading: coachLoading, refetch: refetchCoach } = useCoachingState();
-  const [onboardingDismissed, setOnboardingDismissed] = useState(() =>
-    localStorage.getItem('reop_onboarding_dismissed') === 'true'
-  );
+import { CommanderHero, type HeroKpi } from '@/components/dashboard/CommanderHero';
+import { StreakCard } from '@/components/dashboard/StreakCard';
+import { Modules } from '@/components/dashboard/Modules';
+import { RecentActivityFeed } from '@/components/dashboard/RecentActivityFeed';
+import { UpcomingEvents } from '@/components/dashboard/UpcomingEvents';
+import { JumpBackIn } from '@/components/dashboard/JumpBackIn';
 
-  const isNewUser = data
-    ? data.blockOne.totalTouchpoints === 0 && data.blockThree.databaseSize === 0
-    : false;
+// ─── Time / greeting helpers ─────────────────────────────────────────
 
-  const showOnboarding = !onboardingDismissed && !loading && !!data && isNewUser;
+const today = new Date();
+const greetDate = today.toLocaleDateString('en-US', {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric',
+});
+const hourNow = today.getHours();
+const greeting = hourNow < 12 ? 'Good morning' : hourNow < 18 ? 'Good afternoon' : 'Good evening';
 
-  const dismissOnboarding = useCallback(() => {
-    localStorage.setItem('reop_onboarding_dismissed', 'true');
-    setOnboardingDismissed(true);
-  }, []);
-
-  const coachUpdatedRelative = coachState?.generated_at
-    ? formatDistanceToNow(parseISO(coachState.generated_at), { addSuffix: true })
-    : null;
-
-  const handleRefresh = useCallback(() => {
-    refresh();
-    refetchCoach();
-  }, [refresh, refetchCoach]);
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate(buildAuthRedirectPath(), { replace: true });
-    } else if (user && !authLoading) {
-      document.title = 'Dashboard | Real Estate on Purpose';
-    }
-  }, [user, authLoading, navigate]);
-
-  if (authLoading || loading) {
-    return (
-      <Layout>
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <Skeleton className="h-9 w-48" />
-              <Skeleton className="h-5 w-72" />
-            </div>
-            <Skeleton className="h-10 w-24" />
-          </div>
-          {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardHeader><Skeleton className="h-6 w-48" /></CardHeader>
-              <CardContent><Skeleton className="h-32 w-full" /></CardContent>
-            </Card>
-          ))}
-        </div>
-      </Layout>
-    );
-  }
-
-  if (!user) return null;
-
-  const firstName = profile?.first_name;
-  const greeting = firstName ? `Good to see you, ${firstName}.` : 'Welcome back.';
-
-  return (
-    <Layout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Sparkles className="h-6 w-6 text-purple-500" aria-hidden="true" />
-              Dashboard
-            </h1>
-            <p className="text-muted-foreground text-sm sm:text-base mt-1">
-              {greeting} Here's what matters right now — and how this week is landing.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {coachUpdatedRelative && (
-              <span className="text-xs text-muted-foreground hidden sm:inline">
-                Coach updated {coachUpdatedRelative}
-              </span>
-            )}
-            <Button variant="outline" size="sm" onClick={handleRefresh}>
-              <RefreshCw className="h-4 w-4 mr-1" /> Refresh
-            </Button>
-          </div>
-        </div>
-
-        {error && (
-          <Card className="border-destructive/40 bg-destructive/5 p-4">
-            <p className="text-sm text-destructive">{error}</p>
-          </Card>
-        )}
-
-        {showOnboarding && (
-          <OnboardingWelcome
-            userName={profile?.first_name}
-            onDismiss={dismissOnboarding}
-          />
-        )}
-
-        {/* AI-FIRST — the Coach leads the Dashboard */}
-        <section className="space-y-4">
-          <HeroCard nextHour={coachState?.next_hour ?? null} loading={coachLoading} />
-
-          {/* Week narrative: how you're doing this week */}
-          {!coachLoading && coachState?.week_narrative && (
-            <div className="rounded-xl border border-border bg-card p-4 md:p-5">
-              <div className="flex items-center justify-between gap-2 mb-4">
-                <h2 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">
-                  This week's story
-                </h2>
-                <Sparkles className="h-3.5 w-3.5 text-purple-500" aria-hidden="true" />
-              </div>
-              <div className="space-y-3">
-                <NarrativeLine
-                  icon={<TrendingUp className="h-4 w-4 text-green-600" />}
-                  label="GCI pace"
-                  text={coachState.week_narrative.gci_pace}
-                />
-                <NarrativeLine
-                  icon={<Briefcase className="h-4 w-4 text-orange-600" />}
-                  label="Pipeline"
-                  text={coachState.week_narrative.pipeline_story}
-                />
-                <NarrativeLine
-                  icon={<Users className="h-4 w-4 text-blue-600" />}
-                  label="Sphere"
-                  text={coachState.week_narrative.sphere_story}
-                />
-                {coachState.week_narrative.top_risk && (
-                  <NarrativeLine
-                    icon={<Shield className="h-4 w-4 text-red-600" />}
-                    label="Top risk"
-                    text={coachState.week_narrative.top_risk}
-                    tone="risk"
-                  />
-                )}
-                {coachState.week_narrative.top_win && (
-                  <NarrativeLine
-                    icon={<Award className="h-4 w-4 text-purple-600" />}
-                    label="Top win"
-                    text={coachState.week_narrative.top_win}
-                    tone="win"
-                  />
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Signals — Coach alerts */}
-          {!coachLoading && coachState?.alerts && coachState.alerts.length > 0 && (
-            <div className="space-y-1.5">
-              <h2 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground mb-1">
-                Signals
-              </h2>
-              {coachState.alerts.slice(0, 4).map((alert, i) => {
-                const meta = ALERT_META[alert.level];
-                return (
-                  <div key={i} className={cn('rounded-lg p-3 flex items-start gap-2.5', meta.bg)}>
-                    <span className={cn('h-2 w-2 rounded-full mt-1.5 shrink-0', meta.dot)} />
-                    <p className={cn('text-sm leading-snug flex-1', meta.text)}>{alert.message}</p>
-                    {alert.contact_id && (
-                      <ChevronRight className="h-4 w-4 text-muted-foreground/60 mt-0.5 shrink-0" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* First-run empty state for Coach */}
-          {!coachLoading && !coachState && (
-            <div className="rounded-lg border border-dashed border-border bg-muted/20 p-4 flex items-start gap-3">
-              <AlertCircle className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-              <p className="text-sm text-muted-foreground">
-                Your Coach hasn't run yet. The first full tick runs automatically at 05:00 UTC —
-                come back tomorrow morning and this section will tell you who to talk to and how
-                the week is pacing.
-              </p>
-            </div>
-          )}
-        </section>
-
-        {/* This Month — existing Dashboard metrics */}
-        {data && (
-          <section className="space-y-6 pt-2">
-            <div className="flex items-center gap-2 border-t border-border pt-6">
-              <h2 className="text-lg font-semibold tracking-tight">This Month</h2>
-              <span className="text-xs text-muted-foreground">Your metrics at a glance</span>
-            </div>
-            <AgentIntelligenceWidget />
-            <PipelineLiveWidget />
-            <WeeklyTouchpoints data={data.blockOne} />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <WeeklyTasksBySystem data={data.blockTwo} />
-              <TransactionOpportunity data={data.blockThree} />
-            </div>
-            <TaskPerformance data={data.blockFour} />
-            <OverdueTasks data={data.blockFive} />
-          </section>
-        )}
-      </div>
-    </Layout>
-  );
-};
-
-function NarrativeLine({
-  icon, label, text, tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  text: string;
-  tone?: 'risk' | 'win';
-}) {
-  return (
-    <div className="flex items-start gap-2.5">
-      <div className={cn(
-        'h-8 w-8 rounded-lg flex items-center justify-center shrink-0',
-        tone === 'risk' ? 'bg-red-50' : tone === 'win' ? 'bg-purple-50' : 'bg-muted/50'
-      )}>
-        {icon}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-0.5">
-          {label}
-        </div>
-        <p className="text-sm leading-snug">{text}</p>
-      </div>
-    </div>
-  );
+function formatCompactCurrency(value: number): string {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `$${Math.round(value / 1_000)}K`;
+  return `$${value}`;
 }
 
-export default Index;
+// ─── Prior-year YTD-equivalent count ─────────────────────────────────
+// Used by the "YTD closed" KPI to render "vs N last yr". Counts
+// closed_won opportunities with actual_close_date >= Jan 1 prior year
+// AND <= today's date in the prior year. Only renders when > 0.
+
+function usePriorYearYtdClosed(): number | null {
+  const { user } = useAuth();
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const now = new Date();
+      const priorJan1 = new Date(now.getFullYear() - 1, 0, 1);
+      const priorSameDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+      const { count: c, error } = await supabase
+        .from('opportunities')
+        .select('id', { count: 'exact', head: true })
+        .eq('agent_id', user.id)
+        .eq('outcome', 'closed_won')
+        .gte('actual_close_date', priorJan1.toISOString())
+        .lte('actual_close_date', priorSameDate.toISOString());
+      if (cancelled) return;
+      if (error) {
+        console.warn('[usePriorYearYtdClosed]', error.message);
+        return;
+      }
+      setCount(c ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+  return count;
+}
+
+// ─── YTD conversations from coaching_submissions ─────────────────────
+// Drives the 4th Hero KPI. Source of truth: agent-self-reported weekly
+// `conversations` count from the Scoreboard check-in. Compared to the
+// same period last year (current week number and earlier).
+//
+// Math safety: the table does NOT have a unique constraint on
+// (agent_id, year, week_number). If duplicates ever appear, we dedupe
+// per-week by taking MAX(conversations) — i.e. the most-generous count
+// for that week. SUM is then over the deduped per-week values.
+
+interface YtdConversationsState {
+  ytd: number;
+  priorYearSamePeriod: number | null;
+  weeksWithData: number;
+  loading: boolean;
+}
+
+function useYtdConversations(): YtdConversationsState {
+  const { user } = useAuth();
+  const [state, setState] = useState<YtdConversationsState>({
+    ytd: 0,
+    priorYearSamePeriod: null,
+    weeksWithData: 0,
+    loading: true,
+  });
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const now = new Date();
+      // ISO year + ISO week for matching against coaching_submissions
+      // (which uses ISO week_number and year — consistent with rest of
+      // the coaching system).
+      const isoYear = (() => {
+        const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+        const day = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - day);
+        return d.getUTCFullYear();
+      })();
+      const isoWeek = (() => {
+        const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+        const day = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - day);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+      })();
+
+      // Two queries in parallel.
+      const [thisYearRes, priorYearRes] = await Promise.all([
+        supabase
+          .from('coaching_submissions')
+          .select('week_number, conversations')
+          .eq('agent_id', user.id)
+          .eq('year', isoYear),
+        supabase
+          .from('coaching_submissions')
+          .select('week_number, conversations')
+          .eq('agent_id', user.id)
+          .eq('year', isoYear - 1)
+          .lte('week_number', isoWeek),
+      ]);
+
+      if (cancelled) return;
+
+      if (thisYearRes.error) {
+        console.warn('[useYtdConversations] this year:', thisYearRes.error.message);
+      }
+      if (priorYearRes.error) {
+        console.warn('[useYtdConversations] prior year:', priorYearRes.error.message);
+      }
+
+      // Dedupe per-week: MAX(conversations) per week_number, then sum.
+      // Defensive against the missing UNIQUE constraint on
+      // (agent_id, year, week_number).
+      const dedupeAndSum = (rows: Array<{ week_number: number; conversations: number | null }>) => {
+        const byWeek = new Map<number, number>();
+        for (const r of rows) {
+          const c = r.conversations ?? 0;
+          const existing = byWeek.get(r.week_number);
+          if (existing === undefined || c > existing) byWeek.set(r.week_number, c);
+        }
+        let sum = 0;
+        for (const v of byWeek.values()) sum += v;
+        return { sum, weeks: byWeek.size };
+      };
+
+      const thisYear = dedupeAndSum(thisYearRes.data ?? []);
+      const priorYear = dedupeAndSum(priorYearRes.data ?? []);
+
+      setState({
+        ytd: thisYear.sum,
+        priorYearSamePeriod: priorYear.weeks > 0 ? priorYear.sum : null,
+        weeksWithData: thisYear.weeks,
+        loading: false,
+      });
+    })().catch((err) => {
+      console.warn('[useYtdConversations] failed:', err);
+      if (!cancelled) setState((s) => ({ ...s, loading: false }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  return state;
+}
+
+// ─── Component ───────────────────────────────────────────────────────
+
+export default function Index() {
+  const { user } = useAuth();
+  const { getDisplayName } = useUserProfile();
+  const firstName = (getDisplayName() || user?.email?.split('@')[0] || 'there').split(' ')[0];
+
+  const { callTasks, textTasks, historicalStats, currentWeek } = useSphereSyncTasks();
+  const { metrics: pipelineMetrics } = usePipeline();
+  const { data: delightOpps = [] } = useDelightOpportunities(7);
+  const priorYearYtdClosed = usePriorYearYtdClosed();
+  const { ytd: ytdConversations, priorYearSamePeriod: priorYearConvs, weeksWithData: convWeeks } =
+    useYtdConversations();
+
+  // ── Hero numbers ────────────────────────────────────────────────────
+  // Sphere touches = calls + texts. The SphereSync rotation generates both
+  // every week, so the Hero's headline outreach metric must count both
+  // (the Modules row already does the same — keep them in sync).
+  const completedCalls = callTasks.filter((t) => t.completed).length;
+  const totalCalls = callTasks.length;
+  const remainingCalls = Math.max(0, totalCalls - completedCalls);
+
+  const completedTexts = textTasks.filter((t) => t.completed).length;
+  const totalTexts = textTasks.length;
+  const remainingTexts = Math.max(0, totalTexts - completedTexts);
+
+  const completedTouches = completedCalls + completedTexts;
+  const totalTouches = totalCalls + totalTexts;
+
+  const giftsAhead = delightOpps.length;
+  const ytdClosed = pipelineMetrics.closedDeals ?? 0;
+
+  // ── Hero sub-line — computed from real numbers ─────────────────────
+  let subline: string | null;
+  if (remainingCalls + remainingTexts + giftsAhead === 0 && totalCalls + totalTexts > 0) {
+    subline = "You're caught up on outreach. Take a victory lap.";
+  } else if (remainingCalls + remainingTexts + giftsAhead === 0) {
+    // No tasks generated yet AND no gift opportunities — fall back to a
+    // neutral status sentence rather than fabricating one.
+    subline = `${ytdClosed} closing${ytdClosed === 1 ? '' : 's'} this year so far. The week's ahead.`;
+  } else {
+    const parts: string[] = [];
+    if (remainingCalls > 0) parts.push(`${remainingCalls} call${remainingCalls === 1 ? '' : 's'}`);
+    if (remainingTexts > 0) parts.push(`${remainingTexts} text${remainingTexts === 1 ? '' : 's'}`);
+    if (giftsAhead > 0) parts.push(`${giftsAhead} gift${giftsAhead === 1 ? '' : 's'} this week`);
+    // Join with commas + final "and" for 3 items; just "and" for 2.
+    let joined = '';
+    if (parts.length === 1) {
+      joined = parts[0];
+    } else if (parts.length === 2) {
+      joined = `${parts[0]} and ${parts[1]}`;
+    } else if (parts.length === 3) {
+      joined = `${parts[0]}, ${parts[1]}, and ${parts[2]}`;
+    }
+    subline = `${joined} stand between you and another perfect week.`;
+  }
+
+  // ── Sphere-touches trend chip wording ──────────────────────────────
+  // "On pace" when completion % >= elapsed-week %, otherwise show the gap.
+  const todayDow = today.getDay(); // 0 = Sun, but ISO week starts Mon
+  const elapsedDays = todayDow === 0 ? 7 : todayDow; // 1..7
+  const expectedFracComplete = elapsedDays / 7;
+  const actualFracComplete = totalTouches > 0 ? completedTouches / totalTouches : 0;
+  const touchesTrend = totalTouches === 0
+    ? 'No tasks yet'
+    : actualFracComplete >= expectedFracComplete
+      ? 'On pace'
+      : `${Math.round((expectedFracComplete - actualFracComplete) * totalTouches)} behind`;
+
+  // ── KPI cells ──────────────────────────────────────────────────────
+  const kpis: [HeroKpi, HeroKpi, HeroKpi, HeroKpi] = [
+    {
+      label: 'Sphere touches',
+      value: String(completedTouches),
+      valueSub: totalTouches > 0 ? `/${totalTouches}` : undefined,
+      trend: touchesTrend,
+    },
+    {
+      label: 'Active pipeline',
+      value: formatCompactCurrency(pipelineMetrics.pipelineValue),
+      trend: `${pipelineMetrics.totalOpportunities} active opportunit${pipelineMetrics.totalOpportunities === 1 ? 'y' : 'ies'}`,
+    },
+    {
+      label: 'YTD closed',
+      value: String(ytdClosed),
+      valueSub: ytdClosed === 1 ? 'closing' : 'closings',
+      trend:
+        priorYearYtdClosed != null && priorYearYtdClosed > 0
+          ? `vs ${priorYearYtdClosed} last yr`
+          : ytdClosed > 0
+            ? 'Closed this year'
+            : undefined,
+    },
+    {
+      label: 'Conversations YTD',
+      value: ytdConversations.toLocaleString(),
+      // Trend chip (in priority order):
+      //   1) Compare to same period last ISO year → "vs N last yr (+X%)"
+      //   2) Otherwise show average per week → "Avg N/wk"
+      //   3) Nothing logged yet → clickable "Submit check-in →"
+      trend: ytdConversations === 0
+        ? 'Submit check-in →'
+        : priorYearConvs != null && priorYearConvs > 0
+          ? (() => {
+              const delta = Math.round(((ytdConversations - priorYearConvs) / priorYearConvs) * 100);
+              const sign = delta >= 0 ? '+' : '';
+              return `vs ${priorYearConvs.toLocaleString()} last yr (${sign}${delta}%)`;
+            })()
+          : convWeeks > 0
+            ? `Avg ${Math.round(ytdConversations / convWeeks)}/wk`
+            : undefined,
+      trendLink: ytdConversations === 0 ? '/scoreboard' : undefined,
+    },
+  ];
+
+  return (
+    <>
+      <Helmet>
+        <title>Dashboard — Real Estate on Purpose</title>
+      </Helmet>
+      <Layout>
+        {/* Hero band + Streak card */}
+        <div className="grid xl:grid-cols-[1.65fr_1fr] gap-4 mb-6">
+          <CommanderHero
+            firstName={firstName}
+            greeting={greeting}
+            dateLabel={greetDate}
+            subline={subline}
+            kpis={kpis}
+          />
+          <StreakCard
+            historicalStats={historicalStats}
+            currentWeek={{ weekNumber: currentWeek.weekNumber, year: currentWeek.isoYear }}
+            remainingCalls={remainingCalls}
+          />
+        </div>
+
+        {/* 3 modules */}
+        <Modules />
+
+        {/* Recent activity + Upcoming split */}
+        <div className="grid lg:grid-cols-[1.1fr_1fr] gap-4 mb-6">
+          <RecentActivityFeed limit={5} />
+          <UpcomingEvents limit={5} />
+        </div>
+
+        {/* Shortcuts */}
+        <JumpBackIn />
+      </Layout>
+    </>
+  );
+}

@@ -132,7 +132,7 @@ export function WeeklyTasksBySystem({ data }: Props) {
             )}
           </div>
           {!data.scoreboard.submitted && (
-            <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => navigate('/coaching')}>
+            <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => navigate('/scoreboard')}>
               Submit Now
             </Button>
           )}

@@ -74,17 +74,16 @@ export function useSpecificAgentMetrics(agentId: string | null) {
           { data: transactions },
           { data: events },
           { data: coachingSessions },
-          { data: socialPosts },
-          { data: socialAnalytics }
         ] = await Promise.all([
           supabase.from('contacts').select('*').eq('agent_id', agentId),
           supabase.from('spheresync_tasks').select('*').eq('agent_id', agentId),
           supabase.from('transaction_coordination').select('*').eq('responsible_agent', agentId),
           supabase.from('events').select('*').eq('agent_id', agentId),
           supabase.from('coaching_sessions').select('*').eq('agent_id', agentId),
-          supabase.from('social_posts').select('*').eq('agent_id', agentId),
-          supabase.from('social_analytics').select('*').eq('agent_id', agentId)
         ]);
+        // Postiz-era social_posts + social_analytics tables removed. Metricool-
+        // sourced metrics live behind /v2/scheduler/posts and /v2/analytics
+        // and aren't aggregated into this admin overview yet.
 
         // Calculate metrics
         const totalContacts = contacts?.length || 0;

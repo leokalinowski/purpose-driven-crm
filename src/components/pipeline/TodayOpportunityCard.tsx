@@ -1,6 +1,7 @@
 import { Clock, AlertCircle, CheckCircle2, Phone, MessageCircle, Notebook, ArrowRight, DollarSign } from 'lucide-react';
 import { TodayOpportunity, AttentionState } from '@/hooks/useToday';
-import { pipelineTypeFromOpportunityType, OPPORTUNITY_TYPE_LABELS } from '@/config/pipelineStages';
+import { getEffectivePipelineType, OPPORTUNITY_TYPE_LABELS } from '@/config/pipelineStages';
+import { StageLabel } from './StageLabel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -47,7 +48,7 @@ interface Props {
 }
 
 export function TodayOpportunityCard({ opportunity: opp, onOpen, onLog, onComplete }: Props) {
-  const pipelineType = (opp.pipeline_type ?? pipelineTypeFromOpportunityType(opp.opportunity_type ?? 'buyer')) as string;
+  const pipelineType = getEffectivePipelineType(opp);
   const attention = ATTENTION_CONFIG[opp.attention_state];
   const due = formatDue(opp.next_step_due_date);
 
@@ -74,7 +75,15 @@ export function TodayOpportunityCard({ opportunity: opp, onOpen, onLog, onComple
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0 flex-1">
           <span className="font-semibold text-sm truncate block">{opp.contact_name}</span>
-          <span className="text-xs text-muted-foreground">{opp.stage?.replace(/_/g, ' ')}</span>
+          {/* Phase 2: was rendering raw key with underscores stripped — e.g.
+              "active_search" → "active search" lower-case. Now uses the
+              shared StageLabel which honors the per-pipeline-type label
+              dictionary ("Active Search"). */}
+          <StageLabel
+            stage={opp.stage}
+            pipelineType={pipelineType}
+            className="text-xs text-muted-foreground"
+          />
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {hasDeal && (

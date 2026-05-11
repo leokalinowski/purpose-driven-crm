@@ -1,31 +1,30 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSearchParams } from 'react-router-dom';
-import { DndProvider } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
-import { Sparkles, Calendar, KanbanSquare } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Sparkles, CalendarDays, History, CheckSquare, Loader2 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { useAuth } from '@/hooks/useAuth';
-import { usePipeline, Opportunity } from '@/hooks/usePipeline';
-import { OpportunityDetailV2 } from '@/components/pipeline/OpportunityDetailV2';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { PrioritiesTab } from '@/components/spheresync/tabs/PrioritiesTab';
-import { SphereCadenceTab } from '@/components/spheresync/tabs/SphereCadenceTab';
-import { PipelineTab } from '@/components/spheresync/tabs/PipelineTab';
+import { CadenceTab } from '@/components/spheresync/tabs/CadenceTab';
+import { HistoryTab } from '@/components/spheresync/tabs/HistoryTab';
+import { WeeklyCheckInModal } from '@/components/shared/WeeklyCheckInModal';
 import { cn } from '@/lib/utils';
 
-type Tab = 'priorities' | 'cadence' | 'pipeline';
+type Tab = 'priorities' | 'cadence' | 'history';
+const VALID_TABS: Tab[] = ['priorities', 'cadence', 'history'];
 
-const VALID_TABS: Tab[] = ['priorities', 'cadence', 'pipeline'];
+const tabDefs: { key: Tab; label: string; icon: React.ReactNode }[] = [
+  { key: 'priorities', label: 'Priorities', icon: <Sparkles className="h-3.5 w-3.5" /> },
+  { key: 'cadence',    label: 'Cadence',    icon: <CalendarDays className="h-3.5 w-3.5" /> },
+  { key: 'history',    label: 'History',    icon: <History className="h-3.5 w-3.5" /> },
+];
 
 export default function SphereSyncTasks() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { profile } = useUserProfile();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [detailOpp, setDetailOpp] = useState<Opportunity | null>(null);
-
-  // Pipeline data lifted to page level so the drawer can refresh it
-  // even when opened from the Priorities tab.
-  const { opportunities, loading: pipelineLoading, updateStage, refresh: refreshPipeline } = usePipeline();
+  const [checkInOpen, setCheckInOpen] = useState(false);
 
   const activeTab: Tab = useMemo(() => {
     const t = searchParams.get('tab');
@@ -39,20 +38,32 @@ export default function SphereSyncTasks() {
     setSearchParams(next, { replace: true });
   };
 
-  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'priorities', label: 'Priorities',     icon: <Sparkles className="h-3.5 w-3.5" /> },
-    { key: 'cadence',    label: 'Sphere Cadence', icon: <Calendar className="h-3.5 w-3.5" /> },
-    { key: 'pipeline',   label: 'Pipeline',       icon: <KanbanSquare className="h-3.5 w-3.5" /> },
-  ];
+  useEffect(() => {
+    if (searchParams.get('checkin') === '1') {
+      setCheckInOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete('checkin');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  if (authLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center py-24 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          Loading SphereSync…
+        </div>
+      </Layout>
+    );
+  }
 
   if (!user) {
     return (
       <Layout>
-        <Card>
-          <CardContent className="p-6">
-            <p>Please sign in to access SphereSync.</p>
-          </CardContent>
-        </Card>
+        <div className="bg-card border border-border rounded-lg p-6">
+          <p className="text-sm">Please sign in to access SphereSync.</p>
+        </div>
       </Layout>
     );
   }
@@ -61,62 +72,67 @@ export default function SphereSyncTasks() {
     <>
       <Helmet><title>SphereSync — Real Estate on Purpose</title></Helmet>
       <Layout>
-        <DndProvider backend={HTML5Backend}>
-          <div className="space-y-6">
-            {/* Header */}
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">SphereSync</h1>
-              <p className="text-muted-foreground text-sm sm:text-base mt-1">
-                Your operational hub — what to do now, who to call this week, and where every deal stands.
-              </p>
-            </div>
+        {/* PAGE HEAD */}
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-7">
+          <div>
+            <span className="eye-label block mb-1.5">SphereSync™</span>
+            <h1 className="text-[clamp(1.5rem,2vw+1rem,2rem)] font-medium tracking-tighter leading-[1.15] mb-1.5">
+              Your operational hub.
+            </h1>
+            <p className="text-sm text-muted-foreground max-w-[640px] leading-[1.55]">
+              What to do now, who to call this week, and how the past month has gone — in that order.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2.5">
+            <button
+              onClick={() => setCheckInOpen(true)}
+              className="inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg border border-border bg-card text-sm font-semibold text-reop-dark-blue hover:bg-reop-teal-soft hover:border-primary hover:text-primary transition"
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+              Weekly check-in
+            </button>
+          </div>
+        </div>
 
-            {/* Tab switcher */}
-            <div className="flex items-center bg-muted rounded-lg p-0.5 gap-0.5 w-fit">
-              {tabs.map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={cn(
-                    'flex items-center gap-1.5 px-4 md:px-3 py-2.5 md:py-1.5 min-h-[44px] md:min-h-0 rounded-md text-sm font-medium transition-all',
-                    activeTab === tab.key
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                  aria-pressed={activeTab === tab.key}
-                >
-                  {tab.icon}{tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab content */}
-            {activeTab === 'priorities' && (
-              <PrioritiesTab onOpenOpportunity={setDetailOpp} />
-            )}
-            {activeTab === 'cadence' && (
-              <SphereCadenceTab />
-            )}
-            {activeTab === 'pipeline' && (
-              <PipelineTab
-                opportunities={opportunities}
-                loading={pipelineLoading}
-                updateStage={updateStage}
-                refresh={refreshPipeline}
-                onOpenOpportunity={setDetailOpp}
-              />
-            )}
+        {/* SEGMENTED TABS + WEEK PICKER */}
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="inline-flex gap-0.5 rounded-[9px] bg-[hsl(210_20%_94%)] p-[3px]" role="tablist">
+            {tabDefs.map((tab) => (
+              <button
+                key={tab.key}
+                role="tab"
+                aria-selected={activeTab === tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-3.5 py-[7px] rounded-[7px] text-sm transition-all',
+                  activeTab === tab.key
+                    ? 'bg-card text-reop-dark-blue font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+                    : 'text-muted-foreground hover:text-reop-dark-blue font-medium',
+                )}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          {/* Shared opportunity drawer — works from any tab */}
-          <OpportunityDetailV2
-            opportunity={detailOpp}
-            open={!!detailOpp}
-            onClose={() => setDetailOpp(null)}
-            onRefresh={refreshPipeline}
-          />
-        </DndProvider>
+          {/* Week selector lives inside Cadence + History tabs only —
+              Priorities is always "right now" so a week jumper there is
+              meaningless. */}
+        </div>
+
+        {/* TAB CONTENT */}
+        {activeTab === 'priorities' && <PrioritiesTab />}
+        {activeTab === 'cadence'    && <CadenceTab />}
+        {activeTab === 'history'    && <HistoryTab />}
       </Layout>
+      <WeeklyCheckInModal
+        open={checkInOpen}
+        // Prefer the agent's first name from `profiles`. Fall back to the
+        // email-prefix only if the profile hasn't loaded — never as a default.
+        agentName={profile?.first_name?.trim() || undefined}
+        onClose={() => setCheckInOpen(false)}
+      />
     </>
   );
 }

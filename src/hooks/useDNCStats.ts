@@ -86,14 +86,16 @@ export const useDNCStats = () => {
         .not('dnc_last_checked', 'is', null)
         .lt('dnc_last_checked', thirtyDaysAgo.toISOString());
 
-      // Get last DNC check log for this agent
+      // Get last DNC check log for this agent. .maybeSingle() returns
+      // { data: null } when zero rows match (fresh agents with no history)
+      // instead of erroring like .single() does — keeps the console clean.
       const { data: lastLog } = await supabase
         .from('dnc_logs')
         .select('run_date')
         .eq('agent_id', effectiveAgentId)
         .order('run_date', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       setStats({
         totalContacts: totalContacts || 0,

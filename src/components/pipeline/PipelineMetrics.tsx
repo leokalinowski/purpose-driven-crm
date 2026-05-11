@@ -61,10 +61,12 @@ export function PipelineMetrics({ metrics, loading }: PipelineMetricsProps) {
         </CardHeader>
         <CardContent>
           <div className="text-xl sm:text-2xl font-bold text-foreground">
-            {metrics.winRate.toFixed(1)}%
+            {metrics.winRate !== null ? `${metrics.winRate.toFixed(1)}%` : '—'}
           </div>
           <p className="text-xs text-muted-foreground mt-1 leading-tight">
-            {metrics.closedDeals} of {metrics.totalOpportunities} closed
+            {metrics.winRate !== null
+              ? `${metrics.closedDeals} closed`
+              : 'No closed or lost opportunities yet'}
           </p>
         </CardContent>
       </Card>
@@ -86,7 +88,7 @@ export function PipelineMetrics({ metrics, loading }: PipelineMetricsProps) {
 
       <Card className="border-border/50 hover:border-border transition-colors">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Total Deals</CardTitle>
+          <CardTitle className="text-sm font-medium text-muted-foreground">Total Opportunities</CardTitle>
           <TrendingUp className="h-4 w-4 text-primary" />
         </CardHeader>
         <CardContent>

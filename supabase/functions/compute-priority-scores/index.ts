@@ -36,7 +36,7 @@ interface ContactRow {
   agent_id: UUID;
   first_name: string | null;
   last_name: string | null;
-  category: string | null;
+  category: string | null;        // SphereSync rotation letter (last-name initial), NOT a priority grade
   zip_code: string | null;
   tags: string[] | null;
   last_activity_date: string | null;
@@ -80,32 +80,35 @@ interface IntentResult {
 
 // ─── Mechanical scorers (deterministic, no AI) ───────────────────────────────
 
-/** 0-100. Blends cadence adherence and activity volume. */
+/**
+ * 0-100. Relationship freshness score driven purely by last_activity_date.
+ *
+ * The SphereSync rotation already IS the cadence schedule — every contact
+ * gets a scheduled touch when their last-name letter comes up. So this
+ * function only needs to answer one question: "how stale is this
+ * relationship?" — i.e. how long since the last logged activity.
+ *
+ * No tier system. No per-contact cadence target. The rotation handles it.
+ */
 function relationshipScore(
   daysSinceLast: number | null,
   activity30d: number,
   activity90d: number,
-  category: string | null,
 ): number {
-  // Days between expected touches per category.
-  const cadence: Record<string, number> = {
-    'A-Plus': 14, 'A': 30, 'B': 60, 'C': 90, 'D': 180,
-    Hot: 14, Warm: 30, Cool: 60, Cold: 180,
-  };
-  const target = cadence[category ?? ''] ?? 60;
-
   if (daysSinceLast === null) {
     // Never touched — neutral-low, no hard penalty (could be a brand-new import)
     return 30;
   }
 
-  const ratio = daysSinceLast / target;
+  // Single freshness curve, indifferent to who the contact is. Within Band 2
+  // (cadence rotation) the priority queue further sorts by last_activity_date
+  // ascending, so the most-overdue contacts always rise to the top.
   let base: number;
-  if (ratio <= 0.5)      base = 92;
-  else if (ratio <= 1.0) base = 78;
-  else if (ratio <= 1.5) base = 58;
-  else if (ratio <= 2.5) base = 38;
-  else                   base = 15;
+  if (daysSinceLast <= 30)        base = 92;
+  else if (daysSinceLast <= 60)   base = 78;
+  else if (daysSinceLast <= 90)   base = 58;
+  else if (daysSinceLast <= 180)  base = 38;
+  else                            base = 15;
 
   // Volume bonus — agents who work a contact consistently get credit
   if (activity30d >= 3)      base = Math.min(100, base + 8);
@@ -364,11 +367,16 @@ Deno.serve(async (req: Request) => {
       .select('id, contact_id, stage, outcome, days_in_current_stage, ai_deal_probability, deal_value, actual_close_date')
       .in('contact_id', contactIds)
       .is('actual_close_date', null),
-    // Market pulse — one row per ZIP from the active CSV
+    // Market pulse — one row per ZIP from the realtor.com monthly sync.
+    // We pick the most recent period per ZIP at index time below.
+    // NOTE: the previous query targeted `newsletter_market_data` with columns
+    // that don't exist on that table (median_sale_price/inventory/median_dom).
+    // Those live on `market_stats`, populated by `sync-realtor-market-data`.
     supabase
-      .from('newsletter_market_data')
-      .select('zip_code, median_sale_price, inventory, median_dom')
-      .in('zip_code', Array.from(new Set(contacts.map(c => c.zip_code).filter((z): z is string => !!z)))),
+      .from('market_stats')
+      .select('zip_code, period_month, median_sale_price, median_list_price, inventory, median_dom')
+      .in('zip_code', Array.from(new Set(contacts.map(c => c.zip_code).filter((z): z is string => !!z))))
+      .order('period_month', { ascending: false }),
   ]);
 
   // ── Index lookups — REAL interactions only ────────────────────────────────
@@ -407,12 +415,24 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // The query is ordered by period_month DESC, so the FIRST row per zip is
+  // the most recent snapshot. Skip subsequent (older) rows for the same zip.
   const marketByZip = new Map<string, MarketPulse>();
-  for (const m of (marketRes.data ?? [])) {
+  for (const m of (marketRes.data ?? []) as Array<{
+    zip_code: string;
+    period_month: string;
+    median_sale_price: number | null;
+    median_list_price: number | null;
+    inventory: number | null;
+    median_dom: number | null;
+  }>) {
+    if (marketByZip.has(m.zip_code)) continue;
     marketByZip.set(m.zip_code, {
       zip: m.zip_code,
-      median_price: m.median_sale_price,
-      inventory_trend: null, // not in this table; could be filled from a trend table later
+      // Realtor.com gives listing prices, not sale prices. Coalesce so the
+      // pulse has *something* for any zip with data.
+      median_price: m.median_sale_price ?? m.median_list_price,
+      inventory_trend: null, // could be derived from period-over-period inventory later
       dom: m.median_dom,
     });
   }
@@ -431,7 +451,7 @@ Deno.serve(async (req: Request) => {
       activity,
       daysSince,
       opp,
-      relationship: relationshipScore(daysSince, activity.last_30d_count, activity.last_90d_count, c.category),
+      relationship: relationshipScore(daysSince, activity.last_30d_count, activity.last_90d_count),
       pipeline: pipelineScore(opp),
       flags: flagsScore(c as ContactRow),
     };

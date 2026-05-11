@@ -14,7 +14,7 @@ export const NewsletterCostTracking: React.FC = () => {
           <InfoIcon className="h-4 w-4" />
           <AlertDescription>
             Cost tracking feature will be available after the newsletter_cost_tracking table is created.
-            This feature tracks Grok API usage, email sends, and associated costs.
+            This feature tracks AI usage, email sends, and associated costs.
           </AlertDescription>
         </Alert>
       </CardContent>

@@ -25,6 +25,12 @@ export interface CoachingSubmission {
   tasks?: string;
   coaching_notes?: string;
   must_do_task?: string;
+  // v2: weekly self-ratings (1-5) + focus area picks. Added 2026-05 with the
+  // check-in modal redesign. Null = not rated.
+  energy_rating?: number | null;
+  focus_rating?: number | null;
+  confidence_rating?: number | null;
+  focus_areas?: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -41,7 +47,8 @@ export interface WeeklyCheckInData {
   activation_day_completed: boolean;
 }
 
-// Admin form data — keeps all fields
+// Form data shape — used by BOTH the admin submission form and the agent
+// check-in modal. Optional fields are no-ops when omitted.
 export interface CoachingFormData {
   week_number: number;
   year: number;
@@ -59,6 +66,11 @@ export interface CoachingFormData {
   tasks?: string;
   coaching_notes?: string;
   must_do_task?: string;
+  // v2 — only the check-in modal sets these. Range-checked 1-5 in the DB.
+  energy_rating?: number | null;
+  focus_rating?: number | null;
+  confidence_rating?: number | null;
+  focus_areas?: string[] | null;
 }
 
 export interface WeeklyMetrics {
@@ -245,6 +257,11 @@ export const useSubmitCoachingForm = () => {
         tasks: formData.tasks || null,
         coaching_notes: formData.coaching_notes || null,
         must_do_task: formData.must_do_task || null,
+        // v2 fields — null when not provided (admin form, legacy callers).
+        energy_rating: formData.energy_rating ?? null,
+        focus_rating: formData.focus_rating ?? null,
+        confidence_rating: formData.confidence_rating ?? null,
+        focus_areas: formData.focus_areas && formData.focus_areas.length > 0 ? formData.focus_areas : null,
         updated_at: new Date().toISOString(),
       };
 

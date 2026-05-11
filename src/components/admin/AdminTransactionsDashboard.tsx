@@ -86,7 +86,7 @@ export function AdminTransactionsDashboard() {
     { label: 'YTD GCI', value: fmt(teamMetrics.ytdGci), icon: TrendingUp, sub: `${totalTx} total` },
     { label: 'MTD GCI', value: fmt(teamMetrics.mtdGci), icon: DollarSign },
     { label: 'Active Pipeline', value: fmt(teamMetrics.activePipelineValue), icon: Target, sub: `${ongoingCount} active` },
-    { label: 'Avg Deal Velocity', value: `${teamMetrics.avgDealVelocity.toFixed(0)}d`, icon: Clock },
+    { label: 'Avg Time to Close', value: `${teamMetrics.avgDealVelocity.toFixed(0)}d`, icon: Clock },
     { label: 'Closing Rate', value: `${teamMetrics.teamClosingRate.toFixed(0)}%`, icon: Trophy },
   ];
 
@@ -137,7 +137,7 @@ export function AdminTransactionsDashboard() {
                   <TableHead className="text-right">Closed</TableHead>
                   <TableHead className="text-right">GCI</TableHead>
                   <TableHead className="text-right">Volume</TableHead>
-                  <TableHead className="text-right">Avg Deal</TableHead>
+                  <TableHead className="text-right">Avg Sale</TableHead>
                   <TableHead className="text-right">Close %</TableHead>
                   <TableHead className="text-right">Active</TableHead>
                 </TableRow>

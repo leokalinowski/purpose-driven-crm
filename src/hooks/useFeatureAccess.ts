@@ -28,14 +28,18 @@ const ROUTE_MIN_TIER: Record<string, Tier> = {
   '/spheresync-tasks': 'core',
   '/database': 'core',
   '/coaching': 'core',
+  '/scoreboard': 'core',
   '/newsletter': 'core',
   // Managed routes
   '/support': 'core',
-  '/events': 'managed',
-  '/transactions': 'managed',
+  // Pipeline, Events, Resources are available to Core agents (per product
+  // decision 2026-05). Transactions stays admin-only — it surfaces deal
+  // financials. Social Scheduler stays agent+ — it's a paid add-on tier.
+  '/events': 'core',
+  '/transactions': 'admin',
   '/social-scheduler': 'agent',
-  '/pipeline': 'managed',
-  '/resources': 'admin',
+  '/pipeline': 'core',
+  '/resources': 'core',
 };
 
 function getTierLevel(role: string | null): number {

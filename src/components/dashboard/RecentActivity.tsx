@@ -46,7 +46,7 @@ export function RecentActivity() {
           arr.push({ id: `n-${n.id}`, action: 'Newsletter sent', description: n.campaign_name, time: n.created_at, status: 'sent', link: '/newsletter' });
         }
         for (const s of sessions.data || []) {
-          arr.push({ id: `s-${s.id}`, action: 'Coaching session', description: s.topics_covered || 'Session held', time: s.session_date, status: 'coaching', link: '/coaching' });
+          arr.push({ id: `s-${s.id}`, action: 'Coaching session', description: s.topics_covered || 'Session held', time: s.session_date, status: 'coaching', link: '/scoreboard' });
         }
         for (const tx of txs.data || []) {
           arr.push({ id: `x-${tx.id}`, action: 'Transaction updated', description: tx.transaction_stage, time: tx.created_at, status: 'transaction', link: '/transactions' });

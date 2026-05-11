@@ -2,64 +2,91 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* ============================================================================
+   REOP CRM — Design Tokens
+   Source: design/colors_and_type.css + design/hub_app.css
+   All colors are HSL triplets (shadcn convention) so Tailwind can wrap them.
+   ============================================================================ */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 220 9% 15%;
-
+    /* Surfaces */
+    --background: 210 20% 98%;          /* #F8F9FA */
+    --foreground: 188 100% 21%;         /* #005d6c — body text uses brand dark blue */
     --card: 0 0% 100%;
-    --card-foreground: 220 9% 15%;
-
+    --card-foreground: 188 100% 21%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 9% 15%;
+    --popover-foreground: 188 100% 21%;
 
-    --primary: 180 100% 25%;
+    /* Brand */
+    --primary: 184 100% 34%;            /* #00a2ad teal */
     --primary-foreground: 0 0% 98%;
+    --secondary: 188 100% 21%;          /* #005d6c dark blue */
+    --secondary-foreground: 0 0% 98%;
+    --accent: 74 61% 52%;               /* #99ca3c green */
+    --accent-foreground: 0 0% 98%;
 
-    --secondary: 180 15% 92%;
-    --secondary-foreground: 180 100% 15%;
+    /* Neutrals */
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 14% 34%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 180 25% 85%;
-    --accent-foreground: 180 100% 20%;
-
-    --destructive: 0 84.2% 60.2%;
+    /* Status */
+    --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
+    --warning: 45 93% 47%;
+    --warning-foreground: 0 0% 100%;
+    --positive: 142 71% 45%;
+    --positive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 220 9% 15%;
+    /* Borders & inputs */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 184 100% 34%;
 
     --radius: 0.5rem;
 
+    /* Brand utility tokens (referenced via reop-* Tailwind colors) */
+    --reop-teal: 184 100% 34%;
+    --reop-teal-hover: 187 100% 29%;
+    --reop-teal-soft: 184 100% 97%;
+    --reop-dark-blue: 188 100% 21%;
+    --reop-dark-blue-2: 191 100% 14%;
+    --reop-green: 74 61% 52%;
+    --reop-green-soft: 140 60% 94%;           /* check-circle dot bg */
+
+    /* Hero (dark-card) tokens — used only on the dark commander hero.
+       Pulled out of one-off hsl() literals into named variables. */
+    --reop-hero-stat-bg: 210 47% 22%;
+    --reop-hero-stat-border: 210 47% 28%;
+    --reop-hero-eyebrow: 184 60% 80%;          /* light teal eyebrow + label text */
+    --reop-hero-sub: 210 30% 85%;              /* sub-line text on dark */
+    --reop-hero-trend: 160 60% 70%;            /* trend-up indicator on dark */
+
+    /* Warm accent (mail / cadence amber dot) */
+    --reop-warm-soft: 35 100% 94%;
+    --reop-warm-fg: 35 80% 45%;
+
+    /* Subtle gray surfaces (date mini-cards, hover bg, miss-week square) */
+    --reop-surface-subtle: 210 20% 97%;
+    --reop-surface-muted: 210 20% 92%;
+
+    /* Sidebar — deep teal */
     --sidebar-background: 180 100% 25%;
-
-    --sidebar-foreground: 0 0% 98%;
-
-    --sidebar-primary: 0 0% 98%;
-
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 0 0% 100%;
     --sidebar-primary-foreground: 180 100% 25%;
-
     --sidebar-accent: 180 100% 30%;
-
-    --sidebar-accent-foreground: 0 0% 98%;
-
+    --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 180 100% 30%;
-
     --sidebar-ring: 180 100% 35%;
 
-    /* Chart colors */
-    --chart-1: 180 100% 25%;
-    --chart-2: 180 80% 35%;
-    --chart-3: 180 60% 45%;
+    /* Charts */
+    --chart-1: 184 100% 34%;
+    --chart-2: 188 100% 21%;
+    --chart-3: 74 61% 52%;
+    --chart-4: 35 85% 50%;
+    --chart-5: 280 60% 55%;
   }
-
 }
 
 @layer base {
@@ -67,7 +94,26 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 500;
+    letter-spacing: -0.025em;
+  }
+}
+
+@layer components {
+  /* Eyebrow label used across the design */
+  .eye-label {
+    @apply text-[11px] uppercase tracking-[0.07em] font-bold text-primary;
   }
 }

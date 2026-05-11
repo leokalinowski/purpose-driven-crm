@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { DndProvider } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
+import { MultiBackend } from 'react-dnd-multi-backend';
+import { HTML5toTouch } from '@/lib/dndBackend';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Eye, EyeOff, Send, Check, Loader2, Sparkles, CheckCircle, PanelLeft, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,6 @@ import { BlockSettings, BrandColors } from './BlockSettings';
 import { PreviewPanel } from './PreviewPanel';
 import { SendSchedulePanel } from './SendSchedulePanel';
 import { NewsletterBlock, GlobalStyles, DEFAULT_GLOBAL_STYLES } from './types';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useNewsletterTemplates } from '@/hooks/useNewsletterTemplates';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -231,30 +231,14 @@ export function NewsletterBuilder() {
   );
 
   return (
-    <DndProvider backend={HTML5Backend}>
+    // Phase 3: Mobile drag — same multi-backend swap as PipelineCanvas. The
+    // newsletter block builder used to be just as dead on touch as Pipeline.
+    <DndProvider backend={MultiBackend} options={HTML5toTouch}>
       <div className="h-screen flex flex-col bg-background">
-        {/* AI Review Banner */}
-        {aiGenerated && reviewStatus === 'pending_review' && (
-          <Alert className="rounded-none border-x-0 border-t-0 bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
-            <Sparkles className="h-4 w-4 text-amber-600" />
-            <AlertDescription className="flex items-center justify-between flex-wrap gap-2">
-              <span className="text-amber-800 dark:text-amber-200">
-                <strong>AI-Generated Draft</strong> — Review and edit this newsletter before sending.
-              </span>
-              <Button size="sm" variant="outline" className="border-amber-300 hover:bg-amber-100" onClick={handleApprove}>
-                <CheckCircle className="h-3.5 w-3.5 mr-1.5" /> Approve
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-        {aiGenerated && reviewStatus === 'approved' && (
-          <Alert className="rounded-none border-x-0 border-t-0 bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800 dark:text-green-200">
-              <strong>Approved</strong> — This AI-generated newsletter has been reviewed and approved.
-            </AlertDescription>
-          </Alert>
-        )}
+        {/* AI review state has been moved off the full-width banner and into
+            an inline pill on the toolbar (below). The previous chunky amber
+            Alert ate ~64px of vertical space at the top of every AI draft;
+            the pill version is glanceable and dismissable by approving. */}
 
         {/* Toolbar */}
         <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 border-b bg-card shadow-sm overflow-x-auto">
@@ -270,6 +254,48 @@ export function NewsletterBuilder() {
             {saveStatus === 'saving' && <><Loader2 className="h-3 w-3 animate-spin" /> Saving...</>}
             {saveStatus === 'saved' && <><Check className="h-3 w-3 text-green-500" /> Saved</>}
           </div>
+
+          {/* AI status pill — replaces the old full-width amber Alert.
+              "Pending review" is the active state; "Approved" stays around
+              briefly as a confirmation, then naturally goes away on the next
+              load (we read review_status from the DB on mount). */}
+          {aiGenerated && reviewStatus === 'pending_review' && (
+            <div className="hidden md:inline-flex items-center gap-2 h-8 pl-2.5 pr-1 rounded-full bg-reop-teal-soft border border-primary/20 text-primary shrink-0">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span className="text-[11.5px] font-semibold uppercase tracking-wide">AI draft</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-[11.5px] text-primary hover:bg-primary/10 hover:text-primary"
+                onClick={handleApprove}
+              >
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Approve
+              </Button>
+            </div>
+          )}
+          {aiGenerated && reviewStatus === 'pending_review' && (
+            // Mobile-only compact variant that just shows the pill icon +
+            // an Approve action; full label hidden to save space.
+            <div className="md:hidden inline-flex items-center gap-1 h-8 px-2 rounded-full bg-reop-teal-soft border border-primary/20 text-primary shrink-0">
+              <Sparkles className="h-3.5 w-3.5" />
+              <button
+                type="button"
+                onClick={handleApprove}
+                className="text-[11px] font-semibold underline-offset-2 hover:underline"
+                aria-label="Approve AI draft"
+              >
+                Approve
+              </button>
+            </div>
+          )}
+          {aiGenerated && reviewStatus === 'approved' && (
+            <div className="hidden md:inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full bg-[hsl(140_50%_94%)] border border-[hsl(140_40%_85%)] text-[hsl(140_50%_30%)] shrink-0">
+              <CheckCircle className="h-3.5 w-3.5" />
+              <span className="text-[11.5px] font-semibold uppercase tracking-wide">Approved</span>
+            </div>
+          )}
+
           <div className="flex-1" />
 
           {/* Mobile: Block Palette & Settings drawers */}

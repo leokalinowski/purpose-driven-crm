@@ -71,8 +71,12 @@ export function PipelineColumn({
         ))}
         {opportunities.length === 0 && (
           <div className="flex-1 flex items-center justify-center py-8">
+            {/* Phase 2.5: previous copy said "Drop here…" which lied on
+                mobile (HTML5 backend doesn't fire on touch). Phase 3 enables
+                touch drag, but the menu fallback is still a useful path —
+                surface both. */}
             <p className="text-xs text-muted-foreground/60 select-none text-center px-4">
-              Drop here — or use the menu on a card to move it to {metaStage.label.toLowerCase()}.
+              Drag a card here, or tap the <span className="font-semibold">⋯</span> menu on a card to move it to {metaStage.label.toLowerCase()}.
             </p>
           </div>
         )}
