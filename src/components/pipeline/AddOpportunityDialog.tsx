@@ -15,6 +15,7 @@ import {
   pipelineTypeFromOpportunityType,
   getStagesForType,
 } from "@/config/pipelineStages";
+import { StagePicker } from "./StagePicker";
 
 interface AddOpportunityDialogProps {
   onOpportunityCreated: () => void;
@@ -67,9 +68,8 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
     }));
   };
 
-  const availableStages = getStagesForType(
-    pipelineTypeFromOpportunityType(formData.opportunity_type)
-  );
+  // `availableStages` derivation removed — StagePicker now scopes options
+  // internally based on `pipelineType`.
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -336,29 +336,23 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
             />
           </div>
 
-          {/* Stage */}
+          {/* Stage — uses the shared StagePicker so the dropdown groups
+              sub-stages under the same meta-stage labels (Leads / Working /
+              Under contract / Closed / Closed lost) the agent sees on the
+              kanban board. */}
           <div className="space-y-2">
-            <Label htmlFor="stage">Stage</Label>
-            <Select
+            <StagePicker
+              id="stage"
               value={formData.stage}
-              onValueChange={(value) => setFormData((prev) => ({ ...prev, stage: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {availableStages.map((stage) => (
-                  <SelectItem key={stage.key} value={stage.key}>
-                    {stage.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(value) => setFormData((prev) => ({ ...prev, stage: value }))}
+              pipelineType={pipelineTypeFromOpportunityType(formData.opportunity_type)}
+              triggerClassName="h-10 text-sm"
+            />
           </div>
 
-          {/* Deal Value */}
+          {/* Estimated Value */}
           <div className="space-y-2">
-            <Label htmlFor="deal_value">Deal Value ($)</Label>
+            <Label htmlFor="deal_value">Estimated Value ($)</Label>
             <Input
               id="deal_value"
               type="number"

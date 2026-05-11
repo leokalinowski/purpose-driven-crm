@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { StagePicker } from './StagePicker';
+import { getEffectivePipelineType } from '@/config/pipelineStages';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -42,11 +44,22 @@ export function EditOpportunityDialog({
   const { activities } = useOpportunityActivities(opportunityId);
   
   
-  // Opportunity form state
-  const [formData, setFormData] = useState({
-    stage: 'lead' as 'lead' | 'qualified' | 'appointment' | 'contract' | 'closed',
+  // Opportunity form state. Phase 2: stage was previously typed as a legacy
+  // union (`'lead' | 'qualified' | 'appointment' | 'contract' | 'closed'`)
+  // — none of those are valid stage keys in the current schema (they're
+  // pre-meta-stage CRM defaults). The dropdown let agents pick a stage that
+  // doesn't exist and the resulting UPDATE would fail the CHECK constraint
+  // OR silently land in an unmapped state. Now typed as `string` and
+  // populated from the shared StagePicker (which scopes options to the
+  // opportunity's pipeline type).
+  const [formData, setFormData] = useState<{
+    stage: string;
+    deal_value: number;
+    expected_close_date: string;
+  }>({
+    stage: '',
     deal_value: 0,
-    expected_close_date: ''
+    expected_close_date: '',
   });
 
   // Contact form state
@@ -211,29 +224,19 @@ export function EditOpportunityDialog({
           <TabsContent value="opportunity" className="flex-1 overflow-y-auto">
             <form onSubmit={handleOpportunitySubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="stage">Stage</Label>
-                <Select
+                <StagePicker
+                  id="stage"
                   value={formData.stage}
-                  onValueChange={(value) => {
-                    setFormData({ ...formData, stage: value as any });
+                  onChange={(value) => {
+                    setFormData({ ...formData, stage: value });
                     setHasUnsavedChanges(true);
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="lead">Lead</SelectItem>
-                    <SelectItem value="qualified">Qualified</SelectItem>
-                    <SelectItem value="appointment">Appointment</SelectItem>
-                    <SelectItem value="contract">Contract</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
-                  </SelectContent>
-                </Select>
+                  pipelineType={getEffectivePipelineType(opportunity)}
+                />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="deal_value">Deal Value ($)</Label>
+                <Label htmlFor="deal_value">Estimated Value ($)</Label>
                 <Input
                   id="deal_value"
                   type="number"

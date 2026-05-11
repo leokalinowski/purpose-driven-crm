@@ -165,9 +165,11 @@ export function useDashboardBlocks() {
         // Newsletter: drafts or scheduled this week
         supabase.from('newsletter_campaigns').select('id, campaign_name, status, send_date, created_at')
           .eq('created_by', user.id).gte('created_at', weekStart).lte('created_at', weekEnd),
-        // Social: ALL posts this week (remove .neq filter so we can split client-side)
-        supabase.from('social_posts').select('id, content, platform, schedule_time, status')
-          .eq('agent_id', user.id).gte('schedule_time', weekStart).lte('schedule_time', weekEnd),
+        // Social: Postiz table is gone. Metricool-sourced posts live behind
+        // /v2/scheduler/posts (see useSocialScheduler.ts). The dashboard
+        // doesn't surface social-post-this-week tasks for the moment;
+        // /social-scheduler is the source of truth.
+        Promise.resolve({ data: [] as Array<{ id: string; content: string; platform: string; schedule_time: string; status: string }>, error: null }),
         // Coaching: this week's submission
         supabase.from('coaching_submissions').select('id, conversations, dials_made, appointments_set, leads_contacted, deals_closed')
           .eq('agent_id', user.id).eq('week_number', currentWeekNum).eq('year', currentYear),
@@ -498,7 +500,7 @@ export function useDashboardBlocks() {
             system: 'coaching',
             title: `Scoreboard submission missing for W${pastWeek}`,
             daysOverdue: i * 7,
-            navigateTo: '/coaching',
+            navigateTo: '/scoreboard',
           });
         }
       }

@@ -1,8 +1,11 @@
 import { useRef } from 'react';
 import { useDrag } from 'react-dnd';
 import { Opportunity } from "@/hooks/usePipeline";
-import { pipelineTypeFromOpportunityType, getStageAccent, getStagesForType, getStageLabel, PipelineType } from "@/config/pipelineStages";
-import { Calendar, DollarSign, ArrowRight, AlertCircle, MoreHorizontal, Check } from "lucide-react";
+import {
+  getEffectivePipelineType, getStageAccent,
+  getMetaStageForKey, META_STAGES, defaultSubStage,
+} from "@/config/pipelineStages";
+import { Calendar, DollarSign, ArrowRight, AlertCircle, MoreHorizontal, Check, ShieldAlert } from "lucide-react";
 import { format, parseISO, isPast, isToday } from "date-fns";
 import { cn } from '@/lib/utils';
 import {
@@ -43,9 +46,9 @@ export function OpportunityCard({ opportunity, onEdit, onStageChange }: Opportun
     if (!dragMoved.current) onEdit(opportunity);
   };
 
-  const pipelineType = (opportunity.pipeline_type ?? pipelineTypeFromOpportunityType(opportunity.opportunity_type ?? 'buyer')) as PipelineType;
+  const pipelineType = getEffectivePipelineType(opportunity);
   const accent = getStageAccent(opportunity.stage, pipelineType);
-  const stages = getStagesForType(pipelineType);
+  const currentMeta = getMetaStageForKey(opportunity.stage);
 
   const contactName = opportunity.contact?.first_name || opportunity.contact?.last_name
     ? `${opportunity.contact?.first_name ?? ''} ${opportunity.contact?.last_name ?? ''}`.trim()
@@ -69,9 +72,26 @@ export function OpportunityCard({ opportunity, onEdit, onStageChange }: Opportun
       )}
       style={{ borderLeftColor: accent }}
     >
-      {/* Top row: name + move-to menu */}
+      {/* Top row: name + (optional) DNC pill + move-to menu.
+          Per Pipeline UX audit Should-fix #10: agents calling/texting from a
+          card need an immediate DNC signal. Without this they'd open the
+          detail drawer first or, worse, dial without checking. The contact
+          join already includes `dnc`, so this is purely a render-side surface.
+          Reused styling pattern from ConversationStarterModal's DncBanner —
+          amber, compact, glanceable. */}
       <div className="flex items-start justify-between gap-2 mb-1">
-        <p className="font-medium text-sm text-foreground leading-tight flex-1 min-w-0">{contactName}</p>
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+          <p className="font-medium text-sm text-foreground leading-tight min-w-0">{contactName}</p>
+          {opportunity.contact?.dnc && (
+            <span
+              className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200"
+              title="On the Do-Not-Call registry. Sphere outreach is permitted under EBR — your judgment call."
+            >
+              <ShieldAlert className="h-2.5 w-2.5" />
+              DNC
+            </span>
+          )}
+        </div>
         {onStageChange && (
           <div onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
             <DropdownMenu>
@@ -88,20 +108,26 @@ export function OpportunityCard({ opportunity, onEdit, onStageChange }: Opportun
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel>Move to stage</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {stages.map(s => (
+                {/* Just the 4 meta-stages from the board — same vocabulary
+                    everywhere. Picking one resolves to the canonical
+                    sub-stage for this opportunity's pipeline type via
+                    `defaultSubStage`, which is what the DB stores. */}
+                {META_STAGES.map(meta => (
                   <DropdownMenuItem
-                    key={s.key}
+                    key={meta.key}
                     onClick={() => {
-                      if (s.key !== opportunity.stage) onStageChange(opportunity.id, s.key);
+                      if (meta.key === currentMeta) return;
+                      const newSub = defaultSubStage(meta.key, pipelineType);
+                      onStageChange(opportunity.id, newSub);
                     }}
                     className="gap-2"
                   >
                     <span
                       className="h-2 w-2 rounded-full shrink-0"
-                      style={{ backgroundColor: s.accent }}
+                      style={{ backgroundColor: meta.accent }}
                     />
-                    <span className="flex-1">{s.label}</span>
-                    {s.key === opportunity.stage && (
+                    <span className="flex-1">{meta.label}</span>
+                    {meta.key === currentMeta && (
                       <Check className="h-3.5 w-3.5 text-muted-foreground" />
                     )}
                   </DropdownMenuItem>
@@ -112,15 +138,20 @@ export function OpportunityCard({ opportunity, onEdit, onStageChange }: Opportun
         )}
       </div>
 
-      {/* Sub-status pill — the specific stage within the meta-stage column */}
-      <div className="mb-2">
-        <span
-          className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded"
-          style={{ backgroundColor: `${accent}1a`, color: accent }}
-        >
-          {getStageLabel(opportunity.stage, pipelineType)}
-        </span>
-      </div>
+      {/* Stage pill — shows the META-stage label (Leads / Working / Under
+          contract / Closed) so the card vocabulary matches the column it
+          lives in. The DB-stored sub-stage (e.g. `active_search`) is no
+          longer surfaced on the card per the simplification pass. */}
+      {currentMeta && (
+        <div className="mb-2">
+          <span
+            className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded"
+            style={{ backgroundColor: `${accent}1a`, color: accent }}
+          >
+            {META_STAGES.find(m => m.key === currentMeta)?.label ?? currentMeta}
+          </span>
+        </div>
+      )}
 
       {/* Next step */}
       {opportunity.next_step_title ? (

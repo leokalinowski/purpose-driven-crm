@@ -11,6 +11,7 @@ import { Layout } from '@/components/layout/Layout';
 import { MetricoolDashboard } from '@/components/metricool/MetricoolDashboard';
 import { MetricoolSettings } from '@/components/metricool/MetricoolSettings';
 import { MetricoolGlobalSettings } from '@/components/metricool/MetricoolGlobalSettings';
+import { MetricoolAdminBulkConnect } from '@/components/metricool/MetricoolAdminBulkConnect';
 import { AgentSelector } from '@/components/admin/AgentSelector';
 import { useAgents } from '@/hooks/useAgents';
 
@@ -70,14 +71,19 @@ export default function AdminSocialScheduler() {
           </div>
         </div>
 
+        {/* One-time bulk-import: paste master Metricool credentials and the
+            system imports every agent that already has a brand_id stored.
+            Collapsed by default — admins expand when they need it. */}
+        <MetricoolAdminBulkConnect />
+
         <div className="space-y-4">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <Users className="h-4 w-4" />
               <Label>Select Person:</Label>
             </div>
-            <AgentSelector 
-              selectedAgentId={selectedAgentId} 
+            <AgentSelector
+              selectedAgentId={selectedAgentId}
               onAgentSelect={setSelectedAgentId}
               canManageAgents={true}
             />

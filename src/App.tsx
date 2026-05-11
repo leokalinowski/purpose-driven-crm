@@ -4,17 +4,22 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import { AuthProvider, useAuth } from "@/hooks/useAuth";
-import { useUserRole } from "@/hooks/useUserRole";
+import { AuthProvider } from "@/hooks/useAuth";
+import { ContactSheetProvider } from "@/components/spheresync/ContactSheetProvider";
+import { ConversationStarterProvider } from "@/components/comm/ConversationStarterProvider";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { RouteGuard } from "@/components/layout/RouteGuard";
 import Auth from "./pages/Auth";
-import OAuthCallback from "./pages/OAuthCallback";
+// OAuthCallback removed — was Postiz-era social-oauth handler. Metricool's
+// social network connections happen inside Metricool's own UI (or via the
+// admin), so REOP doesn't need an OAuth callback for the social hub.
 import Index from "./pages/Index";
 import ResetPassword from "./pages/ResetPassword";
 import SphereSyncTasks from "./pages/SphereSyncTasks";
 import Database from "./pages/Database";
+import Pipeline from "./pages/Pipeline";
 import Events from "./pages/Events";
 import NotFound from "./pages/NotFound";
 import Newsletter from "./pages/Newsletter";
@@ -33,6 +38,8 @@ import AdminSphereSyncRecovery from "./pages/AdminSphereSyncRecovery";
 import EventPublicPage from "./pages/EventPublicPage";
 import EditorLanding from "./pages/EditorLanding";
 import Support from "./pages/Support";
+import SupportArticle from "./pages/SupportArticle";
+import AdminSupportArticles from "./pages/AdminSupportArticles";
 import AdminSponsors from "./pages/AdminSponsors";
 import PipelineSurvey from "./pages/PipelineSurvey";
 import AdminSurveyResults from "./pages/AdminSurveyResults";
@@ -43,6 +50,13 @@ import Pricing from "./pages/Pricing";
 import Welcome from "./pages/Welcome";
 import Resources from "./pages/Resources";
 import AdminResources from "./pages/AdminResources";
+import Delight from "./pages/Delight";
+import DesignSystem from "./pages/DesignSystem";
+import ContactDetail from "./pages/ContactDetail";
+import OpportunityDetail from "./pages/OpportunityDetail";
+import EventDetail from "./pages/EventDetail";
+import Search from "./pages/Search";
+import Scoreboard from "./pages/Scoreboard";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,16 +76,7 @@ const queryClient = new QueryClient({
   },
 });
 
-// Dashboard is admin-only. Non-admins land directly on the SphereSync hub.
-// Wait for both auth and role to resolve before deciding so non-admins
-// don't flash the Dashboard while role is loading.
-const HomeRoute = () => {
-  const { user, loading: authLoading } = useAuth();
-  const { isAdmin, loading: roleLoading } = useUserRole();
-  if (authLoading || (user && roleLoading)) return null;
-  if (user && !isAdmin) return <Navigate to="/spheresync-tasks" replace />;
-  return <Index />;
-};
+const HomeRoute = () => <Index />;
 
 const AppContent = () => {
   return (
@@ -81,11 +86,18 @@ const AppContent = () => {
           <Route path="/auth/reset" element={<ResetPassword />} />
         <Route path="/spheresync-tasks" element={<SphereSyncTasks />} />
         <Route path="/database" element={<Database />} />
+        <Route path="/pipeline" element={<Pipeline />} />
         <Route path="/events" element={<Events />} />
         <Route path="/newsletter" element={<Newsletter />} />
         <Route path="/coaching" element={<Coaching />} />
-        <Route path="/transactions" element={<Transactions />} />
-        <Route path="/pipeline" element={<Navigate to="/spheresync-tasks?tab=pipeline" replace />} />
+        <Route
+          path="/transactions"
+          element={
+            <RouteGuard route="/transactions">
+              <Transactions />
+            </RouteGuard>
+          }
+        />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/team-management" element={<AdminTeamManagement />} />
         <Route path="/admin/events" element={<AdminEventsManagement />} />
@@ -96,10 +108,12 @@ const AppContent = () => {
         <Route path="/social-scheduler" element={<SocialScheduler />} />
         <Route path="/admin/social-scheduler" element={<AdminSocialScheduler />} />
         <Route path="/admin/spheresync-recovery" element={<AdminSphereSyncRecovery />} />
-        <Route path="/oauth-callback" element={<OAuthCallback />} />
+        {/* /oauth-callback removed with Postiz */}
         <Route path="/event/:slug" element={<EventPublicPage />} />
         <Route path="/internal/editor" element={<EditorLanding />} />
         <Route path="/support" element={<Support />} />
+        <Route path="/support/articles/:slug" element={<SupportArticle />} />
+        <Route path="/admin/support-articles" element={<AdminSupportArticles />} />
         <Route path="/admin/sponsors" element={<AdminSponsors />} />
         <Route path="/admin/survey-results" element={<AdminSurveyResults />} />
         <Route path="/survey/pipeline" element={<PipelineSurvey />} />
@@ -109,7 +123,14 @@ const AppContent = () => {
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/welcome" element={<Welcome />} />
         <Route path="/resources" element={<Resources />} />
+        <Route path="/delight" element={<Delight />} />
         <Route path="/admin/resources" element={<AdminResources />} />
+        <Route path="/design-system" element={<DesignSystem />} />
+        <Route path="/contacts/:id" element={<ContactDetail />} />
+        <Route path="/pipeline/:id" element={<OpportunityDetail />} />
+        <Route path="/events/:id" element={<EventDetail />} />
+        <Route path="/search" element={<Search />} />
+        <Route path="/scoreboard" element={<Scoreboard />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
@@ -122,11 +143,20 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AuthProvider>
-            <TooltipProvider>
-              <AppContent />
-              <Toaster />
-              <Sonner />
-            </TooltipProvider>
+            {/* ConversationStarterProvider must be OUTER — ContactSheetProvider
+                renders the ContactQuickSheet inline, and the sheet now uses
+                useConversationStarter() for its Call/Text/Email buttons. If
+                the order is swapped, the sheet is rendered outside the
+                conversation-starter tree and the hook throws. */}
+            <ConversationStarterProvider>
+              <ContactSheetProvider>
+                <TooltipProvider>
+                  <AppContent />
+                  <Toaster />
+                  <Sonner />
+                </TooltipProvider>
+              </ContactSheetProvider>
+            </ConversationStarterProvider>
           </AuthProvider>
         </BrowserRouter>
       </QueryClientProvider>

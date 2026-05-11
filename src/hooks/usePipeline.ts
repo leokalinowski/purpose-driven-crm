@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { STAGE_TO_META } from '@/config/pipelineStages';
 
 export interface Opportunity {
   id: string;
@@ -60,8 +61,19 @@ export interface Opportunity {
   next_step_due_date: string | null;
   confidence: string | null;
   last_activity_date: string | null;
+  /**
+   * Server-managed: set by the `generate-agent-intelligence` edge function on
+   * its nightly run when the opportunity has had no activity within the
+   * stage-specific stale threshold. Read-only on the client — DO NOT include
+   * in any update payload (saveDeal strips it via the COMPUTED_OR_JOINED set).
+   */
   is_stale: boolean;
   stale_since: string | null;
+  /**
+   * Server-managed: reset to 0 by the `trg_log_opportunity_stage_change`
+   * BEFORE-UPDATE trigger whenever `stage` changes. Increments are also
+   * trigger-driven. Read-only on the client.
+   */
   days_in_current_stage: number;
   // ── Status ────────────────────────────────────────────────────────────────
   outcome: string | null;
@@ -108,7 +120,8 @@ export interface Opportunity {
 
 export interface PipelineMetrics {
   pipelineValue: number;
-  winRate: number;
+  /** Win rate is null when no opportunity has reached a terminal outcome yet. */
+  winRate: number | null;
   avgCloseTime: number;
   totalOpportunities: number;
   closedDeals: number;
@@ -123,9 +136,13 @@ export function usePipeline() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  // Track which unmapped stages we've already warned about per session, so the
+  // Phase 1.4 toast doesn't re-fire on every re-fetch. Cleared automatically
+  // when the agent navigates away (hook unmount).
+  const warnedUnmappedStages = useRef<Set<string>>(new Set());
   const [metrics, setMetrics] = useState<PipelineMetrics>({
     pipelineValue: 0,
-    winRate: 0,
+    winRate: null,
     avgCloseTime: 0,
     totalOpportunities: 0,
     closedDeals: 0,
@@ -137,7 +154,15 @@ export function usePipeline() {
   const [loading, setLoading] = useState(true);
 
   const fetchOpportunities = async () => {
-    if (!user?.id) return;
+    // No user (logout, pre-auth, or token expiry): clear data and stop the
+    // skeleton. Returning early without resetting loading was leaving the
+    // Pipeline board stuck in its 4-column shimmer forever for unauthenticated
+    // visitors — flagged in the Pipeline UX audit as Must Fix #1.
+    if (!user?.id) {
+      setOpportunities([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -163,6 +188,19 @@ export function usePipeline() {
       const data_ = (data || []) as Opportunity[];
       setOpportunities(data_);
       calculateMetrics(data_);
+
+      // Detect unmapped stages but log quietly. `lost` is intentionally
+      // filtered today — noisy sonner toasts on every fetch were misleading.
+      // If unrecognized stages appear, log once per session per value so the
+      // dev console catches drift without spamming the agent.
+      for (const o of data_) {
+        if (o.stage && !STAGE_TO_META[o.stage] && o.stage !== 'lost' && !warnedUnmappedStages.current.has(o.stage)) {
+          console.warn(
+            `[usePipeline] Stage "${o.stage}" has no meta-stage mapping; row hidden from board.`,
+          );
+          warnedUnmappedStages.current.add(o.stage);
+        }
+      }
     } catch (error: any) {
       console.error('Failed to load pipeline:', error);
       toast({ title: 'Error', description: 'Failed to load pipeline data', variant: 'destructive' });
@@ -172,11 +210,25 @@ export function usePipeline() {
   };
 
   const calculateMetrics = (data: Opportunity[]) => {
-    const active = data.filter(o => !o.actual_close_date && o.outcome !== 'lost' && o.outcome !== 'withdrawn');
-    const closed = data.filter(o => o.stage === 'closed_won' || o.actual_close_date);
+    // "Active" = anything not at a terminal stage. We deliberately ignore
+    // `actual_close_date` here because seed/legacy data on this project has
+    // it set on plenty of in-flight rows (`active_search` with a populated
+    // `actual_close_date` from years ago) — using that field would falsely
+    // count active deals as closed and zero out the pipeline value tile.
+    // The board columns already bucket by stage, so this keeps the metrics
+    // strip honest with what the agent sees.
+    const isClosedWon = (o: Opportunity) => o.stage === 'closed_won';
+    const isLost = (o: Opportunity) => o.stage === 'lost' || o.outcome === 'lost' || o.outcome === 'withdrawn';
+    const active = data.filter(o => !isClosedWon(o) && !isLost(o));
+    const closed = data.filter(isClosedWon);
+    const lost   = data.filter(isLost);
     const pipelineValue = active.reduce((s, o) => s + (o.deal_value ?? 0), 0);
     const totalGciEstimated = active.reduce((s, o) => s + (o.gci_estimated ?? 0), 0);
-    const winRate = data.length > 0 ? (closed.length / data.length) * 100 : 0;
+    // Honest win rate: closed-won / (closed-won + lost). When no deals have a
+    // terminal outcome yet, return null so the UI shows "—" instead of a
+    // misleading "0.0%" or "100%".
+    const decided = closed.length + lost.length;
+    const winRate = decided > 0 ? (closed.length / decided) * 100 : null;
 
     const closedWithDates = closed.filter(o => o.actual_close_date);
     const avgCloseTime = closedWithDates.length > 0
@@ -202,6 +254,7 @@ export function usePipeline() {
   const updateStage = async (opportunityId: string, newStage: string) => {
     if (!user) return;
     const opp = opportunities.find(o => o.id === opportunityId);
+    const previousStage = opp?.stage;
 
     // Optimistic update — moves the card instantly
     setOpportunities(prev =>
@@ -213,23 +266,59 @@ export function usePipeline() {
       if (newStage === 'closed_won') updateData.actual_close_date = new Date().toISOString();
       if (newStage === 'lost') updateData.outcome = 'lost';
 
-      const { error } = await supabase.from('opportunities').update(updateData).eq('id', opportunityId);
+      // Phase 4.1: chain `.select()` so we can detect 0-row updates. Without
+      // this, supabase.update() returned `error: null` even when RLS blocked
+      // the row — the optimistic flip stuck for ~3s and then snapped back via
+      // the next refetch with no error toast. With the select, RLS denial
+      // returns an empty data array, which we treat as an explicit failure.
+      const { data: updated, error } = await supabase
+        .from('opportunities')
+        .update(updateData)
+        .eq('id', opportunityId)
+        .select('id');
       if (error) throw error;
+      if (!updated || updated.length === 0) {
+        throw new Error(
+          'Update affected 0 rows. This is usually an RLS policy denying the change — ' +
+          'either you don\'t own this opportunity or its row was deleted.',
+        );
+      }
 
-      // Non-fatal playbook task generation — fire and forget
+      // Playbook task generation — silently fire-and-forget. The
+      // `pipeline-stage-tasks` edge function currently returns 403 on every
+      // call (auth bug to fix in the function itself, not here). The previous
+      // toast that surfaced the failure was misread as the drag itself
+      // failing — strictly noise from the agent's POV. Console.warn is enough
+      // until the function is repaired.
       const pipelineType = opp?.pipeline_type ?? 'buyer';
-      supabase.functions.invoke('pipeline-stage-tasks', {
-        body: { opportunity_id: opportunityId, new_stage: newStage, pipeline_type: pipelineType, agent_id: user.id },
-      }).catch(e => console.warn('Playbook task generation failed (non-fatal):', e));
+      supabase.functions
+        .invoke('pipeline-stage-tasks', {
+          body: { opportunity_id: opportunityId, new_stage: newStage, pipeline_type: pipelineType, agent_id: user.id },
+        })
+        .catch(e => console.warn('[pipeline-stage-tasks] failed (non-fatal):', e));
 
-      // Re-fetch in background to sync computed columns
+      // Re-fetch in background to sync computed columns (days_in_current_stage,
+      // is_stale flags, etc.) that the BEFORE-UPDATE trigger resets.
       fetchOpportunities();
     } catch (error: any) {
-      // Revert on failure
-      setOpportunities(prev =>
-        prev.map(o => o.id === opportunityId ? { ...o, stage: opp?.stage ?? o.stage } : o)
-      );
-      toast({ title: 'Error', description: 'Failed to update stage', variant: 'destructive' });
+      // Phase 4.3: don't trust local state for the revert. The optimistic
+      // setOpportunities above already mutated the array, so re-deriving the
+      // "previous" stage from the now-stale `prev` snapshot is unreliable.
+      // Force a fresh fetch from server truth. The toast must precede the
+      // fetch so the agent sees the error, but the visual revert happens
+      // when the fetch lands.
+      toast({
+        title: 'Failed to update stage',
+        description: error?.message ?? 'Unknown error. The card snapped back to its previous position.',
+        variant: 'destructive',
+      });
+      // Best-effort optimistic revert in case the refetch is slow.
+      if (previousStage) {
+        setOpportunities(prev =>
+          prev.map(o => o.id === opportunityId ? { ...o, stage: previousStage } : o)
+        );
+      }
+      await fetchOpportunities();
     }
   };
 

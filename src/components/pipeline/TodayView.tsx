@@ -63,7 +63,7 @@ export function TodayView({ onOpenDetail }: TodayViewProps) {
     return (
       <div className="text-center py-16">
         <Sparkles className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-        <h3 className="font-semibold text-base mb-1">No open deals</h3>
+        <h3 className="font-semibold text-base mb-1">No open opportunities</h3>
         <p className="text-sm text-muted-foreground">Add an opportunity to get started.</p>
       </div>
     );
@@ -102,7 +102,7 @@ export function TodayView({ onOpenDetail }: TodayViewProps) {
           className="h-11 w-11 md:h-8 md:w-8 shrink-0"
           onClick={refresh}
           title="Refresh"
-          aria-label="Refresh today's deals"
+          aria-label="Refresh today's opportunities"
         >
           <RefreshCcw className="h-4 w-4 md:h-3.5 md:w-3.5" />
         </Button>

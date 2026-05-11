@@ -20,6 +20,17 @@ export interface AgentMarketingSettings {
   tone_guidelines: string | null;
   what_not_to_say: string | null;
   thumbnail_guidelines: string | null;
+  // Scheduling — used by the AI newsletter "Schedule a call" CTA. Calendly,
+  // Cal.com, SavvyCal, HubSpot meetings, etc. Null → button falls back to
+  // mailto:.
+  scheduling_url: string | null;
+  // Default signature block reused by AI newsletter sends + outbound email
+  // templates. Plain text or simple markdown. Null → fallback to the
+  // agent's display name only.
+  signature_block: string | null;
+  // Default "From: <name>" used by AI newsletter sends. Null → fallback to
+  // the agent's display name.
+  sender_name: string | null;
   // Metricool IDs
   metricool_brand_id: string | null;
   metricool_embed_url: string | null;

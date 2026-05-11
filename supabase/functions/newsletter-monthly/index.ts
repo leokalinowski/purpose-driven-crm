@@ -657,6 +657,9 @@ async function sendEmailBatch(
           to: [email],
           subject,
           html,
+          // Replies route back to the agent's actual inbox, not the shared
+          // RESEND_FROM_EMAIL (which is typically a noreply@ sender).
+          reply_to: agent?.email || undefined,
         });
 
         if (result.error) {

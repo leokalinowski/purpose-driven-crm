@@ -25,9 +25,10 @@ serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ success: false, error: 'AI gateway not configured' }), {
+    const XAI_API_KEY = Deno.env.get('XAI_API_KEY');
+    const XAI_MODEL = Deno.env.get('XAI_MODEL') ?? 'grok-4-1-fast-reasoning';
+    if (!XAI_API_KEY) {
+      return new Response(JSON.stringify({ success: false, error: 'XAI_API_KEY not configured' }), {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -70,67 +71,50 @@ serve(async (req) => {
       });
     }
 
-    // Step 2: Extract structured data using Lovable AI with tool calling
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    // Step 2: Extract structured data using xAI Grok with JSON-object response format
+    const aiResponse = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${XAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
+        model: XAI_MODEL,
         messages: [
           {
             role: 'system',
-            content: 'You extract real estate listing data from scraped web pages. Extract the property details accurately.'
+            content: `You extract real estate listing data from scraped web pages. Respond with a JSON object exactly matching:
+{
+  "price": "<formatted with $ and commas, e.g. \\"$475,000\\">",
+  "address": "<street address only, e.g. \\"123 Oak Street\\">",
+  "city": "<city and state, e.g. \\"Austin, TX\\">",
+  "beds": <number of bedrooms>,
+  "baths": <number of bathrooms>,
+  "sqft": "<square footage with commas, e.g. \\"1,850\\">",
+  "image_url": "<URL of main property photo, or empty string>"
+}
+No prose outside the JSON.`
           },
           {
             role: 'user',
             content: `Extract the property listing details from this page content:\n\n${markdown.substring(0, 8000)}`
           }
         ],
-        tools: [{
-          type: 'function',
-          function: {
-            name: 'extract_listing',
-            description: 'Extract structured listing data from a property page',
-            parameters: {
-              type: 'object',
-              properties: {
-                price: { type: 'string', description: 'Listed price formatted with $ and commas, e.g. "$475,000"' },
-                address: { type: 'string', description: 'Street address only, e.g. "123 Oak Street"' },
-                city: { type: 'string', description: 'City and state, e.g. "Austin, TX"' },
-                beds: { type: 'number', description: 'Number of bedrooms' },
-                baths: { type: 'number', description: 'Number of bathrooms' },
-                sqft: { type: 'string', description: 'Square footage formatted with commas, e.g. "1,850"' },
-                image_url: { type: 'string', description: 'URL of the main property photo if found, or empty string' },
-              },
-              required: ['price', 'address', 'city', 'beds', 'baths', 'sqft'],
-              additionalProperties: false,
-            }
-          }
-        }],
-        tool_choice: { type: 'function', function: { name: 'extract_listing' } },
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
       }),
     });
 
     if (!aiResponse.ok) {
       if (aiResponse.status === 429) {
         const t = await aiResponse.text();
-        console.error('AI rate limited:', t);
+        console.error('xAI rate limited:', t);
         return new Response(JSON.stringify({ success: false, error: 'AI rate limited, try again shortly' }), {
           status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      if (aiResponse.status === 402) {
-        const t = await aiResponse.text();
-        console.error('AI credits exhausted:', t);
-        return new Response(JSON.stringify({ success: false, error: 'AI credits exhausted' }), {
-          status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
       const errText = await aiResponse.text();
-      console.error('AI gateway error:', aiResponse.status, errText);
+      console.error('xAI error:', aiResponse.status, errText);
 
       // Fallback to regex extraction
       const listing = regexExtract(markdown, formattedUrl);
@@ -146,10 +130,19 @@ serve(async (req) => {
     }
 
     const aiData = await aiResponse.json();
-    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
+    const content = aiData.choices?.[0]?.message?.content ?? '';
 
-    if (!toolCall?.function?.arguments) {
-      // Fallback to regex
+    let extracted: Record<string, unknown> | null = null;
+    try {
+      extracted = JSON.parse(content);
+    } catch {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try { extracted = JSON.parse(jsonMatch[0]); } catch { extracted = null; }
+      }
+    }
+
+    if (!extracted) {
       const listing = regexExtract(markdown, formattedUrl);
       if (listing) {
         return new Response(JSON.stringify({ success: true, listing }), {
@@ -160,8 +153,6 @@ serve(async (req) => {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    const extracted = JSON.parse(toolCall.function.arguments);
 
     // Try to get image from scrape metadata if AI didn't find one
     let imageUrl = extracted.image_url || '';

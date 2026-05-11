@@ -59,28 +59,18 @@ export const useContacts = () => {
     if (!user || !effectiveAgentId) return [];
 
     try {
-      let query = supabase
+      // IMPORTANT: this function is the source of truth for filter-chip
+      // counts (Relationship, Calling status) on the Database page. It must
+      // NOT apply the search term — otherwise typing "smith" silently shrinks
+      // the chip counts to the matching subset, which is misleading. The
+      // search filter only applies to the paged `contacts` query in
+      // `fetchContacts` below.
+      const query = supabase
         .from('contacts')
         .select('*')
         .eq('agent_id', effectiveAgentId)
         .order(sortBy, { ascending: sortOrder === 'asc' })
-        .limit(5000); // safety cap
-
-      const trimmed = debouncedSearchTerm.trim();
-      if (trimmed) {
-        query = query.or(
-          [
-            `first_name.ilike.%${trimmed}%`,
-            `last_name.ilike.%${trimmed}%`,
-            `email.ilike.%${trimmed}%`,
-            `phone.ilike.%${trimmed}%`,
-            `city.ilike.%${trimmed}%`,
-            `state.ilike.%${trimmed}%`,
-            `address_1.ilike.%${trimmed}%`,
-            `tags.cs.{${trimmed}}`,
-          ].join(','),
-        );
-      }
+        .limit(5000); // safety cap; stat tiles use useDatabaseStats for true totals
 
       const { data, error } = await query;
       if (error) throw error;
@@ -90,7 +80,7 @@ export const useContacts = () => {
       console.error('[useContacts] Error fetching all contacts:', error);
       return [];
     }
-  }, [user, effectiveAgentId, debouncedSearchTerm, sortBy, sortOrder]);
+  }, [user, effectiveAgentId, sortBy, sortOrder]);
 
   const fetchContacts = useCallback(async () => {
     if (!user || !effectiveAgentId) {
@@ -210,7 +200,20 @@ export const useContacts = () => {
 
     console.log('[addContact] Success:', { id: data?.id });
 
-    // Note: DNC checks are now handled by monthly automation only
+    // Fire a DNC check immediately for the new contact so the agent sees a
+    // current status without waiting for the monthly cron. Fire-and-forget —
+    // the contact is already in the DB; if the DNC API is offline the
+    // contact still saves and the next monthly run will pick it up.
+    if (data?.id && contactData.phone) {
+      void supabase.functions
+        .invoke('dnc-single-check', {
+          body: { contactId: data.id, phone: contactData.phone },
+        })
+        .catch((err) => {
+          console.warn('[addContact] DNC check failed (non-fatal):', err);
+        });
+    }
+
     fetchContacts();
     return data;
   };
@@ -299,6 +302,27 @@ export const useContacts = () => {
     }
 
     console.log(`Successfully uploaded ${results.length} contacts`);
+
+    // Fire a bulk DNC sweep for the agent. The dnc-monthly-check edge function
+    // already filters to `dnc=false AND (dnc_last_checked IS NULL OR < 30d
+    // ago)`, so it'll pick up the freshly inserted contacts (NULL last_checked)
+    // and skip any older ones that were already verified recently. Handles
+    // its own batching + rate limiting (50ms per contact, 500ms per batch).
+    // Fire-and-forget — the import already succeeded in the DB.
+    if (results.length > 0) {
+      void supabase.functions
+        .invoke('dnc-monthly-check', {
+          body: {
+            manualTrigger: true,
+            forceRecheck: false,
+            agentId: effectiveAgentId,
+          },
+        })
+        .catch((err) => {
+          console.warn('[uploadCSV] Bulk DNC check failed (non-fatal):', err);
+        });
+    }
+
     return results;
   };
 

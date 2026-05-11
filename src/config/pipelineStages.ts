@@ -1,6 +1,7 @@
 // ============================================================
 // Pipeline Stage Definitions — single source of truth
-// Used by PipelineBoard, OpportunityDetailDrawer, AddOpportunityDialog
+// Used by PipelineBoard, OpportunityDetailV2, AddOpportunityDialog,
+// EditOpportunityDialog, TodayOpportunityCard, OpportunityCard
 // ============================================================
 
 export type PipelineType = 'buyer' | 'seller' | 'referral';
@@ -47,9 +48,9 @@ export const SELLER_STAGES: PipelineStage[] = [
 export const REFERRAL_STAGES: PipelineStage[] = [
   { key: 'referral_received', label: 'Received',      pipelineType: 'referral', color: 'bg-blue-50 border-blue-200',   accent: '#3b82f6', description: 'Referral just received' },
   { key: 'contacted',         label: 'Contacted',     pipelineType: 'referral', color: 'bg-yellow-50 border-yellow-200', accent: '#eab308', description: 'First contact made' },
-  { key: 'active',            label: 'Active',        pipelineType: 'referral', color: 'bg-green-50 border-green-200', accent: '#22c55e', description: 'Actively working deal' },
+  { key: 'active',            label: 'Active',        pipelineType: 'referral', color: 'bg-green-50 border-green-200', accent: '#22c55e', description: 'Actively working the opportunity' },
   { key: 'referral_sent',     label: 'Sent Out',      pipelineType: 'referral', color: 'bg-purple-50 border-purple-200', accent: '#a855f7', description: 'Referral sent to another agent' },
-  { key: 'closed_won',        label: 'Closed',        pipelineType: 'referral', color: 'bg-teal-50 border-teal-200',   accent: '#14b8a6', description: 'Deal closed, fee collected', terminal: 'won' },
+  { key: 'closed_won',        label: 'Closed',        pipelineType: 'referral', color: 'bg-teal-50 border-teal-200',   accent: '#14b8a6', description: 'Closed, fee collected', terminal: 'won' },
   { key: 'lost',              label: 'Lost',          pipelineType: 'referral', color: 'bg-red-50 border-red-200',     accent: '#ef4444', description: 'Referral lost', terminal: 'lost' },
 ];
 
@@ -96,10 +97,38 @@ export function getNextStage(key: string, type: PipelineType): string | null {
   return stages[idx + 1].key;
 }
 
+/**
+ * Resolve the effective pipeline_type for an opportunity row, regardless of
+ * how it was loaded. Use this everywhere instead of inlining
+ * `pipeline_type ?? pipelineTypeFromOpportunityType(opportunity_type)` —
+ * the fallback was duplicated in 6+ files (Phase 5.1 centralization).
+ *
+ * `pipeline_type` IS supposed to be a generated column on `opportunities`,
+ * but it's currently nullable, so we still need the fallback as a safety net.
+ */
+export function getEffectivePipelineType(
+  opp: { pipeline_type?: string | null; opportunity_type?: string | null }
+): PipelineType {
+  if (opp.pipeline_type === 'buyer' || opp.pipeline_type === 'seller' || opp.pipeline_type === 'referral') {
+    return opp.pipeline_type;
+  }
+  return pipelineTypeFromOpportunityType(opp.opportunity_type ?? 'buyer');
+}
+
 /** Returns the pipeline_type string from opportunity_type */
 export function pipelineTypeFromOpportunityType(opportunityType: string): PipelineType {
   if (['seller', 'landlord'].includes(opportunityType)) return 'seller';
   if (['referral_out', 'referral_in'].includes(opportunityType)) return 'referral';
+  if (!['buyer', 'tenant', 'investor'].includes(opportunityType)) {
+    // Per Pipeline UX audit Should-fix #14: silently bucketing unknowns into
+    // the buyer pipeline hides ETL drift. A warning here is cheap; if a new
+    // opportunity_type lands without a mapping update it shows up in dev tools
+    // immediately rather than masquerading as a buyer.
+    console.warn(
+      `[pipelineStages] Unknown opportunity_type "${opportunityType}" — defaulting to buyer pipeline. ` +
+        `Add the type to pipelineTypeFromOpportunityType() to suppress.`
+    );
+  }
   return 'buyer';
 }
 
@@ -138,20 +167,31 @@ export interface MetaStageDef {
   order: number;
 }
 
+// Labels use real-estate vocabulary, not internal CRM-speak. The keys
+// (`nurturing`/`active`/`pending`/`closed`) are stable identifiers that
+// match the database `STAGE_TO_META` mapping below — DO NOT rename them.
+// The label values are display-only.
+//
+// Lost / withdrawn deals are intentionally NOT surfaced as a separate
+// column — they're filtered out of the board in `STAGE_TO_META` (no entry
+// for `'lost'`). The original Pipeline comprehensive-sweep added a 5th
+// `closed_lost` column and was reverted because it forced a wrap row on
+// desktop and added clutter. Lost-deal follow-up is a separate UI surface
+// for later (per the post-sweep user feedback).
 export const META_STAGES: MetaStageDef[] = [
-  { key: 'nurturing', order: 0, label: 'Nurturing', description: 'Long-term relationship, not yet transacting',  accent: '#a855f7', color: 'bg-purple-50/40 border-purple-200' },
-  { key: 'active',    order: 1, label: 'Active',    description: 'Actively working with this client',             accent: '#3b82f6', color: 'bg-blue-50/40 border-blue-200' },
-  { key: 'pending',   order: 2, label: 'Pending',   description: 'Offer out or under contract, awaiting close',   accent: '#f97316', color: 'bg-orange-50/40 border-orange-200' },
-  { key: 'closed',    order: 3, label: 'Closed',    description: 'Deal complete',                                 accent: '#22c55e', color: 'bg-green-50/40 border-green-200' },
+  { key: 'nurturing', order: 0, label: 'Leads',           description: 'Long-term relationship, not yet transacting',  accent: '#a855f7', color: 'bg-purple-50/40 border-purple-200' },
+  { key: 'active',    order: 1, label: 'Working',         description: 'Actively working with this client',             accent: '#3b82f6', color: 'bg-blue-50/40 border-blue-200' },
+  { key: 'pending',   order: 2, label: 'Under contract',  description: 'Offer out or under contract, awaiting close',   accent: '#f97316', color: 'bg-orange-50/40 border-orange-200' },
+  { key: 'closed',    order: 3, label: 'Closed',          description: 'Opportunity complete',                          accent: '#22c55e', color: 'bg-green-50/40 border-green-200' },
 ];
 
 /** Map every specific stage key (all pipeline types) to its meta-stage. */
 export const STAGE_TO_META: Record<string, MetaStage> = {
-  // Nurturing — early / dormant
+  // Leads — early / dormant
   new_lead:           'nurturing',
   nurturing:          'nurturing',
   referral_received:  'nurturing',
-  // Active — working the deal
+  // Working — agent is actively driving the deal
   active_search:      'active',
   showing:            'active',
   pre_listing:        'active',
@@ -159,20 +199,25 @@ export const STAGE_TO_META: Record<string, MetaStage> = {
   listed_active:      'active',
   contacted:          'active',
   active:             'active',
-  referral_sent:      'active',
-  // Pending — negotiated, awaiting close
+  // Under contract — negotiated, awaiting outside resolution. `referral_sent`
+  // moved here in Phase 5 because semantically the deal has left the agent's
+  // hands and is awaiting another agent — not "actively working."
   offer_submitted:    'pending',
   offer_received:     'pending',
   under_contract:     'pending',
-  // Closed
+  referral_sent:      'pending',
+  // Closed (won) only. `lost` is intentionally NOT mapped — those rows are
+  // filtered off the board to keep the kanban focused on in-flight + closed
+  // deals. A separate "Lost / Withdrawn" report can surface them later.
   closed_won:         'closed',
-  // `lost` is intentionally NOT mapped — filtered out of the board by default
 };
 
 /**
- * Default specific sub-stage to use when dragging a card INTO a meta-stage.
- * Keyed by pipeline_type so a buyer card dropped in Pending becomes `offer_submitted`,
- * a seller card becomes `offer_received`, etc.
+ * Default specific sub-stage to use when picking a meta-stage in the picker
+ * or dropping a card INTO a meta-column. Keyed by pipeline_type so a buyer
+ * card lands at `offer_submitted` for Under contract, a seller card lands at
+ * `offer_received`, etc. The DB row's `stage` column always stores the
+ * sub-stage value (we never store the meta-stage directly).
  */
 export const META_STAGE_DEFAULT_SUB: Record<PipelineType, Record<MetaStage, string>> = {
   buyer:    { nurturing: 'nurturing',          active: 'active_search', pending: 'offer_submitted', closed: 'closed_won' },

@@ -40,7 +40,7 @@ const STAGE_OPTIONS = [
 ];
 
 const FIELD_OPTIONS = [
-  'Deal Value / Price', 'Expected Close Date', 'Commission %', 'Lead Source',
+  'Sale Price', 'Expected Close Date', 'Commission %', 'Lead Source',
   'Property Address', 'MLS Number', 'Buyer/Seller Type', 'Loan Type / Pre-Approval Status',
   'Inspection Date', 'Appraisal Date', 'Contract Date', 'Closing Date',
   'Co-Agent / Referral Partner', 'Attorney / Title Company',
@@ -61,7 +61,7 @@ const VIEW_OPTIONS = ['Kanban Board (Drag & Drop)', 'List / Table View', 'Calend
 
 const SECTIONS = [
   { title: 'Your Info', description: 'Let us know who you are' },
-  { title: 'Pipeline Stages', description: 'How do you want to organize your deals?' },
+  { title: 'Pipeline Stages', description: 'How do you want to organize your opportunities?' },
   { title: 'Fields & Data', description: 'What information matters most at a glance?' },
   { title: 'Automation & Activities', description: 'How can we save you time?' },
   { title: 'Integrations', description: 'Which tools should connect to your pipeline?' },
@@ -172,7 +172,7 @@ const PipelineSurvey = () => {
           <CardHeader>
             <CardTitle className="text-2xl">Smart Pipeline Questionnaire</CardTitle>
             <CardDescription>
-              Help us design the perfect deal-tracking pipeline for your real estate business.
+              Help us design the perfect opportunity-tracking pipeline for your real estate business.
               Your answers directly shape what we build — this takes about 3 minutes.
             </CardDescription>
           </CardHeader>
@@ -251,7 +251,7 @@ const PipelineSurvey = () => {
             {step === 2 && (
               <>
                 <div className="space-y-3">
-                  <Label>Which fields are must-haves on each deal card? *</Label>
+                  <Label>Which fields are must-haves on each opportunity card? *</Label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {FIELD_OPTIONS.map((opt) => (
                       <label key={opt} className="flex items-center gap-2 p-2 rounded-md border border-border hover:bg-accent/50 cursor-pointer transition-colors">
@@ -291,7 +291,7 @@ const PipelineSurvey = () => {
                   {errors.follow_up_automation && <p className="text-sm text-destructive">{errors.follow_up_automation.message}</p>}
                 </div>
                 <div className="space-y-3">
-                  <Label>Which activities should be trackable on a deal? *</Label>
+                  <Label>Which activities should be trackable on an opportunity? *</Label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {ACTIVITY_OPTIONS.map((opt) => (
                       <label key={opt} className="flex items-center gap-2 p-2 rounded-md border border-border hover:bg-accent/50 cursor-pointer transition-colors">
@@ -361,7 +361,7 @@ const PipelineSurvey = () => {
                   {errors.mobile_importance && <p className="text-sm text-destructive">{errors.mobile_importance.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="biggest_pain_point">What's your biggest pain point with tracking deals today?</Label>
+                  <Label htmlFor="biggest_pain_point">What's your biggest pain point with tracking opportunities today?</Label>
                   <Textarea id="biggest_pain_point" {...register('biggest_pain_point')} placeholder="Tell us what frustrates you most…" />
                 </div>
                 <div className="space-y-2">

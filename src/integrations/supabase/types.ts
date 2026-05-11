@@ -64,6 +64,116 @@ export type Database = {
           },
         ]
       }
+      agent_coaching_state: {
+        Row: {
+          agent_id: string
+          alerts: Json
+          chat_context: Json | null
+          created_at: string
+          dirty: boolean
+          generated_at: string
+          model: string | null
+          next_hour: Json | null
+          run_ms: number | null
+          today_list: Json
+          tokens_in: number | null
+          tokens_out: number | null
+          updated_at: string
+          version: number
+          week_narrative: Json | null
+        }
+        Insert: {
+          agent_id: string
+          alerts?: Json
+          chat_context?: Json | null
+          created_at?: string
+          dirty?: boolean
+          generated_at?: string
+          model?: string | null
+          next_hour?: Json | null
+          run_ms?: number | null
+          today_list?: Json
+          tokens_in?: number | null
+          tokens_out?: number | null
+          updated_at?: string
+          version?: number
+          week_narrative?: Json | null
+        }
+        Update: {
+          agent_id?: string
+          alerts?: Json
+          chat_context?: Json | null
+          created_at?: string
+          dirty?: boolean
+          generated_at?: string
+          model?: string | null
+          next_hour?: Json | null
+          run_ms?: number | null
+          today_list?: Json
+          tokens_in?: number | null
+          tokens_out?: number | null
+          updated_at?: string
+          version?: number
+          week_narrative?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_coaching_state_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      agent_growth_goals: {
+        Row: {
+          agent_id: string
+          bar_color_token: string | null
+          created_at: string
+          current_value: number
+          description: string | null
+          id: string
+          sort_order: number
+          status: string
+          target_date: string | null
+          target_value: number | null
+          title: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          bar_color_token?: string | null
+          created_at?: string
+          current_value?: number
+          description?: string | null
+          id?: string
+          sort_order?: number
+          status?: string
+          target_date?: string | null
+          target_value?: number | null
+          title: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          bar_color_token?: string | null
+          created_at?: string
+          current_value?: number
+          description?: string | null
+          id?: string
+          sort_order?: number
+          status?: string
+          target_date?: string | null
+          target_value?: number | null
+          title?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       agent_images: {
         Row: {
           created_at: string | null
@@ -100,6 +210,68 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_intelligence_snapshots: {
+        Row: {
+          agent_id: string
+          coaching_context: Json
+          created_at: string
+          generated_at: string
+          id: string
+          market_pulse: Json
+          model_version: string
+          raw_completion_tokens: number | null
+          raw_prompt_tokens: number | null
+          sphere_health: Json
+          top_opportunities: Json
+          updated_at: string
+          week_number: number
+          weekly_priorities: Json
+          year: number
+        }
+        Insert: {
+          agent_id: string
+          coaching_context?: Json
+          created_at?: string
+          generated_at?: string
+          id?: string
+          market_pulse?: Json
+          model_version?: string
+          raw_completion_tokens?: number | null
+          raw_prompt_tokens?: number | null
+          sphere_health?: Json
+          top_opportunities?: Json
+          updated_at?: string
+          week_number: number
+          weekly_priorities?: Json
+          year: number
+        }
+        Update: {
+          agent_id?: string
+          coaching_context?: Json
+          created_at?: string
+          generated_at?: string
+          id?: string
+          market_pulse?: Json
+          model_version?: string
+          raw_completion_tokens?: number | null
+          raw_prompt_tokens?: number | null
+          sphere_health?: Json
+          top_opportunities?: Json
+          updated_at?: string
+          week_number?: number
+          weekly_priorities?: Json
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_intelligence_snapshots_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       agent_marketing_settings: {
         Row: {
           brand_guidelines: string | null
@@ -125,8 +297,11 @@ export type Database = {
           metricool_twitter_id: string | null
           metricool_youtube_id: string | null
           primary_color: string | null
+          scheduling_url: string | null
           secondary_color: string | null
+          sender_name: string | null
           shade_folder_id: string | null
+          signature_block: string | null
           target_audience: string | null
           thumbnail_guidelines: string | null
           tone_guidelines: string | null
@@ -158,8 +333,11 @@ export type Database = {
           metricool_twitter_id?: string | null
           metricool_youtube_id?: string | null
           primary_color?: string | null
+          scheduling_url?: string | null
           secondary_color?: string | null
+          sender_name?: string | null
           shade_folder_id?: string | null
+          signature_block?: string | null
           target_audience?: string | null
           thumbnail_guidelines?: string | null
           tone_guidelines?: string | null
@@ -191,8 +369,11 @@ export type Database = {
           metricool_twitter_id?: string | null
           metricool_youtube_id?: string | null
           primary_color?: string | null
+          scheduling_url?: string | null
           secondary_color?: string | null
+          sender_name?: string | null
           shade_folder_id?: string | null
+          signature_block?: string | null
           target_audience?: string | null
           thumbnail_guidelines?: string | null
           tone_guidelines?: string | null
@@ -649,11 +830,15 @@ export type Database = {
           closing_amount: number | null
           closings: number | null
           coaching_notes: string | null
+          confidence_rating: number | null
           conversations: number | null
           created_at: string
           database_size: number | null
           deals_closed: number
           dials_made: number | null
+          energy_rating: number | null
+          focus_areas: string[] | null
+          focus_rating: number | null
           id: string
           leads_contacted: number
           must_do_task: string | null
@@ -674,11 +859,15 @@ export type Database = {
           closing_amount?: number | null
           closings?: number | null
           coaching_notes?: string | null
+          confidence_rating?: number | null
           conversations?: number | null
           created_at?: string
           database_size?: number | null
           deals_closed?: number
           dials_made?: number | null
+          energy_rating?: number | null
+          focus_areas?: string[] | null
+          focus_rating?: number | null
           id?: string
           leads_contacted?: number
           must_do_task?: string | null
@@ -699,11 +888,15 @@ export type Database = {
           closing_amount?: number | null
           closings?: number | null
           coaching_notes?: string | null
+          confidence_rating?: number | null
           conversations?: number | null
           created_at?: string
           database_size?: number | null
           deals_closed?: number
           dials_made?: number | null
+          energy_rating?: number | null
+          focus_areas?: string[] | null
+          focus_rating?: number | null
           id?: string
           leads_contacted?: number
           must_do_task?: string | null
@@ -787,18 +980,89 @@ export type Database = {
           address_1: string | null
           address_2: string | null
           agent_id: string
+          best_contact_time: string | null
+          birthday: string | null
+          buyer_bathrooms_min: number | null
+          buyer_bedrooms_min: number | null
+          buyer_deal_breakers: string | null
+          buyer_lender_name: string | null
+          buyer_loan_type: string | null
+          buyer_must_haves: string | null
+          buyer_pre_approval_amount: number | null
+          buyer_pre_approval_expiry: string | null
+          buyer_pre_approval_status: string | null
+          buyer_price_max: number | null
+          buyer_price_min: number | null
+          buyer_property_type: string | null
+          buyer_target_cities: string[] | null
+          buyer_target_zip_codes: string[] | null
           category: string
           city: string | null
+          contact_type: string | null
           created_at: string
+          current_home_purchase_date: string | null
+          current_home_purchase_price: number | null
+          delight_skipped_until: string | null
           dnc: boolean
           dnc_last_checked: string | null
           email: string | null
+          engagement_trend: string | null
+          family_notes: string | null
           first_name: string | null
+          gift_preferences: string | null
+          home_anniversary: string | null
           id: string
+          kids_count: number | null
           last_activity_date: string | null
+          last_call_at: string | null
+          last_email_at: string | null
+          last_gift_sent_at: string | null
           last_name: string
+          last_pipeline_activity: string | null
+          last_text_at: string | null
+          life_event: string | null
+          life_event_date: string | null
+          met_through: string | null
+          met_through_contact_id: string | null
+          motivation_notes: string | null
+          motivation_score: number | null
+          move_timeline: string | null
           notes: string | null
+          owns_investment_properties: boolean | null
           phone: string | null
+          pipeline_active: boolean | null
+          pipeline_stage_summary: string | null
+          preferred_contact_method: string | null
+          priority_components: Json | null
+          priority_computed_at: string | null
+          priority_model: string | null
+          priority_reasoning: string | null
+          priority_score: number | null
+          priority_signals: Json | null
+          priority_watch_flag: boolean
+          referral_source: string | null
+          referral_source_contact_id: string | null
+          referred_contacts_count: number | null
+          relationship_strength: number | null
+          seller_equity_estimate: number | null
+          seller_estimated_value: number | null
+          seller_has_agent: boolean | null
+          seller_home_condition: string | null
+          seller_interview_date: string | null
+          seller_listing_timeline: string | null
+          seller_mortgage_balance: number | null
+          seller_motivation_reason: string | null
+          seller_property_address: string | null
+          seller_property_city: string | null
+          seller_property_state: string | null
+          seller_property_type: string | null
+          seller_property_zip: string | null
+          social_facebook: string | null
+          social_instagram: string | null
+          social_linkedin: string | null
+          sphere_influence_score: number | null
+          spouse_birthday: string | null
+          spouse_name: string | null
           state: string | null
           tags: string[] | null
           updated_at: string
@@ -809,18 +1073,89 @@ export type Database = {
           address_1?: string | null
           address_2?: string | null
           agent_id: string
+          best_contact_time?: string | null
+          birthday?: string | null
+          buyer_bathrooms_min?: number | null
+          buyer_bedrooms_min?: number | null
+          buyer_deal_breakers?: string | null
+          buyer_lender_name?: string | null
+          buyer_loan_type?: string | null
+          buyer_must_haves?: string | null
+          buyer_pre_approval_amount?: number | null
+          buyer_pre_approval_expiry?: string | null
+          buyer_pre_approval_status?: string | null
+          buyer_price_max?: number | null
+          buyer_price_min?: number | null
+          buyer_property_type?: string | null
+          buyer_target_cities?: string[] | null
+          buyer_target_zip_codes?: string[] | null
           category: string
           city?: string | null
+          contact_type?: string | null
           created_at?: string
+          current_home_purchase_date?: string | null
+          current_home_purchase_price?: number | null
+          delight_skipped_until?: string | null
           dnc?: boolean
           dnc_last_checked?: string | null
           email?: string | null
+          engagement_trend?: string | null
+          family_notes?: string | null
           first_name?: string | null
+          gift_preferences?: string | null
+          home_anniversary?: string | null
           id?: string
+          kids_count?: number | null
           last_activity_date?: string | null
+          last_call_at?: string | null
+          last_email_at?: string | null
+          last_gift_sent_at?: string | null
           last_name: string
+          last_pipeline_activity?: string | null
+          last_text_at?: string | null
+          life_event?: string | null
+          life_event_date?: string | null
+          met_through?: string | null
+          met_through_contact_id?: string | null
+          motivation_notes?: string | null
+          motivation_score?: number | null
+          move_timeline?: string | null
           notes?: string | null
+          owns_investment_properties?: boolean | null
           phone?: string | null
+          pipeline_active?: boolean | null
+          pipeline_stage_summary?: string | null
+          preferred_contact_method?: string | null
+          priority_components?: Json | null
+          priority_computed_at?: string | null
+          priority_model?: string | null
+          priority_reasoning?: string | null
+          priority_score?: number | null
+          priority_signals?: Json | null
+          priority_watch_flag?: boolean
+          referral_source?: string | null
+          referral_source_contact_id?: string | null
+          referred_contacts_count?: number | null
+          relationship_strength?: number | null
+          seller_equity_estimate?: number | null
+          seller_estimated_value?: number | null
+          seller_has_agent?: boolean | null
+          seller_home_condition?: string | null
+          seller_interview_date?: string | null
+          seller_listing_timeline?: string | null
+          seller_mortgage_balance?: number | null
+          seller_motivation_reason?: string | null
+          seller_property_address?: string | null
+          seller_property_city?: string | null
+          seller_property_state?: string | null
+          seller_property_type?: string | null
+          seller_property_zip?: string | null
+          social_facebook?: string | null
+          social_instagram?: string | null
+          social_linkedin?: string | null
+          sphere_influence_score?: number | null
+          spouse_birthday?: string | null
+          spouse_name?: string | null
           state?: string | null
           tags?: string[] | null
           updated_at?: string
@@ -831,24 +1166,110 @@ export type Database = {
           address_1?: string | null
           address_2?: string | null
           agent_id?: string
+          best_contact_time?: string | null
+          birthday?: string | null
+          buyer_bathrooms_min?: number | null
+          buyer_bedrooms_min?: number | null
+          buyer_deal_breakers?: string | null
+          buyer_lender_name?: string | null
+          buyer_loan_type?: string | null
+          buyer_must_haves?: string | null
+          buyer_pre_approval_amount?: number | null
+          buyer_pre_approval_expiry?: string | null
+          buyer_pre_approval_status?: string | null
+          buyer_price_max?: number | null
+          buyer_price_min?: number | null
+          buyer_property_type?: string | null
+          buyer_target_cities?: string[] | null
+          buyer_target_zip_codes?: string[] | null
           category?: string
           city?: string | null
+          contact_type?: string | null
           created_at?: string
+          current_home_purchase_date?: string | null
+          current_home_purchase_price?: number | null
+          delight_skipped_until?: string | null
           dnc?: boolean
           dnc_last_checked?: string | null
           email?: string | null
+          engagement_trend?: string | null
+          family_notes?: string | null
           first_name?: string | null
+          gift_preferences?: string | null
+          home_anniversary?: string | null
           id?: string
+          kids_count?: number | null
           last_activity_date?: string | null
+          last_call_at?: string | null
+          last_email_at?: string | null
+          last_gift_sent_at?: string | null
           last_name?: string
+          last_pipeline_activity?: string | null
+          last_text_at?: string | null
+          life_event?: string | null
+          life_event_date?: string | null
+          met_through?: string | null
+          met_through_contact_id?: string | null
+          motivation_notes?: string | null
+          motivation_score?: number | null
+          move_timeline?: string | null
           notes?: string | null
+          owns_investment_properties?: boolean | null
           phone?: string | null
+          pipeline_active?: boolean | null
+          pipeline_stage_summary?: string | null
+          preferred_contact_method?: string | null
+          priority_components?: Json | null
+          priority_computed_at?: string | null
+          priority_model?: string | null
+          priority_reasoning?: string | null
+          priority_score?: number | null
+          priority_signals?: Json | null
+          priority_watch_flag?: boolean
+          referral_source?: string | null
+          referral_source_contact_id?: string | null
+          referred_contacts_count?: number | null
+          relationship_strength?: number | null
+          seller_equity_estimate?: number | null
+          seller_estimated_value?: number | null
+          seller_has_agent?: boolean | null
+          seller_home_condition?: string | null
+          seller_interview_date?: string | null
+          seller_listing_timeline?: string | null
+          seller_mortgage_balance?: number | null
+          seller_motivation_reason?: string | null
+          seller_property_address?: string | null
+          seller_property_city?: string | null
+          seller_property_state?: string | null
+          seller_property_type?: string | null
+          seller_property_zip?: string | null
+          social_facebook?: string | null
+          social_instagram?: string | null
+          social_linkedin?: string | null
+          sphere_influence_score?: number | null
+          spouse_birthday?: string | null
+          spouse_name?: string | null
           state?: string | null
           tags?: string[] | null
           updated_at?: string
           zip_code?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "contacts_met_through_contact_id_fkey"
+            columns: ["met_through_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_referral_source_contact_id_fkey"
+            columns: ["referral_source_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       content_generation_results: {
         Row: {
@@ -1693,6 +2114,51 @@ export type Database = {
         }
         Relationships: []
       }
+      metricool_brands: {
+        Row: {
+          agent_id: string
+          blog_id: number
+          brand_label: string | null
+          connected_networks: Json | null
+          created_at: string
+          id: string
+          last_error: string | null
+          last_sync_at: string | null
+          provisioning_method: string
+          updated_at: string
+          user_id_metricool: number | null
+          user_token: string
+        }
+        Insert: {
+          agent_id: string
+          blog_id: number
+          brand_label?: string | null
+          connected_networks?: Json | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_sync_at?: string | null
+          provisioning_method?: string
+          updated_at?: string
+          user_id_metricool?: number | null
+          user_token: string
+        }
+        Update: {
+          agent_id?: string
+          blog_id?: number
+          brand_label?: string | null
+          connected_networks?: Json | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_sync_at?: string | null
+          provisioning_method?: string
+          updated_at?: string
+          user_id_metricool?: number | null
+          user_token?: string
+        }
+        Relationships: []
+      }
       metricool_links: {
         Row: {
           created_at: string
@@ -1925,8 +2391,14 @@ export type Database = {
           agent_id: string
           created_at: string | null
           id: string
+          is_active: boolean
+          last_sent_at: string | null
+          next_send_at: string | null
           recipient_count: number | null
           recipient_filter: Json | null
+          recurrence: string
+          recurrence_day: number | null
+          recurrence_hour: number
           scheduled_at: string | null
           sender_name: string | null
           sent_at: string | null
@@ -1939,8 +2411,14 @@ export type Database = {
           agent_id: string
           created_at?: string | null
           id?: string
+          is_active?: boolean
+          last_sent_at?: string | null
+          next_send_at?: string | null
           recipient_count?: number | null
           recipient_filter?: Json | null
+          recurrence?: string
+          recurrence_day?: number | null
+          recurrence_hour?: number
           scheduled_at?: string | null
           sender_name?: string | null
           sent_at?: string | null
@@ -1953,8 +2431,14 @@ export type Database = {
           agent_id?: string
           created_at?: string | null
           id?: string
+          is_active?: boolean
+          last_sent_at?: string | null
+          next_send_at?: string | null
           recipient_count?: number | null
           recipient_filter?: Json | null
+          recurrence?: string
+          recurrence_day?: number | null
+          recurrence_hour?: number
           scheduled_at?: string | null
           sender_name?: string | null
           sent_at?: string | null
@@ -2124,37 +2608,187 @@ export type Database = {
         Row: {
           actual_close_date: string | null
           agent_id: string
+          ai_deal_probability: number | null
+          ai_risk_flags: string[] | null
+          ai_scored_at: string | null
+          ai_suggested_next_action: string | null
+          ai_summary: string | null
+          appraisal_date: string | null
+          closing_date_scheduled: string | null
+          commission_amount: number | null
+          commission_pct: number | null
+          confidence: string | null
           contact_id: string | null
+          contract_date: string | null
           created_at: string
+          days_in_current_stage: number | null
           deal_value: number | null
           expected_close_date: string | null
+          first_contact_date: string | null
+          gci_actual: number | null
+          gci_estimated: number | null
           id: string
+          inspection_date: string | null
+          is_stale: boolean | null
+          last_activity_date: string | null
+          list_price: number | null
+          listing_appointment_date: string | null
+          loan_contingency_removal: string | null
+          lost_reason: string | null
+          lost_reason_notes: string | null
+          next_step_due_date: string | null
+          next_step_title: string | null
           notes: string | null
+          offer_date: string | null
+          offer_price: number | null
+          on_hold_until: string | null
+          opportunity_type: string
+          outcome: string | null
+          pipeline_type: string | null
+          priority: number | null
+          property_address: string | null
+          property_baths: number | null
+          property_beds: number | null
+          property_city: string | null
+          property_mls_number: string | null
+          property_sqft: number | null
+          property_state: string | null
+          property_type: string | null
+          property_url: string | null
+          property_year_built: number | null
+          property_zip: string | null
+          referral_agent_name: string | null
+          referral_brokerage: string | null
+          referral_fee_pct: number | null
+          sale_price: number | null
           stage: string
+          stale_since: string | null
+          target_move_date: string | null
+          title: string | null
           updated_at: string
         }
         Insert: {
           actual_close_date?: string | null
           agent_id: string
+          ai_deal_probability?: number | null
+          ai_risk_flags?: string[] | null
+          ai_scored_at?: string | null
+          ai_suggested_next_action?: string | null
+          ai_summary?: string | null
+          appraisal_date?: string | null
+          closing_date_scheduled?: string | null
+          commission_amount?: number | null
+          commission_pct?: number | null
+          confidence?: string | null
           contact_id?: string | null
+          contract_date?: string | null
           created_at?: string
+          days_in_current_stage?: number | null
           deal_value?: number | null
           expected_close_date?: string | null
+          first_contact_date?: string | null
+          gci_actual?: number | null
+          gci_estimated?: number | null
           id?: string
+          inspection_date?: string | null
+          is_stale?: boolean | null
+          last_activity_date?: string | null
+          list_price?: number | null
+          listing_appointment_date?: string | null
+          loan_contingency_removal?: string | null
+          lost_reason?: string | null
+          lost_reason_notes?: string | null
+          next_step_due_date?: string | null
+          next_step_title?: string | null
           notes?: string | null
+          offer_date?: string | null
+          offer_price?: number | null
+          on_hold_until?: string | null
+          opportunity_type?: string
+          outcome?: string | null
+          pipeline_type?: string | null
+          priority?: number | null
+          property_address?: string | null
+          property_baths?: number | null
+          property_beds?: number | null
+          property_city?: string | null
+          property_mls_number?: string | null
+          property_sqft?: number | null
+          property_state?: string | null
+          property_type?: string | null
+          property_url?: string | null
+          property_year_built?: number | null
+          property_zip?: string | null
+          referral_agent_name?: string | null
+          referral_brokerage?: string | null
+          referral_fee_pct?: number | null
+          sale_price?: number | null
           stage: string
+          stale_since?: string | null
+          target_move_date?: string | null
+          title?: string | null
           updated_at?: string
         }
         Update: {
           actual_close_date?: string | null
           agent_id?: string
+          ai_deal_probability?: number | null
+          ai_risk_flags?: string[] | null
+          ai_scored_at?: string | null
+          ai_suggested_next_action?: string | null
+          ai_summary?: string | null
+          appraisal_date?: string | null
+          closing_date_scheduled?: string | null
+          commission_amount?: number | null
+          commission_pct?: number | null
+          confidence?: string | null
           contact_id?: string | null
+          contract_date?: string | null
           created_at?: string
+          days_in_current_stage?: number | null
           deal_value?: number | null
           expected_close_date?: string | null
+          first_contact_date?: string | null
+          gci_actual?: number | null
+          gci_estimated?: number | null
           id?: string
+          inspection_date?: string | null
+          is_stale?: boolean | null
+          last_activity_date?: string | null
+          list_price?: number | null
+          listing_appointment_date?: string | null
+          loan_contingency_removal?: string | null
+          lost_reason?: string | null
+          lost_reason_notes?: string | null
+          next_step_due_date?: string | null
+          next_step_title?: string | null
           notes?: string | null
+          offer_date?: string | null
+          offer_price?: number | null
+          on_hold_until?: string | null
+          opportunity_type?: string
+          outcome?: string | null
+          pipeline_type?: string | null
+          priority?: number | null
+          property_address?: string | null
+          property_baths?: number | null
+          property_beds?: number | null
+          property_city?: string | null
+          property_mls_number?: string | null
+          property_sqft?: number | null
+          property_state?: string | null
+          property_type?: string | null
+          property_url?: string | null
+          property_year_built?: number | null
+          property_zip?: string | null
+          referral_agent_name?: string | null
+          referral_brokerage?: string | null
+          referral_fee_pct?: number | null
+          sale_price?: number | null
           stage?: string
+          stale_since?: string | null
+          target_move_date?: string | null
+          title?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2172,33 +2806,52 @@ export type Database = {
           activity_date: string | null
           activity_type: string
           agent_id: string
+          contact_id: string | null
           created_at: string
           description: string | null
           id: string
           metadata: Json | null
+          note: string | null
           opportunity_id: string
+          outcome: string | null
+          title: string | null
         }
         Insert: {
           activity_date?: string | null
           activity_type: string
           agent_id: string
+          contact_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
           metadata?: Json | null
+          note?: string | null
           opportunity_id: string
+          outcome?: string | null
+          title?: string | null
         }
         Update: {
           activity_date?: string | null
           activity_type?: string
           agent_id?: string
+          contact_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
           metadata?: Json | null
+          note?: string | null
           opportunity_id?: string
+          outcome?: string | null
+          title?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "opportunity_activities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "opportunity_activities_opportunity_id_fkey"
             columns: ["opportunity_id"]
@@ -2239,6 +2892,63 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "opportunity_notes_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_stage_history: {
+        Row: {
+          agent_id: string
+          changed_at: string
+          changed_by: string
+          created_at: string
+          days_in_from_stage: number | null
+          from_stage: string | null
+          id: string
+          notes: string | null
+          opportunity_id: string
+          pipeline_type: string
+          to_stage: string
+        }
+        Insert: {
+          agent_id: string
+          changed_at?: string
+          changed_by?: string
+          created_at?: string
+          days_in_from_stage?: number | null
+          from_stage?: string | null
+          id?: string
+          notes?: string | null
+          opportunity_id: string
+          pipeline_type?: string
+          to_stage: string
+        }
+        Update: {
+          agent_id?: string
+          changed_at?: string
+          changed_by?: string
+          created_at?: string
+          days_in_from_stage?: number | null
+          from_stage?: string | null
+          id?: string
+          notes?: string | null
+          opportunity_id?: string
+          pipeline_type?: string
+          to_stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_stage_history_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "opportunity_stage_history_opportunity_id_fkey"
             columns: ["opportunity_id"]
             isOneToOne: false
             referencedRelation: "opportunities"
@@ -2296,6 +3006,59 @@ export type Database = {
           },
         ]
       }
+      pipeline_stage_playbooks: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          description: string | null
+          due_days_offset: number | null
+          id: string
+          is_active: boolean
+          pipeline_type: string
+          priority: number | null
+          sort_order: number | null
+          stage: string
+          task_type: string
+          title: string
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_days_offset?: number | null
+          id?: string
+          is_active?: boolean
+          pipeline_type: string
+          priority?: number | null
+          sort_order?: number | null
+          stage: string
+          task_type?: string
+          title: string
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_days_offset?: number | null
+          id?: string
+          is_active?: boolean
+          pipeline_type?: string
+          priority?: number | null
+          sort_order?: number | null
+          stage?: string
+          task_type?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_stage_playbooks_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       pipeline_survey_responses: {
         Row: {
           activity_types: string[] | null
@@ -2350,129 +3113,196 @@ export type Database = {
         }
         Relationships: []
       }
+      pipeline_tasks: {
+        Row: {
+          agent_id: string
+          ai_suggested: boolean | null
+          auto_generated: boolean
+          coach_created_at: string | null
+          coach_dismissed_at: string | null
+          coach_reasoning: string | null
+          completed: boolean
+          completed_at: string | null
+          contact_id: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          due_time: string | null
+          id: string
+          opportunity_id: string
+          playbook_stage: string | null
+          priority: number | null
+          sort_order: number | null
+          source: string | null
+          task_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          ai_suggested?: boolean | null
+          auto_generated?: boolean
+          coach_created_at?: string | null
+          coach_dismissed_at?: string | null
+          coach_reasoning?: string | null
+          completed?: boolean
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          due_time?: string | null
+          id?: string
+          opportunity_id: string
+          playbook_stage?: string | null
+          priority?: number | null
+          sort_order?: number | null
+          source?: string | null
+          task_type?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          ai_suggested?: boolean | null
+          auto_generated?: boolean
+          coach_created_at?: string | null
+          coach_dismissed_at?: string | null
+          coach_reasoning?: string | null
+          completed?: boolean
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          due_time?: string | null
+          id?: string
+          opportunity_id?: string
+          playbook_stage?: string | null
+          priority?: number | null
+          sort_order?: number | null
+          source?: string | null
+          task_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_tasks_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "pipeline_tasks_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pipeline_tasks_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
-          brand_guidelines: string | null
+          annual_closings_goal: number | null
+          annual_conversations_goal: number | null
+          annual_gci_goal: number | null
           brokerage: string | null
           brokerage_info: string | null
           can_email_marketing: boolean | null
-          clickup_editing_task_list_id: string | null
-          clickup_video_deliverables_list_id: string | null
           created_at: string
-          editors: string[] | null
           email: string | null
-          "Example Copy": string | null
-          example_copy: string | null
           first_name: string | null
           full_name: string | null
-          gpt_prompt: string | null
-          headshot_url: string | null
           id: string
           last_name: string | null
           license_number: string | null
-          license_states: string[] | null
-          logo_colored_url: string | null
-          logo_white_url: string | null
-          metricool_creds: Json | null
+          notify_email: boolean
+          notify_in_app: boolean
           office_address: string | null
           office_number: string | null
           phone_number: string | null
-          primary_color: string | null
           privacy_policy_url: string | null
+          quiet_hours_end: number
+          quiet_hours_start: number
+          reminder_day: number
           role: string
-          secondary_color: string | null
-          shade_folder_id: string | null
           state_licenses: string[] | null
-          "Target Audience": string | null
           team_name: string | null
-          "Thumbnail Guidelines": string | null
-          "Tone Guidelines": string | null
+          timezone: string
           updated_at: string
           user_id: string
           website: string | null
-          "What NOT to Say": string | null
         }
         Insert: {
-          brand_guidelines?: string | null
+          annual_closings_goal?: number | null
+          annual_conversations_goal?: number | null
+          annual_gci_goal?: number | null
           brokerage?: string | null
           brokerage_info?: string | null
           can_email_marketing?: boolean | null
-          clickup_editing_task_list_id?: string | null
-          clickup_video_deliverables_list_id?: string | null
           created_at?: string
-          editors?: string[] | null
           email?: string | null
-          "Example Copy"?: string | null
-          example_copy?: string | null
           first_name?: string | null
           full_name?: string | null
-          gpt_prompt?: string | null
-          headshot_url?: string | null
           id?: string
           last_name?: string | null
           license_number?: string | null
-          license_states?: string[] | null
-          logo_colored_url?: string | null
-          logo_white_url?: string | null
-          metricool_creds?: Json | null
+          notify_email?: boolean
+          notify_in_app?: boolean
           office_address?: string | null
           office_number?: string | null
           phone_number?: string | null
-          primary_color?: string | null
           privacy_policy_url?: string | null
+          quiet_hours_end?: number
+          quiet_hours_start?: number
+          reminder_day?: number
           role?: string
-          secondary_color?: string | null
-          shade_folder_id?: string | null
           state_licenses?: string[] | null
-          "Target Audience"?: string | null
           team_name?: string | null
-          "Thumbnail Guidelines"?: string | null
-          "Tone Guidelines"?: string | null
+          timezone?: string
           updated_at?: string
           user_id: string
           website?: string | null
-          "What NOT to Say"?: string | null
         }
         Update: {
-          brand_guidelines?: string | null
+          annual_closings_goal?: number | null
+          annual_conversations_goal?: number | null
+          annual_gci_goal?: number | null
           brokerage?: string | null
           brokerage_info?: string | null
           can_email_marketing?: boolean | null
-          clickup_editing_task_list_id?: string | null
-          clickup_video_deliverables_list_id?: string | null
           created_at?: string
-          editors?: string[] | null
           email?: string | null
-          "Example Copy"?: string | null
-          example_copy?: string | null
           first_name?: string | null
           full_name?: string | null
-          gpt_prompt?: string | null
-          headshot_url?: string | null
           id?: string
           last_name?: string | null
           license_number?: string | null
-          license_states?: string[] | null
-          logo_colored_url?: string | null
-          logo_white_url?: string | null
-          metricool_creds?: Json | null
+          notify_email?: boolean
+          notify_in_app?: boolean
           office_address?: string | null
           office_number?: string | null
           phone_number?: string | null
-          primary_color?: string | null
           privacy_policy_url?: string | null
+          quiet_hours_end?: number
+          quiet_hours_start?: number
+          reminder_day?: number
           role?: string
-          secondary_color?: string | null
-          shade_folder_id?: string | null
           state_licenses?: string[] | null
-          "Target Audience"?: string | null
           team_name?: string | null
-          "Thumbnail Guidelines"?: string | null
-          "Tone Guidelines"?: string | null
+          timezone?: string
           updated_at?: string
           user_id?: string
           website?: string | null
-          "What NOT to Say"?: string | null
         }
         Relationships: []
       }
@@ -2578,224 +3408,6 @@ export type Database = {
           table_name?: string
           user_agent?: string | null
           user_id?: string | null
-        }
-        Relationships: []
-      }
-      social_accounts: {
-        Row: {
-          access_token: string
-          account_id: string | null
-          account_name: string | null
-          agent_id: string
-          created_at: string
-          expires_at: string | null
-          id: string
-          platform: string
-          refresh_token: string | null
-          updated_at: string
-        }
-        Insert: {
-          access_token: string
-          account_id?: string | null
-          account_name?: string | null
-          agent_id: string
-          created_at?: string
-          expires_at?: string | null
-          id?: string
-          platform: string
-          refresh_token?: string | null
-          updated_at?: string
-        }
-        Update: {
-          access_token?: string
-          account_id?: string | null
-          account_name?: string | null
-          agent_id?: string
-          created_at?: string
-          expires_at?: string | null
-          id?: string
-          platform?: string
-          refresh_token?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      social_analytics: {
-        Row: {
-          agent_id: string
-          clicks: number | null
-          comments: number | null
-          created_at: string
-          engagement_rate: number | null
-          followers: number | null
-          id: string
-          impressions: number | null
-          likes: number | null
-          metric_date: string
-          platform: string
-          post_id: string | null
-          reach: number | null
-          shares: number | null
-          updated_at: string
-        }
-        Insert: {
-          agent_id: string
-          clicks?: number | null
-          comments?: number | null
-          created_at?: string
-          engagement_rate?: number | null
-          followers?: number | null
-          id?: string
-          impressions?: number | null
-          likes?: number | null
-          metric_date: string
-          platform: string
-          post_id?: string | null
-          reach?: number | null
-          shares?: number | null
-          updated_at?: string
-        }
-        Update: {
-          agent_id?: string
-          clicks?: number | null
-          comments?: number | null
-          created_at?: string
-          engagement_rate?: number | null
-          followers?: number | null
-          id?: string
-          impressions?: number | null
-          likes?: number | null
-          metric_date?: string
-          platform?: string
-          post_id?: string | null
-          reach?: number | null
-          shares?: number | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      social_media_analytics: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          id: string
-          metric_date: string
-          metric_type: string
-          metric_value: number
-          platform: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          metric_date: string
-          metric_type: string
-          metric_value: number
-          platform: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          metric_date?: string
-          metric_type?: string
-          metric_value?: number
-          platform?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "social_media_analytics_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
-          },
-        ]
-      }
-      social_posts: {
-        Row: {
-          agent_id: string
-          content: string
-          created_at: string
-          error_message: string | null
-          id: string
-          media_type: string | null
-          media_url: string | null
-          platform: string
-          posted_at: string | null
-          postiz_post_id: string | null
-          schedule_time: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          agent_id: string
-          content: string
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          media_type?: string | null
-          media_url?: string | null
-          platform: string
-          posted_at?: string | null
-          postiz_post_id?: string | null
-          schedule_time: string
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          agent_id?: string
-          content?: string
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          media_type?: string | null
-          media_url?: string | null
-          platform?: string
-          posted_at?: string | null
-          postiz_post_id?: string | null
-          schedule_time?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      social_shade_clickup_links: {
-        Row: {
-          agent_marketing_settings_id: string
-          clickup_task_id: string | null
-          created_at: string
-          file_name: string | null
-          id: string
-          shade_asset_id: string | null
-          shade_file_id: string
-          shade_path: string | null
-          transcription_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          agent_marketing_settings_id: string
-          clickup_task_id?: string | null
-          created_at?: string
-          file_name?: string | null
-          id?: string
-          shade_asset_id?: string | null
-          shade_file_id: string
-          shade_path?: string | null
-          transcription_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          agent_marketing_settings_id?: string
-          clickup_task_id?: string | null
-          created_at?: string
-          file_name?: string | null
-          id?: string
-          shade_asset_id?: string | null
-          shade_file_id?: string
-          shade_path?: string | null
-          transcription_id?: string | null
-          updated_at?: string
         }
         Relationships: []
       }
@@ -2915,6 +3527,13 @@ export type Database = {
       spheresync_tasks: {
         Row: {
           agent_id: string
+          ai_priority_score: number | null
+          ai_reason: string | null
+          ai_scored_at: string | null
+          ai_talking_points: string[] | null
+          coach_created_at: string | null
+          coach_dismissed_at: string | null
+          coach_reasoning: string | null
           completed: boolean
           completed_at: string | null
           created_at: string
@@ -2922,6 +3541,7 @@ export type Database = {
           id: string
           lead_id: string | null
           notes: string | null
+          source: string | null
           task_type: string
           updated_at: string
           week_number: number | null
@@ -2929,6 +3549,13 @@ export type Database = {
         }
         Insert: {
           agent_id: string
+          ai_priority_score?: number | null
+          ai_reason?: string | null
+          ai_scored_at?: string | null
+          ai_talking_points?: string[] | null
+          coach_created_at?: string | null
+          coach_dismissed_at?: string | null
+          coach_reasoning?: string | null
           completed?: boolean
           completed_at?: string | null
           created_at?: string
@@ -2936,6 +3563,7 @@ export type Database = {
           id?: string
           lead_id?: string | null
           notes?: string | null
+          source?: string | null
           task_type: string
           updated_at?: string
           week_number?: number | null
@@ -2943,6 +3571,13 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          ai_priority_score?: number | null
+          ai_reason?: string | null
+          ai_scored_at?: string | null
+          ai_talking_points?: string[] | null
+          coach_created_at?: string | null
+          coach_dismissed_at?: string | null
+          coach_reasoning?: string | null
           completed?: boolean
           completed_at?: string | null
           created_at?: string
@@ -2950,6 +3585,7 @@ export type Database = {
           id?: string
           lead_id?: string | null
           notes?: string | null
+          source?: string | null
           task_type?: string
           updated_at?: string
           week_number?: number | null
@@ -3084,6 +3720,104 @@ export type Database = {
           payment_status?: string | null
           updated_at?: string
           website?: string | null
+        }
+        Relationships: []
+      }
+      support_articles: {
+        Row: {
+          author_id: string | null
+          body: string
+          category_id: string
+          created_at: string
+          id: string
+          is_featured: boolean
+          is_published: boolean
+          min_tier: string
+          published_at: string | null
+          search_vector: unknown
+          slug: string
+          summary: string | null
+          tags: string[]
+          title: string
+          updated_at: string
+          view_count: number
+        }
+        Insert: {
+          author_id?: string | null
+          body?: string
+          category_id: string
+          created_at?: string
+          id?: string
+          is_featured?: boolean
+          is_published?: boolean
+          min_tier?: string
+          published_at?: string | null
+          search_vector?: unknown
+          slug: string
+          summary?: string | null
+          tags?: string[]
+          title: string
+          updated_at?: string
+          view_count?: number
+        }
+        Update: {
+          author_id?: string | null
+          body?: string
+          category_id?: string
+          created_at?: string
+          id?: string
+          is_featured?: boolean
+          is_published?: boolean
+          min_tier?: string
+          published_at?: string | null
+          search_vector?: unknown
+          slug?: string
+          summary?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_articles_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "support_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_categories: {
+        Row: {
+          created_at: string
+          description: string | null
+          icon_token: string
+          id: string
+          name: string
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          icon_token?: string
+          id?: string
+          name: string
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          icon_token?: string
+          id?: string
+          name?: string
+          slug?: string
+          sort_order?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -3494,9 +4228,129 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      delight_opportunities_v: {
+        Row: {
+          agent_id: string | null
+          contact_id: string | null
+          days_away: number | null
+          delight_skipped_until: string | null
+          first_name: string | null
+          gift_preferences: string | null
+          kind: string | null
+          last_gift_sent_at: string | null
+          last_name: string | null
+          next_occurrence: string | null
+          source_date: string | null
+        }
+        Relationships: []
+      }
+      v_agent_coaching_state_summary: {
+        Row: {
+          agent_id: string | null
+          agent_name: string | null
+          alert_count: number | null
+          dirty: boolean | null
+          generated_at: string | null
+          model: string | null
+          run_ms: number | null
+          today_count: number | null
+          total_tokens: number | null
+          updated_at: string | null
+          version: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_coaching_state_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      v_coach_scheduling_jobs: {
+        Row: {
+          active: boolean | null
+          command: string | null
+          jobid: number | null
+          jobname: string | null
+          schedule: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          command?: string | null
+          jobid?: number | null
+          jobname?: string | null
+          schedule?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          command?: string | null
+          jobid?: number | null
+          jobname?: string | null
+          schedule?: string | null
+        }
+        Relationships: []
+      }
+      v_coach_task_ttl_jobs: {
+        Row: {
+          active: boolean | null
+          command: string | null
+          jobid: number | null
+          jobname: string | null
+          schedule: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          command?: string | null
+          jobid?: number | null
+          jobname?: string | null
+          schedule?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          command?: string | null
+          jobid?: number | null
+          jobname?: string | null
+          schedule?: string | null
+        }
+        Relationships: []
+      }
+      v_priority_rescore_jobs: {
+        Row: {
+          active: boolean | null
+          command: string | null
+          jobid: number | null
+          jobname: string | null
+          schedule: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          command?: string | null
+          jobid?: number | null
+          jobname?: string | null
+          schedule?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          command?: string | null
+          jobid?: number | null
+          jobname?: string | null
+          schedule?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      _mark_coaching_dirty: { Args: { p_agent_id: string }; Returns: undefined }
+      _priority_rescore_single: {
+        Args: { p_contact_id: string }
+        Returns: undefined
+      }
+      bump_support_article_view: {
+        Args: { p_slug: string }
+        Returns: undefined
+      }
       check_duplicate_rsvp: {
         Args: { p_email: string; p_event_id: string }
         Returns: boolean
@@ -3569,6 +4423,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      invoke_priority_rescore: {
+        Args: { row_limit?: number; where_clause: string }
+        Returns: number
+      }
       is_valid_phone: { Args: { phone_input: string }; Returns: boolean }
       log_newsletter_activity: {
         Args: {
@@ -3609,6 +4467,13 @@ export type Database = {
       submit_rsvp_answers: {
         Args: { p_answers: Json; p_rsvp_id: string }
         Returns: undefined
+      }
+      sweep_stale_coach_tasks: {
+        Args: never
+        Returns: {
+          dismissed_count: number
+          table_name: string
+        }[]
       }
       validate_invitation: {
         Args: { p_code: string; p_email: string }
@@ -3748,3 +4613,4 @@ export const Constants = {
     },
   },
 } as const
+

@@ -13,10 +13,11 @@ Deno.serve(async (req) => {
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const XAI_API_KEY = Deno.env.get("XAI_API_KEY");
+  const XAI_MODEL = Deno.env.get("XAI_MODEL") ?? "grok-4-1-fast-reasoning";
 
-  if (!LOVABLE_API_KEY) {
-    return new Response(JSON.stringify({ error: "Missing LOVABLE_API_KEY" }), {
+  if (!XAI_API_KEY) {
+    return new Response(JSON.stringify({ error: "Missing XAI_API_KEY" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -93,55 +94,35 @@ Keep the caption engaging, authentic, and aligned with the agent's brand. Do NOT
         ? `Here is the video description:\n\n${video_description}`
         : "Generate engaging social media copy for a real estate video post. No transcript or description was provided, so create a general engaging caption.";
 
-    // Call Lovable AI gateway using tool calling for structured output
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Call xAI Grok with JSON-object response format for structured output
+    const jsonInstruction = `\n\nRespond with a JSON object exactly matching this shape:
+{
+  "social_copy": "<caption with hashtags>",
+  "youtube_titles": ["<title 1>", "<title 2>", "<title 3>"],
+  "youtube_description": "<2-3 sentences>"
+}
+No prose outside the JSON.`;
+
+    const aiResp = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${XAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: XAI_MODEL,
         messages: [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: systemPrompt + jsonInstruction },
           { role: "user", content: userContent },
         ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "save_social_copy",
-              description: "Save the generated social media copy and YouTube metadata",
-              parameters: {
-                type: "object",
-                properties: {
-                  social_copy: {
-                    type: "string",
-                    description: "The social media caption with hashtags for Instagram/Facebook/LinkedIn/TikTok",
-                  },
-                  youtube_titles: {
-                    type: "array",
-                    items: { type: "string" },
-                    description: "3 YouTube title options",
-                  },
-                  youtube_description: {
-                    type: "string",
-                    description: "YouTube video description, 2-3 sentences",
-                  },
-                },
-                required: ["social_copy", "youtube_titles", "youtube_description"],
-                additionalProperties: false,
-              },
-            },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "save_social_copy" } },
+        response_format: { type: "json_object" },
+        temperature: 0.7,
       }),
     });
 
     if (!aiResp.ok) {
       const errText = await aiResp.text();
-      console.error("AI gateway error:", aiResp.status, errText);
+      console.error("xAI error:", aiResp.status, errText);
 
       if (aiResp.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limited, try again later" }), {
@@ -150,31 +131,24 @@ Keep the caption engaging, authentic, and aligned with the agent's brand. Do NOT
         });
       }
 
-      throw new Error(`AI gateway error [${aiResp.status}]: ${errText}`);
+      throw new Error(`xAI error [${aiResp.status}]: ${errText}`);
     }
 
     const aiData = await aiResp.json();
-    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
+    const content = aiData.choices?.[0]?.message?.content ?? "";
 
     let socialCopy = "";
     let youtubeTitles = "[]";
     let youtubeDescription = "";
 
-    if (toolCall?.function?.arguments) {
-      try {
-        const args = JSON.parse(toolCall.function.arguments);
-        socialCopy = args.social_copy || "";
-        youtubeTitles = JSON.stringify(args.youtube_titles || []);
-        youtubeDescription = args.youtube_description || "";
-      } catch {
-        console.error("Failed to parse tool call arguments");
-        // Fallback: try to use the message content directly
-        const content = aiData.choices?.[0]?.message?.content || "";
-        socialCopy = content;
-      }
-    } else {
-      // Fallback if no tool call returned
-      socialCopy = aiData.choices?.[0]?.message?.content || "";
+    try {
+      const args = JSON.parse(content);
+      socialCopy = args.social_copy || "";
+      youtubeTitles = JSON.stringify(args.youtube_titles || []);
+      youtubeDescription = args.youtube_description || "";
+    } catch {
+      console.error("Failed to parse Grok JSON response, using raw content as caption");
+      socialCopy = content;
     }
 
     // Save to content_generation_results

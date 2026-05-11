@@ -56,7 +56,7 @@ export const STRIPE_TIERS = {
       'Everything in Core',
       'Contact database (1,000 contacts)',
       'Event management',
-      'Pipeline & deal tracking',
+      'Pipeline & opportunity tracking',
       'Social media scheduler',
     ],
     role: 'managed' as const,

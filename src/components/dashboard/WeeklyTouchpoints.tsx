@@ -43,7 +43,7 @@ export function WeeklyTouchpoints({ data }: Props) {
           <div className="text-sm text-muted-foreground mt-1">{scoreboard.conversations} / 25 conversations</div>
           <Progress value={convoPct} className="h-2 mt-2 max-w-xs mx-auto" />
           {!scoreboard.submitted && (
-            <Button variant="link" size="sm" className="mt-2 text-xs" onClick={() => navigate('/coaching')}>
+            <Button variant="link" size="sm" className="mt-2 text-xs" onClick={() => navigate('/scoreboard')}>
               Submit your Weekly Check-In →
             </Button>
           )}

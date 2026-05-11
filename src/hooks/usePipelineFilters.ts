@@ -1,34 +1,56 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Opportunity } from './usePipeline';
-import { PipelineType, getStagesForType, pipelineTypeFromOpportunityType } from '@/config/pipelineStages';
+import { PipelineType, getStagesForType, getEffectivePipelineType } from '@/config/pipelineStages';
 
 export type PipelineSortBy = 'deal_value' | 'close_date' | 'ai_probability' | 'days_stale' | 'created_at';
 export type PipelineFilterType = PipelineType | 'all';
 
+// Per Pipeline UX audit Should-fix #13: agents have a preferred sort (often
+// "Most stale" or "Closest close" — not "Newest first") and forcing them to
+// re-pick it on every visit is friction. Persist last-used to localStorage.
+// Read defensively so a corrupted/missing value falls back to the sensible
+// default rather than crashing.
+const SORT_STORAGE_KEY = 'reop.pipeline.sortBy';
+const VALID_SORTS: PipelineSortBy[] = ['deal_value', 'close_date', 'ai_probability', 'days_stale', 'created_at'];
+
+function readStoredSort(): PipelineSortBy {
+  if (typeof window === 'undefined') return 'created_at';
+  try {
+    const raw = window.localStorage.getItem(SORT_STORAGE_KEY);
+    if (raw && (VALID_SORTS as string[]).includes(raw)) return raw as PipelineSortBy;
+  } catch {
+    // localStorage may throw in privacy mode; treat as no preference.
+  }
+  return 'created_at';
+}
+
 export function usePipelineFilters(opportunities: Opportunity[]) {
   const [pipelineType, setPipelineType] = useState<PipelineFilterType>('all');
-  const [showLost, setShowLost] = useState(false);
-  const [sortBy, setSortBy] = useState<PipelineSortBy>('created_at');
+  const [sortBy, setSortBy] = useState<PipelineSortBy>(readStoredSort);
   const [filterStage, setFilterStage] = useState<string | null>(null);
+
+  // Persist on change. Failures are silent — a non-persisted sort is no worse
+  // than the pre-fix behavior.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SORT_STORAGE_KEY, sortBy);
+    } catch {
+      /* privacy mode / quota — ignore */
+    }
+  }, [sortBy]);
 
   const filtered = useMemo(() => {
     let result = [...opportunities];
 
     // Filter by pipeline type
     if (pipelineType !== 'all') {
-      result = result.filter(o => {
-        const pt = (o as any).pipeline_type ?? pipelineTypeFromOpportunityType((o as any).opportunity_type ?? 'buyer');
-        return pt === pipelineType;
-      });
+      result = result.filter(o => getEffectivePipelineType(o) === pipelineType);
     }
 
-    // Filter out lost/withdrawn unless explicitly shown
-    if (!showLost) {
-      result = result.filter(o => {
-        const outcome = (o as any).outcome;
-        return !outcome || !['lost', 'withdrawn'].includes(outcome);
-      });
-    }
+    // Phase 1: Lost deals are now a first-class meta-stage column (Closed
+    // lost) on the board. The legacy "Show lost" toggle that hid them by
+    // default is gone — agents need to find lost deals to follow up later.
+    // Withdrawn opportunities also flow through the closed_lost meta now.
 
     // Filter by specific stage
     if (filterStage) {
@@ -56,7 +78,7 @@ export function usePipelineFilters(opportunities: Opportunity[]) {
     });
 
     return result;
-  }, [opportunities, pipelineType, showLost, sortBy, filterStage]);
+  }, [opportunities, pipelineType, sortBy, filterStage]);
 
   // Stages to display on the board
   const boardStages = useMemo(() => {
@@ -79,7 +101,6 @@ export function usePipelineFilters(opportunities: Opportunity[]) {
     boardStages,
     aiStats,
     pipelineType, setPipelineType,
-    showLost, setShowLost,
     sortBy, setSortBy,
     filterStage, setFilterStage,
   };

@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { CoachContactBlurb } from '@/components/commander/CoachContactBlurb';
+import { useContactSheet } from '@/components/spheresync/ContactSheetProvider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { StagePicker } from './StagePicker';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { TodayOpportunity } from '@/hooks/useToday';
@@ -22,12 +24,13 @@ import { CompleteAndSetNextModal } from './CompleteAndSetNextModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import {
-  pipelineTypeFromOpportunityType, getStagesForType,
+  getEffectivePipelineType,
   getStageLabel, OPPORTUNITY_TYPE_LABELS, getStageAccent,
 } from '@/config/pipelineStages';
 import {
   ArrowRight, CheckCircle2, Zap, CalendarClock, MessageSquare,
   Phone, Mail, Users, FileText, DollarSign, Calendar, Home, Save, X,
+  ExternalLink,
 } from 'lucide-react';
 import { format, parseISO, isToday, isTomorrow, isPast } from 'date-fns';
 
@@ -113,6 +116,9 @@ function SelectRow({
   );
 }
 
+// `StageSelectRow` was extracted to `./StagePicker.tsx` so EditOpportunityDialog
+// and AddOpportunityDialog could reuse the same grouped-by-meta dropdown.
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 type Opp = TodayOpportunity | Opportunity;
@@ -126,14 +132,24 @@ interface Props {
 
 export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: Props) {
   const { toast } = useToast();
-  const { activities, refresh: refreshActivities } = useOpportunityActivities(opportunity?.id ?? null);
+  const { timeline, refresh: refreshActivities } = useOpportunityActivities(opportunity?.id ?? null);
+  // Cross-page bridge — opens the unified ContactQuickSheet (the same drawer
+  // SphereSync + Database use) for the linked contact. Closes this drawer
+  // first so the two sheets don't collide visually.
+  const { openContact } = useContactSheet();
   const [logOpen, setLogOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Editable state, reset when opp changes
+  // Editable state, reset when opp changes. Phase 4.2: instead of tracking
+  // a single `dealDirty` boolean and sending every field on save (including
+  // server-managed columns like `is_stale`, `days_in_current_stage`, AI
+  // fields), we track the SET of dirty field names. saveDeal then builds the
+  // patch from only those keys — minimal payload, no risk of clobbering
+  // server-computed state.
   const [deal, setDeal] = useState<Record<string, any>>({});
-  const [dealDirty, setDealDirty] = useState(false);
+  const [dealDirtyFields, setDealDirtyFields] = useState<Set<string>>(new Set());
+  const dealDirty = dealDirtyFields.size > 0;
   const [contactEdits, setContactEdits] = useState<Record<string, string>>({});
   const [contactDirty, setContactDirty] = useState(false);
 
@@ -141,7 +157,7 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
     if (opportunity) {
       setDeal({ ...(opportunity as any) });
       setContactEdits({});
-      setDealDirty(false);
+      setDealDirtyFields(new Set());
       setContactDirty(false);
     }
   }, [opportunity?.id]);
@@ -149,8 +165,7 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
   if (!opportunity) return null;
 
   const opp = opportunity as any;
-  const pipelineType = (opp.pipeline_type ?? pipelineTypeFromOpportunityType(opp.opportunity_type ?? 'buyer')) as 'buyer' | 'seller' | 'referral';
-  const stages = getStagesForType(pipelineType);
+  const pipelineType = getEffectivePipelineType(opp);
   const accent = getStageAccent(opp.stage, pipelineType);
 
   const contactName: string =
@@ -164,7 +179,11 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
 
   const setDealField = (field: string, val: string) => {
     setDeal(prev => ({ ...prev, [field]: val === '' ? null : val }));
-    setDealDirty(true);
+    setDealDirtyFields(prev => {
+      const next = new Set(prev);
+      next.add(field);
+      return next;
+    });
   };
 
   const setContactField = (field: string, val: string) => {
@@ -175,16 +194,59 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
   const saveDeal = async () => {
     setSaving(true);
     try {
-      // Only send updatable columns (exclude computed/joined)
-      const { contact, contact_name, attention_state, ...updateable } = deal;
-      const { error } = await supabase
+      // Phase 4.2: build the patch from only dirty fields. The previous impl
+      // sent EVERY column on every save (minus a handful of joined/UI fields),
+      // which:
+      //   1) wasted the network payload
+      //   2) clobbered server-managed columns (is_stale, stale_since,
+      //      days_in_current_stage, ai_*, attention_state) with whatever
+      //      stale value was loaded into local state on drawer open
+      //   3) made concurrent edits dangerously last-write-wins
+      // Now we only ship the columns the agent actually touched, plus the
+      // updated_at bump. The blocklist below is a safety net — if a future
+      // computed column accidentally gets bound to a form input, this still
+      // prevents writing to it.
+      const COMPUTED_OR_JOINED = new Set([
+        'id', 'agent_id', 'created_at', 'updated_at',
+        'contact', 'contact_name', 'attention_state',
+        'is_stale', 'stale_since', 'days_in_current_stage', 'last_activity_date',
+        'pipeline_type', // generated column on the table
+        'ai_deal_probability', 'ai_summary', 'ai_suggested_next_action',
+        'ai_risk_flags', 'ai_scored_at',
+      ]);
+
+      const patch: Record<string, any> = {};
+      for (const field of dealDirtyFields) {
+        if (COMPUTED_OR_JOINED.has(field)) continue;
+        patch[field] = deal[field];
+      }
+      if (Object.keys(patch).length === 0) {
+        toast({ title: 'Nothing to save' });
+        setSaving(false);
+        return;
+      }
+      patch.updated_at = new Date().toISOString();
+
+      // Same RLS-deny detection pattern as updateStage in usePipeline.
+      const { data: updated, error } = await supabase
         .from('opportunities')
-        .update({ ...updateable, updated_at: new Date().toISOString() })
-        .eq('id', opp.id);
+        .update(patch)
+        .eq('id', opp.id)
+        .select('id');
       if (error) throw error;
+      if (!updated || updated.length === 0) {
+        throw new Error(
+          'Update affected 0 rows — likely an RLS policy denial. Try reloading.',
+        );
+      }
+
       toast({ title: 'Saved' });
-      setDealDirty(false);
+      setDealDirtyFields(new Set());
       onRefresh();
+      // Fire-and-forget AI re-score so Coach reflects fresh deal state.
+      supabase.functions
+        .invoke('pipeline-score-opportunities', { body: { opportunity_id: opp.id } })
+        .catch((err) => console.warn('[OpportunityDetailV2] re-score failed', err));
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally { setSaving(false); }
@@ -202,6 +264,10 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
       toast({ title: 'Contact saved' });
       setContactDirty(false);
       onRefresh();
+      // Fire-and-forget priority re-score on the contact.
+      supabase.functions
+        .invoke('compute-priority-scores', { body: { contact_id: opp.contact_id } })
+        .catch((err) => console.warn('[OpportunityDetailV2] priority re-score failed', err));
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally { setSaving(false); }
@@ -236,11 +302,22 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
                 {opp.ai_deal_probability != null && (
                   <Badge
                     variant="outline"
-                    className={cn('text-xs h-5 gap-1',
+                    className={cn('text-xs h-5 gap-1 cursor-help',
                       opp.ai_deal_probability >= 70 ? 'text-green-700 border-green-300' :
                       opp.ai_deal_probability >= 40 ? 'text-amber-700 border-amber-300' :
                       'text-red-700 border-red-300'
                     )}
+                    // Per Pipeline UX audit Should-fix #11: a probability
+                    // number with no provenance reads as a fact. Showing the
+                    // last-scored timestamp + a hedge phrase tells agents
+                    // it's a model output, not a guarantee, and lets them
+                    // judge freshness. Native title= avoids pulling in the
+                    // Tooltip primitive for a one-off badge.
+                    title={
+                      opp.ai_scored_at
+                        ? `AI-estimated likelihood of close · scored ${format(parseISO(opp.ai_scored_at), 'MMM d, h:mm a')}`
+                        : 'AI-estimated likelihood of close'
+                    }
                   >
                     <Zap className="h-2.5 w-2.5" />{opp.ai_deal_probability}%
                   </Badge>
@@ -311,25 +388,45 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
                   My Confidence
                 </p>
                 <div className="flex gap-2">
-                  {CONFIDENCE_OPTS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={async () => {
-                        await supabase.from('opportunities')
-                          .update({ confidence: opt.value, updated_at: new Date().toISOString() })
-                          .eq('id', opp.id);
-                        onRefresh();
-                      }}
-                      className={cn(
-                        'flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors',
-                        (opp.confidence ?? 'medium') === opt.value
-                          ? opt.cls
-                          : 'text-muted-foreground border-border hover:border-foreground/20'
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                  {CONFIDENCE_OPTS.map(opt => {
+                    // Read from local `deal` state (which shadows `opp` after
+                    // the useEffect on line 140-147) so an optimistic flip is
+                    // visible before the parent refresh round-trips. Per
+                    // Pipeline UX audit Should-fix #9: clicking a confidence
+                    // chip used to fire silently with no toast and no UI
+                    // feedback until refresh — agents would click and not
+                    // know if it worked.
+                    const currentConfidence = (d.confidence ?? opp.confidence ?? 'medium');
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={async () => {
+                          // Optimistic flip — local state updates immediately.
+                          setDeal(prev => ({ ...prev, confidence: opt.value }));
+                          try {
+                            const { error } = await supabase.from('opportunities')
+                              .update({ confidence: opt.value, updated_at: new Date().toISOString() })
+                              .eq('id', opp.id);
+                            if (error) throw error;
+                            toast({ title: `Confidence set to ${opt.label.toLowerCase()}` });
+                            onRefresh();
+                          } catch (e: any) {
+                            // Revert on failure so the UI doesn't lie.
+                            setDeal(prev => ({ ...prev, confidence: opp.confidence ?? null }));
+                            toast({ title: 'Error', description: e.message, variant: 'destructive' });
+                          }
+                        }}
+                        className={cn(
+                          'flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                          currentConfidence === opt.value
+                            ? opt.cls
+                            : 'text-muted-foreground border-border hover:border-foreground/20'
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -385,13 +482,15 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
             {/* ── Transaction ── */}
             <TabsContent value="transaction" className="flex-1 overflow-y-auto px-5 pt-4 pb-24 space-y-5 mt-0">
 
-              {/* Stage + type */}
+              {/* Stage + type. The Stage picker groups sub-stages under
+                  their board-visible meta-stage labels (Leads / Working /
+                  Under contract / Closed) so the dropdown vocabulary matches
+                  the column vocabulary. */}
               <div className="grid grid-cols-2 gap-3">
-                <SelectRow
-                  label="Stage"
+                <StagePicker
                   value={d.stage ?? ''}
                   onChange={v => setDealField('stage', v)}
-                  options={stages.map(s => ({ value: s.key, label: s.label }))}
+                  pipelineType={pipelineType}
                 />
                 <SelectRow
                   label="Type"
@@ -407,7 +506,7 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
                   <DollarSign className="h-3.5 w-3.5" />Financial
                 </p>
                 <div className="grid grid-cols-2 gap-3">
-                  <FieldRow label="Deal Value"     value={String(d.deal_value ?? '')}     onChange={v => setDealField('deal_value', v)}     type="number" prefix="$" />
+                  <FieldRow label="Estimated Value" value={String(d.deal_value ?? '')}     onChange={v => setDealField('deal_value', v)}     type="number" prefix="$" />
                   <FieldRow label="List Price"     value={String(d.list_price ?? '')}     onChange={v => setDealField('list_price', v)}     type="number" prefix="$" />
                   <FieldRow label="Offer Price"    value={String(d.offer_price ?? '')}    onChange={v => setDealField('offer_price', v)}    type="number" prefix="$" />
                   <FieldRow label="Sale Price"     value={String(d.sale_price ?? '')}     onChange={v => setDealField('sale_price', v)}     type="number" prefix="$" />
@@ -483,6 +582,34 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
 
             {/* ── Contact ── */}
             <TabsContent value="contact" className="flex-1 overflow-y-auto px-5 pt-4 pb-24 space-y-5 mt-0">
+
+              {/* Cross-page bridge to the unified ContactQuickSheet so the
+                  agent can see this person's full Database row — tags,
+                  notes, family/life-events, full activity history — without
+                  navigating away from the pipeline. */}
+              {opp.contact_id && (
+                <div className="flex items-center justify-between gap-2 -mt-1 mb-1">
+                  <p className="text-xs text-muted-foreground leading-snug">
+                    Editing contact fields below saves to this person's Database record.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs gap-1 text-primary hover:text-primary"
+                    onClick={() => {
+                      const contactId = opp.contact_id;
+                      onClose();
+                      // Defer so the opportunity drawer's close animation
+                      // doesn't fight the contact drawer's open.
+                      setTimeout(() => openContact(contactId), 200);
+                    }}
+                  >
+                    Open full contact view
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <FieldRow label="First Name" value={c.first_name ?? ''} onChange={v => setContactField('first_name', v)} />
@@ -601,12 +728,18 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
                 </Button>
               </div>
 
-              {activities.length === 0 ? (
+              {timeline.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-10">No activity yet</p>
               ) : (
                 <div className="space-y-1">
-                  {activities.map(act => (
-                    <div key={act.id} className="flex gap-3 pb-3 border-b border-border/40 last:border-0">
+                  {/* Unified timeline — opportunity activities + contact-scoped
+                      activities (calls/texts logged from SphereSync, Database,
+                      ContactQuickSheet) merged by date. Cross-posted duplicates
+                      are deduped in the hook. Rows from the contact-only side
+                      get a small "Contact" chip so the agent can tell them
+                      apart from opportunity-direct entries. */}
+                  {timeline.map(act => (
+                    <div key={`${act.source}-${act.id}`} className="flex gap-3 pb-3 border-b border-border/40 last:border-0">
                       <div className="mt-0.5 h-6 w-6 rounded-full bg-muted flex items-center justify-center text-muted-foreground flex-shrink-0">
                         {ACTIVITY_ICONS[act.activity_type] ?? <FileText className="h-3.5 w-3.5" />}
                       </div>
@@ -618,6 +751,14 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
                           <span className="text-xs text-muted-foreground">
                             {format(parseISO(act.activity_date), 'MMM d · h:mm a')}
                           </span>
+                          {act.source === 'contact' && (
+                            <span
+                              className="text-[9px] uppercase tracking-wide font-semibold px-1 py-0.5 rounded bg-muted text-muted-foreground"
+                              title="Logged at the contact level (e.g. from SphereSync or Database), not against this opportunity."
+                            >
+                              Contact
+                            </span>
+                          )}
                         </div>
                         {act.title && <p className="text-xs text-muted-foreground mt-0.5">{act.title}</p>}
                         {act.note && <p className="text-xs text-muted-foreground mt-0.5">{act.note}</p>}

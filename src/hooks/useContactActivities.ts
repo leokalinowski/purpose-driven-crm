@@ -6,7 +6,7 @@ export interface ContactActivity {
   id: string;
   contact_id: string;
   agent_id: string;
-  activity_type: 'call' | 'text' | 'email' | 'meeting' | 'note' | 'task';
+  activity_type: 'call' | 'text' | 'email' | 'meeting' | 'note' | 'task' | 'gift';
   activity_date: string;
   duration_minutes: number | null;
   outcome: string | null;
@@ -107,6 +107,21 @@ export const useContactActivities = (contactId: string) => {
     }
   }, [user, fetchActivities]);
 
+  /**
+   * Convenience wrapper: log a free-text note for this contact. Notes are
+   * persisted as `activity_type='note'` rows in `contact_activities`, so they
+   * appear alongside calls/texts/emails in the activity timeline and never
+   * overwrite each other.
+   */
+  const addNote = useCallback(async (body: string) => {
+    const trimmed = body.trim();
+    if (!trimmed) throw new Error('Note body is empty');
+    return addActivity({
+      activity_type: 'note',
+      notes: trimmed,
+    });
+  }, [addActivity]);
+
   const deleteActivity = useCallback(async (id: string) => {
     if (!user) throw new Error('User not authenticated');
 
@@ -132,6 +147,7 @@ export const useContactActivities = (contactId: string) => {
     loading,
     fetchActivities,
     addActivity,
+    addNote,
     updateActivity,
     deleteActivity,
   };
