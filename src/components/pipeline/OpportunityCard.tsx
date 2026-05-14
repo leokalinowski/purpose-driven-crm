@@ -2,8 +2,9 @@ import { useRef } from 'react';
 import { useDrag } from 'react-dnd';
 import { Opportunity } from "@/hooks/usePipeline";
 import {
-  getEffectivePipelineType, getStageAccent,
-  getMetaStageForKey, META_STAGES, defaultSubStage,
+  getStageAccent,
+  getStageLabel,
+  getBoardStages,
 } from "@/config/pipelineStages";
 import { Calendar, DollarSign, ArrowRight, AlertCircle, MoreHorizontal, Check, ShieldAlert } from "lucide-react";
 import { format, parseISO, isPast, isToday } from "date-fns";
@@ -46,9 +47,9 @@ export function OpportunityCard({ opportunity, onEdit, onStageChange }: Opportun
     if (!dragMoved.current) onEdit(opportunity);
   };
 
-  const pipelineType = getEffectivePipelineType(opportunity);
-  const accent = getStageAccent(opportunity.stage, pipelineType);
-  const currentMeta = getMetaStageForKey(opportunity.stage);
+  const accent = getStageAccent(opportunity.stage);
+  const stageLabel = getStageLabel(opportunity.stage);
+  const boardStages = getBoardStages();
 
   const contactName = opportunity.contact?.first_name || opportunity.contact?.last_name
     ? `${opportunity.contact?.first_name ?? ''} ${opportunity.contact?.last_name ?? ''}`.trim()
@@ -108,26 +109,24 @@ export function OpportunityCard({ opportunity, onEdit, onStageChange }: Opportun
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel>Move to stage</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {/* Just the 4 meta-stages from the board — same vocabulary
-                    everywhere. Picking one resolves to the canonical
-                    sub-stage for this opportunity's pipeline type via
-                    `defaultSubStage`, which is what the DB stores. */}
-                {META_STAGES.map(meta => (
+                {/* The 7 board stages — same vocabulary everywhere.
+                    `lost` is intentionally excluded from this quick-move
+                    menu; it lives in a separate filter view. */}
+                {boardStages.map(stage => (
                   <DropdownMenuItem
-                    key={meta.key}
+                    key={stage.key}
                     onClick={() => {
-                      if (meta.key === currentMeta) return;
-                      const newSub = defaultSubStage(meta.key, pipelineType);
-                      onStageChange(opportunity.id, newSub);
+                      if (stage.key === opportunity.stage) return;
+                      onStageChange(opportunity.id, stage.key);
                     }}
                     className="gap-2"
                   >
                     <span
                       className="h-2 w-2 rounded-full shrink-0"
-                      style={{ backgroundColor: meta.accent }}
+                      style={{ backgroundColor: stage.accent }}
                     />
-                    <span className="flex-1">{meta.label}</span>
-                    {meta.key === currentMeta && (
+                    <span className="flex-1">{stage.label}</span>
+                    {stage.key === opportunity.stage && (
                       <Check className="h-3.5 w-3.5 text-muted-foreground" />
                     )}
                   </DropdownMenuItem>
@@ -138,17 +137,15 @@ export function OpportunityCard({ opportunity, onEdit, onStageChange }: Opportun
         )}
       </div>
 
-      {/* Stage pill — shows the META-stage label (Leads / Working / Under
-          contract / Closed) so the card vocabulary matches the column it
-          lives in. The DB-stored sub-stage (e.g. `active_search`) is no
-          longer surfaced on the card per the simplification pass. */}
-      {currentMeta && (
+      {/* Stage pill — universal Pam-style stage label (e.g.
+          "Opportunity identified"). Matches the column the card lives in. */}
+      {opportunity.stage && (
         <div className="mb-2">
           <span
             className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded"
             style={{ backgroundColor: `${accent}1a`, color: accent }}
           >
-            {META_STAGES.find(m => m.key === currentMeta)?.label ?? currentMeta}
+            {stageLabel}
           </span>
         </div>
       )}

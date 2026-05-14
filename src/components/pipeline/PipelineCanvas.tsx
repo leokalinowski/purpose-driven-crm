@@ -7,17 +7,8 @@ import { usePipelineFilters, type PipelineFilterType, type PipelineSortBy } from
 import { PipelineBoard } from './PipelineBoard';
 import { AddOpportunityDialog } from './AddOpportunityDialog';
 import { OpportunityDetailV2 } from './OpportunityDetailV2';
-import { META_STAGES, getMetaStageForKey } from '@/config/pipelineStages';
+import { getBoardStages } from '@/config/pipelineStages';
 import { TrendingUp, AlertTriangle, Sparkles } from 'lucide-react';
-
-// Tile top-accent colors. Keep aligned with `META_STAGES[i].accent` —
-// these are slightly desaturated variants chosen for the tile-only treatment.
-const STAGE_ACCENT: Record<string, string> = {
-  nurturing: 'hsl(280 60% 55%)',
-  active:    'hsl(184 100% 34%)',
-  pending:   'hsl(35 85% 50%)',
-  closed:    'hsl(140 50% 45%)',
-};
 
 type Variant = 'hub' | 'standalone';
 
@@ -31,20 +22,22 @@ export function PipelineCanvas({ variant = 'hub' }: { variant?: Variant }) {
 
   const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
 
-  // Volume-by-meta-stage from active opportunities. Initializing buckets from
-  // META_STAGES means adding a new meta-stage (e.g. `closed_lost`) doesn't
-  // require touching this loop again.
+  // Volume-by-stage from active opportunities. One bucket per board stage
+  // (the 7 — `lost` is off-board). Sphere-only rows (stage = NULL) are
+  // ignored. Cards beyond the 4 visible summary tiles below still show
+  // their stage on the kanban itself.
+  const boardStages = useMemo(() => getBoardStages(), []);
+  const summaryStages = useMemo(() => boardStages.slice(0, 4), [boardStages]);
   const stageBuckets = useMemo(() => {
     const buckets: Record<string, { count: number; volume: number }> =
-      Object.fromEntries(META_STAGES.map(m => [m.key, { count: 0, volume: 0 }]));
+      Object.fromEntries(boardStages.map((s) => [s.key, { count: 0, volume: 0 }]));
     for (const o of filtered) {
-      const meta = getMetaStageForKey(o.stage);
-      if (!meta || !buckets[meta]) continue;
-      buckets[meta].count++;
-      buckets[meta].volume += o.deal_value ?? 0;
+      if (!o.stage || !buckets[o.stage]) continue;
+      buckets[o.stage].count++;
+      buckets[o.stage].volume += o.deal_value ?? 0;
     }
     return buckets;
-  }, [filtered]);
+  }, [filtered, boardStages]);
 
   const formatCurrency = (n: number) => {
     if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -60,9 +53,12 @@ export function PipelineCanvas({ variant = 'hub' }: { variant?: Variant }) {
     // leads on a phone couldn't move cards before. Backend config lives in
     // src/lib/dndBackend.ts and is shared with the Newsletter builder.
     <DndProvider backend={MultiBackend} options={HTML5toTouch}>
-      {/* Stage summary tiles — 4 columns on desktop matching the board. */}
+      {/* Stage summary tiles — first 4 stages of the funnel as a quick
+          glance row above the full 7-column board. The remaining 3 stages
+          (active / under contract / closed) are visible on the board
+          itself so we don't double-count them as tiles. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3 mb-5">
-        {META_STAGES.map((s) => {
+        {summaryStages.map((s) => {
           const b = stageBuckets[s.key];
           return (
             <div
@@ -71,7 +67,7 @@ export function PipelineCanvas({ variant = 'hub' }: { variant?: Variant }) {
             >
               <div
                 className="absolute top-0 left-0 right-0 h-[3px]"
-                style={{ background: STAGE_ACCENT[s.key] }}
+                style={{ background: s.accent }}
               />
               <div className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground font-semibold mb-2">
                 {s.label}

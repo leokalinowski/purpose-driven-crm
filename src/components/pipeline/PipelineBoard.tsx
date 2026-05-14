@@ -1,13 +1,7 @@
 import { useMemo } from 'react';
-import { Opportunity } from "@/hooks/usePipeline";
-import {
-  MetaStage,
-  META_STAGES,
-  getMetaStageForKey,
-  defaultSubStage,
-  getEffectivePipelineType,
-} from "@/config/pipelineStages";
-import { PipelineColumn } from "./PipelineColumn";
+import { Opportunity } from '@/hooks/usePipeline';
+import { getBoardStages, type StageKey } from '@/config/pipelineStages';
+import { PipelineColumn } from './PipelineColumn';
 
 interface PipelineBoardProps {
   opportunities: Opportunity[];
@@ -22,38 +16,32 @@ export function PipelineBoard({
   onEditOpportunity,
   loading,
 }: PipelineBoardProps) {
+  const boardStages = getBoardStages();
 
-  // Group opportunities by meta-stage. Init from META_STAGES so adding a
-  // new meta (e.g. `closed_lost`) doesn't need a literal map update here.
-  const byMeta = useMemo(() => {
+  // Group opportunities by stage. Opportunities with stage = null (sphere-
+  // only) AND stage = 'lost' (off-board) are filtered out — the board only
+  // shows the 7 active stages.
+  const byStage = useMemo(() => {
     const map = Object.fromEntries(
-      META_STAGES.map(m => [m.key, [] as Opportunity[]])
-    ) as Record<MetaStage, Opportunity[]>;
+      boardStages.map((s) => [s.key, [] as Opportunity[]]),
+    ) as Record<StageKey, Opportunity[]>;
     for (const o of opportunities) {
-      const meta = getMetaStageForKey(o.stage);
-      if (meta && map[meta]) map[meta].push(o);
+      if (o.stage && map[o.stage as StageKey]) map[o.stage as StageKey].push(o);
     }
     return map;
-  }, [opportunities]);
+  }, [opportunities, boardStages]);
 
-  // When dropped onto a meta-column, resolve the specific sub-stage based on pipeline_type
-  // and skip the write if the card is already in that meta-column.
-  const handleMetaDrop = async (opportunityId: string, meta: MetaStage) => {
-    const opp = opportunities.find(o => o.id === opportunityId);
-    if (!opp) return;
-    const currentMeta = getMetaStageForKey(opp.stage);
-    if (currentMeta === meta) return;
-
-    const pipelineType = getEffectivePipelineType(opp);
-    const newStage = defaultSubStage(meta, pipelineType);
+  const handleStageDrop = async (opportunityId: string, newStage: string) => {
+    const opp = opportunities.find((o) => o.id === opportunityId);
+    if (!opp || opp.stage === newStage) return;
     await onStageUpdate(opportunityId, newStage);
   };
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 snap-x snap-mandatory md:snap-none overflow-x-auto md:overflow-visible pb-4">
-        {META_STAGES.map((stage) => (
-          <div key={stage.key} className="min-w-[280px] md:min-w-0 space-y-3 snap-start">
+      <div className="flex gap-3 overflow-x-auto pb-4">
+        {boardStages.map((stage) => (
+          <div key={stage.key} className="w-[200px] flex-shrink-0 space-y-3">
             <div className="h-10 bg-muted animate-pulse rounded-lg" />
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-24 bg-muted animate-pulse rounded-lg" />
@@ -64,14 +52,17 @@ export function PipelineBoard({
     );
   }
 
+  // 7 columns, ~200px each ≈ 1400px total + gaps. Wraps to horizontal scroll
+  // below ~1100px (the design's intent per Q5). Mobile collapses naturally
+  // because each column is fixed-width with flex-shrink-0.
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 snap-x snap-mandatory md:snap-none overflow-x-auto md:overflow-visible pb-4">
-      {META_STAGES.map((stage) => (
-        <div key={stage.key} className="min-w-[280px] md:min-w-0 snap-start">
+    <div className="flex gap-3 overflow-x-auto pb-4 snap-x snap-mandatory md:snap-none">
+      {boardStages.map((stage) => (
+        <div key={stage.key} className="snap-start">
           <PipelineColumn
-            metaStage={stage}
-            opportunities={byMeta[stage.key]}
-            onMetaStageUpdate={handleMetaDrop}
+            stage={stage}
+            opportunities={byStage[stage.key as StageKey]}
+            onStageMove={handleStageDrop}
             onStageUpdate={onStageUpdate}
             onEditOpportunity={onEditOpportunity}
           />
