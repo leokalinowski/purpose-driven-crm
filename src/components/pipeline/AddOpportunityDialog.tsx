@@ -13,7 +13,6 @@ import { useToast } from "@/hooks/use-toast";
 import {
   OPPORTUNITY_TYPE_LABELS,
   pipelineTypeFromOpportunityType,
-  getStagesForType,
 } from "@/config/pipelineStages";
 import { StagePicker } from "./StagePicker";
 
@@ -28,7 +27,7 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
     contact_id: "",
     opportunity_type: "buyer",
     title: "",
-    stage: "new_lead",
+    stage: "conversation_active",
     deal_value: "",
     expected_close_date: "",
     notes: "",
@@ -57,15 +56,12 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
     }
   }, [open, fetchContacts]);
 
-  // When opportunity_type changes, reset stage to the first stage of the new pipeline type
+  // Opportunity_type now only drives the card badge; stages are universal.
+  // Keep the picker scoped to the agent's selection but DON'T reset stage —
+  // the agent's chosen stage is independent.
   const handleOpportunityTypeChange = (value: string) => {
-    const pt = pipelineTypeFromOpportunityType(value);
-    const stages = getStagesForType(pt);
-    setFormData(prev => ({
-      ...prev,
-      opportunity_type: value,
-      stage: stages[0]?.key ?? 'new_lead',
-    }));
+    void pipelineTypeFromOpportunityType; // referenced for symmetry; no-op
+    setFormData(prev => ({ ...prev, opportunity_type: value }));
   };
 
   // `availableStages` derivation removed — StagePicker now scopes options
@@ -131,7 +127,7 @@ export function AddOpportunityDialog({ onOpportunityCreated }: AddOpportunityDia
           contact_id: "",
           opportunity_type: "buyer",
           title: "",
-          stage: "new_lead",
+          stage: "conversation_active",
           deal_value: "",
           expected_close_date: "",
           notes: "",

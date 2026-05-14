@@ -2,14 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { STAGE_TO_META } from '@/config/pipelineStages';
+import { getStageByKey } from '@/config/pipelineStages';
 
 export interface Opportunity {
   id: string;
   agent_id: string;
   contact_id: string;
   // ── Classification ────────────────────────────────────────────────────────
-  stage: string;
+  // `stage` is nullable since the Pam migration — NULL = sphere-only
+  // opportunity (in the table but not on the kanban board).
+  stage: string | null;
   opportunity_type: string;     // buyer | seller | referral_out | referral_in | landlord | tenant | investor
   pipeline_type: string | null; // generated: buyer | seller | referral
   title: string | null;
@@ -189,14 +191,14 @@ export function usePipeline() {
       setOpportunities(data_);
       calculateMetrics(data_);
 
-      // Detect unmapped stages but log quietly. `lost` is intentionally
-      // filtered today — noisy sonner toasts on every fetch were misleading.
-      // If unrecognized stages appear, log once per session per value so the
-      // dev console catches drift without spamming the agent.
+      // Detect unrecognized stages (drift from the canonical 7 + lost).
+      // Sphere-only rows (stage = null) are expected and silent. Log once
+      // per session per value so the dev console catches schema drift
+      // without spamming the agent.
       for (const o of data_) {
-        if (o.stage && !STAGE_TO_META[o.stage] && o.stage !== 'lost' && !warnedUnmappedStages.current.has(o.stage)) {
+        if (o.stage && !getStageByKey(o.stage) && !warnedUnmappedStages.current.has(o.stage)) {
           console.warn(
-            `[usePipeline] Stage "${o.stage}" has no meta-stage mapping; row hidden from board.`,
+            `[usePipeline] Stage "${o.stage}" is not a recognized pipeline stage; row hidden from board.`,
           );
           warnedUnmappedStages.current.add(o.stage);
         }
@@ -217,7 +219,7 @@ export function usePipeline() {
     // count active deals as closed and zero out the pipeline value tile.
     // The board columns already bucket by stage, so this keeps the metrics
     // strip honest with what the agent sees.
-    const isClosedWon = (o: Opportunity) => o.stage === 'closed_won';
+    const isClosedWon = (o: Opportunity) => o.stage === 'closed';
     const isLost = (o: Opportunity) => o.stage === 'lost' || o.outcome === 'lost' || o.outcome === 'withdrawn';
     const active = data.filter(o => !isClosedWon(o) && !isLost(o));
     const closed = data.filter(isClosedWon);
@@ -263,7 +265,7 @@ export function usePipeline() {
 
     try {
       const updateData: any = { stage: newStage, updated_at: new Date().toISOString() };
-      if (newStage === 'closed_won') updateData.actual_close_date = new Date().toISOString();
+      if (newStage === 'closed') updateData.actual_close_date = new Date().toISOString();
       if (newStage === 'lost') updateData.outcome = 'lost';
 
       // Phase 4.1: chain `.select()` so we can detect 0-row updates. Without
@@ -327,7 +329,7 @@ export function usePipeline() {
     try {
       const { error } = await supabase.from('opportunities').insert({
         contact_id: data.contact_id,
-        stage: data.stage || 'new_lead',
+        stage: data.stage || 'conversation_active',
         opportunity_type: (data as any).opportunity_type || 'buyer',
         title: (data as any).title ?? null,
         deal_value: data.deal_value ?? 0,

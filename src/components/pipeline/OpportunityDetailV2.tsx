@@ -297,7 +297,7 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
                   {OPPORTUNITY_TYPE_LABELS[opp.opportunity_type ?? ''] ?? opp.opportunity_type}
                 </Badge>
                 <Badge variant="outline" className="text-xs h-5">
-                  {getStageLabel(opp.stage, pipelineType)}
+                  {getStageLabel(opp.stage)}
                 </Badge>
                 {opp.ai_deal_probability != null && (
                   <Badge

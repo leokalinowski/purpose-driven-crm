@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Opportunity } from './usePipeline';
-import { PipelineType, getStagesForType, getEffectivePipelineType } from '@/config/pipelineStages';
+import { PipelineType, getBoardStages, getEffectivePipelineType } from '@/config/pipelineStages';
 
 export type PipelineSortBy = 'deal_value' | 'close_date' | 'ai_probability' | 'days_stale' | 'created_at';
 export type PipelineFilterType = PipelineType | 'all';
@@ -80,11 +80,10 @@ export function usePipelineFilters(opportunities: Opportunity[]) {
     return result;
   }, [opportunities, pipelineType, sortBy, filterStage]);
 
-  // Stages to display on the board
-  const boardStages = useMemo(() => {
-    if (pipelineType === 'all') return getStagesForType('all');
-    return getStagesForType(pipelineType);
-  }, [pipelineType]);
+  // Stages to display on the board — universal across types now.
+  // The `pipelineType` filter no longer drives a different stage set;
+  // it filters which opportunities show, not which columns exist.
+  const boardStages = useMemo(() => getBoardStages(), []);
 
   // AI stats summary
   const aiStats = useMemo(() => {

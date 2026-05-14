@@ -155,14 +155,18 @@ function pct(numerator: number, denominator: number): number {
   return (numerator / denominator) * 100;
 }
 
-/** Group stages into the four buckets used by the design reference. */
+/**
+ * Group stages into four readable buckets for the dashboard caption.
+ * Maps Pam's 7 canonical stages to "leads / consult / active / contract".
+ * `closed` and `lost` are excluded — only active pipeline counts here.
+ */
 function summarizeStages(stageBreakdown: Record<string, number> | undefined): string {
   if (!stageBreakdown) return 'No active opportunities';
   const buckets: { label: string; stages: string[] }[] = [
-    { label: 'leads',    stages: ['new_lead', 'nurturing', 'referral_received', 'contacted'] },
-    { label: 'active',   stages: ['active_search', 'pre_listing', 'showing', 'listing_appt', 'listed_active', 'active'] },
-    { label: 'contract', stages: ['offer_submitted', 'offer_received', 'under_contract'] },
-    { label: 'closing',  stages: ['closing_scheduled'] },
+    { label: 'leads',    stages: ['conversation_active', 'opportunity_identified'] },
+    { label: 'consult',  stages: ['consultation_completed', 'client_secured'] },
+    { label: 'active',   stages: ['active_opportunity'] },
+    { label: 'contract', stages: ['under_contract'] },
   ];
   const counts = buckets
     .map((b) => ({ label: b.label, n: b.stages.reduce((s, st) => s + (stageBreakdown[st] || 0), 0) }))

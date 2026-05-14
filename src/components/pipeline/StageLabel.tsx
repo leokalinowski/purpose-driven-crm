@@ -1,24 +1,19 @@
 /**
  * Shared stage-label display. Use this anywhere a stage needs to render —
  * cards, lists, drawer header, Today view — instead of inlining
- * `getStageLabel(stage, pipelineType)` or hand-rolling `replace(/_/g, ' ')`.
+ * `getStageLabel(stage)` or hand-rolling `replace(/_/g, ' ')`.
  *
- * Shows the META-stage label (Leads / Working / Under contract / Closed),
- * not the fine-grained sub-stage. The board column vocabulary is the single
- * source of truth across the Pipeline UI per the simplification pass.
+ * Renders the canonical sentence-case label from PIPELINE_STAGES (one of
+ * Pam's 7 + `lost`). The `pill` variant tints with the stage's accent.
  */
 
 import { cn } from '@/lib/utils';
-import {
-  getStageAccent,
-  getMetaStageForKey,
-  getEffectivePipelineType,
-  META_STAGES,
-} from '@/config/pipelineStages';
+import { getStageAccent, getStageLabel } from '@/config/pipelineStages';
 
 interface StageLabelProps {
   stage: string | null | undefined;
-  /** Either pass an opportunity (we'll resolve pipeline_type) or pass it directly. */
+  /** Kept for API stability — opportunity_type drives the type badge,
+   *  not stage labels (stages are now universal). */
   opportunity?: { pipeline_type?: string | null; opportunity_type?: string | null };
   pipelineType?: 'buyer' | 'seller' | 'referral';
   /** Render as a tinted pill. Default: plain text. */
@@ -28,23 +23,13 @@ interface StageLabelProps {
 
 export function StageLabel({
   stage,
-  opportunity,
-  pipelineType: pipelineTypeProp,
   variant = 'text',
   className,
 }: StageLabelProps) {
   if (!stage) return <span className={cn('text-muted-foreground', className)}>—</span>;
 
-  const pipelineType =
-    pipelineTypeProp ??
-    (opportunity ? getEffectivePipelineType(opportunity) : 'buyer');
-
-  const meta = getMetaStageForKey(stage);
-  const metaDef = meta ? META_STAGES.find(m => m.key === meta) : undefined;
-  // Falls back to the raw sub-stage key (title-cased) if it has no meta —
-  // safety net for unmapped legacy data, NOT the expected path.
-  const label = metaDef?.label ?? stage.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  const accent = getStageAccent(stage, pipelineType);
+  const label = getStageLabel(stage);
+  const accent = getStageAccent(stage);
 
   if (variant === 'pill') {
     return (
