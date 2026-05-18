@@ -6,6 +6,35 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
+## 2026-05-18 — Security audit: high-tier batch (PR TBD)
+
+**What.** Five audit items from the same live-system audit that produced PRs #35 (critical auth) and #36 (priority cleanup). Each was a real exposure or schema drift — none were ship-blockers individually, but together they close most of the high-tier surface area.
+
+**B1. `create-checkout` priceId whitelist.** The function accepted any `priceId` and passed it straight through to `stripe.checkout.sessions.create`. Any caller could launch a Checkout session for any price that exists in our Stripe account — including test-mode prices in prod, arbitrary upsell pricing, or cross-product prices — and receive a `success_url` redirect with a tier-less subscription. Fix: hard-reject if `priceId` isn't in `FOUNDER_PLANS` or `STANDARD_PRICE_TIERS`. Deployed live as v41.
+
+**B2. `event_rsvps` public INSERT: drop policy + harden RPC.** The `Public can create RSVPs` PostgREST policy was vestigial — the frontend stopped using direct INSERTs long ago in favor of the `submit_public_rsvp` RPC. The RPC itself had no email validation, no length caps, and no rate limit. Migration `20260518000005`:
+- Drops the policy
+- Re-creates the RPC with email format regex, length caps (email ≤ 250, name ≤ 200, phone ≤ 50, guest_count 1–20), and a per-event 30-RSVPs-per-5-min throttle that cuts off enumeration attacks while leaving headroom for genuinely popular events
+- No frontend change (same RPC signature)
+
+**B3. SECURITY DEFINER views: REVOKE from anon + authenticated.** Five views (`delight_opportunities_v`, `v_agent_coaching_state_summary`, `v_coach_scheduling_jobs`, `v_coach_task_ttl_jobs`, `v_priority_rescore_jobs`) were created `SECURITY DEFINER` AND granted full CRUD to `anon` + `authenticated`. The most exploitable: `delight_opportunities_v` exposed every agent's contact PII (name + birthday + spouse_birthday + home_anniversary + gift_preferences) to anyone with the anon key via `curl https://<project>.supabase.co/rest/v1/delight_opportunities_v`. Migration `20260518000006` REVOKEs ALL on all 5 from anon + authenticated; service_role keeps full access (the only legitimate caller is `delight-daily-nudge` cron). Frontend audit (`grep -rn` over `src/`) confirmed zero consumers besides that one cron edge function.
+
+**B4. Storage: drop 5 public LIST policies + flip `newsletter-csvs` to private.** Migration `20260518000007`:
+- Drops `Public can view agent assets`, `Public can view backgrounds`, `Public read access for assets`, `Public read access for newsletter assets`, `Anyone can view sponsor logos` on `storage.objects`. For `public:true` buckets, direct URL fetches via `/storage/v1/object/public/<bucket>/<path>` bypass RLS anyway — these policies only enabled `storage.objects.list()` enumeration. Frontend audit confirmed zero `.list()` callers; every consumer is `getPublicUrl()` (pure client-side string concat).
+- Flips `newsletter-csvs` bucket from `public:true` to `public:false`. Only writer is the `upload-csv` edge fn (service_role); no consumer fetches CSVs by URL after upload. Was world-fetchable with the bucket+filename, leaking uploaded contact-list CSVs to anyone who could guess a path.
+
+**B5. `contacts.priority_band` CHECK constraint.** Tightened the allowlist from `('pipeline','cadence','engagement','sphere')` to `('pipeline','cadence')`. Live data was already clean (0 rows in the dropped buckets); the migration fixes schema-vs-code drift so a future scorer bug that writes `'engagement'` fails closed instead of slipping through.
+
+**Files.**
+- `supabase/functions/create-checkout/index.ts` — v41 (deployed).
+- `supabase/migrations/20260518000005_event_rsvps_throttle.sql`
+- `supabase/migrations/20260518000006_lockdown_security_definer_views.sql`
+- `supabase/migrations/20260518000007_storage_lockdown.sql`
+- `supabase/migrations/20260518000008_tighten_priority_band_check.sql`
+
+**Verification.** All 4 migrations applied live via MCP; smoke verified: `submit_public_rsvp` RPC rebuilt and callable, the 5 views show only `service_role` grants, `newsletter-csvs.public=false`, `contacts_priority_band_check` is the tight allowlist.
+
+**What remains.** Track B still has: CORS `*` tightening (B6 — separate PR, touches many edge functions), operator action for leaked-password protection + OTP expiry (B7), multi-role gating in `get_current_user_role()` (B8 — deferred, no user has multi-role today). Track C (frontend cleanup) hasn't started.
 ## 2026-05-18 — Priority cleanup: kill half-migrated `priority_score` debris (PR TBD)
 
 **What.** Audit item #4 from the same live-system audit that produced PR #35. The set-based priority rewrite (PR #34) left the old weighted-score readers in the tree, several of them visibly broken:
