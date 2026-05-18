@@ -2076,17 +2076,20 @@ function SignalsView({ items }: { items: { tone: SignalTone; text: string }[] })
 }
 
 // Order + display config for the score bars. Weights match compute-priority-
-// scores: when there's an active opportunity it's 0.35 / 0.30 / 0.25 / 0.10;
-// without one the pipeline weight redistributes to 0.50 / 0 / 0.40 / 0.10.
+// scores (2026-05-18 rebuild): with an active opportunity the blend is
+// 0.40 / 0.35 / 0.10 / 0.10 / 0.05 (pipeline / cadence / engagement /
+// relationship / flags). Without one, the 0.40 pipeline weight redistributes
+// proportionally across the others (cadence stays dominant).
 const COMPONENT_ORDER: Array<{
-  key: 'relationship' | 'pipeline' | 'intent' | 'flags';
+  key: 'pipeline' | 'cadence' | 'engagement' | 'relationship' | 'flags';
   label: string;
   description: string;
 }> = [
-  { key: 'relationship', label: 'Relationship', description: 'Cadence freshness — how stale the relationship is.' },
-  { key: 'pipeline',     label: 'Pipeline',     description: 'Active opportunity momentum.' },
-  { key: 'intent',       label: 'Intent',       description: 'AI-synthesized buying intent.' },
-  { key: 'flags',        label: 'Flags',        description: 'VIP, pre-approval, watch flag.' },
+  { key: 'pipeline',     label: 'Pipeline',     description: 'Active opportunity stage — early stages weighted higher.' },
+  { key: 'cadence',      label: 'Cadence',      description: 'This week’s SphereSync rotation letter + task completion.' },
+  { key: 'engagement',   label: 'Engagement',   description: 'Recent gifts, event RSVPs, logged activity.' },
+  { key: 'relationship', label: 'Relationship', description: 'Freshness of the last logged touch.' },
+  { key: 'flags',        label: 'Flags',        description: 'VIP, pre-approval, watch flag, motivation.' },
 ];
 
 function ComponentBar({
@@ -2146,16 +2149,27 @@ function CoachPane({
   const signals = c.priority_signals ?? null;
   const tps = task?.ai_talking_points ?? [];
 
-  // Detect whether there's an active opportunity contributing to the score —
-  // when pipeline weight is non-zero we use the with-pipeline caps; otherwise
-  // the no-pipeline caps (relationship and intent absorb pipeline's slice).
+  // Detect whether there's an active opportunity contributing to the score.
+  // With pipeline → 40/35/10/10/5; without → pipeline's 40% redistributes
+  // proportionally across the other four (cadence ~58, engagement ~17,
+  // relationship ~17, flags ~8 — rounded to whole percents for display).
   const pipelineNum = typeof components?.pipeline === 'number' ? (components.pipeline as number) : 0;
   const hasPipeline = pipelineNum > 0 || !!c.pipeline_active;
-  const weightFor = (key: 'relationship' | 'pipeline' | 'intent' | 'flags'): number => {
+  const weightFor = (key: 'pipeline' | 'cadence' | 'engagement' | 'relationship' | 'flags'): number => {
     if (hasPipeline) {
-      return key === 'relationship' ? 35 : key === 'pipeline' ? 30 : key === 'intent' ? 25 : 10;
+      return key === 'pipeline' ? 40
+        : key === 'cadence' ? 35
+        : key === 'engagement' ? 10
+        : key === 'relationship' ? 10
+        : 5;
     }
-    return key === 'relationship' ? 50 : key === 'pipeline' ? 0 : key === 'intent' ? 40 : 10;
+    // Renormalized (sums to 100). Pipeline bar is hidden upstream when its
+    // weight is 0 and its value is 0.
+    return key === 'pipeline' ? 0
+      : key === 'cadence' ? 58
+      : key === 'engagement' ? 17
+      : key === 'relationship' ? 17
+      : 8;
   };
 
   return (

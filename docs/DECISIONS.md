@@ -6,6 +6,31 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
+## 2026-05-18 — Priority system rebuild, Phase 2 — frontend swap (PR TBD)
+
+**What.** Frontend now reads the deterministic score + band the Phase 1 scorer writes, so every surface ranks contacts identically. No more parallel ranking systems.
+
+- **`usePrioritizedQueue` rewritten.** Old 3-band client-side composer (3 separate queries + dedup) replaced with a single `SELECT ... ORDER BY priority_score DESC NULLS LAST` filtered by `priority_band IS NOT NULL`. Items are then grouped client-side by `band` for display. ~270 lines → ~170. Removes the broken `event_rsvps.contact_id` query that was silently erroring on main.
+- **`PrioritiesTab.buildFocusReasoning` deleted.** The FocusCard's reasoning sentence now comes from `item.reason` (i.e. `contacts.priority_reasoning`) — same sentence the ContactQuickSheet shows. One story per contact across the whole app, no more "FocusCard says X, drawer says Y."
+- **`usePrioritizedContacts` type updated.** `priority_components` shape changed from `{relationship, pipeline, intent, flags}` (Grok era) to `{pipeline, cadence, engagement, relationship, flags}` (5-component blend). Added `priority_band` field. Old `ai_key_signals` kept as legacy field for any unscored-since-Phase-1 rows.
+- **`ContactQuickSheet` Coach insight pane updated.** `COMPONENT_ORDER` rewritten for the new 5-component shape with new descriptions ("Cadence", "Engagement" added; "Intent" removed). `weightFor()` updated to 40/35/10/10/5 (with pipeline) and the proportionally-renormalized 0/58/17/17/8 (without). The existing `SignalsView` + `humanizeSignalString` + `buildHumanSignals` helpers were kept as-is — they parse generic strings and structural fields that survived the rebuild.
+- **`src/integrations/supabase/types.ts`** — added `priority_band: string | null` to the `contacts` Row / Insert / Update types. Manual edit instead of full regen (full regen is 154KB; types.ts already has the schema and only this one column changed for the contacts table).
+
+**Why.** Phase 1 wrote a real score to the DB, but `PrioritiesTab` and the Dashboard FocusCard ignored it — they re-derived a 3-band ranking client-side from 3 separate queries. The old derivation was also blind to the `priority_band` classifier and used `last_name.ilike` instead of `contacts.category` for cadence (two sources of truth for the same concept). Phase 2 cuts both — DB is the truth.
+
+**Verified.** `bunx tsc --noEmit` clean, `bunx eslint <touched files>` clean (no new warnings), `bun run build` ✓ (existing chunk-size + dynamic-import warnings are pre-existing).
+
+**Key files.**
+- `src/hooks/usePrioritizedQueue.ts` — rewritten
+- `src/hooks/usePrioritizedContacts.ts` — type updates
+- `src/components/spheresync/tabs/PrioritiesTab.tsx` — removed `buildFocusReasoning`, use DB reason
+- `src/components/spheresync/ContactQuickSheet.tsx` — `COMPONENT_ORDER` + `weightFor` for 5-component shape
+- `src/integrations/supabase/types.ts` — `priority_band` on contacts (Row / Insert / Update)
+
+**Source.** Continuation of the 2026-05-18 Phase 1 work. User direction: "make the new score visible everywhere."
+
+---
+
 ## 2026-05-18 — Priority system rebuild, Phase 1 — backend (PR #31)
 
 **What.** Rewrote the contact prioritization scorer from scratch to make it the core piece of the product.

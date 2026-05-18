@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Sparkles, Phone, MessageSquare, Mail, Info, ListOrdered,
-  ClipboardList, RefreshCw, Loader2, Check, Quote,
+  ClipboardList, RefreshCw, Loader2, Check,
 } from 'lucide-react';
 import { addDays, format, isSameDay, startOfWeek, endOfWeek, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -93,45 +93,14 @@ function CoachTrustBar() {
   );
 }
 
-// ─── Reasoning derivers ──────────────────────────────────────────────────────
+// ─── FocusCard helpers ───────────────────────────────────────────────────────
 //
-// The FocusCard reads the top of the deterministic queue (queue.all[0]) — same
-// banded model the Priority queue uses below it. No AI ranking. The reasoning
-// + bullets are derived directly from the band and the queue item's signals,
-// so the explanation always matches the math.
-
-function buildFocusReasoning(item: QueueItem): string {
-  const days = item.last_activity_date
-    ? Math.max(0, Math.round((Date.now() - new Date(item.last_activity_date).getTime()) / 86400_000))
-    : null;
-
-  if (item.band === 'pipeline') {
-    if (days === null) {
-      return 'Active opportunity in your pipeline with no logged touches yet — get the first conversation on the books before it drifts.';
-    }
-    if (days >= 14) {
-      return `Active opportunity in your pipeline. Last touch was ${days} days ago — that's long enough that the opportunity is starting to stall. A check-in keeps momentum.`;
-    }
-    return `Active opportunity in your pipeline. Last touch ${days} day${days === 1 ? '' : 's'} ago — they're still warm. Stay close so the opportunity doesn't drift to another agent.`;
-  }
-
-  if (item.band === 'cadence') {
-    const initial = item.last_name?.[0]?.toUpperCase() ?? '';
-    if (days === null) {
-      return `Their last name (${initial}) is up in this week's rotation and you have no logged touches yet. Start the relationship — that's exactly what the rotation schedule is for.`;
-    }
-    if (days > 90) {
-      return `Their last name (${initial}) is up this week and it's been ${days} days since the last touch. They're at risk of slipping out of your sphere. Top of the queue today.`;
-    }
-    if (days > 60) {
-      return `Their last name (${initial}) is up in this week's rotation and ${days} days have passed. The cadence schedule is asking for a touch — keep the relationship healthy.`;
-    }
-    return `Their last name (${initial}) is up in this week's rotation. Last touch ${days} day${days === 1 ? '' : 's'} ago — keep the rotation honest by clearing this week's list.`;
-  }
-
-  // engagement
-  return `Recently engaged with your marketing. The signal is fresh — a personal follow-up turns the click into a conversation. If you don't reach out, the moment passes.`;
-}
+// The FocusCard reads the top of the deterministic priority queue
+// (queue.all[0]) — same scorer the Database page and SignalsView use.
+// The headline reasoning sentence comes from the DB column the scorer
+// writes (`item.reason`), so every surface tells the agent the same story.
+// "Why now" bullets are the queue item's context chips + a relative
+// last-touched marker; no re-derivation, no AI call.
 
 function buildFocusBullets(item: QueueItem): string[] {
   const days = item.last_activity_date
@@ -195,7 +164,10 @@ function FocusCard() {
     : focus.primary_action === 'text' ? 'Text'
       : 'Email';
 
-  const reasoning = buildFocusReasoning(focus);
+  // `focus.reason` comes straight from the DB column the scorer writes — the
+  // same sentence shown in ContactQuickSheet's Coach insight pane. One story
+  // per contact across the whole app.
+  const reasoning = focus.reason || 'Top contact in your priority queue.';
   const bullets = buildFocusBullets(focus);
   const totalQueued = queue.all.length;
 

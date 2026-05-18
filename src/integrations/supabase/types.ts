@@ -1033,6 +1033,7 @@ export type Database = {
           pipeline_active: boolean | null
           pipeline_stage_summary: string | null
           preferred_contact_method: string | null
+          priority_band: string | null
           priority_components: Json | null
           priority_computed_at: string | null
           priority_model: string | null
@@ -1126,6 +1127,7 @@ export type Database = {
           pipeline_active?: boolean | null
           pipeline_stage_summary?: string | null
           preferred_contact_method?: string | null
+          priority_band?: string | null
           priority_components?: Json | null
           priority_computed_at?: string | null
           priority_model?: string | null
@@ -1219,6 +1221,7 @@ export type Database = {
           pipeline_active?: boolean | null
           pipeline_stage_summary?: string | null
           preferred_contact_method?: string | null
+          priority_band?: string | null
           priority_components?: Json | null
           priority_computed_at?: string | null
           priority_model?: string | null

@@ -19,21 +19,35 @@ export interface PrioritizedContact {
   last_activity_date: string | null;
 
   priority_score: number | null;
+  priority_band: 'pipeline' | 'cadence' | 'engagement' | 'sphere' | null;
   priority_reasoning: string | null;
+  // Component shape changed 2026-05-18 (Phase 1 rebuild): dropped `intent`
+  // (Grok removed); added `cadence` + `engagement`. Order intentionally
+  // matches the new formula 0.40/0.35/0.10/0.10/0.05.
   priority_components: {
-    relationship: number;
-    pipeline: number;
-    intent: number;
-    flags: number;
+    pipeline?: number;
+    cadence?: number;
+    engagement?: number;
+    relationship?: number;
+    flags?: number;
   } | null;
   priority_signals: {
     days_since_last_activity?: number | null;
+    activity_14d?: number;
     activity_30d?: number;
     activity_90d?: number;
+    gift_30d?: number;
+    recent_rsvp?: boolean;
     active_opportunity_stage?: string | null;
     days_in_stage?: number | null;
-    market_zip?: string | null;
+    rotation_week?: number | null;
+    rotation_letter?: string | null;
+    letter_is_current?: boolean;
+    letter_is_prev?: boolean;
+    task_done_this_week?: boolean;
     life_event?: string | null;
+    // Legacy field — populated by the old Grok scorer pre-2026-05-18. Read
+    // defensively so older rows that haven't been re-scored yet still render.
     ai_key_signals?: string[];
   } | null;
   priority_computed_at: string | null;
@@ -93,7 +107,7 @@ export function usePrioritizedContacts(opts?: { limit?: number }) {
         .select(`
           id, agent_id, first_name, last_name, email, phone, category, zip_code, tags, dnc,
           last_activity_date,
-          priority_score, priority_reasoning, priority_components, priority_signals,
+          priority_score, priority_band, priority_reasoning, priority_components, priority_signals,
           priority_computed_at, priority_model, priority_watch_flag
         `)
         .eq('agent_id', user!.id)
