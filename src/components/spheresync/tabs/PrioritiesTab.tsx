@@ -120,7 +120,11 @@ function FocusCard() {
   const { openStarter } = useConversationStarter();
   const queue = usePrioritizedQueue();
 
-  const focus = queue.all[0] ?? null;
+  // Pick the first contact the agent HASN'T touched yet this week. That's
+  // the "next thing to do." Falls back to queue.all[0] only when everything
+  // on the list has already been touched — at which point there's nothing
+  // new to highlight, so we show the highest-priority one as a stale focus.
+  const focus = queue.all.find((i) => !i.touched_this_week) ?? queue.all[0] ?? null;
 
   if (queue.loading) {
     return (
@@ -141,7 +145,7 @@ function FocusCard() {
           You&apos;re clear.
         </h2>
         <p className="text-sm text-muted-foreground leading-[1.6]">
-          No active pipeline opportunities, this week&apos;s rotation has no matches in your sphere yet, and no recent marketing engagement to follow up on. Add an opportunity in the Pipeline or wait for the next rotation week.
+          No active pipeline opportunities and this week&apos;s rotation has no matches in your sphere. Add an opportunity in the Pipeline or wait for the next rotation week.
         </p>
       </div>
     );
@@ -458,7 +462,7 @@ function PriorityQueue() {
           )}
         </h3>
         <div className="text-[11.5px] text-muted-foreground">
-          Pipeline first · then this week&apos;s rotation · then recent engagement
+          Pipeline first · then this week&apos;s rotation
         </div>
       </div>
       <div>
@@ -491,10 +495,26 @@ function PriorityQueue() {
                   className="flex flex-col gap-1 min-w-0 text-left"
                 >
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    <b className="text-sm font-semibold hover:text-primary hover:underline underline-offset-2">{item.contact_name}</b>
+                    <b className={cn(
+                      'text-sm font-semibold hover:text-primary hover:underline underline-offset-2',
+                      // Touched pipeline contacts get muted name treatment so the
+                      // "still on the list, but not the next thing to do" status
+                      // reads at a glance.
+                      item.touched_this_week && 'text-muted-foreground',
+                    )}>{item.contact_name}</b>
                     {item.dnc && (
                       <span className="inline-flex items-center px-1.5 py-px rounded-full bg-[hsl(0_84%_95%)] text-[10px] font-semibold text-[hsl(0_84%_40%)]">
                         DNC
+                      </span>
+                    )}
+                    {item.touched_this_week && (
+                      // Green checkmark chip — only fires for items still in
+                      // the queue after a touch (i.e., pipeline-band contacts;
+                      // cadence-band touched contacts are filtered out entirely
+                      // upstream).
+                      <span className="inline-flex items-center gap-1 px-1.5 py-px rounded-full bg-reop-green/15 text-[10px] font-semibold text-[hsl(142_55%_28%)]">
+                        <Check className="w-3 h-3" />
+                        Touched this week
                       </span>
                     )}
                   </div>

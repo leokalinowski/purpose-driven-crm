@@ -6,6 +6,60 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
+## 2026-05-18 — Priority system: set-based rebuild + UI overhaul (PR TBD)
+
+**SUPERSEDES** the 0–100 weighted-score model from PRs #31 (backend) and #32 (frontend). Those PRs are closed; this one is the canonical rebuild.
+
+**What.** Threw out the weighted score entirely. A contact is now a PRIORITY iff:
+
+1. **Pipeline** — has an active opportunity at `conversation_active`, `opportunity_identified`, or `consultation_completed`. Later stages (`client_secured`, `active_opportunity`, `under_contract`) are NOT priorities — the client is already engaged.
+2. **Cadence** — `contacts.category` matches THIS week's call or text rotation AND no completed `spheresync_tasks` row for the current week.
+
+No score. No engagement set. No carryover from last week. No weighted blend. The earlier formula confused more than it helped — when cadence-only contacts could outscore a real pipeline opportunity, the agent stopped trusting the number.
+
+**Ordering within the queue:**
+- Pipeline contacts first, sorted: `conversation_active` → `opportunity_identified` → `consultation_completed` (early stages first per the FLIP — agents forget the unsecured contact, not the one already moving)
+- Within band: contacts NOT touched this week come BEFORE touched ones (touched contacts get a muted name + green "✓ Touched this week" chip; they stay visible but drop in rank)
+- Then cadence by last-touch ASC
+
+**"Touched this week" semantics.** Real touches only — calls, texts, emails, gifts logged in `contact_activities` with `outcome IS NOT NULL`, OR `outcome IS NULL` but `notes` doesn't start with `'SphereSync '`. The earlier version read `contacts.last_activity_date` directly and got fooled by SphereSync task STUB rows that the Monday-morning cron stamps onto every cadence contact.
+
+**Database page rewrite.** Killed the 6-tier Temperature column + filter — agents never trusted it. Replaced with a single SphereSync filter rail (panini design):
+- "On the Priorities list" (union of pipeline + cadence)
+- "Calling this week · R, V" (current call letters)
+- "Texting this week · O" (current text letter)
+- "Touched this week"
+
+PRIORITIES tile shows `N · X pipeline · Y cadence`. SPHERESYNC column shows a single "PRIORITY" badge per row. The useless single-value RELATIONSHIP filter auto-hides when every contact has the same `contact_type`.
+
+**ContactQuickSheet Coach pane** rewritten. Gone: the 0–100 hero number, the 5 weighted-component bars, the "Refresh score" button. New: "Priority status" — a checklist of which sets the contact is in ("Active opportunity · Consultation completed" / "Week 21 call rotation · letter R"), or a plain "Not on the Priorities list right now" line for non-priorities.
+
+**Event-driven rescore.** `usePipeline` now fires `compute-priority-scores` for the affected contact after every opportunity create / update / updateStage / delete + invalidates the priorities cache. A new opp appears on the Priorities tab in ~1 second, not at the next 6h cron tick.
+
+**DB integrity fix.** New trigger on `spheresync_tasks` ensures `completed_at` is set whenever `completed=true` (and cleared when un-completed). Fixed a dashboard bug where 6 of Leo's completed calls had NULL `completed_at` and the "Sphere touches" KPI silently showed 0/17 instead of 6/17. Backfill migration stamps existing NULL rows with the SUNDAY of their assigned ISO week (NOT `NOW()` — that would pull historical completions into "this week").
+
+**Non-priority UI improvements bundled in:**
+- **Events page**: clicking "Calendar view" now hides the featured-event hero + mini-cal and shows a single full-width calendar at the top. Button toggles label between "Calendar view" ↔ "List view".
+- **EventForm**: the "Publish Public RSVP Page" toggle is now a highlighted teal callout with a URL preview when ON (was a generic field row, easy to miss).
+
+**Key files.**
+- `supabase/functions/compute-priority-scores/index.ts` — set-based-v7 classifier (deployed live as version 11)
+- `supabase/migrations/20260518000001_priority_system_rebuild.sql` — `priority_band` column, cron consolidated (carried over from PR #31)
+- `supabase/migrations/20260518000002_priority_rescore_chunked_rpc.sql` — RPC batches to 100 IDs per pg_net call
+- `supabase/migrations/20260518000003_spheresync_task_completed_at_integrity.sql` — trigger + safe backfill
+- `src/hooks/usePrioritizedQueue.ts` — set-based, band-hierarchy sort, touched-this-week from real activities
+- `src/hooks/useCompletedSphereTouchesThisWeek.ts` — exposes `touchedContactIds: Set<string>`
+- `src/hooks/usePipeline.ts` — event-driven rescore on every opportunity mutation
+- `src/pages/Database.tsx` — SphereSync filter rail + PRIORITIES tile + SPHERESYNC column
+- `src/components/spheresync/ContactQuickSheet.tsx` — Coach pane rewritten as priority-status checklist
+- `src/components/spheresync/tabs/PrioritiesTab.tsx` — touched-this-week chip, untouched-first focus pick
+- `src/pages/Events.tsx` — Calendar view toggle behavior
+- `src/components/events/EventForm.tsx` — highlighted RSVP toggle
+
+**Source.** Live iteration with Leo on 2026-05-18 evening. Multiple frustrated rounds — got it wrong several ways before landing on the simple contract: "A contact is a priority if they're in the pipeline OR up in this week's rotation. Nothing else. No score." Then layered the touched-this-week behavior for the demote / drop-off effect.
+
+---
+
 ## 2026-05-18 — Visual polish: ContactTable initials + WeekHintBar (PR #33)
 
 **What.** Two small visual upgrades cherry-picked from the PR #26 audit (which itself was closed as superseded — see audit comments on that PR for the full triage).

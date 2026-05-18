@@ -193,8 +193,12 @@ export default function Events() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2.5">
+            {/* Toggle: button flips label + action based on current tab.
+                In Calendar mode we hide the featured-event hero/mini-cal
+                grid below, so this button is the only way back to the
+                normal list view. */}
             <button
-              onClick={() => setTab('Calendar')}
+              onClick={() => setTab(tab === 'Calendar' ? 'Upcoming' : 'Calendar')}
               className={cn(
                 'inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg border text-sm font-semibold transition',
                 tab === 'Calendar'
@@ -205,8 +209,8 @@ export default function Events() {
               )}
             >
               <Calendar className="w-3.5 h-3.5" />
-              Calendar view
-              {featuredPendingTaskCount > 0 && (
+              {tab === 'Calendar' ? 'List view' : 'Calendar view'}
+              {tab !== 'Calendar' && featuredPendingTaskCount > 0 && (
                 <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px] font-bold">
                   {featuredPendingTaskCount}
                 </span>
@@ -222,7 +226,10 @@ export default function Events() {
           </div>
         </div>
 
-        {/* HERO: featured + mini cal */}
+        {/* HERO: featured + mini cal — hidden in Calendar view so the
+            full-width calendar below isn't competing with a second mini
+            calendar on the right. */}
+        {tab !== 'Calendar' && (
         <section className="grid lg:grid-cols-[1.5fr_1fr] gap-5 mb-7">
           {featured ? (
             <article
@@ -452,6 +459,7 @@ export default function Events() {
             </div>
           </div>
         </section>
+        )}
 
         {/* GRID HEAD */}
         <div className="flex justify-between items-center mb-3.5 flex-wrap gap-2.5">

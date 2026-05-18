@@ -1,8 +1,38 @@
 import { useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { getStageByKey } from '@/config/pipelineStages';
+
+/**
+ * Fire-and-forget priority rescore for a single contact, then invalidate
+ * any usePrioritizedQueue caches so the Priorities tab + Database PRIORITY
+ * badges refresh without waiting for the 6-hour cron tick.
+ *
+ * Called from every opportunity mutation (create / update / updateStage /
+ * delete) because all of them can shift a contact in or out of the
+ * pipeline band. The edge function is cheap (<1s for one contact); the
+ * cache invalidation is the bit that drives the UI update.
+ */
+function rescorePriorityForContact(
+  contactId: string | null | undefined,
+  queryClient: ReturnType<typeof useQueryClient>,
+): void {
+  if (!contactId) return;
+  // Async, no await — we want the mutation flow to feel snappy. If the
+  // rescore fails the cron will catch up on the next 6h tick.
+  supabase.functions
+    .invoke('compute-priority-scores', { body: { contact_ids: [contactId] } })
+    .then(() => {
+      // Refresh both the priorities queue (used by Priorities tab + Database
+      // SphereSync badges) and the real-touches hook (in case the mutation
+      // also wrote a contact_activities row indirectly).
+      queryClient.invalidateQueries({ queryKey: ['priority-queue-v6'] });
+      queryClient.invalidateQueries({ queryKey: ['real-touches-this-week'] });
+    })
+    .catch((e) => console.warn('[priority rescore] failed (non-fatal):', e));
+}
 
 // ── Module-level cache ──────────────────────────────────────────────────
 // Pipeline data is referenced by the Dashboard hero, the Modules row, and
@@ -199,6 +229,7 @@ function computeMetricsForCache(data: Opportunity[]): PipelineMetrics {
 export function usePipeline() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Hydrate from the module cache on first render so navigations back to
   // the Dashboard within the TTL skip the loading flash entirely.
@@ -348,6 +379,11 @@ export function usePipeline() {
       // Re-fetch in background to sync computed columns (days_in_current_stage,
       // is_stale flags, etc.) that the BEFORE-UPDATE trigger resets.
       fetchOpportunities({ force: true });
+      // Stage change can move a contact into or out of the priority-stage
+      // set (conversation_active / opportunity_identified / consultation_completed).
+      // Rescore so the Priorities tab + Database PRIORITY badges update
+      // without waiting for the next 6h cron tick.
+      rescorePriorityForContact(opp?.contact_id ?? null, queryClient);
     } catch (error: any) {
       // Phase 4.3: don't trust local state for the revert. The optimistic
       // setOpportunities above already mutated the array, so re-deriving the
@@ -386,6 +422,9 @@ export function usePipeline() {
       });
       if (error) throw error;
       await fetchOpportunities({ force: true });
+      // Rescore that contact's priority so the new opp appears on the
+      // Priorities tab / Database badges immediately — no 6h cron wait.
+      rescorePriorityForContact(data.contact_id ?? null, queryClient);
       toast({ title: 'Opportunity created' });
       return true;
     } catch (error: any) {
@@ -402,6 +441,10 @@ export function usePipeline() {
         .eq('id', opportunityId);
       if (error) throw error;
       await fetchOpportunities({ force: true });
+      // Stage may have changed (e.g. moved into / out of the priority
+      // stages) — rescore so priority_band reflects reality.
+      const opp = opportunities.find((o) => o.id === opportunityId);
+      rescorePriorityForContact(opp?.contact_id ?? data.contact_id ?? null, queryClient);
       toast({ title: 'Opportunity updated' });
       return true;
     } catch (error: any) {
@@ -412,9 +455,12 @@ export function usePipeline() {
 
   const deleteOpportunity = async (opportunityId: string) => {
     try {
+      const opp = opportunities.find((o) => o.id === opportunityId);
       const { error } = await supabase.from('opportunities').delete().eq('id', opportunityId);
       if (error) throw error;
       await fetchOpportunities({ force: true });
+      // Deletion can drop a contact OUT of the pipeline band — rescore.
+      rescorePriorityForContact(opp?.contact_id ?? null, queryClient);
       toast({ title: 'Opportunity deleted' });
       return true;
     } catch (error: any) {
