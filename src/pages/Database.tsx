@@ -20,7 +20,9 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useContacts, type Contact, type ContactInput } from '@/hooks/useContacts';
-import { usePrioritizedContacts, tierFor } from '@/hooks/usePrioritizedContacts';
+import { usePrioritizedContacts } from '@/hooks/usePrioritizedContacts';
+import { useCompletedSphereTouchesThisWeek } from '@/hooks/useCompletedSphereTouchesThisWeek';
+import { getCurrentWeekTasks } from '@/utils/sphereSyncLogic';
 import { useDatabaseStats } from '@/hooks/useDatabaseStats';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { useContactSheet } from '@/components/spheresync/ContactSheetProvider';
@@ -36,27 +38,16 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 
-type Temp = 'urgent' | 'hot' | 'warm' | 'cool' | 'cold' | 'unscored';
-
-const TEMP_COLORS: Record<Temp, { dot: string; text: string }> = {
-  urgent: { dot: 'hsl(0 80% 45%)', text: 'hsl(0 80% 40%)' },
-  hot:    { dot: 'hsl(0 70% 55%)', text: 'hsl(0 70% 50%)' },
-  warm:   { dot: 'hsl(35 80% 55%)', text: 'hsl(35 80% 45%)' },
-  cool:   { dot: 'hsl(200 40% 60%)', text: 'hsl(200 40% 50%)' },
-  cold:   { dot: 'hsl(210 10% 70%)', text: 'hsl(215 16% 47%)' },
-  unscored: { dot: 'hsl(210 10% 80%)', text: 'hsl(215 16% 47%)' },
-};
-
-const TEMP_LABEL: Record<Temp, string> = {
-  urgent: 'Urgent',
-  hot: 'Hot',
-  warm: 'Warm',
-  cool: 'Cool',
-  cold: 'Cold',
-  unscored: 'Unscored',
-};
-
-const TEMP_ORDER: Temp[] = ['urgent', 'hot', 'warm', 'cool', 'cold', 'unscored'];
+// SphereSync membership chips. These are the only Priority/Cadence concepts
+// surfaced on the Database — the prior `Temp` tier ladder (urgent/hot/warm/
+// cool/cold/unscored) is gone; it was a UI bucketing of `priority_score`
+// that confused agents. Now we surface only the two SphereSync concepts:
+//   - Priorities: the contact appears on the SphereSync Priorities tab
+//     (priority_score >= 60 — the "needs your attention" cohort)
+//   - Cadence:   the contact's category letter is in this week's
+//     SphereSync call rotation or text rotation
+//   - Touched:   the contact has at least one completed spheresync_task
+//     this week (so the agent doesn't double-touch)
 
 type LastTouchRange = 'all' | '7d' | '30d' | '30-90d' | '90d+' | 'never';
 
@@ -75,16 +66,41 @@ const LAST_TOUCH_OPTIONS: { value: LastTouchRange; label: string }[] = [
 
 type CallingStatus = 'callable' | 'dnc' | 'email_only' | 'text_only' | 'no_contact_info';
 
-function TempPill({ temp, label }: { temp: Temp; label?: string }) {
-  const colors = TEMP_COLORS[temp];
+// ─── SphereSync cell — Cadence + Priority chips per contact row ─────────
+// Renders 0–3 small chips:
+//   - "Call this week" or "Text this week" when the contact's letter
+//     matches this week's SphereSync rotation
+//   - "Priority" when the contact is on the Priorities list (score >= 60)
+// Returns an em-dash when nothing applies, so the column never looks broken.
+
+interface SphereSyncCellProps {
+  inCallCadence: boolean;
+  inTextCadence: boolean;
+  isPriority: boolean;
+}
+
+function SphereSyncCell({ inCallCadence, inTextCadence, isPriority }: SphereSyncCellProps) {
+  if (!inCallCadence && !inTextCadence && !isPriority) {
+    return <span className="text-muted-foreground text-[12px]">—</span>;
+  }
   return (
-    <span
-      className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold"
-      style={{ color: colors.text }}
-    >
-      <span className="inline-block w-2 h-2 rounded-full" style={{ background: colors.dot }} />
-      {label ?? TEMP_LABEL[temp]}
-    </span>
+    <div className="inline-flex flex-wrap items-center gap-1.5">
+      {inCallCadence && (
+        <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-wide bg-reop-teal-soft text-primary px-2 py-0.5 rounded-full">
+          Call this week
+        </span>
+      )}
+      {inTextCadence && (
+        <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-wide bg-[hsl(210_80%_94%)] text-[hsl(210_80%_40%)] px-2 py-0.5 rounded-full">
+          Text this week
+        </span>
+      )}
+      {isPriority && (
+        <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-wide bg-[hsl(0_84%_95%)] text-[hsl(0_72%_45%)] px-2 py-0.5 rounded-full">
+          Priority
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -190,10 +206,21 @@ export default function Database() {
 
   const { groups: priorityGroups } = usePrioritizedContacts({ limit: 5000 });
   const { stats: dbStats } = useDatabaseStats();
+  const { touchedContactIds } = useCompletedSphereTouchesThisWeek();
+
+  // This week's SphereSync rotation — deterministic from the ISO week.
+  // Drives the "Calling this week" / "Texting this week" cadence filters
+  // and the SphereSync column badges. Memoized so it doesn't recompute on
+  // every render.
+  const currentWeekRotation = useMemo(() => getCurrentWeekTasks(), []);
 
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [selectedRelationships, setSelectedRelationships] = useState<Set<string>>(new Set());
-  const [selectedTemps, setSelectedTemps] = useState<Set<Temp>>(new Set());
+  // Single-toggle SphereSync filters — replace the prior 6-tier Temp set.
+  const [filterPriorityOnly, setFilterPriorityOnly] = useState(false);
+  const [filterCallCadence, setFilterCallCadence] = useState(false);
+  const [filterTextCadence, setFilterTextCadence] = useState(false);
+  const [filterTouchedThisWeek, setFilterTouchedThisWeek] = useState(false);
   const [lastTouchRange, setLastTouchRange] = useState<LastTouchRange>('all');
   const [selectedCallingStatuses, setSelectedCallingStatuses] = useState<Set<CallingStatus>>(new Set());
 
@@ -208,9 +235,18 @@ export default function Database() {
     return map;
   }, [priorityGroups]);
 
-  const tempForContact = (c: Contact): Temp => {
-    const score = priorityById.get(c.id);
-    return tierFor(score ?? null) as Temp;
+  // Per-contact SphereSync membership lookup — keyed off priority_score
+  // (>= 60 == on the Priorities list) and the contact's category letter
+  // against this week's rotation. Used by the filter predicate, by the
+  // SphereSync column cell, and to drive the filter-rail chip counts.
+  const sphereSyncFor = (c: Contact): SphereSyncCellProps => {
+    const score = priorityById.get(c.id) ?? null;
+    const letter = (c.category ?? '').toUpperCase();
+    return {
+      isPriority: score !== null && score >= 60,
+      inCallCadence: !!letter && currentWeekRotation.callCategories.includes(letter),
+      inTextCadence: !!letter && letter === currentWeekRotation.textCategory,
+    };
   };
 
   // Counts for the filter rail are computed off allContacts (full-set, not just current page)
@@ -225,17 +261,25 @@ export default function Database() {
       .slice(0, 8);
   }, [allContacts]);
 
-  const tempCounts = useMemo(() => {
-    if (!priorityGroups) return null;
-    return {
-      urgent: priorityGroups.urgent.length,
-      hot: priorityGroups.hot.length,
-      warm: priorityGroups.warm.length,
-      cool: priorityGroups.cool.length,
-      cold: priorityGroups.cold.length,
-      unscored: priorityGroups.unscored.length,
-    };
-  }, [priorityGroups]);
+  // Chip counts for the SphereSync section of the filter rail. All four
+  // are computed off `allContacts` so the numbers match the filtered view.
+  const sphereSyncCounts = useMemo(() => {
+    const callLetters = new Set(currentWeekRotation.callCategories.map((l) => l.toUpperCase()));
+    const textLetter = currentWeekRotation.textCategory.toUpperCase();
+    let priority = 0;
+    let call = 0;
+    let text = 0;
+    let touched = 0;
+    for (const c of allContacts) {
+      const score = priorityById.get(c.id);
+      if (score !== undefined && score !== null && score >= 60) priority++;
+      const letter = (c.category ?? '').toUpperCase();
+      if (letter && callLetters.has(letter)) call++;
+      if (letter && letter === textLetter) text++;
+      if (touchedContactIds.has(c.id)) touched++;
+    }
+    return { priority, call, text, touched };
+  }, [allContacts, priorityById, touchedContactIds, currentWeekRotation]);
 
   const callingStatusCounts = useMemo(() => {
     let callable = 0;
@@ -305,31 +349,43 @@ export default function Database() {
   // 12 hot contacts lived on page 5 of the server-paged set).
   const hasActiveFilters =
     selectedRelationships.size > 0 ||
-    selectedTemps.size > 0 ||
+    filterPriorityOnly ||
+    filterCallCadence ||
+    filterTextCadence ||
+    filterTouchedThisWeek ||
     selectedCallingStatuses.size > 0 ||
     lastTouchRange !== 'all';
 
   // Reset to page 1 whenever the filter set changes — otherwise the agent can
   // land on an empty page (e.g. they're on page 4 of unfiltered, then filter
-  // to "Hot" with only 8 matches = 1 page, and see nothing).
+  // to "Priorities" with only 8 matches = 1 page, and see nothing).
   useEffect(() => {
     if (currentPage !== 1) goToPage(1);
     // We intentionally only depend on the filter values, not currentPage.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRelationships, selectedTemps, selectedCallingStatuses, lastTouchRange]);
+  }, [selectedRelationships, filterPriorityOnly, filterCallCadence, filterTextCadence, filterTouchedThisWeek, selectedCallingStatuses, lastTouchRange]);
 
   // Predicate that combines every active filter. Used both for the visible
   // page and the filtered-total count below.
   const matchesAllFilters = useMemo(() => {
+    const callLetters = new Set(currentWeekRotation.callCategories.map((l) => l.toUpperCase()));
+    const textLetter = currentWeekRotation.textCategory.toUpperCase();
     return (c: Contact): boolean => {
       if (selectedRelationships.size > 0) {
         const key = c.contact_type?.trim() || 'Unspecified';
         if (!selectedRelationships.has(key)) return false;
       }
-      if (selectedTemps.size > 0) {
-        const t = tempForContact(c);
-        if (!selectedTemps.has(t)) return false;
+      const ss = sphereSyncFor(c);
+      if (filterPriorityOnly && !ss.isPriority) return false;
+      if (filterCallCadence) {
+        const letter = (c.category ?? '').toUpperCase();
+        if (!letter || !callLetters.has(letter)) return false;
       }
+      if (filterTextCadence) {
+        const letter = (c.category ?? '').toUpperCase();
+        if (!letter || letter !== textLetter) return false;
+      }
+      if (filterTouchedThisWeek && !touchedContactIds.has(c.id)) return false;
       if (selectedCallingStatuses.size > 0) {
         if (!selectedCallingStatuses.has(callingStatusFor(c))) return false;
       }
@@ -353,9 +409,10 @@ export default function Database() {
       }
       return true;
     };
-    // priorityById is a dep because tempForContact uses it via closure.
+    // priorityById + touchedContactIds + currentWeekRotation are deps for
+    // the SphereSync filters; sphereSyncFor closes over priorityById.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRelationships, selectedTemps, lastTouchRange, selectedCallingStatuses, priorityById]);
+  }, [selectedRelationships, filterPriorityOnly, filterCallCadence, filterTextCadence, filterTouchedThisWeek, lastTouchRange, selectedCallingStatuses, priorityById, touchedContactIds, currentWeekRotation]);
 
   // Filtered full set when any chip is active, otherwise empty (we use the
   // server-paged `contacts` instead).
@@ -552,31 +609,81 @@ export default function Database() {
 
       <div className="py-4 border-b border-border">
         <h4 className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground font-bold mb-2.5">
-          Priority
+          SphereSync
         </h4>
-        {!tempCounts ? (
-          <p className="text-[12px] text-muted-foreground">Loading…</p>
-        ) : (
-          TEMP_ORDER.map((t) => (
-            <label
-              key={t}
-              className="flex items-center gap-2.5 py-2.5 text-sm cursor-pointer text-reop-dark-blue hover:text-primary transition"
-            >
-              <input
-                type="checkbox"
-                checked={selectedTemps.has(t)}
-                onChange={() => setSelectedTemps((s) => toggleSetItem(s, t))}
-                className="w-[15px] h-[15px] accent-primary"
-              />
-              <span className="flex-1">
-                <TempPill temp={t} />
+
+        {/* Priorities — single toggle. Matches the SphereSync Priorities tab
+            (priority_score ≥ 60). Replaces the prior 6-tier temperature
+            ladder, which surfaced low-signal noise. */}
+        <label className="flex items-center gap-2.5 py-2.5 text-sm cursor-pointer text-reop-dark-blue hover:text-primary transition">
+          <input
+            type="checkbox"
+            checked={filterPriorityOnly}
+            onChange={() => setFilterPriorityOnly((v) => !v)}
+            className="w-[15px] h-[15px] accent-primary"
+          />
+          <span className="flex-1">On the Priorities list</span>
+          <span className="text-[11px] px-1.5 rounded-full bg-[hsl(210_20%_96%)] text-muted-foreground">
+            {sphereSyncCounts.priority}
+          </span>
+        </label>
+
+        {/* Weekly cadence — drives off this week's SphereSync rotation letters.
+            Letters shown inline so the chip self-explains. */}
+        <label className="flex items-center gap-2.5 py-2.5 text-sm cursor-pointer text-reop-dark-blue hover:text-primary transition">
+          <input
+            type="checkbox"
+            checked={filterCallCadence}
+            onChange={() => setFilterCallCadence((v) => !v)}
+            className="w-[15px] h-[15px] accent-primary"
+          />
+          <span className="flex-1">
+            Calling this week
+            {currentWeekRotation.callCategories.length > 0 && (
+              <span className="ml-1.5 text-[11px] text-muted-foreground font-medium">
+                · {currentWeekRotation.callCategories.join(', ')}
               </span>
-              <span className="text-[11px] px-1.5 rounded-full bg-[hsl(210_20%_96%)] text-muted-foreground">
-                {tempCounts[t]}
+            )}
+          </span>
+          <span className="text-[11px] px-1.5 rounded-full bg-[hsl(210_20%_96%)] text-muted-foreground">
+            {sphereSyncCounts.call}
+          </span>
+        </label>
+
+        <label className="flex items-center gap-2.5 py-2.5 text-sm cursor-pointer text-reop-dark-blue hover:text-primary transition">
+          <input
+            type="checkbox"
+            checked={filterTextCadence}
+            onChange={() => setFilterTextCadence((v) => !v)}
+            className="w-[15px] h-[15px] accent-primary"
+          />
+          <span className="flex-1">
+            Texting this week
+            {currentWeekRotation.textCategory && (
+              <span className="ml-1.5 text-[11px] text-muted-foreground font-medium">
+                · {currentWeekRotation.textCategory}
               </span>
-            </label>
-          ))
-        )}
+            )}
+          </span>
+          <span className="text-[11px] px-1.5 rounded-full bg-[hsl(210_20%_96%)] text-muted-foreground">
+            {sphereSyncCounts.text}
+          </span>
+        </label>
+
+        {/* Touched this week — contacts the agent already called or texted
+            via SphereSync this week. Lets agents avoid double-touching. */}
+        <label className="flex items-center gap-2.5 py-2.5 text-sm cursor-pointer text-reop-dark-blue hover:text-primary transition">
+          <input
+            type="checkbox"
+            checked={filterTouchedThisWeek}
+            onChange={() => setFilterTouchedThisWeek((v) => !v)}
+            className="w-[15px] h-[15px] accent-primary"
+          />
+          <span className="flex-1">Touched this week</span>
+          <span className="text-[11px] px-1.5 rounded-full bg-[hsl(210_20%_96%)] text-muted-foreground">
+            {sphereSyncCounts.touched}
+          </span>
+        </label>
       </div>
 
       <div className="py-4 border-b border-border">
@@ -647,13 +754,19 @@ export default function Database() {
       </div>
 
       {(selectedRelationships.size > 0 ||
-        selectedTemps.size > 0 ||
+        filterPriorityOnly ||
+        filterCallCadence ||
+        filterTextCadence ||
+        filterTouchedThisWeek ||
         lastTouchRange !== 'all' ||
         selectedCallingStatuses.size > 0) && (
         <button
           onClick={() => {
             setSelectedRelationships(new Set());
-            setSelectedTemps(new Set());
+            setFilterPriorityOnly(false);
+            setFilterCallCadence(false);
+            setFilterTextCadence(false);
+            setFilterTouchedThisWeek(false);
             setLastTouchRange('all');
             setSelectedCallingStatuses(new Set());
           }}
@@ -824,7 +937,7 @@ export default function Database() {
                       {[
                         { label: 'Name' },
                         { label: 'Relationship' },
-                        { label: 'Priority' },
+                        { label: 'SphereSync' },
                         { label: 'Last touch' },
                         { label: 'Tags' },
                         { label: '', srOnly: 'Actions' },
@@ -847,7 +960,7 @@ export default function Database() {
                       </tr>
                     ) : (
                       visibleContacts.map((c) => {
-                        const t = tempForContact(c);
+                        const ss = sphereSyncFor(c);
                         const tags = (c.tags ?? []).slice(0, 3);
                         const callable = !c.dnc && !!c.phone;
                         return (
@@ -886,7 +999,7 @@ export default function Database() {
                               {c.contact_type || <span className="text-muted-foreground">—</span>}
                             </td>
                             <td className="py-3 px-4 align-middle">
-                              <TempPill temp={t} />
+                              <SphereSyncCell {...ss} />
                             </td>
                             <td className="py-3 px-4 align-middle whitespace-nowrap text-muted-foreground text-[12.5px]">
                               {formatRelativeTouch(c.last_activity_date)}
@@ -991,7 +1104,7 @@ export default function Database() {
                   </div>
                 ) : (
                   visibleContacts.map((c) => {
-                    const t = tempForContact(c);
+                    const ss = sphereSyncFor(c);
                     const tags = (c.tags ?? []).slice(0, 4);
                     const callable = !c.dnc && !!c.phone;
                     return (
@@ -1018,7 +1131,9 @@ export default function Database() {
                                   <b className="font-semibold block text-sm truncate">{fullNameFor(c)}</b>
                                   <span className="text-[12px] text-muted-foreground line-clamp-1">{metaFor(c)}</span>
                                 </div>
-                                <TempPill temp={t} />
+                                <div className="shrink-0">
+                                  <SphereSyncCell {...ss} />
+                                </div>
                               </div>
                               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-muted-foreground">
                                 <span>{c.contact_type || 'Unspecified'}</span>
