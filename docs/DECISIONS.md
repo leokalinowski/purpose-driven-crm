@@ -6,7 +6,7 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
-## 2026-05-18 — Priority system rebuild, Phase 1 — backend (PR TBD)
+## 2026-05-18 — Priority system rebuild, Phase 1 — backend (PR #31)
 
 **What.** Rewrote the contact prioritization scorer from scratch to make it the core piece of the product.
 
