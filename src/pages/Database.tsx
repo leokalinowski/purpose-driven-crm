@@ -285,9 +285,9 @@ export default function Database() {
           : '—',
       },
       {
-        label: 'Hot leads',
+        label: 'Hot priorities',
         value: hotLeads.toLocaleString(),
-        delta: hotLeads > 0 ? 'Score 60+' : 'No hot leads',
+        delta: hotLeads > 0 ? 'Priority score 60+' : 'No hot priorities',
         positive: hotLeads > 0,
       },
       {
@@ -552,7 +552,7 @@ export default function Database() {
 
       <div className="py-4 border-b border-border">
         <h4 className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground font-bold mb-2.5">
-          Temperature
+          Priority
         </h4>
         {!tempCounts ? (
           <p className="text-[12px] text-muted-foreground">Loading…</p>
@@ -701,7 +701,7 @@ export default function Database() {
           <div>
             <span className="eye-label block mb-1.5">Database</span>
             <h1 className="text-[clamp(1.5rem,2vw+1rem,2rem)] font-medium tracking-tighter leading-[1.15] mb-1.5">
-              {totalContacts.toLocaleString()} relationships, one source of truth.
+              {totalContacts.toLocaleString()} {totalContacts === 1 ? 'relationship' : 'relationships'}, one source of truth.
             </h1>
             <p className="text-sm text-muted-foreground max-w-[640px] leading-[1.55]">
               Everyone in your world — tagged, dated, and searchable. Click any row to open the full file.
@@ -824,7 +824,7 @@ export default function Database() {
                       {[
                         { label: 'Name' },
                         { label: 'Relationship' },
-                        { label: 'Temp' },
+                        { label: 'Priority' },
                         { label: 'Last touch' },
                         { label: 'Tags' },
                         { label: '', srOnly: 'Actions' },

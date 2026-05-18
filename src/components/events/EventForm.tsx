@@ -479,17 +479,31 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
             </p>
           </div>
 
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div className="space-y-0.5">
-              <Label htmlFor="isPublished">Publish Public RSVP Page</Label>
-              <p className="text-sm text-muted-foreground">
-                Allow public RSVPs via a shareable link
+          <div
+            className={
+              isPublished
+                ? 'flex items-center justify-between p-4 border-2 border-primary bg-reop-teal-soft rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
+                : 'flex items-center justify-between p-4 border-2 border-primary/40 bg-reop-teal-soft/40 rounded-lg ring-1 ring-primary/20'
+            }
+          >
+            <div className="space-y-0.5 flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-[0.1em] font-bold text-primary bg-card border border-primary/30 px-1.5 py-0.5 rounded">
+                  Recommended
+                </span>
+                <Label htmlFor="isPublished" className="text-base font-semibold text-reop-dark-blue cursor-pointer">
+                  Publish Public RSVP Page
+                </Label>
+              </div>
+              <p className="text-sm text-reop-dark-blue/80">
+                Turn this on to get a shareable RSVP link — the main way invitees confirm. Off means no public page is created.
               </p>
             </div>
             <Switch
               id="isPublished"
               checked={isPublished}
               onCheckedChange={setIsPublished}
+              className="ml-4"
             />
           </div>
 

@@ -364,7 +364,7 @@ const AdminEventsManagement = () => {
 
   const exportEvents = () => {
     const csv = [
-      ['Title', 'Date', 'Location', 'Agent', 'Published', 'RSVPs', 'Capacity', 'Attendance', 'Leads'].join(','),
+      ['Title', 'Date', 'Location', 'Agent', 'Published', 'RSVPs', 'Capacity', 'Attendance', 'New contacts'].join(','),
       ...filteredEvents.map(e => [
         `"${e.title}"`,
         e.event_date,
@@ -819,7 +819,7 @@ const AdminEventsManagement = () => {
                                                   <p className="text-xl font-bold">{event.attendance_count || event.current_rsvp_count || 0}</p>
                                                 </div>
                                                 <div className="p-3 rounded-lg bg-background border">
-                                                  <p className="text-xs text-muted-foreground">Leads</p>
+                                                  <p className="text-xs text-muted-foreground">New contacts</p>
                                                   <p className="text-xl font-bold">{event.leads_generated || 0}</p>
                                                 </div>
                                               </div>

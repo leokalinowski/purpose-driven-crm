@@ -92,7 +92,7 @@ export const EventCard = ({ event, type }: EventCardProps) => {
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 <div>
                   <p className="text-sm font-medium">{event.leads_generated}</p>
-                  <p className="text-xs text-muted-foreground">Leads Generated</p>
+                  <p className="text-xs text-muted-foreground">New contacts</p>
                 </div>
               </div>
             )}

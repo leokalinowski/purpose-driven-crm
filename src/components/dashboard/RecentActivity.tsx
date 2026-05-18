@@ -34,7 +34,7 @@ export function RecentActivity() {
 
         const arr: ActivityItem[] = [];
         for (const c of contacts.data || []) {
-          arr.push({ id: `c-${c.id}`, action: 'New lead added', description: `${c.first_name || ''} ${c.last_name}`.trim(), time: c.created_at, status: 'new', link: '/database' });
+          arr.push({ id: `c-${c.id}`, action: 'New contact added', description: `${c.first_name || ''} ${c.last_name}`.trim(), time: c.created_at, status: 'new', link: '/database' });
         }
         for (const t of tasks.data || []) {
           if (t.completed_at) arr.push({ id: `t-${t.id}`, action: 'SphereSync task completed', description: t.task_type, time: t.completed_at, status: 'completed', link: '/spheresync-tasks' });

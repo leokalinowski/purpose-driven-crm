@@ -132,12 +132,12 @@ export function EnhancedTransactionMetrics({ metrics, loading }: EnhancedTransac
         </CardContent>
       </Card>
 
-      {/* Lead Source Breakdown */}
+      {/* Contact source breakdown */}
       <Card className="md:col-span-2">
         <CardHeader>
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <UserCheck className="h-4 w-4" />
-            Lead Sources
+            Contact sources
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -152,7 +152,7 @@ export function EnhancedTransactionMetrics({ metrics, loading }: EnhancedTransac
                   </Badge>
                 ))
             ) : (
-              <p className="text-sm text-muted-foreground">No lead source data available</p>
+              <p className="text-sm text-muted-foreground">No contact source data available</p>
             )}
           </div>
         </CardContent>

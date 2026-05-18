@@ -51,6 +51,12 @@ type PresetKey = 'market' | 'seasonal' | 'educational' | 'custom';
 type Tone = 'warm' | 'professional' | 'casual' | 'authoritative';
 type Length = 'short' | 'medium' | 'long';
 
+// Per-topic sub-angles. Each topic has its own set — these are the
+// "different questions per topic" the partner asked for.
+type MarketAngle = 'price_trends' | 'inventory' | 'days_on_market' | 'rates_affordability';
+type SeasonalAngle = 'maintenance' | 'outdoor_curb' | 'market_timing' | 'tax_finance';
+type EducationalTopic = 'first_time_buyer' | 'refinance_101' | 'home_maintenance' | 'closing_process' | 'inspections' | 'title_insurance';
+
 // ── Static option metadata ──────────────────────────────────────────────
 
 const getSeason = (): string => {
@@ -159,6 +165,120 @@ const GOALS: GoalMeta[] = [
   { key: 'top_of_mind',   label: 'Stay top of mind',  Icon: Sun,           sub: 'No hard ask — friendly check-in.' },
 ];
 
+// Topic-specific sub-angle metadata. Each entry's `prompt` becomes the
+// `topic_hint` sent to the backend, so they need to read as concrete
+// directions to the LLM, not user-facing one-liners.
+
+interface SubAngleMeta<K extends string> {
+  key: K;
+  label: string;
+  sub: string;
+  prompt: string;
+}
+
+const MARKET_ANGLES: SubAngleMeta<MarketAngle>[] = [
+  {
+    key: 'price_trends',
+    label: 'Price trends',
+    sub: 'Where median values are heading.',
+    prompt:
+      'Write a newsletter focused on median home price trends in the local market. Lead with the current median, the 3-month change, and what it means for buyers and sellers. Keep numbers concrete; avoid speculation.',
+  },
+  {
+    key: 'inventory',
+    label: 'Inventory',
+    sub: 'How tight or loose the market is.',
+    prompt:
+      'Write a newsletter focused on current inventory levels — months of supply, active vs. sold ratio, new listings this month. Translate the numbers into "what this means for buyers" and "what this means for sellers".',
+  },
+  {
+    key: 'days_on_market',
+    label: 'Days on market',
+    sub: 'Speed of sale, pricing pressure.',
+    prompt:
+      'Write a newsletter focused on days-on-market and time-to-contract. Compare to the prior month and same period last year. Explain whether sellers can price aggressively or need to compete.',
+  },
+  {
+    key: 'rates_affordability',
+    label: 'Rates & affordability',
+    sub: 'Mortgage rates + monthly payments.',
+    prompt:
+      'Write a newsletter focused on current mortgage rate environment and affordability — what the monthly payment looks like at today\'s rate vs. 6 months ago for the local median home. Help readers see whether waiting is costing them.',
+  },
+];
+
+const SEASONAL_ANGLES: SubAngleMeta<SeasonalAngle>[] = [
+  {
+    key: 'maintenance',
+    label: 'Seasonal maintenance',
+    sub: 'A checklist for the time of year.',
+    prompt: `Write a ${getSeason()} ${new Date().getFullYear()} home-maintenance newsletter. Give a practical checklist of 5–7 things homeowners should do this season — gutters, HVAC, weatherproofing, etc., whichever fits the season. Pragmatic, friendly tone.`,
+  },
+  {
+    key: 'outdoor_curb',
+    label: 'Outdoor & curb appeal',
+    sub: 'Landscaping, exterior, prep tips.',
+    prompt: `Write a ${getSeason()} ${new Date().getFullYear()} newsletter about outdoor home prep and curb appeal — landscaping moves, exterior touch-ups, lighting, what's worth the money this season. Aim it at homeowners who want their property to look its best.`,
+  },
+  {
+    key: 'market_timing',
+    label: 'Seasonal market timing',
+    sub: 'Whether to buy / sell / wait this season.',
+    prompt: `Write a ${getSeason()} ${new Date().getFullYear()} newsletter explaining the seasonal dynamics of the local market — historically how this season tends to behave (inventory, buyer activity, price movement) and what that means for someone considering a move now vs. later this year.`,
+  },
+  {
+    key: 'tax_finance',
+    label: 'Tax & finance season',
+    sub: 'Deductions, refinances, payment changes.',
+    prompt: `Write a ${getSeason()} ${new Date().getFullYear()} newsletter on the financial side of homeownership for this time of year — relevant tax deductions, refinance windows, escrow / property tax updates, anything seasonally financial. Keep it tactical, not generic.`,
+  },
+];
+
+const EDUCATIONAL_TOPICS: SubAngleMeta<EducationalTopic>[] = [
+  {
+    key: 'first_time_buyer',
+    label: 'First-time buyer 101',
+    sub: 'Pre-approval → closing in plain English.',
+    prompt:
+      'Write an educational newsletter for first-time homebuyers. Walk through the journey at a high level: pre-approval, house hunting, offers, inspection, appraisal, closing. Keep jargon defined inline. End with the 3 mistakes first-timers make most often.',
+  },
+  {
+    key: 'refinance_101',
+    label: 'Refinance 101',
+    sub: 'When it makes sense, when it doesn\'t.',
+    prompt:
+      'Write an educational newsletter on refinancing. Cover the break-even calculation, when refinancing makes sense vs. doesn\'t, common pitfalls (resetting the loan term, closing costs), and the questions to ask a lender. Practical, not promotional.',
+  },
+  {
+    key: 'home_maintenance',
+    label: 'Home maintenance basics',
+    sub: 'What every owner should do annually.',
+    prompt:
+      'Write an educational newsletter on home maintenance fundamentals for any owner. Annual / quarterly / monthly task buckets. Focus on the small habits that prevent expensive problems — HVAC service, water heater flush, roof inspection cadence, etc.',
+  },
+  {
+    key: 'closing_process',
+    label: 'The closing process',
+    sub: 'What happens between contract and keys.',
+    prompt:
+      'Write an educational newsletter explaining the closing process step-by-step — earnest money, contingencies, inspection period, appraisal, loan underwriting, final walk-through, closing day. Demystify the timeline and the docs.',
+  },
+  {
+    key: 'inspections',
+    label: 'Inspections explained',
+    sub: 'What gets inspected, what really matters.',
+    prompt:
+      'Write an educational newsletter on home inspections — what a general inspection covers vs. what it doesn\'t, the specialist inspections to consider (radon, sewer scope, roof, foundation), how to read an inspection report, and what should make you walk vs. negotiate.',
+  },
+  {
+    key: 'title_insurance',
+    label: 'Title insurance',
+    sub: 'Why it exists, what it actually protects.',
+    prompt:
+      'Write an educational newsletter on title insurance — what it actually protects against (with real-world examples), the difference between owner\'s and lender\'s policies, why it\'s a one-time cost worth understanding, and when to ask questions of the title company.',
+  },
+];
+
 const TONE_META: { key: Tone; label: string; sub: string }[] = [
   { key: 'warm',          label: 'Warm',           sub: 'Personal, conversational' },
   { key: 'professional',  label: 'Professional',   sub: 'Polished, knowledgeable' },
@@ -193,14 +313,12 @@ export function AIGenerateDialog({ open, onClose }: AIGenerateDialogProps) {
   const [audience, setAudience] = useState<Audience>('both');
   const [goal, setGoal] = useState<Goal>('top_of_mind');
 
-  // Direction + refinements
+  // Direction + per-topic angle picks
   const [selectedPreset, setSelectedPreset] = useState<PresetKey>('market');
+  const [marketAngle, setMarketAngle] = useState<MarketAngle>('price_trends');
+  const [seasonalAngle, setSeasonalAngle] = useState<SeasonalAngle>('maintenance');
+  const [educationalTopic, setEducationalTopic] = useState<EducationalTopic>('first_time_buyer');
   const [customPrompt, setCustomPrompt] = useState('');
-  const [presetPrompts, setPresetPrompts] = useState<Record<Exclude<PresetKey, 'custom'>, string>>(() => ({
-    market: PRESETS[0].defaultPrompt(),
-    seasonal: PRESETS[1].defaultPrompt(),
-    educational: PRESETS[2].defaultPrompt(),
-  }));
   const [tone, setTone] = useState<Tone>('warm');
   const [length, setLength] = useState<Length>('medium');
 
@@ -257,10 +375,28 @@ export function AIGenerateDialog({ open, onClose }: AIGenerateDialogProps) {
     setAudience('both');
     setGoal('top_of_mind');
     setSelectedPreset('market');
+    setMarketAngle('price_trends');
+    setSeasonalAngle('maintenance');
+    setEducationalTopic('first_time_buyer');
     setCustomPrompt('');
     setTone('warm');
     setLength('medium');
     setShowBrandPanel(false);
+  };
+
+  // Resolve the topic_hint prompt that gets sent to the backend, based on
+  // the selected topic angle + its sub-choice. Custom is handled separately.
+  const resolvedPromptForBackend = (): string => {
+    switch (selectedPreset) {
+      case 'market':
+        return MARKET_ANGLES.find((a) => a.key === marketAngle)?.prompt ?? PRESETS[0].defaultPrompt();
+      case 'seasonal':
+        return SEASONAL_ANGLES.find((a) => a.key === seasonalAngle)?.prompt ?? PRESETS[1].defaultPrompt();
+      case 'educational':
+        return EDUCATIONAL_TOPICS.find((a) => a.key === educationalTopic)?.prompt ?? PRESETS[2].defaultPrompt();
+      case 'custom':
+        return customPrompt.trim();
+    }
   };
 
   const handleClose = () => {
@@ -293,7 +429,7 @@ export function AIGenerateDialog({ open, onClose }: AIGenerateDialogProps) {
     }
 
     const isCustom = selectedPreset === 'custom';
-    const promptText = isCustom ? customPrompt.trim() : presetPrompts[selectedPreset];
+    const promptText = resolvedPromptForBackend();
     if (isCustom && !promptText) {
       toast({
         title: 'Custom prompt required',
@@ -353,15 +489,24 @@ export function AIGenerateDialog({ open, onClose }: AIGenerateDialogProps) {
   const sectionCounter = { n: 0 };
   const nextNum = () => String(++sectionCounter.n);
 
-  // Which follow-ups belong to which topic angle:
-  //   market      → Area + Audience (data is geography-bound + audience-tuned)
-  //   seasonal    → Audience (timing applies to everyone equally)
-  //   educational → nothing extra (general)
-  //   custom      → freeform prompt only
+  // Each topic angle has its own follow-up question set — these are
+  // intentionally different (not just a shared list with hide/show):
+  //   market      → Area  + Market angle (price / inventory / DOM / rates)
+  //   seasonal    → Seasonal angle (maintenance / curb / timing / tax)
+  //   educational → Educational topic (first-timer / refi / closing / …)
+  //   custom      → Freeform prompt
+  // The Audience question and the editable prompt-preview are gone — the
+  // topic-specific picks are concrete enough to feed the LLM directly.
   const showAreaQuestion = selectedPreset === 'market';
-  const showAudienceQuestion = selectedPreset === 'market' || selectedPreset === 'seasonal';
+  const showMarketAngle = selectedPreset === 'market';
+  const showSeasonalAngle = selectedPreset === 'seasonal';
+  const showEducationalTopic = selectedPreset === 'educational';
   const showCustomPrompt = selectedPreset === 'custom';
-  const showPromptPreview = !showCustomPrompt; // market/seasonal/educational render an editable resolved prompt
+  // Audience only applies when the body voice meaningfully shifts —
+  // Market (numbers read differently for buyers vs. sellers) and Custom
+  // (so agents can tune the freeform direction). Seasonal + Educational
+  // are general by design.
+  const showAudienceQuestion = selectedPreset === 'market' || selectedPreset === 'custom';
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
@@ -491,7 +636,73 @@ export function AIGenerateDialog({ open, onClose }: AIGenerateDialogProps) {
           </Section>
           )}
 
-          {/* ── AUDIENCE (Market or Seasonal) ───────────────────────────── */}
+          {/* ── MARKET ANGLE (Market only) ──────────────────────────────── */}
+          {showMarketAngle && (
+            <Section
+              number={nextNum()}
+              title="Which market angle leads the story?"
+              hint="The number you anchor the newsletter on. The AI builds the rest around it."
+            >
+              <div className="grid grid-cols-2 gap-2">
+                {MARKET_ANGLES.map((a) => (
+                  <CardChoice
+                    key={a.key}
+                    active={marketAngle === a.key}
+                    onClick={() => setMarketAngle(a.key)}
+                    label={a.label}
+                    sub={a.sub}
+                    Icon={TrendingUp}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* ── SEASONAL ANGLE (Seasonal only) ──────────────────────────── */}
+          {showSeasonalAngle && (
+            <Section
+              number={nextNum()}
+              title={`What ${getSeason().toLowerCase()} angle?`}
+              hint="Seasonal newsletters land best when they're actionable for the time of year."
+            >
+              <div className="grid grid-cols-2 gap-2">
+                {SEASONAL_ANGLES.map((a) => (
+                  <CardChoice
+                    key={a.key}
+                    active={seasonalAngle === a.key}
+                    onClick={() => setSeasonalAngle(a.key)}
+                    label={a.label}
+                    sub={a.sub}
+                    Icon={Calendar}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* ── EDUCATIONAL TOPIC (Educational only) ────────────────────── */}
+          {showEducationalTopic && (
+            <Section
+              number={nextNum()}
+              title="Which topic are you teaching?"
+              hint="Pick one topic. Stronger than a generic 'educational' newsletter."
+            >
+              <div className="grid grid-cols-2 gap-2">
+                {EDUCATIONAL_TOPICS.map((a) => (
+                  <CardChoice
+                    key={a.key}
+                    active={educationalTopic === a.key}
+                    onClick={() => setEducationalTopic(a.key)}
+                    label={a.label}
+                    sub={a.sub}
+                    Icon={GraduationCap}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* ── AUDIENCE (Market or Custom only) ────────────────────────── */}
           {showAudienceQuestion && (
             <Section
               number={nextNum()}
@@ -552,28 +763,8 @@ export function AIGenerateDialog({ open, onClose }: AIGenerateDialogProps) {
             </div>
           </Section>
 
-          {/* ── REFINEMENTS (prompt preview + voice/length) ─────────────── */}
+          {/* ── REFINEMENTS (voice + length) ────────────────────────────── */}
           <div className="border-t border-border pt-4 space-y-4">
-            {showPromptPreview && (
-              <div>
-                <Label className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground mb-1.5 block">
-                  Topic prompt (edit to refine)
-                </Label>
-                <Textarea
-                  value={presetPrompts[selectedPreset as Exclude<PresetKey, 'custom'>]}
-                  onChange={(e) =>
-                    setPresetPrompts((prev) => ({
-                      ...prev,
-                      [selectedPreset as Exclude<PresetKey, 'custom'>]: e.target.value,
-                    }))
-                  }
-                  disabled={isGenerating}
-                  rows={3}
-                  className="text-sm"
-                />
-              </div>
-            )}
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground mb-1.5 block">

@@ -158,13 +158,13 @@ function pct(numerator: number, denominator: number): number {
 
 /**
  * Group stages into four readable buckets for the dashboard caption.
- * Maps Pam's 7 canonical stages to "leads / consult / active / contract".
+ * Maps Pam's 7 canonical stages to "new / consult / active / contract".
  * `closed` and `lost` are excluded — only active pipeline counts here.
  */
 function summarizeStages(stageBreakdown: Record<string, number> | undefined): string {
   if (!stageBreakdown) return 'No active opportunities';
   const buckets: { label: string; stages: string[] }[] = [
-    { label: 'leads',    stages: ['conversation_active', 'opportunity_identified'] },
+    { label: 'new',      stages: ['conversation_active', 'opportunity_identified'] },
     { label: 'consult',  stages: ['consultation_completed', 'client_secured'] },
     { label: 'active',   stages: ['active_opportunity'] },
     { label: 'contract', stages: ['under_contract'] },
