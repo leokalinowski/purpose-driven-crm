@@ -3,7 +3,17 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Edit, Trash2, ChevronUp, ChevronDown, Activity, MapPin, Tag, Phone, Mail, User, Shield } from 'lucide-react';
+import { Edit, Trash2, ChevronUp, ChevronDown, Activity, MapPin, Tag, Phone, Mail, Shield } from 'lucide-react';
+
+/** Get 1-2 initial letters from a contact's name for the avatar bubble. */
+function getInitials(first: string | null | undefined, last: string | null | undefined): string {
+  const f = (first ?? '').trim();
+  const l = (last ?? '').trim();
+  if (f && l) return (f[0] + l[0]).toUpperCase();
+  if (f) return f.slice(0, 2).toUpperCase();
+  if (l) return l.slice(0, 2).toUpperCase();
+  return '··';
+}
 import { Contact } from '@/hooks/useContacts';
 import { ContactEnricher } from './ContactEnricher';
 import { EnrichedContact } from '@/utils/dataEnrichment';
@@ -95,16 +105,26 @@ export const ContactTable = ({
                 }}
               />
             )}
-            <div>
-              <h3 className="font-medium flex items-center gap-2">
-                <User className="h-4 w-4" />
-                {contact.first_name} {contact.last_name}
-              </h3>
-              {contact.dnc && (
-                <Badge variant="destructive" className="text-xs mt-1">
-                  DNC
-                </Badge>
-              )}
+            <div className="flex items-center gap-2.5 min-w-0">
+              {/* Initials avatar replaces the generic User icon — gives each
+                  contact a recognizable identity on mobile cards where the
+                  generic icon read as visual noise. */}
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-reop-teal-soft font-bold text-[12px] text-primary"
+                aria-hidden
+              >
+                {getInitials(contact.first_name, contact.last_name)}
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-medium truncate">
+                  {contact.first_name} {contact.last_name}
+                </h3>
+                {contact.dnc && (
+                  <Badge variant="destructive" className="text-xs mt-1">
+                    DNC
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex gap-1">

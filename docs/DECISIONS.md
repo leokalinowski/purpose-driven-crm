@@ -6,6 +6,21 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
+## 2026-05-18 — Visual polish: ContactTable initials + WeekHintBar (PR TBD)
+
+**What.** Two small visual upgrades cherry-picked from the PR #26 audit (which itself was closed as superseded — see audit comments on that PR for the full triage).
+
+1. **ContactTable mobile cards: initials avatar** instead of the generic `<User />` icon. New `getInitials(first, last)` helper at the top of `src/components/database/ContactTable.tsx`. The avatar is a 36px teal-soft circle with bold uppercase initials — same visual language as the Avatar pattern used in `PrioritiesTab` and `ContactQuickSheet`. Mobile cards now feel like individual people rather than identical "User icon + name" rows.
+2. **`WeekHintBar` shared component** at `src/components/spheresync/WeekHintBar.tsx`. Renders the "Week N rotates letters A, B, C (calls); texts go to D" banner with letter chips. Accepts an optional `weekNumber` prop (defaults to the current ISO week) so the same component can serve other rotation views in the future. **Not wired in this PR** — `PrioritiesTab` is touched by the in-flight Phase 2 PR (#32) and I didn't want to create a merge conflict for a single-import line. Wiring is a 2-line follow-up.
+
+**Why.** Audit of the older PR #26 ("Agent Ops HQ redesign") flagged these as the durable visual ideas worth keeping; the rest of #26 was superseded by the May 2026 dashboard/sidebar work or broke against Pam's 7 flat stages.
+
+**Skipped from the original audit list.** The cadence stat-tile redesign — the existing `GoalBar` in `CadenceTab.tsx` is already clean, so the redesign was lower value-vs-scope than the other two.
+
+**Source.** PR #26 audit report (recorded in the prior session); user direction to ship the surviving visual ideas as a small focused PR.
+
+---
+
 ## 2026-05-14 — System architecture doc + working-notes foundation (PR #29)
 
 **What.** Added three foundational docs so future sessions don't start cold:
