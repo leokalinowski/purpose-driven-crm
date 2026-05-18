@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Sparkles, Phone, MessageSquare, Mail, Info, ListOrdered,
-  ClipboardList, RefreshCw, Loader2, Check, Quote,
+  Sparkles, Phone, MessageSquare, Mail, ListOrdered,
+  ClipboardList, RefreshCw, Loader2, Check,
 } from 'lucide-react';
+import { WeekHintBar } from '../WeekHintBar';
 import { addDays, format, isSameDay, startOfWeek, endOfWeek, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -93,45 +94,14 @@ function CoachTrustBar() {
   );
 }
 
-// ─── Reasoning derivers ──────────────────────────────────────────────────────
+// ─── FocusCard helpers ───────────────────────────────────────────────────────
 //
-// The FocusCard reads the top of the deterministic queue (queue.all[0]) — same
-// banded model the Priority queue uses below it. No AI ranking. The reasoning
-// + bullets are derived directly from the band and the queue item's signals,
-// so the explanation always matches the math.
-
-function buildFocusReasoning(item: QueueItem): string {
-  const days = item.last_activity_date
-    ? Math.max(0, Math.round((Date.now() - new Date(item.last_activity_date).getTime()) / 86400_000))
-    : null;
-
-  if (item.band === 'pipeline') {
-    if (days === null) {
-      return 'Active opportunity in your pipeline with no logged touches yet — get the first conversation on the books before it drifts.';
-    }
-    if (days >= 14) {
-      return `Active opportunity in your pipeline. Last touch was ${days} days ago — that's long enough that the opportunity is starting to stall. A check-in keeps momentum.`;
-    }
-    return `Active opportunity in your pipeline. Last touch ${days} day${days === 1 ? '' : 's'} ago — they're still warm. Stay close so the opportunity doesn't drift to another agent.`;
-  }
-
-  if (item.band === 'cadence') {
-    const initial = item.last_name?.[0]?.toUpperCase() ?? '';
-    if (days === null) {
-      return `Their last name (${initial}) is up in this week's rotation and you have no logged touches yet. Start the relationship — that's exactly what the rotation schedule is for.`;
-    }
-    if (days > 90) {
-      return `Their last name (${initial}) is up this week and it's been ${days} days since the last touch. They're at risk of slipping out of your sphere. Top of the queue today.`;
-    }
-    if (days > 60) {
-      return `Their last name (${initial}) is up in this week's rotation and ${days} days have passed. The cadence schedule is asking for a touch — keep the relationship healthy.`;
-    }
-    return `Their last name (${initial}) is up in this week's rotation. Last touch ${days} day${days === 1 ? '' : 's'} ago — keep the rotation honest by clearing this week's list.`;
-  }
-
-  // engagement
-  return `Recently engaged with your marketing. The signal is fresh — a personal follow-up turns the click into a conversation. If you don't reach out, the moment passes.`;
-}
+// The FocusCard reads the top of the deterministic priority queue
+// (queue.all[0]) — same scorer the Database page and SignalsView use.
+// The headline reasoning sentence comes from the DB column the scorer
+// writes (`item.reason`), so every surface tells the agent the same story.
+// "Why now" bullets are the queue item's context chips + a relative
+// last-touched marker; no re-derivation, no AI call.
 
 function buildFocusBullets(item: QueueItem): string[] {
   const days = item.last_activity_date
@@ -150,7 +120,11 @@ function FocusCard() {
   const { openStarter } = useConversationStarter();
   const queue = usePrioritizedQueue();
 
-  const focus = queue.all[0] ?? null;
+  // Pick the first contact the agent HASN'T touched yet this week. That's
+  // the "next thing to do." Falls back to queue.all[0] only when everything
+  // on the list has already been touched — at which point there's nothing
+  // new to highlight, so we show the highest-priority one as a stale focus.
+  const focus = queue.all.find((i) => !i.touched_this_week) ?? queue.all[0] ?? null;
 
   if (queue.loading) {
     return (
@@ -171,7 +145,7 @@ function FocusCard() {
           You&apos;re clear.
         </h2>
         <p className="text-sm text-muted-foreground leading-[1.6]">
-          No active pipeline opportunities, this week&apos;s rotation has no matches in your sphere yet, and no recent marketing engagement to follow up on. Add an opportunity in the Pipeline or wait for the next rotation week.
+          No active pipeline opportunities and this week&apos;s rotation has no matches in your sphere. Add an opportunity in the Pipeline or wait for the next rotation week.
         </p>
       </div>
     );
@@ -195,7 +169,10 @@ function FocusCard() {
     : focus.primary_action === 'text' ? 'Text'
       : 'Email';
 
-  const reasoning = buildFocusReasoning(focus);
+  // `focus.reason` comes straight from the DB column the scorer writes — the
+  // same sentence shown in ContactQuickSheet's Coach insight pane. One story
+  // per contact across the whole app.
+  const reasoning = focus.reason || 'Top contact in your priority queue.';
   const bullets = buildFocusBullets(focus);
   const totalQueued = queue.all.length;
 
@@ -347,44 +324,6 @@ function StreakCard({ weeks }: { weeks: number }) {
   );
 }
 
-function HintBar() {
-  const { currentWeek } = useSphereSyncTasks();
-  const callLetters = SPHERESYNC_CALLS[currentWeek.weekNumber] ?? [];
-  const textLetter = SPHERESYNC_TEXTS[currentWeek.weekNumber];
-
-  if (callLetters.length === 0 && !textLetter) return null;
-
-  return (
-    <div
-      className="flex items-center gap-3 p-3 px-4 rounded-[10px] border mb-5 text-sm flex-wrap"
-      style={{ background: 'hsl(184 100% 97%)', borderColor: 'hsl(184 50% 85%)' }}
-    >
-      <Info className="w-4 h-4 text-primary shrink-0" />
-      <div className="leading-[1.5]">
-        <b className="font-semibold">Week {currentWeek.weekNumber} rotation:</b> calling
-        {callLetters.length > 0 && <> last names <b className="text-primary">{callLetters.join(', ')}</b></>}
-        {textLetter && <>, texting <b className="text-primary">{textLetter}</b></>}.
-        <span className="block text-xs text-muted-foreground mt-0.5">
-          REOP works the alphabet over the year so every sphere contact gets a call twice.
-        </span>
-      </div>
-      <div className="flex gap-1 ml-auto flex-wrap">
-        {callLetters.map((l) => (
-          <div key={l} className="w-[26px] h-[26px] rounded-md bg-card border flex items-center justify-center font-bold text-[13px] text-primary"
-               style={{ borderColor: 'hsl(184 50% 80%)' }}>
-            {l}
-          </div>
-        ))}
-        {textLetter && (
-          <div className="w-[26px] h-[26px] rounded-md bg-reop-green text-white border-reop-green border flex items-center justify-center font-bold text-[13px]">
-            {textLetter}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function CadenceStrip() {
   const { user } = useAuth();
   const [perDay, setPerDay] = useState<Record<string, { call: number; text: number; event: number }>>({});
@@ -523,7 +462,7 @@ function PriorityQueue() {
           )}
         </h3>
         <div className="text-[11.5px] text-muted-foreground">
-          Pipeline first · then this week&apos;s rotation · then recent engagement
+          Pipeline first · then this week&apos;s rotation
         </div>
       </div>
       <div>
@@ -556,10 +495,26 @@ function PriorityQueue() {
                   className="flex flex-col gap-1 min-w-0 text-left"
                 >
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    <b className="text-sm font-semibold hover:text-primary hover:underline underline-offset-2">{item.contact_name}</b>
+                    <b className={cn(
+                      'text-sm font-semibold hover:text-primary hover:underline underline-offset-2',
+                      // Touched pipeline contacts get muted name treatment so the
+                      // "still on the list, but not the next thing to do" status
+                      // reads at a glance.
+                      item.touched_this_week && 'text-muted-foreground',
+                    )}>{item.contact_name}</b>
                     {item.dnc && (
                       <span className="inline-flex items-center px-1.5 py-px rounded-full bg-[hsl(0_84%_95%)] text-[10px] font-semibold text-[hsl(0_84%_40%)]">
                         DNC
+                      </span>
+                    )}
+                    {item.touched_this_week && (
+                      // Green checkmark chip — only fires for items still in
+                      // the queue after a touch (i.e., pipeline-band contacts;
+                      // cadence-band touched contacts are filtered out entirely
+                      // upstream).
+                      <span className="inline-flex items-center gap-1 px-1.5 py-px rounded-full bg-reop-green/15 text-[10px] font-semibold text-[hsl(142_55%_28%)]">
+                        <Check className="w-3 h-3" />
+                        Touched this week
                       </span>
                     )}
                   </div>
@@ -674,7 +629,7 @@ export function PrioritiesTab() {
         </aside>
       </section>
 
-      <HintBar />
+      <WeekHintBar />
       <CadenceStrip />
       <PriorityQueue />
     </div>

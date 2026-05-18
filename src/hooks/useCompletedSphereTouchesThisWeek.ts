@@ -17,6 +17,12 @@ export interface CompletedSphereTouches {
   calls: number;
   texts: number;
   total: number;
+  /**
+   * Set of contact (lead) IDs that had at least one completed spheresync_task
+   * this week. Used by the Database page's "Touched this week" SphereSync
+   * filter chip. O(1) lookup per contact row.
+   */
+  touchedContactIds: Set<string>;
   loading: boolean;
 }
 
@@ -26,6 +32,7 @@ export function useCompletedSphereTouchesThisWeek(): CompletedSphereTouches {
     calls: 0,
     texts: 0,
     total: 0,
+    touchedContactIds: new Set(),
     loading: true,
   });
 
@@ -36,9 +43,10 @@ export function useCompletedSphereTouchesThisWeek(): CompletedSphereTouches {
       const now = new Date();
       const weekStart = startOfWeek(now, { weekStartsOn: 1 }).toISOString();
       const weekEnd = endOfWeek(now, { weekStartsOn: 1 }).toISOString();
+      // Pull lead_id so consumers can build a fast "touched this week?" lookup.
       const { data, error } = await supabase
         .from('spheresync_tasks')
-        .select('task_type')
+        .select('task_type, lead_id')
         .eq('agent_id', user.id)
         .eq('completed', true)
         .gte('completed_at', weekStart)
@@ -49,10 +57,13 @@ export function useCompletedSphereTouchesThisWeek(): CompletedSphereTouches {
         setState((s) => ({ ...s, loading: false }));
         return;
       }
-      const rows = data ?? [];
+      const rows = (data ?? []) as Array<{ task_type: string; lead_id: string | null }>;
       const calls = rows.filter((r) => r.task_type === 'call').length;
       const texts = rows.filter((r) => r.task_type === 'text').length;
-      setState({ calls, texts, total: calls + texts, loading: false });
+      const touchedContactIds = new Set(
+        rows.map((r) => r.lead_id).filter((id): id is string => !!id),
+      );
+      setState({ calls, texts, total: calls + texts, touchedContactIds, loading: false });
     })();
     return () => {
       cancelled = true;

@@ -2076,17 +2076,20 @@ function SignalsView({ items }: { items: { tone: SignalTone; text: string }[] })
 }
 
 // Order + display config for the score bars. Weights match compute-priority-
-// scores: when there's an active opportunity it's 0.35 / 0.30 / 0.25 / 0.10;
-// without one the pipeline weight redistributes to 0.50 / 0 / 0.40 / 0.10.
+// scores (2026-05-18 rebuild): with an active opportunity the blend is
+// 0.40 / 0.35 / 0.10 / 0.10 / 0.05 (pipeline / cadence / engagement /
+// relationship / flags). Without one, the 0.40 pipeline weight redistributes
+// proportionally across the others (cadence stays dominant).
 const COMPONENT_ORDER: Array<{
-  key: 'relationship' | 'pipeline' | 'intent' | 'flags';
+  key: 'pipeline' | 'cadence' | 'engagement' | 'relationship' | 'flags';
   label: string;
   description: string;
 }> = [
-  { key: 'relationship', label: 'Relationship', description: 'Cadence freshness — how stale the relationship is.' },
-  { key: 'pipeline',     label: 'Pipeline',     description: 'Active opportunity momentum.' },
-  { key: 'intent',       label: 'Intent',       description: 'AI-synthesized buying intent.' },
-  { key: 'flags',        label: 'Flags',        description: 'VIP, pre-approval, watch flag.' },
+  { key: 'pipeline',     label: 'Pipeline',     description: 'Active opportunity stage — early stages weighted higher.' },
+  { key: 'cadence',      label: 'Cadence',      description: 'This week’s SphereSync rotation letter + task completion.' },
+  { key: 'engagement',   label: 'Engagement',   description: 'Recent gifts, event RSVPs, logged activity.' },
+  { key: 'relationship', label: 'Relationship', description: 'Freshness of the last logged touch.' },
+  { key: 'flags',        label: 'Flags',        description: 'VIP, pre-approval, watch flag, motivation.' },
 ];
 
 function ComponentBar({
@@ -2131,6 +2134,17 @@ function ComponentBar({
   );
 }
 
+/**
+ * CoachPane — set-based priority view (Phase 4, 2026-05-18 evening).
+ *
+ * No score. No weight bars. No /100 number. Just: is this contact a priority,
+ * and why. Matches the contract: PRIORITY = pipeline OR cadence; otherwise
+ * the section is hidden entirely (the contact isn't on the list).
+ *
+ * Signals read directly from priority_signals.{in_pipeline, in_cadence,
+ * pipeline_stage, rotation_letter, rotation_kind, rotation_week} written by
+ * the `set-based-v6` classifier in compute-priority-scores.
+ */
 function CoachPane({
   c,
   task,
@@ -2142,35 +2156,39 @@ function CoachPane({
   onRefreshScore: () => void;
   refreshing: boolean;
 }) {
-  const components = c.priority_components ?? null;
-  const signals = c.priority_signals ?? null;
+  const signals = (c.priority_signals ?? {}) as Record<string, unknown>;
   const tps = task?.ai_talking_points ?? [];
 
-  // Detect whether there's an active opportunity contributing to the score —
-  // when pipeline weight is non-zero we use the with-pipeline caps; otherwise
-  // the no-pipeline caps (relationship and intent absorb pipeline's slice).
-  const pipelineNum = typeof components?.pipeline === 'number' ? (components.pipeline as number) : 0;
-  const hasPipeline = pipelineNum > 0 || !!c.pipeline_active;
-  const weightFor = (key: 'relationship' | 'pipeline' | 'intent' | 'flags'): number => {
-    if (hasPipeline) {
-      return key === 'relationship' ? 35 : key === 'pipeline' ? 30 : key === 'intent' ? 25 : 10;
-    }
-    return key === 'relationship' ? 50 : key === 'pipeline' ? 0 : key === 'intent' ? 40 : 10;
+  const inPipeline = !!signals.in_pipeline;
+  const inCadence = !!signals.in_cadence;
+  const isPriority = inPipeline || inCadence;
+
+  const pipelineStage = typeof signals.pipeline_stage === 'string' ? signals.pipeline_stage : null;
+  const rotationLetter = typeof signals.rotation_letter === 'string' ? signals.rotation_letter : null;
+  const rotationKind = signals.rotation_kind === 'text' ? 'text' : signals.rotation_kind === 'call' ? 'call' : null;
+  const rotationWeek = typeof signals.rotation_week === 'number' ? signals.rotation_week : null;
+
+  // Friendly stage labels for the bullet.
+  const stageLabels: Record<string, string> = {
+    conversation_active:    'Conversation active',
+    opportunity_identified: 'Opportunity identified',
+    consultation_completed: 'Consultation completed',
+    client_secured:         'Client secured',
+    active_opportunity:     'Active opportunity',
+    under_contract:         'Under contract',
   };
+  const stageLabel = pipelineStage ? (stageLabels[pipelineStage] ?? pipelineStage.replace(/_/g, ' ')) : null;
 
   return (
     <div className="space-y-4">
-      <Section icon={Sparkles} title="Coach insight">
-        {/* Big priority hero — replaces the easy-to-miss "Priority 51/100" pill */}
-        {c.priority_score != null && (
-          <div className="flex items-end gap-4 mb-3 flex-wrap">
-            <div className="flex items-baseline gap-1">
-              <span className="text-[44px] font-semibold leading-none text-primary tabular-nums">
-                {c.priority_score}
-              </span>
-              <span className="text-[15px] text-muted-foreground">/ 100</span>
-            </div>
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+      <Section icon={Sparkles} title="Priority status">
+        {isPriority ? (
+          <>
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <Pill tone={inPipeline ? 'accent' : 'primary'}>
+                <Sparkles className="w-3 h-3" />
+                On your Priorities list
+              </Pill>
               {c.priority_watch_flag && (
                 <Pill tone="warn">
                   <AlertTriangle className="w-3 h-3" />
@@ -2183,15 +2201,40 @@ function CoachPane({
                 </span>
               )}
             </div>
-          </div>
-        )}
-        {(c.priority_reasoning || task?.ai_reason) ? (
-          <p className="text-[13.5px] text-reop-dark-blue leading-[1.55] m-0">
-            {c.priority_reasoning ?? task?.ai_reason}
-          </p>
+
+            <div className="text-[10.5px] uppercase tracking-[0.07em] font-bold text-muted-foreground mb-2">
+              Why now
+            </div>
+            <ul className="m-0 p-0 list-none space-y-2">
+              {inPipeline && stageLabel && (
+                <li className="flex items-start gap-2 text-[13.5px] text-reop-dark-blue leading-[1.5]">
+                  <TrendingUp className="w-3.5 h-3.5 mt-[3px] shrink-0 text-primary" />
+                  <span>
+                    <b className="font-semibold">Active opportunity</b> · {stageLabel}
+                  </span>
+                </li>
+              )}
+              {inCadence && rotationLetter && rotationWeek != null && (
+                <li className="flex items-start gap-2 text-[13.5px] text-reop-dark-blue leading-[1.5]">
+                  <Activity className="w-3.5 h-3.5 mt-[3px] shrink-0 text-primary" />
+                  <span>
+                    <b className="font-semibold">
+                      Week {rotationWeek} {rotationKind === 'text' ? 'text' : 'call'} rotation
+                    </b>{' '}
+                    · letter {rotationLetter}
+                  </span>
+                </li>
+              )}
+            </ul>
+          </>
         ) : (
-          <p className="text-[13px] text-muted-foreground m-0">No Coach commentary yet.</p>
+          <p className="text-[13px] text-muted-foreground m-0 leading-[1.5]">
+            Not on the Priorities list right now. They&apos;ll surface when an opportunity
+            is added or when their letter ({c.category?.toUpperCase() || '—'}) comes up
+            in the rotation.
+          </p>
         )}
+
         <div className="mt-3 flex justify-end">
           <button
             onClick={onRefreshScore}
@@ -2206,7 +2249,7 @@ function CoachPane({
             ) : (
               <>
                 <Activity className="w-3 h-3" />
-                Refresh score
+                Re-classify
               </>
             )}
           </button>
@@ -2225,43 +2268,6 @@ function CoachPane({
           </ul>
         </Section>
       )}
-
-      {components && (
-        <Section icon={Activity} title="Score breakdown">
-          <div className="flex flex-col gap-3">
-            {COMPONENT_ORDER.map(({ key, label, description }) => {
-              const raw = (components as Record<string, unknown>)[key];
-              const value = typeof raw === 'number' ? raw : 0;
-              const cap = weightFor(key);
-              if (cap === 0 && value === 0) return null;
-              return (
-                <ComponentBar
-                  key={key}
-                  label={label}
-                  description={description}
-                  value={value}
-                  capForBar={cap}
-                  weightPct={cap}
-                  tone={value > 0 ? 'primary' : 'muted'}
-                />
-              );
-            })}
-            <div className="text-[11px] text-muted-foreground leading-[1.45] pt-1">
-              Each bar shows that component&apos;s contribution to the {c.priority_score ?? '—'} / 100 total. Weights add to 100% and shift when the contact has no active opportunity.
-            </div>
-          </div>
-        </Section>
-      )}
-
-      {(() => {
-        const humanSignals = buildHumanSignals(signals ?? {}, c);
-        if (humanSignals.length === 0) return null;
-        return (
-          <Section icon={Sparkles} title="What I'm seeing">
-            <SignalsView items={humanSignals} />
-          </Section>
-        );
-      })()}
     </div>
   );
 }

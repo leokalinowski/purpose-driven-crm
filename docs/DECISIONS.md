@@ -6,6 +6,139 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
+## 2026-05-18 — Priority system: set-based rebuild + UI overhaul (PR TBD)
+
+**SUPERSEDES** the 0–100 weighted-score model from PRs #31 (backend) and #32 (frontend). Those PRs are closed; this one is the canonical rebuild.
+
+**What.** Threw out the weighted score entirely. A contact is now a PRIORITY iff:
+
+1. **Pipeline** — has an active opportunity at `conversation_active`, `opportunity_identified`, or `consultation_completed`. Later stages (`client_secured`, `active_opportunity`, `under_contract`) are NOT priorities — the client is already engaged.
+2. **Cadence** — `contacts.category` matches THIS week's call or text rotation AND no completed `spheresync_tasks` row for the current week.
+
+No score. No engagement set. No carryover from last week. No weighted blend. The earlier formula confused more than it helped — when cadence-only contacts could outscore a real pipeline opportunity, the agent stopped trusting the number.
+
+**Ordering within the queue:**
+- Pipeline contacts first, sorted: `conversation_active` → `opportunity_identified` → `consultation_completed` (early stages first per the FLIP — agents forget the unsecured contact, not the one already moving)
+- Within band: contacts NOT touched this week come BEFORE touched ones (touched contacts get a muted name + green "✓ Touched this week" chip; they stay visible but drop in rank)
+- Then cadence by last-touch ASC
+
+**"Touched this week" semantics.** Real touches only — calls, texts, emails, gifts logged in `contact_activities` with `outcome IS NOT NULL`, OR `outcome IS NULL` but `notes` doesn't start with `'SphereSync '`. The earlier version read `contacts.last_activity_date` directly and got fooled by SphereSync task STUB rows that the Monday-morning cron stamps onto every cadence contact.
+
+**Database page rewrite.** Killed the 6-tier Temperature column + filter — agents never trusted it. Replaced with a single SphereSync filter rail (panini design):
+- "On the Priorities list" (union of pipeline + cadence)
+- "Calling this week · R, V" (current call letters)
+- "Texting this week · O" (current text letter)
+- "Touched this week"
+
+PRIORITIES tile shows `N · X pipeline · Y cadence`. SPHERESYNC column shows a single "PRIORITY" badge per row. The useless single-value RELATIONSHIP filter auto-hides when every contact has the same `contact_type`.
+
+**ContactQuickSheet Coach pane** rewritten. Gone: the 0–100 hero number, the 5 weighted-component bars, the "Refresh score" button. New: "Priority status" — a checklist of which sets the contact is in ("Active opportunity · Consultation completed" / "Week 21 call rotation · letter R"), or a plain "Not on the Priorities list right now" line for non-priorities.
+
+**Event-driven rescore.** `usePipeline` now fires `compute-priority-scores` for the affected contact after every opportunity create / update / updateStage / delete + invalidates the priorities cache. A new opp appears on the Priorities tab in ~1 second, not at the next 6h cron tick.
+
+**DB integrity fix.** New trigger on `spheresync_tasks` ensures `completed_at` is set whenever `completed=true` (and cleared when un-completed). Fixed a dashboard bug where 6 of Leo's completed calls had NULL `completed_at` and the "Sphere touches" KPI silently showed 0/17 instead of 6/17. Backfill migration stamps existing NULL rows with the SUNDAY of their assigned ISO week (NOT `NOW()` — that would pull historical completions into "this week").
+
+**Non-priority UI improvements bundled in:**
+- **Events page**: clicking "Calendar view" now hides the featured-event hero + mini-cal and shows a single full-width calendar at the top. Button toggles label between "Calendar view" ↔ "List view".
+- **EventForm**: the "Publish Public RSVP Page" toggle is now a highlighted teal callout with a URL preview when ON (was a generic field row, easy to miss).
+
+**Key files.**
+- `supabase/functions/compute-priority-scores/index.ts` — set-based-v7 classifier (deployed live as version 11)
+- `supabase/migrations/20260518000001_priority_system_rebuild.sql` — `priority_band` column, cron consolidated (carried over from PR #31)
+- `supabase/migrations/20260518000002_priority_rescore_chunked_rpc.sql` — RPC batches to 100 IDs per pg_net call
+- `supabase/migrations/20260518000003_spheresync_task_completed_at_integrity.sql` — trigger + safe backfill
+- `src/hooks/usePrioritizedQueue.ts` — set-based, band-hierarchy sort, touched-this-week from real activities
+- `src/hooks/useCompletedSphereTouchesThisWeek.ts` — exposes `touchedContactIds: Set<string>`
+- `src/hooks/usePipeline.ts` — event-driven rescore on every opportunity mutation
+- `src/pages/Database.tsx` — SphereSync filter rail + PRIORITIES tile + SPHERESYNC column
+- `src/components/spheresync/ContactQuickSheet.tsx` — Coach pane rewritten as priority-status checklist
+- `src/components/spheresync/tabs/PrioritiesTab.tsx` — touched-this-week chip, untouched-first focus pick
+- `src/pages/Events.tsx` — Calendar view toggle behavior
+- `src/components/events/EventForm.tsx` — highlighted RSVP toggle
+
+**Source.** Live iteration with Leo on 2026-05-18 evening. Multiple frustrated rounds — got it wrong several ways before landing on the simple contract: "A contact is a priority if they're in the pipeline OR up in this week's rotation. Nothing else. No score." Then layered the touched-this-week behavior for the demote / drop-off effect.
+
+---
+
+## 2026-05-18 — Visual polish: ContactTable initials + WeekHintBar (PR #33)
+
+**What.** Two small visual upgrades cherry-picked from the PR #26 audit (which itself was closed as superseded — see audit comments on that PR for the full triage).
+
+1. **ContactTable mobile cards: initials avatar** instead of the generic `<User />` icon. New `getInitials(first, last)` helper at the top of `src/components/database/ContactTable.tsx`. The avatar is a 36px teal-soft circle with bold uppercase initials — same visual language as the Avatar pattern used in `PrioritiesTab` and `ContactQuickSheet`. Mobile cards now feel like individual people rather than identical "User icon + name" rows.
+2. **`WeekHintBar` shared component** at `src/components/spheresync/WeekHintBar.tsx`. Renders the "Week N rotates letters A, B, C (calls); texts go to D" banner with letter chips. Accepts an optional `weekNumber` prop (defaults to the current ISO week) so the same component can serve other rotation views in the future. **Not wired in this PR** — `PrioritiesTab` is touched by the in-flight Phase 2 PR (#32) and I didn't want to create a merge conflict for a single-import line. Wiring is a 2-line follow-up.
+
+**Why.** Audit of the older PR #26 ("Agent Ops HQ redesign") flagged these as the durable visual ideas worth keeping; the rest of #26 was superseded by the May 2026 dashboard/sidebar work or broke against Pam's 7 flat stages.
+
+**Skipped from the original audit list.** The cadence stat-tile redesign — the existing `GoalBar` in `CadenceTab.tsx` is already clean, so the redesign was lower value-vs-scope than the other two.
+
+**Source.** PR #26 audit report (recorded in the prior session); user direction to ship the surviving visual ideas as a small focused PR.
+
+---
+
+## 2026-05-18 — Priority system rebuild, Phase 2 — frontend swap (PR #32)
+
+**What.** Frontend now reads the deterministic score + band the Phase 1 scorer writes, so every surface ranks contacts identically. No more parallel ranking systems.
+
+- **`usePrioritizedQueue` rewritten.** Old 3-band client-side composer (3 separate queries + dedup) replaced with a single `SELECT ... ORDER BY priority_score DESC NULLS LAST` filtered by `priority_band IS NOT NULL`. Items are then grouped client-side by `band` for display. ~270 lines → ~170. Removes the broken `event_rsvps.contact_id` query that was silently erroring on main.
+- **`PrioritiesTab.buildFocusReasoning` deleted.** The FocusCard's reasoning sentence now comes from `item.reason` (i.e. `contacts.priority_reasoning`) — same sentence the ContactQuickSheet shows. One story per contact across the whole app, no more "FocusCard says X, drawer says Y."
+- **`usePrioritizedContacts` type updated.** `priority_components` shape changed from `{relationship, pipeline, intent, flags}` (Grok era) to `{pipeline, cadence, engagement, relationship, flags}` (5-component blend). Added `priority_band` field. Old `ai_key_signals` kept as legacy field for any unscored-since-Phase-1 rows.
+- **`ContactQuickSheet` Coach insight pane updated.** `COMPONENT_ORDER` rewritten for the new 5-component shape with new descriptions ("Cadence", "Engagement" added; "Intent" removed). `weightFor()` updated to 40/35/10/10/5 (with pipeline) and the proportionally-renormalized 0/58/17/17/8 (without). The existing `SignalsView` + `humanizeSignalString` + `buildHumanSignals` helpers were kept as-is — they parse generic strings and structural fields that survived the rebuild.
+- **`src/integrations/supabase/types.ts`** — added `priority_band: string | null` to the `contacts` Row / Insert / Update types. Manual edit instead of full regen (full regen is 154KB; types.ts already has the schema and only this one column changed for the contacts table).
+
+**Why.** Phase 1 wrote a real score to the DB, but `PrioritiesTab` and the Dashboard FocusCard ignored it — they re-derived a 3-band ranking client-side from 3 separate queries. The old derivation was also blind to the `priority_band` classifier and used `last_name.ilike` instead of `contacts.category` for cadence (two sources of truth for the same concept). Phase 2 cuts both — DB is the truth.
+
+**Verified.** `bunx tsc --noEmit` clean, `bunx eslint <touched files>` clean (no new warnings), `bun run build` ✓ (existing chunk-size + dynamic-import warnings are pre-existing).
+
+**Key files.**
+- `src/hooks/usePrioritizedQueue.ts` — rewritten
+- `src/hooks/usePrioritizedContacts.ts` — type updates
+- `src/components/spheresync/tabs/PrioritiesTab.tsx` — removed `buildFocusReasoning`, use DB reason
+- `src/components/spheresync/ContactQuickSheet.tsx` — `COMPONENT_ORDER` + `weightFor` for 5-component shape
+- `src/integrations/supabase/types.ts` — `priority_band` on contacts (Row / Insert / Update)
+
+**Source.** Continuation of the 2026-05-18 Phase 1 work. User direction: "make the new score visible everywhere."
+
+---
+
+## 2026-05-18 — Priority system rebuild, Phase 1 — backend (PR #31)
+
+**What.** Rewrote the contact prioritization scorer from scratch to make it the core piece of the product.
+
+1. **New formula:** `0.40·pipeline + 0.35·cadence + 0.10·engagement + 0.10·relationship + 0.05·flags`. Pipeline weight redistributes proportionally when no active opportunity.
+2. **Pipeline stage map FLIPPED** — Pam's 7 stages with EARLY stages weighted HIGHER (agents forget the `conversation_active` lead, not the one under contract): `conversation_active`=90, `opportunity_identified`=85, `consultation_completed`=80, `client_secured`=50, `active_opportunity`=40, `under_contract`=25, `closed`/`lost` excluded. Stale-in-stage penalty: −15 after 14d, −25 after 30d.
+3. **Cadence is now a real input** — reads `contacts.category` against this week's `SPHERESYNC_CALLS ∪ SPHERESYNC_TEXTS` and `spheresync_tasks` completion for current + previous ISO week.
+4. **Engagement is now a real input** (low weight): gifts in last 30d, email-matched event RSVPs in last 90d, recent logged activity.
+5. **Grok dropped** — deterministic reasoning string built from the dominant component. Same "why this contact" on every UI surface. The Grok intent call was costing money to produce a sentence the FocusCard never even read.
+6. **`priority_band` column** added to `contacts` (`pipeline | cadence | engagement | sphere`). UI surfaces group consistently without re-deriving.
+7. **Cron consolidated** — 4 tiered jobs (hot daily / warm weekly / cool biw / cold monthly) replaced with one `priority-rescore-all-6h`. Cadence depends on ISO week → must refresh weekly anyway.
+8. **RPC chunked at 100 IDs per pg_net invocation.** The old 200-row cap was protecting us from PostgREST URL-length overflow; chunking inside the RPC fixes it properly.
+
+**Why.** Two parallel ranking systems existed — `compute-priority-scores` (only Database page read it) and `usePrioritizedQueue` (client-side 3-band composer, ignored `priority_score`). They never agreed. The scorer ignored Pam's 7 stages (still mapped legacy `new_lead`/`active_search`/etc), ignored the SphereSync rotation, ignored marketing engagement, and burned ~3,000 Grok calls/day to write reasoning the visible UI threw away. A prior branch (`claude/compassionate-panini-8202be`) tried to fix this client-side-only — got engagement wrong, broke on a non-existent `event_rsvps.contact_id`, and left the backend running unused.
+
+**Method.** Two parallel audit agents (one post-morteming the prior branch, one mapping current code + live DB). Then a fresh rebuild on `feat/priority-system-rebuild` off `origin/main`. Deployed + verified live: 3,380/3,380 contacts scored on `deterministic-v2`. 3 in `pipeline` band (matches the 3 active opportunities production-wide; `conversation_active`=46 vs `active_opportunity`=31 — the FLIP works). Per-agent tops are all "Week N rotation (letter X) — owed a touch this week."
+
+**Key files / migrations.**
+- `supabase/functions/compute-priority-scores/index.ts` — full rewrite, no Grok, +`priority_band`
+- `supabase/migrations/20260518000001_priority_system_rebuild.sql` — column add, cron consolidation, cap raised
+- `supabase/migrations/20260518000002_priority_rescore_chunked_rpc.sql` — chunk RPC to 100 IDs per pg_net invocation
+
+**Decisions baked in.**
+| # | Question | Picked |
+|---|---|---|
+| 1 | Backend scorer or client-side? | Backend (browser shouldn't re-rank 3,400 contacts on every page) |
+| 2 | Weights | 40 / 35 / 10 / 10 / 5 |
+| 3 | Stage map direction | EARLY stages weighted HIGHER |
+| 4 | Grok intent | Dropped. Deterministic reasoning. |
+| 5 | Marketing engagement data pipeline | Deferred to Phase 4 (no per-contact opens/clicks captured today) |
+| 6 | Cron tiering | Dropped. Single 6h all-rescore. |
+| 7 | RPC chunking | 100 IDs per batch (PostgREST URL limit) |
+
+**Scope note.** Backend only. `Database` page already reads `priority_score`, so the new scores are visible there immediately. `PrioritiesTab` still uses the old client-side `usePrioritizedQueue` composer — that swap is **Phase 2**: read `priority_score` + `priority_band` directly, delete `buildFocusReasoning`, restore the deleted `SignalsView` in `ContactQuickSheet`.
+
+**Source.** User feedback: "the priority system should take into account the correct stages of the pipeline, the weekly cadence and in a lesser weight marketing engagement" + "contacts should be prioritized higher before they are secured, active, and under contract" (the FLIP).
+
+---
+
 ## 2026-05-14 — System architecture doc + working-notes foundation (PR #29)
 
 **What.** Added three foundational docs so future sessions don't start cold:

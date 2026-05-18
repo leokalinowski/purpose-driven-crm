@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAgents } from '@/hooks/useAgents';
 import { supabase } from '@/integrations/supabase/client';
 import { RSVPQuestionBuilder } from './rsvp/RSVPQuestionBuilder';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Share2 } from 'lucide-react';
 
 interface EventFormProps {
   event?: Event;
@@ -479,18 +479,60 @@ export const EventForm = ({ event, onClose, isAdminMode = false, adminAgentId }:
             </p>
           </div>
 
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div className="space-y-0.5">
-              <Label htmlFor="isPublished">Publish Public RSVP Page</Label>
-              <p className="text-sm text-muted-foreground">
-                Allow public RSVPs via a shareable link
-              </p>
+          {/* Highlighted callout — the "shall I make this RSVP-able?" toggle is
+              the single most important decision on this form. Pulled out of the
+              regular field stack into a teal callout so agents don't miss it. */}
+          <div className="rounded-xl border-2 border-primary/30 bg-reop-teal-soft/60 p-4 sm:p-5 space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <Share2 className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 space-y-1">
+                  <Label htmlFor="isPublished" className="text-base font-semibold text-reop-dark-blue cursor-pointer">
+                    Publish public RSVP page
+                  </Label>
+                  <p className="text-[13px] text-reop-dark-blue/80 leading-[1.5]">
+                    Turn on to generate a shareable link. Anyone with the link can RSVP —
+                    no account needed. You can toggle this off any time.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="isPublished"
+                checked={isPublished}
+                onCheckedChange={setIsPublished}
+                className="mt-1"
+              />
             </div>
-            <Switch
-              id="isPublished"
-              checked={isPublished}
-              onCheckedChange={setIsPublished}
-            />
+
+            {/* When ON, show the link the agent will share. For unsaved events
+                we can only preview the format; for existing events with a
+                public_slug we show the real URL with a copy button. */}
+            {isPublished && (
+              <div className="rounded-lg border border-primary/25 bg-card p-3 flex items-center justify-between gap-3">
+                <code className="text-[12px] text-reop-dark-blue truncate font-mono">
+                  {event?.public_slug
+                    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/event/${event.public_slug}`
+                    : `${typeof window !== 'undefined' ? window.location.origin : ''}/event/<slug-generated-on-save>`}
+                </code>
+                {event?.public_slug && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 h-8"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      const url = `${window.location.origin}/event/${event.public_slug}`;
+                      navigator.clipboard.writeText(url).catch(() => {});
+                    }}
+                  >
+                    Copy link
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Custom RSVP Questions - only show when editing an existing event */}
