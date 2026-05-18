@@ -41,7 +41,9 @@ export interface TodayItem {
   contact_id: string;
   contact_name: string;
   opportunity_id?: string | null;
-  priority_score: number | null;
+  // priority_score on this item was dropped 2026-05-18 — the Coach still
+  // writes it into agent_coaching_state JSON for legacy reasons, but no
+  // UI surface consumes it (the only reader, ActionCard, was deleted).
   action: CoachAction;
   reasoning: string;
   quick_actions: string[];
@@ -244,18 +246,10 @@ export function useDismissCoachTask() {
   });
 }
 
-// ─── Helper: tier a priority_score into a visible bucket ─────────────────────
-
-export type PriorityTier = 'urgent' | 'hot' | 'warm' | 'cool' | 'cold' | 'unscored';
-
-export function tierFor(score: number | null | undefined): PriorityTier {
-  if (score == null) return 'unscored';
-  if (score >= 80) return 'urgent';
-  if (score >= 60) return 'hot';
-  if (score >= 40) return 'warm';
-  if (score >= 20) return 'cool';
-  return 'cold';
-}
+// PriorityTier + tierFor were removed 2026-05-18 with the set-based
+// priority rewrite. Only consumers were ActionCard and usePrioritizedContacts,
+// both deleted in the same pass. Do not re-introduce — `priority_band`
+// (pipeline | cadence | null) on `contacts` replaces this.
 
 export const URGENCY_META: Record<CoachUrgency, { label: string; className: string }> = {
   overdue:   { label: 'Overdue',   className: 'bg-red-50 text-red-700 border-red-200' },
