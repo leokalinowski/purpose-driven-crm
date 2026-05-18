@@ -1990,21 +1990,39 @@ const BAND_META: Record<QueueItem['band'], { label: string; tone: 'primary' | 's
   engagement: { label: 'Recently engaged',  tone: 'success' },
 };
 
-/** Scan the SphereSync rotation tables for the next ISO week (1–52) where
- *  the contact's letter is up for either calls or texts. Returns null when
- *  the letter never appears (only happens for non-A-Z categories). */
-function nextRotationForLetter(
-  letter: string,
-  currentWeek: number,
-): { week: number; weeksAway: number; kind: 'call' | 'text' } | null {
+type RotationHit = { week: number; weeksAway: number; kind: 'call' | 'text' };
+
+/** Scan the SphereSync rotation tables for the next ISO week (1–52, 0 =
+ *  this week) where the contact's letter is up for calls or texts.
+ *  Returns null when the letter never appears (only happens for non-A-Z
+ *  categories). Start at offset=0 so we correctly detect "letter is up
+ *  THIS week" rather than skipping past it. */
+function nextRotationForLetter(letter: string, currentWeek: number): RotationHit | null {
   if (!letter) return null;
   const L = letter.toUpperCase();
-  for (let offset = 1; offset <= 52; offset++) {
+  for (let offset = 0; offset < 52; offset++) {
     const week = ((currentWeek - 1 + offset) % 52) + 1;
     if ((SPHERESYNC_CALLS[week] ?? []).includes(L)) return { week, weeksAway: offset, kind: 'call' };
     if (SPHERESYNC_TEXTS[week] === L) return { week, weeksAway: offset, kind: 'text' };
   }
   return null;
+}
+
+function rotationFallbackText(letter: string, hit: RotationHit | null): string {
+  if (!letter) {
+    return 'No SphereSync category set yet — add a last-name initial to schedule them on the rotation.';
+  }
+  if (!hit) {
+    return `Their letter (${letter}) isn’t in the rotation calendar. Update their category if this is wrong.`;
+  }
+  const kind = hit.kind === 'call' ? 'calls' : 'texts';
+  if (hit.weeksAway === 0) {
+    return `Their letter (${letter}) is up for ${kind} this week — they’re on the rotation but didn’t make today’s top of queue.`;
+  }
+  if (hit.weeksAway === 1) {
+    return `Their letter (${letter}) is up for ${kind} next week.`;
+  }
+  return `Their letter (${letter}) is next up for ${kind} in week ${hit.week} (in ${hit.weeksAway} weeks).`;
 }
 
 function PriorityPane({
@@ -2067,13 +2085,7 @@ function PriorityPane({
               Not on the priority list this week.
             </p>
             <p className="text-[12.5px] text-muted-foreground leading-[1.55] m-0 mt-1.5">
-              {nextRotation
-                ? `Their letter (${letter}) is next up for ${nextRotation.kind === 'call' ? 'calls' : 'texts'} in week ${nextRotation.week} (${
-                    nextRotation.weeksAway === 1 ? 'next week' : `in ${nextRotation.weeksAway} weeks`
-                  }).`
-                : letter
-                  ? `Their letter (${letter}) isn’t in the rotation calendar. Update their category if this is wrong.`
-                  : 'No SphereSync category set yet — add a last-name initial to schedule them on the rotation.'}
+              {rotationFallbackText(letter, nextRotation)}
             </p>
             {c.priority_watch_flag && (
               <div className="mt-2.5">

@@ -64,9 +64,15 @@ interface PrioritizedQueueResult {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const ENGAGEMENT_LOOKBACK_DAYS = 30;
-const PIPELINE_CAP = 8;
-const CADENCE_CAP = 12;
-const ENGAGEMENT_CAP = 5;
+// Caps used to be PIPELINE_CAP=8 / CADENCE_CAP=12 / ENGAGEMENT_CAP=5 to keep
+// the Priorities tab to a single screen. The caps silently dropped contacts
+// whose letter was up this week (cadence) or whose deal was active
+// (pipeline) — and that "drop" showed through as inconsistent counts
+// between the Database "On the Priorities list" filter (capped) and the
+// "Calling this week" / "Texting this week" filters (uncapped). Caps are
+// a display concern, not a model concern; remove them entirely and let
+// the queue size equal the real number of priorities. Display pagination
+// can be added at the UI layer if any one band grows too large.
 
 function fullName(first: string | null, last: string | null): string {
   return [first, last].filter(Boolean).join(' ').trim() || 'Unnamed contact';
@@ -100,8 +106,13 @@ export function usePrioritizedQueue(): PrioritizedQueueResult {
   );
 
   // ─── Band 1: Pipeline ──────────────────────────────────────────────────────
-  // Active opportunities (pre-transaction). Per the product spec, anything
-  // with an actual_close_date is in Transactions, not Pipeline.
+  // "Active" matches the Pipeline page definition (usePipeline.ts):
+  // anything not at a terminal stage AND not marked lost/withdrawn. We
+  // intentionally do NOT filter on `actual_close_date IS NULL` — this
+  // project has legacy/seed data where active rows (e.g. `consultation_
+  // completed` with a populated `actual_close_date` from years ago) would
+  // be wrongly excluded, leaving the priority queue's pipeline band
+  // empty while the Pipeline kanban shows the same deals as active.
   const pipelineQuery = useQuery({
     queryKey: ['priority-queue', 'pipeline', agentId],
     enabled: !!agentId,
@@ -110,18 +121,18 @@ export function usePrioritizedQueue(): PrioritizedQueueResult {
       const { data, error } = await supabase
         .from('opportunities')
         .select(`
-          id, stage, contact_id, last_activity_date, days_in_current_stage,
+          id, stage, outcome, contact_id, last_activity_date, days_in_current_stage,
           contacts!inner ( id, first_name, last_name, phone, email, dnc, last_activity_date )
         `)
         .eq('agent_id', agentId!)
-        .is('actual_close_date', null)
-        .not('outcome', 'in', '(won,lost,withdrawn)')
         .order('last_activity_date', { ascending: true, nullsFirst: true });
 
       if (error) throw error;
-      return (data ?? []) as unknown as Array<{
+
+      type Row = {
         id: string;
-        stage: string;
+        stage: string | null;
+        outcome: string | null;
         contact_id: string;
         last_activity_date: string | null;
         days_in_current_stage: number | null;
@@ -134,7 +145,14 @@ export function usePrioritizedQueue(): PrioritizedQueueResult {
           dnc: boolean;
           last_activity_date: string | null;
         };
-      }>;
+      };
+
+      // Client-side filter mirrors usePipeline.ts active definition.
+      return ((data ?? []) as unknown as Row[]).filter((o) => {
+        if (o.stage === 'closed' || o.stage === 'lost') return false;
+        if (o.outcome === 'lost' || o.outcome === 'withdrawn') return false;
+        return true;
+      });
     },
   });
 
@@ -155,8 +173,7 @@ export function usePrioritizedQueue(): PrioritizedQueueResult {
         .select('id, first_name, last_name, phone, email, dnc, last_activity_date')
         .eq('agent_id', agentId!)
         .or(orClause)
-        .order('last_activity_date', { ascending: true, nullsFirst: true })
-        .limit(50);
+        .order('last_activity_date', { ascending: true, nullsFirst: true });
 
       if (error) throw error;
       return (data ?? []) as Array<{
@@ -304,7 +321,6 @@ export function usePrioritizedQueue(): PrioritizedQueueResult {
         reason: `In your pipeline · ${stageLabel} · last touch ${relativeAgo(days)}`,
         context_chips: [stageLabel],
       });
-      if (pipelineItems.length >= PIPELINE_CAP) break;
     }
 
     // Band 2 — only contacts not already in Band 1
@@ -334,7 +350,6 @@ export function usePrioritizedQueue(): PrioritizedQueueResult {
             : `This week's rotation (${initial}) · last touch ${relativeAgo(days)}`,
         context_chips: [`Letter ${initial}`, isCallLetter ? 'Call week' : 'Text week'],
       });
-      if (cadenceItems.length >= CADENCE_CAP) break;
     }
 
     // Band 3 — only contacts not in 1 or 2
@@ -357,7 +372,6 @@ export function usePrioritizedQueue(): PrioritizedQueueResult {
         reason: `${c.signal_label} ${relativeAgo(days)}`,
         context_chips: [c.signal_kind === 'gift' ? 'Gift sent' : 'Event RSVP'],
       });
-      if (engagementItems.length >= ENGAGEMENT_CAP) break;
     }
 
     const all = [...pipelineItems, ...cadenceItems, ...engagementItems];
