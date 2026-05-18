@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
+import { requireCronAuth } from '../_shared/authGuards.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -55,10 +56,22 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
+    // SECURITY (hardened 2026-05-18):
+    // Cron callers (event-email-scheduler) carry an X-Cron-Job header
+    // (and, once CRON_SHARED_SECRET is set, an X-Cron-Secret header).
+    // When that gate passes we skip the per-user RLS check below and
+    // run as service-role. Human callers fall through to the existing
+    // RLS + admin-role checks.
+    const isCronCall = req.headers.get('X-Cron-Job') === 'true' || req.headers.get('x-cron-job') === 'true'
+    if (isCronCall) {
+      const denied = requireCronAuth(req)
+      if (denied) return denied
+    }
+
     // --- Client 1: User-context client for permission validation ---
     const authHeader = req.headers.get('Authorization')
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader! } },
+      global: { headers: { Authorization: authHeader ?? '' } },
     })
 
     // --- Client 2: Service-role client for reliable data operations ---

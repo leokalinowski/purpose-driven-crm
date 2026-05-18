@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
+import { requireCronAuth } from "../_shared/authGuards.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -250,9 +251,15 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // SECURITY (hardened 2026-05-18): require cron-secret header OR
+  // legacy X-Cron-Job header when CRON_SHARED_SECRET env is unset.
+  // Triggers an org-wide email blast — never allow anonymous calls.
+  const denied = requireCronAuth(req);
+  if (denied) return denied;
+
   const startTime = Date.now();
   console.log("=== Starting coaching reminder process ===");
-  
+
   // Check if this is a cron job call
   const isCronJob = req.headers.get('x-cron-job') === 'true';
   let requestBody: any = {};

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
+import { requireAdminAuth } from "../_shared/authGuards.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,6 +15,9 @@ interface ManualSendRequest {
   dry_run?: boolean;
 }
 
+// SECURITY (hardened 2026-05-18):
+//   - verify_jwt: true at deploy time
+//   - Caller MUST hold role `admin` (triggers SphereSync email blast)
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -26,6 +30,9 @@ serve(async (req) => {
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error("Missing Supabase configuration");
     }
+
+    const auth = await requireAdminAuth(req, supabaseUrl, supabaseServiceKey);
+    if (auth.denied) return auth.denied;
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { agent_id, week_number, year, force, dry_run }: ManualSendRequest = await req.json();

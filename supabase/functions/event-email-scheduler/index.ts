@@ -1,8 +1,9 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { requireCronAuth } from '../_shared/authGuards.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-job, x-cron-secret',
 }
 
 // Helper to log to unified email_logs table
@@ -207,8 +208,18 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Auth: accept cron header OR authenticated admin
-    const isCron = req.headers.get('X-Cron-Job') === 'true'
+    // SECURITY (hardened 2026-05-18):
+    // Accept two paths:
+    //   (a) Cron: requireCronAuth (cron-secret header, falls back to
+    //       X-Cron-Job header when env unset for backward compat).
+    //   (b) Admin: authenticated user with role === 'admin'.
+    // The prior version trusted any client that sent X-Cron-Job: true.
+    const isCron = req.headers.get('X-Cron-Job') === 'true' || req.headers.get('x-cron-job') === 'true'
+
+    if (isCron) {
+      const denied = requireCronAuth(req)
+      if (denied) return denied
+    }
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
