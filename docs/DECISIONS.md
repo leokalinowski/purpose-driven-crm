@@ -6,6 +6,45 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
+## 2026-05-18 — Priority system rebuild, Phase 1 — backend (PR TBD)
+
+**What.** Rewrote the contact prioritization scorer from scratch to make it the core piece of the product.
+
+1. **New formula:** `0.40·pipeline + 0.35·cadence + 0.10·engagement + 0.10·relationship + 0.05·flags`. Pipeline weight redistributes proportionally when no active opportunity.
+2. **Pipeline stage map FLIPPED** — Pam's 7 stages with EARLY stages weighted HIGHER (agents forget the `conversation_active` lead, not the one under contract): `conversation_active`=90, `opportunity_identified`=85, `consultation_completed`=80, `client_secured`=50, `active_opportunity`=40, `under_contract`=25, `closed`/`lost` excluded. Stale-in-stage penalty: −15 after 14d, −25 after 30d.
+3. **Cadence is now a real input** — reads `contacts.category` against this week's `SPHERESYNC_CALLS ∪ SPHERESYNC_TEXTS` and `spheresync_tasks` completion for current + previous ISO week.
+4. **Engagement is now a real input** (low weight): gifts in last 30d, email-matched event RSVPs in last 90d, recent logged activity.
+5. **Grok dropped** — deterministic reasoning string built from the dominant component. Same "why this contact" on every UI surface. The Grok intent call was costing money to produce a sentence the FocusCard never even read.
+6. **`priority_band` column** added to `contacts` (`pipeline | cadence | engagement | sphere`). UI surfaces group consistently without re-deriving.
+7. **Cron consolidated** — 4 tiered jobs (hot daily / warm weekly / cool biw / cold monthly) replaced with one `priority-rescore-all-6h`. Cadence depends on ISO week → must refresh weekly anyway.
+8. **RPC chunked at 100 IDs per pg_net invocation.** The old 200-row cap was protecting us from PostgREST URL-length overflow; chunking inside the RPC fixes it properly.
+
+**Why.** Two parallel ranking systems existed — `compute-priority-scores` (only Database page read it) and `usePrioritizedQueue` (client-side 3-band composer, ignored `priority_score`). They never agreed. The scorer ignored Pam's 7 stages (still mapped legacy `new_lead`/`active_search`/etc), ignored the SphereSync rotation, ignored marketing engagement, and burned ~3,000 Grok calls/day to write reasoning the visible UI threw away. A prior branch (`claude/compassionate-panini-8202be`) tried to fix this client-side-only — got engagement wrong, broke on a non-existent `event_rsvps.contact_id`, and left the backend running unused.
+
+**Method.** Two parallel audit agents (one post-morteming the prior branch, one mapping current code + live DB). Then a fresh rebuild on `feat/priority-system-rebuild` off `origin/main`. Deployed + verified live: 3,380/3,380 contacts scored on `deterministic-v2`. 3 in `pipeline` band (matches the 3 active opportunities production-wide; `conversation_active`=46 vs `active_opportunity`=31 — the FLIP works). Per-agent tops are all "Week N rotation (letter X) — owed a touch this week."
+
+**Key files / migrations.**
+- `supabase/functions/compute-priority-scores/index.ts` — full rewrite, no Grok, +`priority_band`
+- `supabase/migrations/20260518000001_priority_system_rebuild.sql` — column add, cron consolidation, cap raised
+- `supabase/migrations/20260518000002_priority_rescore_chunked_rpc.sql` — chunk RPC to 100 IDs per pg_net invocation
+
+**Decisions baked in.**
+| # | Question | Picked |
+|---|---|---|
+| 1 | Backend scorer or client-side? | Backend (browser shouldn't re-rank 3,400 contacts on every page) |
+| 2 | Weights | 40 / 35 / 10 / 10 / 5 |
+| 3 | Stage map direction | EARLY stages weighted HIGHER |
+| 4 | Grok intent | Dropped. Deterministic reasoning. |
+| 5 | Marketing engagement data pipeline | Deferred to Phase 4 (no per-contact opens/clicks captured today) |
+| 6 | Cron tiering | Dropped. Single 6h all-rescore. |
+| 7 | RPC chunking | 100 IDs per batch (PostgREST URL limit) |
+
+**Scope note.** Backend only. `Database` page already reads `priority_score`, so the new scores are visible there immediately. `PrioritiesTab` still uses the old client-side `usePrioritizedQueue` composer — that swap is **Phase 2**: read `priority_score` + `priority_band` directly, delete `buildFocusReasoning`, restore the deleted `SignalsView` in `ContactQuickSheet`.
+
+**Source.** User feedback: "the priority system should take into account the correct stages of the pipeline, the weekly cadence and in a lesser weight marketing engagement" + "contacts should be prioritized higher before they are secured, active, and under contract" (the FLIP).
+
+---
+
 ## 2026-05-14 — System architecture doc + working-notes foundation (PR #29)
 
 **What.** Added three foundational docs so future sessions don't start cold:
