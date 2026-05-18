@@ -6,7 +6,7 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
-## 2026-05-18 — Visual polish: ContactTable initials + WeekHintBar (PR TBD)
+## 2026-05-18 — Visual polish: ContactTable initials + WeekHintBar (PR #33)
 
 **What.** Two small visual upgrades cherry-picked from the PR #26 audit (which itself was closed as superseded — see audit comments on that PR for the full triage).
 
