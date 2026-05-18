@@ -17,6 +17,7 @@ import { Layout } from '@/components/layout/Layout';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
+import { useCompletedSphereTouchesThisWeek } from '@/hooks/useCompletedSphereTouchesThisWeek';
 import { usePipeline } from '@/hooks/usePipeline';
 import { useDelightOpportunities } from '@/hooks/useDelight';
 import { supabase } from '@/integrations/supabase/client';
@@ -193,9 +194,19 @@ function useYtdConversations(): YtdConversationsState {
 // ─── Component ───────────────────────────────────────────────────────
 
 export default function Index() {
-  const { user } = useAuth();
-  const { getDisplayName } = useUserProfile();
-  const firstName = (getDisplayName() || user?.email?.split('@')[0] || 'there').split(' ')[0];
+  const { profile, loading: profileLoading } = useUserProfile();
+  // Empty while the profile is still loading — CommanderHero renders just
+  // the greeting until we have a real name to show, so we never flash
+  // "{greeting}, Email address." before swapping to the real first name.
+  // Falls back to `'there'` only if the loaded profile has no usable name.
+  const firstName = (() => {
+    if (profileLoading) return '';
+    const fromProfile = (profile?.first_name ?? '').trim();
+    if (fromProfile) return fromProfile.split(' ')[0];
+    const fromLast = (profile?.last_name ?? '').trim();
+    if (fromLast) return fromLast;
+    return 'there';
+  })();
 
   const { callTasks, textTasks, historicalStats, currentWeek } = useSphereSyncTasks();
   const { metrics: pipelineMetrics } = usePipeline();
@@ -203,20 +214,25 @@ export default function Index() {
   const priorYearYtdClosed = usePriorYearYtdClosed();
   const { ytd: ytdConversations, priorYearSamePeriod: priorYearConvs, weeksWithData: convWeeks } =
     useYtdConversations();
+  const sphereTouchesThisWeek = useCompletedSphereTouchesThisWeek();
 
   // ── Hero numbers ────────────────────────────────────────────────────
-  // Sphere touches = calls + texts. The SphereSync rotation generates both
-  // every week, so the Hero's headline outreach metric must count both
-  // (the Modules row already does the same — keep them in sync).
-  const completedCalls = callTasks.filter((t) => t.completed).length;
+  // "Remaining" uses this week's *assigned* tasks (denominator-style) so
+  // the subline's "X calls / Y texts stand between you and a perfect week"
+  // reflects what's still on Pam's plate for the current rotation.
   const totalCalls = callTasks.length;
-  const remainingCalls = Math.max(0, totalCalls - completedCalls);
+  const completedCallsAssigned = callTasks.filter((t) => t.completed).length;
+  const remainingCalls = Math.max(0, totalCalls - completedCallsAssigned);
 
-  const completedTexts = textTasks.filter((t) => t.completed).length;
   const totalTexts = textTasks.length;
-  const remainingTexts = Math.max(0, totalTexts - completedTexts);
+  const completedTextsAssigned = textTasks.filter((t) => t.completed).length;
+  const remainingTexts = Math.max(0, totalTexts - completedTextsAssigned);
 
-  const completedTouches = completedCalls + completedTexts;
+  // The headline "Sphere touches" KPI counts EVERY sphere task completed
+  // this week — including catch-up completions of tasks assigned to a
+  // prior week. This is why Recent Activity can show touches while the
+  // assignment-based count showed 0.
+  const completedTouches = sphereTouchesThisWeek.calls + sphereTouchesThisWeek.texts;
   const totalTouches = totalCalls + totalTexts;
 
   const giftsAhead = delightOpps.length;

@@ -70,7 +70,10 @@ const contactSchema = z.object({
     .or(z.literal("")),
   dnc: z.boolean().optional(),
   tags: z.array(z.string()).nullable().optional(),
-});
+}).refine(
+  (data) => Boolean(data.phone?.trim()) || Boolean(data.email?.trim()),
+  { message: 'Provide at least a phone number or an email', path: ['phone'] },
+);
 
 type ContactFormData = z.infer<typeof contactSchema>;
 
@@ -242,39 +245,44 @@ export const ContactForm = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                type="tel"
-                {...register('phone', {
-                  onChange: (e) => {
-                    const formatted = formatPhoneNumber(e.target.value);
-                    setValue('phone', formatted);
-                  }
-                })}
-                placeholder="(555) 123-4567"
-                maxLength={20}
-              />
-              {errors.phone && (
-                <p className="text-sm text-destructive">{errors.phone.message}</p>
-              )}
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  {...register('phone', {
+                    onChange: (e) => {
+                      const formatted = formatPhoneNumber(e.target.value);
+                      setValue('phone', formatted);
+                    }
+                  })}
+                  placeholder="(555) 123-4567"
+                  maxLength={20}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  {...register('email')}
+                  placeholder="john@example.com"
+                  maxLength={255}
+                />
+              </div>
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                {...register('email')}
-                placeholder="john@example.com"
-                maxLength={255}
-              />
-              {errors.email && (
-                <p className="text-sm text-destructive">{errors.email.message}</p>
-              )}
-            </div>
+            <p className="text-xs text-muted-foreground">
+              At least one of phone or email is required.
+            </p>
+            {errors.phone && (
+              <p className="text-sm text-destructive">{errors.phone.message}</p>
+            )}
+            {errors.email && (
+              <p className="text-sm text-destructive">{errors.email.message}</p>
+            )}
           </div>
 
           <div className="space-y-2">

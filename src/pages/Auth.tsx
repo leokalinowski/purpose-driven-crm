@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -52,6 +53,14 @@ const Auth = () => {
   
   // Separate state for state licenses input to allow comma typing
   const [stateLicensesInput, setStateLicensesInput] = useState('');
+  const [acceptedTos, setAcceptedTos] = useState(false);
+
+  // Public T&C and Privacy URLs. Override via Vite env vars when the
+  // hosted pages move; defaults point at the app's own /terms and
+  // /privacy routes which can be filled in later.
+  const env = import.meta.env as Record<string, string | undefined>;
+  const tosUrl = env.VITE_TOS_URL ?? '/terms';
+  const privacyUrl = env.VITE_PRIVACY_URL ?? '/privacy';
   
   const { signIn, signUp, signInWithGoogle, user } = useAuth();
   const navigate = useNavigate();
@@ -124,7 +133,16 @@ const Auth = () => {
     if (signupStep !== 3) {
       return;
     }
-    
+
+    if (!acceptedTos) {
+      toast({
+        title: 'Please accept the Terms',
+        description: 'You must accept the Terms of Service and Privacy Policy to create an account.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -543,8 +561,40 @@ const Auth = () => {
               )}
             </div>
             
+            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-gray-50 border border-gray-200">
+              <Checkbox
+                id="accept-tos"
+                checked={acceptedTos}
+                onCheckedChange={(v) => setAcceptedTos(v === true)}
+                className="mt-0.5"
+              />
+              <label htmlFor="accept-tos" className="text-sm text-gray-700 leading-relaxed cursor-pointer select-none">
+                I agree to the{' '}
+                <a
+                  href={tosUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary font-medium underline hover:no-underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Terms of Service
+                </a>{' '}
+                and{' '}
+                <a
+                  href={privacyUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary font-medium underline hover:no-underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Privacy Policy
+                </a>
+                .
+              </label>
+            </div>
+
             <div className="flex gap-2">
-              <Button 
+              <Button
                 type="button"
                 onClick={prevStep}
                 variant="outline"
@@ -552,10 +602,10 @@ const Auth = () => {
               >
                 <ArrowLeft className="w-4 h-4 mr-2" /> Back
               </Button>
-              <Button 
+              <Button
                 type="submit"
-                disabled={loading}
-                className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+                disabled={loading || !acceptedTos}
+                className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Creating account...' : (
                   <>

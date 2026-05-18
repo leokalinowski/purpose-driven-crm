@@ -108,12 +108,21 @@ export function CommanderHero({ firstName, greeting, dateLabel, subline, kpis }:
           {dateLabel}
         </div>
 
-        {/* Greeting — always the agent's first name */}
+        {/* Greeting — agent's first name. Empty `firstName` renders just
+            the greeting + comma, so the profile-loading flash doesn't
+            briefly leak the user's email into the headline. */}
         <h2 className="font-display text-[clamp(1.9rem,2.8vw+0.5rem,2.6rem)] font-normal tracking-[-0.04em] leading-[1.1] text-white max-w-[640px] m-0 mb-2 text-balance">
-          {greeting},{' '}
-          <strong className="font-bold" style={{ color: 'hsl(184 90% 72%)' }}>
-            {firstName}.
-          </strong>
+          {greeting}
+          {firstName ? (
+            <>
+              ,{' '}
+              <strong className="font-bold" style={{ color: 'hsl(184 90% 72%)' }}>
+                {firstName}.
+              </strong>
+            </>
+          ) : (
+            '.'
+          )}
         </h2>
 
         {/* Sub-line — only render when the parent has one to show */}

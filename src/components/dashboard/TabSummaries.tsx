@@ -31,11 +31,11 @@ export function TabSummaries() {
       <Card>
         <CardHeader>
           <CardTitle>Database</CardTitle>
-          <CardDescription>Lead growth</CardDescription>
+          <CardDescription>Opportunity growth</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{data?.kpis.totalContacts.value ?? 0}</div>
-          <div className="text-sm text-muted-foreground">Total leads</div>
+          <div className="text-sm text-muted-foreground">Total opportunities</div>
           <Link to="/database" className="text-sm underline">Go to Database</Link>
         </CardContent>
       </Card>
