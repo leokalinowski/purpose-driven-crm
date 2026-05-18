@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Sparkles, Phone, MessageSquare, Mail, Info, ListOrdered,
+  Sparkles, Phone, MessageSquare, Mail, ListOrdered,
   ClipboardList, RefreshCw, Loader2, Check,
 } from 'lucide-react';
+import { WeekHintBar } from '../WeekHintBar';
 import { addDays, format, isSameDay, startOfWeek, endOfWeek, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -319,44 +320,6 @@ function StreakCard({ weeks }: { weeks: number }) {
   );
 }
 
-function HintBar() {
-  const { currentWeek } = useSphereSyncTasks();
-  const callLetters = SPHERESYNC_CALLS[currentWeek.weekNumber] ?? [];
-  const textLetter = SPHERESYNC_TEXTS[currentWeek.weekNumber];
-
-  if (callLetters.length === 0 && !textLetter) return null;
-
-  return (
-    <div
-      className="flex items-center gap-3 p-3 px-4 rounded-[10px] border mb-5 text-sm flex-wrap"
-      style={{ background: 'hsl(184 100% 97%)', borderColor: 'hsl(184 50% 85%)' }}
-    >
-      <Info className="w-4 h-4 text-primary shrink-0" />
-      <div className="leading-[1.5]">
-        <b className="font-semibold">Week {currentWeek.weekNumber} rotation:</b> calling
-        {callLetters.length > 0 && <> last names <b className="text-primary">{callLetters.join(', ')}</b></>}
-        {textLetter && <>, texting <b className="text-primary">{textLetter}</b></>}.
-        <span className="block text-xs text-muted-foreground mt-0.5">
-          REOP works the alphabet over the year so every sphere contact gets a call twice.
-        </span>
-      </div>
-      <div className="flex gap-1 ml-auto flex-wrap">
-        {callLetters.map((l) => (
-          <div key={l} className="w-[26px] h-[26px] rounded-md bg-card border flex items-center justify-center font-bold text-[13px] text-primary"
-               style={{ borderColor: 'hsl(184 50% 80%)' }}>
-            {l}
-          </div>
-        ))}
-        {textLetter && (
-          <div className="w-[26px] h-[26px] rounded-md bg-reop-green text-white border-reop-green border flex items-center justify-center font-bold text-[13px]">
-            {textLetter}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function CadenceStrip() {
   const { user } = useAuth();
   const [perDay, setPerDay] = useState<Record<string, { call: number; text: number; event: number }>>({});
@@ -646,7 +609,7 @@ export function PrioritiesTab() {
         </aside>
       </section>
 
-      <HintBar />
+      <WeekHintBar />
       <CadenceStrip />
       <PriorityQueue />
     </div>
