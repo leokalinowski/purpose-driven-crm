@@ -6,7 +6,7 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
-## 2026-05-18 — Priority system rebuild, Phase 2 — frontend swap (PR TBD)
+## 2026-05-18 — Priority system rebuild, Phase 2 — frontend swap (PR #32)
 
 **What.** Frontend now reads the deterministic score + band the Phase 1 scorer writes, so every surface ranks contacts identically. No more parallel ranking systems.
 
