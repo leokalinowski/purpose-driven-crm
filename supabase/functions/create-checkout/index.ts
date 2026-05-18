@@ -192,7 +192,21 @@ serve(async (req) => {
     }
 
     // ── Standard plan checkout ──
-    const tier = STANDARD_PRICE_TIERS[priceId] || null;
+    // SECURITY (hardened 2026-05-18): reject any priceId that isn't
+    // in either map. Before this gate, the function passed an arbitrary
+    // priceId straight through to stripe.checkout.sessions.create —
+    // so any caller could launch a Checkout session for ANY price that
+    // exists in our Stripe account (including test-mode prices in prod,
+    // arbitrary upsell pricing, or cross-product prices), then receive
+    // a `success_url` redirect with a tier-less subscription.
+    const tier = STANDARD_PRICE_TIERS[priceId];
+    if (!tier) {
+      logStep("REJECTED — priceId not in whitelist", { priceId });
+      return new Response(
+        JSON.stringify({ error: "Invalid priceId" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 },
+      );
+    }
     logStep("Standard plan", { tier });
 
     const sessionParams: any = {
@@ -203,7 +217,7 @@ serve(async (req) => {
       cancel_url: `${origin}/pricing`,
       subscription_data: {
         metadata: {
-          ...(tier ? { tier } : {}),
+          tier,
           ...(user ? { user_id: user.id } : {}),
         },
       },
