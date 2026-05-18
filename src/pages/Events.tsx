@@ -3,7 +3,9 @@ import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar, Plus, Clock, MapPin, User, Sparkles, ChevronLeft, ChevronRight,
+  Link2, ExternalLink, Copy, Check,
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { Layout } from '@/components/layout/Layout';
 import { cn } from '@/lib/utils';
 import { useEvents, type Event as Ev, type EventTask } from '@/hooks/useEvents';
@@ -98,8 +100,10 @@ function speakerInitials(name: string): string {
 
 export default function Events() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { events, tasks, loading, markTaskComplete, updateTask } = useEvents();
   const [tab, setTab] = useState<Tab>('Upcoming');
+  const [copiedLink, setCopiedLink] = useState(false);
   // `editingEvent` was previously used to open EventForm on card click. Cards
   // now navigate to /events/:id instead — EventForm is reached via the Edit
   // button on the detail page. This state stays only for the "create new"
@@ -143,6 +147,31 @@ export default function Events() {
 
   const visibleList: Ev[] = tab === 'Upcoming' ? upcoming : tab === 'Drafts' ? drafts : past;
 
+  // Count of pending tasks for the featured event — used to nudge the
+  // user toward the Calendar tab and to badge the tab button.
+  const featuredPendingTaskCount = useMemo(() => {
+    if (!featured) return 0;
+    return tasks.filter(
+      (t) => t.event_id === featured.id && t.status !== 'completed' && !t.completed_at,
+    ).length;
+  }, [tasks, featured]);
+
+  const buildPublicUrl = (slug: string) =>
+    typeof window !== 'undefined' ? `${window.location.origin}/event/${slug}` : `/event/${slug}`;
+
+  const copyPublicLink = async (slug: string) => {
+    const url = buildPublicUrl(slug);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      toast({ title: 'Link copied', description: url });
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch (err) {
+      console.warn('Clipboard write failed:', err);
+      toast({ title: 'Copy failed', description: 'Please copy the link manually.', variant: 'destructive' });
+    }
+  };
+
   const onCalendarPrev = () =>
     setCalCursor(({ year, month }) => (month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 }));
   const onCalendarNext = () =>
@@ -160,7 +189,7 @@ export default function Events() {
               The calendar that builds relationships.
             </h1>
             <p className="text-sm text-muted-foreground max-w-[640px] leading-[1.55]">
-              Two mixers a year, one pop-by per quarter, four open houses per listing. Your Coach keeps the rhythm; you bring the people.
+              Every touchpoint in the Hub traces back to here. Conversations don't start on calls — they start when an invitation lands in someone's inbox. Plan the events that give your sphere a reason to talk.
             </p>
           </div>
           <div className="flex flex-wrap gap-2.5">
@@ -170,11 +199,18 @@ export default function Events() {
                 'inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg border text-sm font-semibold transition',
                 tab === 'Calendar'
                   ? 'border-primary bg-reop-teal-soft text-primary'
-                  : 'border-border bg-card text-reop-dark-blue hover:bg-reop-teal-soft hover:border-primary hover:text-primary',
+                  : featuredPendingTaskCount > 0
+                    ? 'border-primary bg-reop-teal-soft text-primary hover:brightness-95'
+                    : 'border-border bg-card text-reop-dark-blue hover:bg-reop-teal-soft hover:border-primary hover:text-primary',
               )}
             >
               <Calendar className="w-3.5 h-3.5" />
               Calendar view
+              {featuredPendingTaskCount > 0 && (
+                <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px] font-bold">
+                  {featuredPendingTaskCount}
+                </span>
+              )}
             </button>
             <button
               onClick={() => setShowCreate(true)}
@@ -253,16 +289,41 @@ export default function Events() {
                         : 'Share the public RSVP link to start collecting responses'}
                     </div>
                   </div>
-                  {featured.public_slug && (
-                    <a
+                  {featured.public_slug ? (
+                    <div
+                      className="flex items-center gap-2"
                       onClick={(e) => e.stopPropagation()}
-                      href={`/event/${featured.public_slug}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[12.5px] text-primary font-semibold hover:underline"
                     >
-                      Open public page →
-                    </a>
+                      <button
+                        type="button"
+                        onClick={() => copyPublicLink(featured.public_slug!)}
+                        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-primary text-primary-foreground text-[12.5px] font-semibold hover:bg-reop-teal-hover transition"
+                      >
+                        {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedLink ? 'Copied!' : 'Copy RSVP link'}
+                      </button>
+                      <a
+                        href={`/event/${featured.public_slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-card text-reop-dark-blue text-[12.5px] font-semibold hover:border-primary hover:text-primary transition"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Open
+                      </a>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/events/${featured.id}`);
+                      }}
+                      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-primary text-primary-foreground text-[12.5px] font-semibold hover:bg-reop-teal-hover transition"
+                    >
+                      <Link2 className="w-3.5 h-3.5" />
+                      Publish to get RSVP link
+                    </button>
                   )}
                 </div>
                 <h5 className="text-[11px] uppercase text-muted-foreground tracking-[0.05em] font-bold mb-2">
@@ -410,10 +471,16 @@ export default function Events() {
                 )}
               >
                 {t}
-                {t !== 'Calendar' && (
+                {t !== 'Calendar' ? (
                   <span className="ml-1.5 text-[11px] text-muted-foreground/80">
                     {t === 'Upcoming' ? upcoming.length : t === 'Drafts' ? drafts.length : past.length}
                   </span>
+                ) : (
+                  featuredPendingTaskCount > 0 && (
+                    <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                      {featuredPendingTaskCount}
+                    </span>
+                  )
                 )}
               </button>
             ))}

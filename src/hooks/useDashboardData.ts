@@ -204,7 +204,7 @@ export function useDashboardData() {
     return {
       kpis: {
         totalContacts: {
-          label: 'Total Leads',
+          label: 'Total Opportunities',
           value: totalContacts,
           deltaPct: calculatePercentageChange(contactsCurr, contactsPrev),
           subtext: 'From last month'

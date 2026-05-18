@@ -269,8 +269,10 @@ export function AIGenerateDialog({ open, onClose }: AIGenerateDialogProps) {
     onClose();
   };
 
-  // Validation: if scope=city or state, the user must have picked a value.
+  // Validation: only the Market angle asks the Area question, so the
+  // area picker is only required when that angle is selected.
   const areaValid = (() => {
+    if (selectedPreset !== 'market') return true;
     if (areaScope === 'top_zips') return true;
     if (areaScope === 'city') return !!selectedCity;
     if (areaScope === 'state') return !!areaStateValue;
@@ -346,6 +348,21 @@ export function AIGenerateDialog({ open, onClose }: AIGenerateDialogProps) {
     }
   };
 
+  // Section numbering is dynamic — different topic angles surface
+  // different follow-ups, so we compute the step label as we render.
+  const sectionCounter = { n: 0 };
+  const nextNum = () => String(++sectionCounter.n);
+
+  // Which follow-ups belong to which topic angle:
+  //   market      → Area + Audience (data is geography-bound + audience-tuned)
+  //   seasonal    → Audience (timing applies to everyone equally)
+  //   educational → nothing extra (general)
+  //   custom      → freeform prompt only
+  const showAreaQuestion = selectedPreset === 'market';
+  const showAudienceQuestion = selectedPreset === 'market' || selectedPreset === 'seasonal';
+  const showCustomPrompt = selectedPreset === 'custom';
+  const showPromptPreview = !showCustomPrompt; // market/seasonal/educational render an editable resolved prompt
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -357,14 +374,47 @@ export function AIGenerateDialog({ open, onClose }: AIGenerateDialogProps) {
             Compose with AI
           </DialogTitle>
           <DialogDescription>
-            Three quick questions, then we draft a personalized newsletter you can review before sending.
+            Pick the angle, fine-tune a few details, then we draft a personalized newsletter you can review before sending.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* ── 1. AREA ─────────────────────────────────────────────────── */}
+          {/* ── 1. TOPIC ANGLE (now first) ──────────────────────────────── */}
           <Section
-            number="1"
+            number={nextNum()}
+            title="What's the topic angle?"
+            hint="The angle shapes which follow-up questions you'll see — and the kind of data the AI pulls in."
+          >
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {PRESETS.map(({ key, label, oneLiner, Icon }) => {
+                const active = selectedPreset === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSelectedPreset(key)}
+                    className={cn(
+                      'text-left p-3 rounded-lg border transition flex flex-col gap-1.5',
+                      active
+                        ? 'border-primary bg-reop-teal-soft'
+                        : 'border-border bg-card hover:border-primary/40 hover:bg-muted/30',
+                    )}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Icon className={cn('w-3.5 h-3.5 flex-shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
+                      <span className={cn('text-sm font-semibold', active && 'text-primary')}>{label}</span>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground leading-snug">{oneLiner}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </Section>
+
+          {/* ── 2. AREA (only for Market update) ────────────────────────── */}
+          {showAreaQuestion && (
+          <Section
+            number={nextNum()}
             title="What area do you want to talk about?"
             hint="Different area each month keeps your sphere from hearing the same ZIP codes over and over."
           >
@@ -439,30 +489,52 @@ export function AIGenerateDialog({ open, onClose }: AIGenerateDialogProps) {
               </div>
             )}
           </Section>
+          )}
 
-          {/* ── 2. AUDIENCE ─────────────────────────────────────────────── */}
-          <Section
-            number="2"
-            title="Who's this newsletter for?"
-            hint="Reframes the body voice and which numbers lead."
-          >
-            <div className="grid grid-cols-2 gap-2">
-              {AUDIENCES.map(({ key, label, sub, Icon }) => (
-                <CardChoice
-                  key={key}
-                  active={audience === key}
-                  onClick={() => setAudience(key)}
-                  label={label}
-                  sub={sub}
-                  Icon={Icon}
-                />
-              ))}
-            </div>
-          </Section>
+          {/* ── AUDIENCE (Market or Seasonal) ───────────────────────────── */}
+          {showAudienceQuestion && (
+            <Section
+              number={nextNum()}
+              title="Who's this newsletter for?"
+              hint="Reframes the body voice and which numbers lead."
+            >
+              <div className="grid grid-cols-2 gap-2">
+                {AUDIENCES.map(({ key, label, sub, Icon }) => (
+                  <CardChoice
+                    key={key}
+                    active={audience === key}
+                    onClick={() => setAudience(key)}
+                    label={label}
+                    sub={sub}
+                    Icon={Icon}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
 
-          {/* ── 3. GOAL ─────────────────────────────────────────────────── */}
+          {/* ── CUSTOM PROMPT (Custom only) ─────────────────────────────── */}
+          {showCustomPrompt && (
+            <Section
+              number={nextNum()}
+              title="Tell the AI what to write."
+              hint="Describe the angle, the body, the call to action — anything that helps."
+            >
+              <Textarea
+                id="ai-custom"
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                disabled={isGenerating}
+                placeholder="e.g. Write about new construction inventory in my area — focus on the trade-off between new builds vs. resale at this price point."
+                rows={4}
+                className="text-sm"
+              />
+            </Section>
+          )}
+
+          {/* ── GOAL (always) ───────────────────────────────────────────── */}
           <Section
-            number="3"
+            number={nextNum()}
             title="What do you want them to do?"
             hint="Drives the call-to-action."
           >
@@ -480,61 +552,19 @@ export function AIGenerateDialog({ open, onClose }: AIGenerateDialogProps) {
             </div>
           </Section>
 
-          {/* ── Refinements (collapsed-feel section) ────────────────────── */}
+          {/* ── REFINEMENTS (prompt preview + voice/length) ─────────────── */}
           <div className="border-t border-border pt-4 space-y-4">
-            <div>
-              <Label className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground mb-2 block">
-                Topic angle <span className="font-normal lowercase tracking-normal text-muted-foreground/80">(optional refinement)</span>
-              </Label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {PRESETS.map(({ key, label, Icon }) => {
-                  const active = selectedPreset === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setSelectedPreset(key)}
-                      className={cn(
-                        'text-left p-2 rounded-md border transition flex items-center gap-1.5',
-                        active
-                          ? 'border-primary bg-reop-teal-soft'
-                          : 'border-border bg-card hover:border-primary/40 hover:bg-muted/30',
-                      )}
-                    >
-                      <Icon className={cn('w-3.5 h-3.5 flex-shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
-                      <span className={cn('text-xs font-semibold', active && 'text-primary')}>{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {selectedPreset === 'custom' ? (
-              <div>
-                <Label htmlFor="ai-custom" className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground mb-1.5 block">
-                  Your prompt
-                </Label>
-                <Textarea
-                  id="ai-custom"
-                  value={customPrompt}
-                  onChange={(e) => setCustomPrompt(e.target.value)}
-                  disabled={isGenerating}
-                  placeholder="e.g. Write about new construction inventory in my area — focus on the trade-off between new builds vs. resale at this price point."
-                  rows={3}
-                  className="text-sm"
-                />
-              </div>
-            ) : (
+            {showPromptPreview && (
               <div>
                 <Label className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground mb-1.5 block">
                   Topic prompt (edit to refine)
                 </Label>
                 <Textarea
-                  value={presetPrompts[selectedPreset]}
+                  value={presetPrompts[selectedPreset as Exclude<PresetKey, 'custom'>]}
                   onChange={(e) =>
                     setPresetPrompts((prev) => ({
                       ...prev,
-                      [selectedPreset]: e.target.value,
+                      [selectedPreset as Exclude<PresetKey, 'custom'>]: e.target.value,
                     }))
                   }
                   disabled={isGenerating}

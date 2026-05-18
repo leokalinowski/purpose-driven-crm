@@ -4,6 +4,22 @@ import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { getStageByKey } from '@/config/pipelineStages';
 
+// ── Module-level cache ──────────────────────────────────────────────────
+// Pipeline data is referenced by the Dashboard hero, the Modules row, and
+// the Pipeline board — each previously triggered its own fetch on mount
+// and flashed the loading state on every navigation back to `/`. We cache
+// the last fetched payload per user with a short TTL so subsequent mounts
+// hydrate instantly. Mutations (stage moves, create/update/delete) bust
+// the cache by re-fetching with `force: true`.
+
+const PIPELINE_CACHE_TTL_MS = 60_000;
+
+interface PipelineCacheEntry {
+  opportunities: Opportunity[];
+  fetchedAt: number;
+}
+const pipelineCache = new Map<string, PipelineCacheEntry>();
+
 export interface Opportunity {
   id: string;
   agent_id: string;
@@ -134,28 +150,85 @@ export interface PipelineMetrics {
   staleCount: number;
 }
 
+// Pure metrics calculator — kept at module scope so the cached-state
+// initializer in usePipeline() can rebuild PipelineMetrics from a cached
+// opportunities array without re-running the network query.
+function computeMetricsForCache(data: Opportunity[]): PipelineMetrics {
+  const isClosedWon = (o: Opportunity) => o.stage === 'closed';
+  const isLost = (o: Opportunity) => o.stage === 'lost' || o.outcome === 'lost' || o.outcome === 'withdrawn';
+  const active = data.filter((o) => !isClosedWon(o) && !isLost(o));
+  const closed = data.filter(isClosedWon);
+  const lost = data.filter(isLost);
+  const pipelineValue = active.reduce((s, o) => s + (o.deal_value ?? 0), 0);
+  const totalGciEstimated = active.reduce((s, o) => s + (o.gci_estimated ?? 0), 0);
+  const decided = closed.length + lost.length;
+  const winRate = decided > 0 ? (closed.length / decided) * 100 : null;
+  const closedWithDates = closed.filter((o) => o.actual_close_date);
+  const avgCloseTime =
+    closedWithDates.length > 0
+      ? closedWithDates.reduce(
+          (s, o) =>
+            s +
+            (new Date(o.actual_close_date!).getTime() - new Date(o.created_at).getTime()),
+          0,
+        ) / closedWithDates.length / (1000 * 60 * 60 * 24)
+      : 0;
+  const stageBreakdown = data.reduce((acc, o) => {
+    acc[o.stage as string] = (acc[o.stage as string] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const scored = active.filter((o) => o.ai_deal_probability != null);
+  const avgDealProbability =
+    scored.length > 0
+      ? Math.round(scored.reduce((s, o) => s + (o.ai_deal_probability ?? 0), 0) / scored.length)
+      : null;
+  const staleCount = active.filter((o) => o.is_stale).length;
+  return {
+    pipelineValue,
+    winRate,
+    avgCloseTime,
+    totalOpportunities: data.length,
+    closedDeals: closed.length,
+    stageBreakdown,
+    totalGciEstimated,
+    avgDealProbability,
+    staleCount,
+  };
+}
+
 export function usePipeline() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+
+  // Hydrate from the module cache on first render so navigations back to
+  // the Dashboard within the TTL skip the loading flash entirely.
+  const cached = user?.id ? pipelineCache.get(user.id) : undefined;
+  const cacheIsFresh = cached ? Date.now() - cached.fetchedAt < PIPELINE_CACHE_TTL_MS : false;
+
+  const [opportunities, setOpportunities] = useState<Opportunity[]>(cached?.opportunities ?? []);
   // Track which unmapped stages we've already warned about per session, so the
   // Phase 1.4 toast doesn't re-fire on every re-fetch. Cleared automatically
   // when the agent navigates away (hook unmount).
   const warnedUnmappedStages = useRef<Set<string>>(new Set());
-  const [metrics, setMetrics] = useState<PipelineMetrics>({
-    pipelineValue: 0,
-    winRate: null,
-    avgCloseTime: 0,
-    totalOpportunities: 0,
-    closedDeals: 0,
-    stageBreakdown: {},
-    totalGciEstimated: 0,
-    avgDealProbability: null,
-    staleCount: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState<PipelineMetrics>(() =>
+    cached ? computeMetricsForCache(cached.opportunities) : {
+      pipelineValue: 0,
+      winRate: null,
+      avgCloseTime: 0,
+      totalOpportunities: 0,
+      closedDeals: 0,
+      stageBreakdown: {},
+      totalGciEstimated: 0,
+      avgDealProbability: null,
+      staleCount: 0,
+    },
+  );
+  // Loading is false when we already have a fresh cached snapshot — the
+  // background re-fetch is silent. Stale cache still shows data while a
+  // refresh happens, but `loading` stays true so consumers can decide.
+  const [loading, setLoading] = useState(!cacheIsFresh);
 
-  const fetchOpportunities = async () => {
+  const fetchOpportunities = async (opts: { force?: boolean } = {}) => {
     // No user (logout, pre-auth, or token expiry): clear data and stop the
     // skeleton. Returning early without resetting loading was leaving the
     // Pipeline board stuck in its 4-column shimmer forever for unauthenticated
@@ -165,7 +238,17 @@ export function usePipeline() {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    // Cache hit and not a forced refresh — skip network, keep state.
+    const entry = pipelineCache.get(user.id);
+    if (!opts.force && entry && Date.now() - entry.fetchedAt < PIPELINE_CACHE_TTL_MS) {
+      setOpportunities(entry.opportunities);
+      calculateMetrics(entry.opportunities);
+      setLoading(false);
+      return;
+    }
+    // Only show the loading skeleton when we have nothing to render yet.
+    // A stale cache stays visible while the background refetch runs.
+    if (!entry) setLoading(true);
     try {
       const { data, error } = await supabase
         .from('opportunities')
@@ -188,6 +271,7 @@ export function usePipeline() {
 
       if (error) throw error;
       const data_ = (data || []) as Opportunity[];
+      pipelineCache.set(user.id, { opportunities: data_, fetchedAt: Date.now() });
       setOpportunities(data_);
       calculateMetrics(data_);
 
@@ -212,45 +296,7 @@ export function usePipeline() {
   };
 
   const calculateMetrics = (data: Opportunity[]) => {
-    // "Active" = anything not at a terminal stage. We deliberately ignore
-    // `actual_close_date` here because seed/legacy data on this project has
-    // it set on plenty of in-flight rows (`active_search` with a populated
-    // `actual_close_date` from years ago) — using that field would falsely
-    // count active deals as closed and zero out the pipeline value tile.
-    // The board columns already bucket by stage, so this keeps the metrics
-    // strip honest with what the agent sees.
-    const isClosedWon = (o: Opportunity) => o.stage === 'closed';
-    const isLost = (o: Opportunity) => o.stage === 'lost' || o.outcome === 'lost' || o.outcome === 'withdrawn';
-    const active = data.filter(o => !isClosedWon(o) && !isLost(o));
-    const closed = data.filter(isClosedWon);
-    const lost   = data.filter(isLost);
-    const pipelineValue = active.reduce((s, o) => s + (o.deal_value ?? 0), 0);
-    const totalGciEstimated = active.reduce((s, o) => s + (o.gci_estimated ?? 0), 0);
-    // Honest win rate: closed-won / (closed-won + lost). When no deals have a
-    // terminal outcome yet, return null so the UI shows "—" instead of a
-    // misleading "0.0%" or "100%".
-    const decided = closed.length + lost.length;
-    const winRate = decided > 0 ? (closed.length / decided) * 100 : null;
-
-    const closedWithDates = closed.filter(o => o.actual_close_date);
-    const avgCloseTime = closedWithDates.length > 0
-      ? closedWithDates.reduce((s, o) => s + (new Date(o.actual_close_date!).getTime() - new Date(o.created_at).getTime()), 0)
-        / closedWithDates.length / (1000 * 60 * 60 * 24)
-      : 0;
-
-    const stageBreakdown = data.reduce((acc, o) => {
-      acc[o.stage] = (acc[o.stage] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const scored = active.filter(o => o.ai_deal_probability != null);
-    const avgDealProbability = scored.length > 0
-      ? Math.round(scored.reduce((s, o) => s + (o.ai_deal_probability ?? 0), 0) / scored.length)
-      : null;
-
-    const staleCount = active.filter(o => o.is_stale).length;
-
-    setMetrics({ pipelineValue, winRate, avgCloseTime, totalOpportunities: data.length, closedDeals: closed.length, stageBreakdown, totalGciEstimated, avgDealProbability, staleCount });
+    setMetrics(computeMetricsForCache(data));
   };
 
   const updateStage = async (opportunityId: string, newStage: string) => {
@@ -301,7 +347,7 @@ export function usePipeline() {
 
       // Re-fetch in background to sync computed columns (days_in_current_stage,
       // is_stale flags, etc.) that the BEFORE-UPDATE trigger resets.
-      fetchOpportunities();
+      fetchOpportunities({ force: true });
     } catch (error: any) {
       // Phase 4.3: don't trust local state for the revert. The optimistic
       // setOpportunities above already mutated the array, so re-deriving the
@@ -320,7 +366,7 @@ export function usePipeline() {
           prev.map(o => o.id === opportunityId ? { ...o, stage: previousStage } : o)
         );
       }
-      await fetchOpportunities();
+      await fetchOpportunities({ force: true });
     }
   };
 
@@ -339,7 +385,7 @@ export function usePipeline() {
         agent_id: user.id,
       });
       if (error) throw error;
-      await fetchOpportunities();
+      await fetchOpportunities({ force: true });
       toast({ title: 'Opportunity created' });
       return true;
     } catch (error: any) {
@@ -355,7 +401,7 @@ export function usePipeline() {
         .update({ ...data, updated_at: new Date().toISOString() })
         .eq('id', opportunityId);
       if (error) throw error;
-      await fetchOpportunities();
+      await fetchOpportunities({ force: true });
       toast({ title: 'Opportunity updated' });
       return true;
     } catch (error: any) {
@@ -368,7 +414,7 @@ export function usePipeline() {
     try {
       const { error } = await supabase.from('opportunities').delete().eq('id', opportunityId);
       if (error) throw error;
-      await fetchOpportunities();
+      await fetchOpportunities({ force: true });
       toast({ title: 'Opportunity deleted' });
       return true;
     } catch (error: any) {
@@ -387,7 +433,7 @@ export function usePipeline() {
       if (contactData.phone) {
         supabase.functions.invoke('dnc-single-check', { body: { contactId } }).catch(() => {});
       }
-      await fetchOpportunities();
+      await fetchOpportunities({ force: true });
       toast({ title: 'Contact updated' });
       return true;
     } catch (error: any) {
@@ -403,7 +449,7 @@ export function usePipeline() {
       if (opportunityId) body.opportunity_id = opportunityId;
       const { error } = await supabase.functions.invoke('pipeline-score-opportunities', { body });
       if (error) throw error;
-      await fetchOpportunities();
+      await fetchOpportunities({ force: true });
       toast({ title: 'AI scores refreshed' });
     } catch (err: any) {
       toast({ title: 'Error', description: 'AI scoring failed: ' + err.message, variant: 'destructive' });
@@ -422,6 +468,8 @@ export function usePipeline() {
     deleteOpportunity,
     updateContact,
     refreshAIScores,
-    refresh: fetchOpportunities,
+    // Public refresh always bypasses the cache — the manual refresh
+    // button and any consumer that calls .refresh() expects fresh data.
+    refresh: () => fetchOpportunities({ force: true }),
   };
 }

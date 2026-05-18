@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSphereSyncTasks } from '@/hooks/useSphereSyncTasks';
+import { useCompletedSphereTouchesThisWeek } from '@/hooks/useCompletedSphereTouchesThisWeek';
 import { usePipeline } from '@/hooks/usePipeline';
 
 // ─── Shared atoms ────────────────────────────────────────────────────
@@ -272,12 +273,16 @@ export function Modules() {
   const { tasks, callTasks, textTasks, historicalStats } = useSphereSyncTasks();
   const { metrics: pipelineMetrics } = usePipeline();
   const delight = useDelightHistory();
+  const sphereTouches = useCompletedSphereTouchesThisWeek();
 
   // ── Sphere touches data ─────────────────────────────────────────────
-  const completedThisWeek =
-    callTasks.filter((t) => t.completed).length + textTasks.filter((t) => t.completed).length;
+  // Numerator = tasks completed by `completed_at` this week (catches
+  // catch-up completions of prior-week assignments). Denominator =
+  // this week's assigned rotation, so progress reflects "how much of
+  // what was scheduled have I cleared".
+  const completedThisWeek = sphereTouches.total;
   const totalThisWeek = callTasks.length + textTasks.length;
-  const progressPct = pct(completedThisWeek, totalThisWeek);
+  const progressPct = pct(Math.min(completedThisWeek, totalThisWeek), totalThisWeek);
 
   // Sparkline: last 7 weeks' completed-task counts (chronological, oldest → newest).
   const sortedStats = [...historicalStats].sort((a, b) => {

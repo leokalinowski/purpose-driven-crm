@@ -137,6 +137,7 @@ export function useDashboardBlocks() {
       const [
         sphereTasksAll,
         sphereTasksWeek,
+        sphereTasksCompletedThisWeek, // by `completed_at` window — catches catch-up completions
         eventTasksWeekAll,     // All event tasks this week (for performance)
         eventTasksOverdue,
         newsletterWeek,
@@ -153,9 +154,16 @@ export function useDashboardBlocks() {
         // SphereSync: all incomplete for overdue
         supabase.from('spheresync_tasks').select('id, task_type, completed, completed_at, created_at, week_number, year, lead_id, notes')
           .eq('agent_id', user.id).eq('completed', false),
-        // SphereSync: this week
+        // SphereSync: this week (by week_number — drives the assigned-tasks
+        // queue, performance %, and "incomplete this week" list)
         supabase.from('spheresync_tasks').select('id, task_type, completed, completed_at, created_at, week_number, year, lead_id, notes')
           .eq('agent_id', user.id).eq('week_number', currentWeekNum).eq('year', currentYear),
+        // SphereSync: COMPLETED this week by completed_at — drives the
+        // touchpoints rollup. Catches catch-up completions (tasks whose
+        // week_number is an earlier week but were finished this week).
+        supabase.from('spheresync_tasks').select('id, task_type, completed_at, lead_id')
+          .eq('agent_id', user.id).eq('completed', true)
+          .gte('completed_at', weekStart).lte('completed_at', weekEnd),
         // Event tasks: ALL for this week (completed + incomplete) for accurate performance tracking
         supabase.from('event_tasks').select('id, task_name, due_date, status, completed_at, event_id, phase, created_at')
           .eq('agent_id', user.id).gte('due_date', weekStart.split('T')[0]).lte('due_date', weekEnd.split('T')[0]),
@@ -199,7 +207,9 @@ export function useDashboardBlocks() {
       ]);
 
       // ----- BLOCK ONE: Weekly Touchpoints -----
-      const completedSphereThisWeek = (sphereTasksWeek.data || []).filter(t => t.completed);
+      // Source by `completed_at` window (not `week_number`) so catch-up
+      // completions of prior-week tasks are counted as this week's touches.
+      const completedSphereThisWeek = sphereTasksCompletedThisWeek.data || [];
       const sphereTouchpoints = completedSphereThisWeek.length;
       const eventEmailsTouchpoints = (eventEmailsWeek as any).data?.length || 0;
       const newsletterTouchpoints = (newsletterWeek.data || []).filter((n: any) => n.status === 'sent').length;
