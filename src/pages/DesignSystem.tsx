@@ -143,9 +143,9 @@ export default function DesignSystem() {
             <div className="text-xs text-positive flex items-center gap-1"><TrendingUp className="w-3 h-3" />+12 this wk</div>
           </div>
           <div className="bg-card border border-border rounded-lg p-5">
-            <div className="flex justify-between items-start"><span className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Coach Score</span><Award className="w-4 h-4 text-muted-foreground" /></div>
-            <div className="text-[32px] font-semibold text-reop-dark-blue mt-3 mb-1 leading-none">86</div>
-            <div className="text-xs text-muted-foreground">Top 12%</div>
+            <div className="flex justify-between items-start"><span className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Priorities</span><Award className="w-4 h-4 text-muted-foreground" /></div>
+            <div className="text-[32px] font-semibold text-reop-dark-blue mt-3 mb-1 leading-none">25</div>
+            <div className="text-xs text-muted-foreground">8 pipeline · 12 cadence · 5 engaged</div>
           </div>
         </div>
       </Section>

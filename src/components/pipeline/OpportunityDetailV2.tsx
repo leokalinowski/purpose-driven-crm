@@ -264,10 +264,9 @@ export function OpportunityDetailV2({ opportunity, open, onClose, onRefresh }: P
       toast({ title: 'Contact saved' });
       setContactDirty(false);
       onRefresh();
-      // Fire-and-forget priority re-score on the contact.
-      supabase.functions
-        .invoke('compute-priority-scores', { body: { contact_id: opp.contact_id } })
-        .catch((err) => console.warn('[OpportunityDetailV2] priority re-score failed', err));
+      // (System A `compute-priority-scores` re-score removed — UI no longer
+      // reads the AI-blended score. SphereSync queue updates automatically
+      // off the contacts row change.)
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally { setSaving(false); }

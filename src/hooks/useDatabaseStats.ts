@@ -21,7 +21,6 @@ import { useAuth } from '@/hooks/useAuth';
 export interface DatabaseStats {
   totalContacts: number;
   pastClients: number;
-  hotLeads: number;        // priority_score >= 60 (urgent + hot)
   noTouch90d: number;      // last_activity_date IS NULL OR < 90d ago
   recentNew: number;       // created_at > 30d ago
 }
@@ -43,9 +42,13 @@ export function useDatabaseStats() {
       const ninetyDaysAgo = new Date(Date.now() - 90 * 86400_000).toISOString();
       const thirtyDaysAgo = new Date(Date.now() - 30 * 86400_000).toISOString();
 
-      // Run all five counts in parallel. Each `head: true` returns count only,
+      // Run all four counts in parallel. Each `head: true` returns count only,
       // no row data — minimal payload, RLS-bounded by the existing policy.
-      const [totalRes, pastRes, hotRes, noTouchRes, recentRes] = await Promise.all([
+      // The prior `hotLeads` count was sourced from `priority_score >= 60`
+      // (System A) and is gone — the Database "Priorities" tile now reads
+      // from `usePrioritizedQueue` client-side so the count matches the
+      // SphereSync Priorities tab exactly.
+      const [totalRes, pastRes, noTouchRes, recentRes] = await Promise.all([
         supabase
           .from('contacts')
           .select('id', { count: 'exact', head: true })
@@ -55,11 +58,6 @@ export function useDatabaseStats() {
           .select('id', { count: 'exact', head: true })
           .eq('agent_id', agentId!)
           .in('contact_type', PAST_CLIENT_TYPES),
-        supabase
-          .from('contacts')
-          .select('id', { count: 'exact', head: true })
-          .eq('agent_id', agentId!)
-          .gte('priority_score', 60),
         supabase
           .from('contacts')
           .select('id', { count: 'exact', head: true })
@@ -75,14 +73,13 @@ export function useDatabaseStats() {
       // If any single query fails, throw so the consumer falls into the error
       // branch rather than displaying a partial set of zeros that look like
       // real numbers.
-      for (const res of [totalRes, pastRes, hotRes, noTouchRes, recentRes]) {
+      for (const res of [totalRes, pastRes, noTouchRes, recentRes]) {
         if (res.error) throw res.error;
       }
 
       return {
         totalContacts: totalRes.count ?? 0,
         pastClients: pastRes.count ?? 0,
-        hotLeads: hotRes.count ?? 0,
         noTouch90d: noTouchRes.count ?? 0,
         recentNew: recentRes.count ?? 0,
       };

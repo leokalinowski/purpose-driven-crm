@@ -49,6 +49,16 @@ interface PrioritizedQueueResult {
   engagement: QueueItem[];
   all: QueueItem[];
   loading: boolean;
+  // Lookups for downstream consumers (Database filter chip, ContactQuickSheet,
+  // KPI tiles). Derived from `all` — no extra queries.
+  contactIds: Set<string>;
+  byContactId: Map<string, QueueItem>;
+  counts: {
+    pipeline: number;
+    cadence: number;
+    engagement: number;
+    total: number;
+  };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -350,12 +360,30 @@ export function usePrioritizedQueue(): PrioritizedQueueResult {
       if (engagementItems.length >= ENGAGEMENT_CAP) break;
     }
 
+    const all = [...pipelineItems, ...cadenceItems, ...engagementItems];
+    const contactIds = new Set<string>();
+    const byContactId = new Map<string, QueueItem>();
+    for (const item of all) {
+      contactIds.add(item.contact_id);
+      // First write wins — pipeline > cadence > engagement (matches the band
+      // hierarchy ordering in `all` above), so a contact in two bands is
+      // looked up by its highest-priority band.
+      if (!byContactId.has(item.contact_id)) byContactId.set(item.contact_id, item);
+    }
     return {
       pipeline: pipelineItems,
       cadence: cadenceItems,
       engagement: engagementItems,
-      all: [...pipelineItems, ...cadenceItems, ...engagementItems],
+      all,
       loading: pipelineQuery.isLoading || cadenceQuery.isLoading || engagementQuery.isLoading,
+      contactIds,
+      byContactId,
+      counts: {
+        pipeline: pipelineItems.length,
+        cadence: cadenceItems.length,
+        engagement: engagementItems.length,
+        total: all.length,
+      },
     };
   }, [
     pipelineQuery.data, pipelineQuery.isLoading,

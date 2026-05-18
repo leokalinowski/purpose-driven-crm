@@ -335,12 +335,12 @@ export function useSphereSyncTasks() {
             if (actErr) console.warn('Contact activity log failed (non-fatal):', actErr.message);
           });
 
-          // 2. Re-score this contact so Coach reflects the fresh touch.
-          supabase.functions
-            .invoke('compute-priority-scores', { body: { contact_id: task.lead_id } })
-            .catch((e) => console.warn('Priority re-score failed (non-fatal):', e));
+          // (System A `compute-priority-scores` re-score invocation removed —
+          // the UI no longer reads the AI-blended priority_score. The
+          // SphereSync queue (System B) updates automatically when the
+          // contact_activities insert above invalidates last_activity_date.)
 
-          // 3. If contact has an active opportunity, mirror to opportunity_activities too.
+          // 2. If contact has an active opportunity, mirror to opportunity_activities too.
           supabase
             .from('opportunities')
             .select('id')

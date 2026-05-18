@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -15,6 +15,12 @@ import { useContactActivities, type ContactActivity } from '@/hooks/useContactAc
 import { useUpdateContact } from '@/hooks/useUpdateContact';
 import type { SphereSyncTask } from '@/hooks/useSphereSyncTasks';
 import { useAuth } from '@/hooks/useAuth';
+import { usePrioritizedQueue, type QueueItem } from '@/hooks/usePrioritizedQueue';
+import {
+  SPHERESYNC_CALLS,
+  SPHERESYNC_TEXTS,
+  getCurrentWeekNumber,
+} from '@/utils/sphereSyncLogic';
 import { useConversationStarter } from '@/components/comm/ConversationStarterProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
@@ -63,11 +69,10 @@ interface ContactRecord {
   move_timeline: string | null;
   life_event: string | null;
   life_event_date: string | null;
-  priority_score: number | null;
-  priority_reasoning: string | null;
-  priority_components: Record<string, unknown> | null;
-  priority_signals: Record<string, unknown> | null;
-  priority_computed_at: string | null;
+  // The legacy AI-blended priority fields (priority_score, priority_reasoning,
+  // priority_components, priority_signals, priority_computed_at, priority_model)
+  // still exist on the database row but are no longer read by this UI — the
+  // PriorityPane below uses `usePrioritizedQueue` (System B) instead.
   priority_watch_flag: boolean;
   buyer_price_min: number | null;
   buyer_price_max: number | null;
@@ -1964,253 +1969,122 @@ function isMeaningful(v: unknown): boolean {
   return true;
 }
 
-// Translate an opaque signal key/string into a single plain-English line +
-// a tone bucket. Negative ("zero / no / missing") = warn. Positive = good.
-// Anything we don't recognize falls back to a humanized version of the raw
-// key so the agent never sees `last_30d` or `zero_*` jargon.
-type SignalTone = 'warn' | 'good' | 'info';
+// (Legacy System A helpers — humanizeSignalString, buildHumanSignals,
+// SignalsView, COMPONENT_ORDER, ComponentBar — removed along with the old
+// CoachPane. The new PriorityPane reads the SphereSync queue directly
+// and has no per-component breakdown to render.)
 
-function humanizeSignalString(raw: string): { tone: SignalTone; text: string } {
-  const lower = raw.toLowerCase().trim();
-  // Negative signals — most common ai_key_signals values
-  if (/zero[\s_-]*last[_\s]?30d|no[\s_-]*recent[\s_-]*engage|no[\s_-]*30/.test(lower) || lower === 'no_recent_engagement') {
-    return { tone: 'warn', text: 'No conversations logged in the last 30 days' };
+// ─── Priority pane ───────────────────────────────────────────────────────────
+//
+// Replaces the prior "Coach insight" pane that showed a 0–100 priority_score
+// plus AI breakdown. The score was sourced from the legacy AI engine
+// (compute-priority-scores) which doesn't match what users see on the
+// SphereSync Priorities tab. This pane now reads from the SAME queue
+// (`usePrioritizedQueue`) that powers that tab, so the explanation a user
+// sees on a contact always matches whether/how the contact actually
+// appears on their Priorities list.
+
+const BAND_META: Record<QueueItem['band'], { label: string; tone: 'primary' | 'success' | 'warn' }> = {
+  pipeline:   { label: 'In your pipeline',  tone: 'primary' },
+  cadence:    { label: 'This week’s rotation', tone: 'primary' },
+  engagement: { label: 'Recently engaged',  tone: 'success' },
+};
+
+/** Scan the SphereSync rotation tables for the next ISO week (1–52) where
+ *  the contact's letter is up for either calls or texts. Returns null when
+ *  the letter never appears (only happens for non-A-Z categories). */
+function nextRotationForLetter(
+  letter: string,
+  currentWeek: number,
+): { week: number; weeksAway: number; kind: 'call' | 'text' } | null {
+  if (!letter) return null;
+  const L = letter.toUpperCase();
+  for (let offset = 1; offset <= 52; offset++) {
+    const week = ((currentWeek - 1 + offset) % 52) + 1;
+    if ((SPHERESYNC_CALLS[week] ?? []).includes(L)) return { week, weeksAway: offset, kind: 'call' };
+    if (SPHERESYNC_TEXTS[week] === L) return { week, weeksAway: offset, kind: 'text' };
   }
-  if (/zero[\s_-]*last[_\s]?90d|no[\s_-]*90/.test(lower)) {
-    return { tone: 'warn', text: 'No conversations logged in the last 90 days' };
-  }
-  if (/no[\s_-]*life[\s_-]*event/.test(lower)) {
-    return { tone: 'info', text: 'No life event captured' };
-  }
-  if (/no[\s_-]*active[\s_-]*opportunity|no[\s_-]*pipeline/.test(lower)) {
-    return { tone: 'info', text: 'No active opportunity in pipeline' };
-  }
-  if (/stale[\s_-]*deal|stuck[\s_-]*deal/.test(lower)) {
-    return { tone: 'warn', text: 'Opportunity has gone stale' };
-  }
-  // Positive signals
-  if (/active[\s_-]*opportunity|in[\s_-]*pipeline|pipeline[\s_-]*active/.test(lower)) {
-    return { tone: 'good', text: 'Active opportunity in pipeline' };
-  }
-  if (/pre[\s_-]?approved|approval[\s_-]*approved/.test(lower)) {
-    return { tone: 'good', text: 'Pre-approved' };
-  }
-  if (/recent[\s_-]*engagement|fresh[\s_-]*touch/.test(lower)) {
-    return { tone: 'good', text: 'Recent activity logged' };
-  }
-  // Fallback — humanize the raw text without exposing snake_case
-  const cleaned = raw.replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
-  const text = cleaned.length === 0
-    ? raw
-    : cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
-  return { tone: 'info', text };
+  return null;
 }
 
-// Build a deduplicated, plain-English list of signals from:
-//   1. ai_key_signals (already user-facing, just needs translation)
-//   2. structured fields on priority_signals (life_event, active_opportunity_stage)
-//   3. positive contact-level flags (pre-approved, watch flag)
-// Everything else (raw activity counts, ZIPs, day counts) is intentionally
-// dropped — those numbers belong in the score breakdown bars, not as
-// separate technical labels.
-function buildHumanSignals(
-  signals: Record<string, unknown>,
-  contact: ContactRecord,
-): { tone: SignalTone; text: string }[] {
-  const items: { tone: SignalTone; text: string }[] = [];
-
-  const keySignals = Array.isArray(signals.ai_key_signals)
-    ? (signals.ai_key_signals as unknown[]).filter((s): s is string => typeof s === 'string' && s.trim() !== '')
-    : [];
-  for (const raw of keySignals) {
-    const humanized = humanizeSignalString(raw);
-    if (!items.some((i) => i.text === humanized.text)) items.push(humanized);
-  }
-
-  const lifeEvent = typeof signals.life_event === 'string' ? signals.life_event.trim() : '';
-  if (lifeEvent && !items.some((i) => /life event/i.test(i.text))) {
-    items.push({ tone: 'good', text: `Life event: ${lifeEvent}` });
-  }
-
-  const stage = typeof signals.active_opportunity_stage === 'string' ? signals.active_opportunity_stage.trim() : '';
-  if (stage && !items.some((i) => /pipeline|opportunity/i.test(i.text))) {
-    const pretty = stage.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
-    items.push({ tone: 'good', text: `Active opportunity · ${pretty}` });
-  }
-
-  // VIP / pre-approval flags surfaced from contact (so the agent sees the
-  // high-value positives even if Grok didn't echo them in ai_key_signals).
-  if (contact.buyer_pre_approval_status === 'approved' && !items.some((i) => /pre[\s-]?approved/i.test(i.text))) {
-    items.push({ tone: 'good', text: 'Pre-approved' });
-  }
-  if (contact.priority_watch_flag && !items.some((i) => /watch|attention/i.test(i.text))) {
-    items.push({ tone: 'good', text: 'Flagged for personal attention' });
-  }
-
-  return items;
-}
-
-function SignalsView({ items }: { items: { tone: SignalTone; text: string }[] }) {
-  return (
-    <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
-      {items.map((it, i) => {
-        const styles =
-          it.tone === 'warn'
-            ? { wrap: 'bg-[hsl(45_93%_96%)] border-[hsl(45_70%_88%)]', icon: 'text-[hsl(35_80%_38%)]', Icon: AlertTriangle }
-            : it.tone === 'good'
-              ? { wrap: 'bg-[hsl(140_50%_96%)] border-[hsl(140_40%_82%)]', icon: 'text-[hsl(142_55%_28%)]', Icon: TrendingUp }
-              : { wrap: 'bg-[hsl(210_20%_97%)] border-border', icon: 'text-muted-foreground', Icon: Activity };
-        const Icon = styles.Icon;
-        return (
-          <li
-            key={i}
-            className={cn('flex items-start gap-2 text-[13px] text-reop-dark-blue leading-[1.45] px-3 py-2 rounded-md border', styles.wrap)}
-          >
-            <Icon className={cn('w-3.5 h-3.5 mt-[2px] shrink-0', styles.icon)} />
-            <span>{it.text}</span>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-// Order + display config for the score bars. Weights match compute-priority-
-// scores: when there's an active opportunity it's 0.35 / 0.30 / 0.25 / 0.10;
-// without one the pipeline weight redistributes to 0.50 / 0 / 0.40 / 0.10.
-const COMPONENT_ORDER: Array<{
-  key: 'relationship' | 'pipeline' | 'intent' | 'flags';
-  label: string;
-  description: string;
-}> = [
-  { key: 'relationship', label: 'Relationship', description: 'Cadence freshness — how stale the relationship is.' },
-  { key: 'pipeline',     label: 'Pipeline',     description: 'Active opportunity momentum.' },
-  { key: 'intent',       label: 'Intent',       description: 'AI-synthesized buying intent.' },
-  { key: 'flags',        label: 'Flags',        description: 'VIP, pre-approval, watch flag.' },
-];
-
-function ComponentBar({
-  label,
-  description,
-  value,
-  capForBar,
-  weightPct,
-  tone,
-}: {
-  label: string;
-  description: string;
-  value: number;
-  capForBar: number;
-  weightPct: number;
-  tone: 'primary' | 'muted';
-}) {
-  const pct = capForBar > 0 ? Math.min(100, Math.round((value / capForBar) * 100)) : 0;
-  const fill = tone === 'primary' ? 'hsl(184 100% 34%)' : 'hsl(210 14% 70%)';
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-3 min-w-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[12.5px] font-semibold text-reop-dark-blue truncate" title={description}>
-            {label}
-          </span>
-          <span className="text-[10.5px] text-muted-foreground bg-[hsl(210_20%_94%)] px-1.5 rounded-full whitespace-nowrap">
-            {weightPct}% weight
-          </span>
-        </div>
-        <span className="text-[12.5px] font-bold text-reop-dark-blue tabular-nums whitespace-nowrap">
-          {Math.round(value)} <span className="text-[11px] text-muted-foreground">/ {capForBar}</span>
-        </span>
-      </div>
-      <div className="h-1.5 rounded-full bg-[hsl(210_20%_94%)] overflow-hidden">
-        <div
-          className="h-full rounded-full transition-[width] duration-300"
-          style={{ width: `${pct}%`, background: fill }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function CoachPane({
+function PriorityPane({
   c,
   task,
-  onRefreshScore,
-  refreshing,
 }: {
   c: ContactRecord;
   task?: SphereSyncTask | null;
-  onRefreshScore: () => void;
-  refreshing: boolean;
 }) {
-  const components = c.priority_components ?? null;
-  const signals = c.priority_signals ?? null;
+  const queue = usePrioritizedQueue();
+  const queueItem = queue.byContactId.get(c.id) ?? null;
   const tps = task?.ai_talking_points ?? [];
 
-  // Detect whether there's an active opportunity contributing to the score —
-  // when pipeline weight is non-zero we use the with-pipeline caps; otherwise
-  // the no-pipeline caps (relationship and intent absorb pipeline's slice).
-  const pipelineNum = typeof components?.pipeline === 'number' ? (components.pipeline as number) : 0;
-  const hasPipeline = pipelineNum > 0 || !!c.pipeline_active;
-  const weightFor = (key: 'relationship' | 'pipeline' | 'intent' | 'flags'): number => {
-    if (hasPipeline) {
-      return key === 'relationship' ? 35 : key === 'pipeline' ? 30 : key === 'intent' ? 25 : 10;
-    }
-    return key === 'relationship' ? 50 : key === 'pipeline' ? 0 : key === 'intent' ? 40 : 10;
-  };
+  // For the "not a priority" fallback message — when this contact's letter is up.
+  const currentWeek = useMemo(() => getCurrentWeekNumber(), []);
+  const letter = (c.category ?? '').toUpperCase();
+  const nextRotation = useMemo(
+    () => (queueItem ? null : nextRotationForLetter(letter, currentWeek)),
+    [queueItem, letter, currentWeek],
+  );
 
   return (
     <div className="space-y-4">
-      <Section icon={Sparkles} title="Coach insight">
-        {/* Big priority hero — replaces the easy-to-miss "Priority 51/100" pill */}
-        {c.priority_score != null && (
-          <div className="flex items-end gap-4 mb-3 flex-wrap">
-            <div className="flex items-baseline gap-1">
-              <span className="text-[44px] font-semibold leading-none text-primary tabular-nums">
-                {c.priority_score}
-              </span>
-              <span className="text-[15px] text-muted-foreground">/ 100</span>
-            </div>
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+      <Section icon={Sparkles} title="Priority this week">
+        {queue.loading ? (
+          <p className="text-[13px] text-muted-foreground m-0">Loading priority status…</p>
+        ) : queueItem ? (
+          <>
+            <div className="flex flex-wrap items-center gap-2 mb-2.5">
+              <Pill tone={BAND_META[queueItem.band].tone}>
+                <Sparkles className="w-3 h-3" />
+                {BAND_META[queueItem.band].label}
+              </Pill>
               {c.priority_watch_flag && (
                 <Pill tone="warn">
                   <AlertTriangle className="w-3 h-3" />
                   Watch
                 </Pill>
               )}
-              {c.priority_computed_at && (
-                <span className="text-[11.5px] text-muted-foreground">
-                  Updated {formatRelative(c.priority_computed_at)}
-                </span>
-              )}
             </div>
-          </div>
-        )}
-        {(c.priority_reasoning || task?.ai_reason) ? (
-          <p className="text-[13.5px] text-reop-dark-blue leading-[1.55] m-0">
-            {c.priority_reasoning ?? task?.ai_reason}
-          </p>
-        ) : (
-          <p className="text-[13px] text-muted-foreground m-0">No Coach commentary yet.</p>
-        )}
-        <div className="mt-3 flex justify-end">
-          <button
-            onClick={onRefreshScore}
-            disabled={refreshing}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-card text-[12px] font-semibold text-reop-dark-blue hover:bg-reop-teal-soft hover:border-primary hover:text-primary transition disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {refreshing ? (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                Refreshing…
-              </span>
-            ) : (
-              <>
-                <Activity className="w-3 h-3" />
-                Refresh score
-              </>
+            <p className="text-[13.5px] text-reop-dark-blue leading-[1.55] m-0">
+              {queueItem.reason}
+            </p>
+            {queueItem.context_chips.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {queueItem.context_chips.map((chip, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center text-[11px] font-medium text-muted-foreground bg-[hsl(210_20%_94%)] px-2 py-0.5 rounded-full"
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
             )}
-          </button>
-        </div>
+          </>
+        ) : (
+          <>
+            <p className="text-[13.5px] text-reop-dark-blue leading-[1.55] m-0">
+              Not on the priority list this week.
+            </p>
+            <p className="text-[12.5px] text-muted-foreground leading-[1.55] m-0 mt-1.5">
+              {nextRotation
+                ? `Their letter (${letter}) is next up for ${nextRotation.kind === 'call' ? 'calls' : 'texts'} in week ${nextRotation.week} (${
+                    nextRotation.weeksAway === 1 ? 'next week' : `in ${nextRotation.weeksAway} weeks`
+                  }).`
+                : letter
+                  ? `Their letter (${letter}) isn’t in the rotation calendar. Update their category if this is wrong.`
+                  : 'No SphereSync category set yet — add a last-name initial to schedule them on the rotation.'}
+            </p>
+            {c.priority_watch_flag && (
+              <div className="mt-2.5">
+                <Pill tone="warn">
+                  <AlertTriangle className="w-3 h-3" />
+                  Watch flag is on
+                </Pill>
+              </div>
+            )}
+          </>
+        )}
       </Section>
 
       {tps.length > 0 && (
@@ -2225,43 +2099,6 @@ function CoachPane({
           </ul>
         </Section>
       )}
-
-      {components && (
-        <Section icon={Activity} title="Score breakdown">
-          <div className="flex flex-col gap-3">
-            {COMPONENT_ORDER.map(({ key, label, description }) => {
-              const raw = (components as Record<string, unknown>)[key];
-              const value = typeof raw === 'number' ? raw : 0;
-              const cap = weightFor(key);
-              if (cap === 0 && value === 0) return null;
-              return (
-                <ComponentBar
-                  key={key}
-                  label={label}
-                  description={description}
-                  value={value}
-                  capForBar={cap}
-                  weightPct={cap}
-                  tone={value > 0 ? 'primary' : 'muted'}
-                />
-              );
-            })}
-            <div className="text-[11px] text-muted-foreground leading-[1.45] pt-1">
-              Each bar shows that component&apos;s contribution to the {c.priority_score ?? '—'} / 100 total. Weights add to 100% and shift when the contact has no active opportunity.
-            </div>
-          </div>
-        </Section>
-      )}
-
-      {(() => {
-        const humanSignals = buildHumanSignals(signals ?? {}, c);
-        if (humanSignals.length === 0) return null;
-        return (
-          <Section icon={Sparkles} title="What I'm seeing">
-            <SignalsView items={humanSignals} />
-          </Section>
-        );
-      })()}
     </div>
   );
 }
@@ -2281,28 +2118,7 @@ export function ContactQuickSheet({
   const { activities, loading: activitiesLoading, fetchActivities, addActivity, deleteActivity, updateActivity } =
     useContactActivities(contactId ?? '');
   const [tab, setTab] = useState<TabKey>('overview');
-  const [refreshingScore, setRefreshingScore] = useState(false);
-  const qc = useQueryClient();
   const updateMutation = useUpdateContact();
-
-  const handleRefreshScore = async () => {
-    if (!contactId || !user?.id) return;
-    setRefreshingScore(true);
-    try {
-      const { error } = await supabase.functions.invoke('compute-priority-scores', {
-        body: { agent_id: user.id, contact_ids: [contactId] },
-      });
-      if (error) throw error;
-      await qc.invalidateQueries({ queryKey: ['contact', contactId] });
-      toast.success('Score refreshed');
-    } catch (err) {
-      toast.error('Could not refresh score', {
-        description: err instanceof Error ? err.message : 'Try again in a minute.',
-      });
-    } finally {
-      setRefreshingScore(false);
-    }
-  };
 
   // Cached contact fetch — keyed by ['contact', id] so useUpdateContact's
   // optimistic writes flow into this view without a refetch round-trip.
@@ -2584,7 +2400,7 @@ export function ContactQuickSheet({
           {([
             { key: 'overview',    label: 'Overview',    icon: User },
             { key: 'touchpoints', label: 'Touchpoints', icon: Activity, count: activities.length || undefined },
-            { key: 'coach',       label: 'Coach',       icon: Sparkles },
+            { key: 'coach',       label: 'Priority',    icon: Sparkles },
           ] as { key: TabKey; label: string; icon: typeof User; count?: number }[]).map((t) => {
             const active = tab === t.key;
             return (
@@ -2624,14 +2440,7 @@ export function ContactQuickSheet({
           ) : (
             <>
               {tab === 'overview' && <OverviewPane c={contact} mutation={updateMutation} />}
-              {tab === 'coach' && (
-                <CoachPane
-                  c={contact}
-                  task={task}
-                  onRefreshScore={handleRefreshScore}
-                  refreshing={refreshingScore}
-                />
-              )}
+              {tab === 'coach' && <PriorityPane c={contact} task={task} />}
               {tab === 'touchpoints' && (
                 <TouchpointsPane
                   activities={recentActivities}

@@ -20,7 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useContacts, type Contact, type ContactInput } from '@/hooks/useContacts';
-import { usePrioritizedContacts } from '@/hooks/usePrioritizedContacts';
+import { usePrioritizedQueue } from '@/hooks/usePrioritizedQueue';
 import { useCompletedSphereTouchesThisWeek } from '@/hooks/useCompletedSphereTouchesThisWeek';
 import { getCurrentWeekTasks } from '@/utils/sphereSyncLogic';
 import { useDatabaseStats } from '@/hooks/useDatabaseStats';
@@ -204,7 +204,10 @@ export default function Database() {
     fetchContacts,
   } = useContacts();
 
-  const { groups: priorityGroups } = usePrioritizedContacts({ limit: 5000 });
+  // System B is the single source of truth for "Priorities" — same queue
+  // that powers the SphereSync Priorities tab, so the Database filter
+  // and KPI tile always agree with what the user sees there.
+  const priorityQueue = usePrioritizedQueue();
   const { stats: dbStats } = useDatabaseStats();
   const { touchedContactIds } = useCompletedSphereTouchesThisWeek();
 
@@ -228,22 +231,19 @@ export default function Database() {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
-  // Build a fast lookup for priority_score by contact id from the prioritized cache
-  const priorityById = useMemo(() => {
-    const map = new Map<string, number | null>();
-    priorityGroups?.all.forEach((c) => map.set(c.id, c.priority_score));
-    return map;
-  }, [priorityGroups]);
-
-  // Per-contact SphereSync membership lookup — keyed off priority_score
-  // (>= 60 == on the Priorities list) and the contact's category letter
-  // against this week's rotation. Used by the filter predicate, by the
-  // SphereSync column cell, and to drive the filter-rail chip counts.
+  // Per-contact SphereSync membership lookup.
+  //   - `isPriority` mirrors the SphereSync Priorities tab exactly: it's true
+  //     iff the contact is in any of the queue's three bands (pipeline /
+  //     cadence / engagement). System A's stale `priority_score >= 60` is
+  //     no longer consulted anywhere in the UI.
+  //   - `inCallCadence` / `inTextCadence` come from the deterministic
+  //     letter rotation — independent of the capped queue so the chips
+  //     surface EVERY contact whose letter is up this week, not just
+  //     the top-12 the queue surfaces.
   const sphereSyncFor = (c: Contact): SphereSyncCellProps => {
-    const score = priorityById.get(c.id) ?? null;
     const letter = (c.category ?? '').toUpperCase();
     return {
-      isPriority: score !== null && score >= 60,
+      isPriority: priorityQueue.contactIds.has(c.id),
       inCallCadence: !!letter && currentWeekRotation.callCategories.includes(letter),
       inTextCadence: !!letter && letter === currentWeekRotation.textCategory,
     };
@@ -261,25 +261,30 @@ export default function Database() {
       .slice(0, 8);
   }, [allContacts]);
 
-  // Chip counts for the SphereSync section of the filter rail. All four
-  // are computed off `allContacts` so the numbers match the filtered view.
+  // Chip counts for the SphereSync section of the filter rail.
+  //   - Priority: the actual queue size (matches the Priorities tab).
+  //   - Call/Text/Touched: counted over `allContacts` so the numbers
+  //     reflect everyone in the agent's database, not just the queue's
+  //     capped top-25.
   const sphereSyncCounts = useMemo(() => {
     const callLetters = new Set(currentWeekRotation.callCategories.map((l) => l.toUpperCase()));
     const textLetter = currentWeekRotation.textCategory.toUpperCase();
-    let priority = 0;
     let call = 0;
     let text = 0;
     let touched = 0;
     for (const c of allContacts) {
-      const score = priorityById.get(c.id);
-      if (score !== undefined && score !== null && score >= 60) priority++;
       const letter = (c.category ?? '').toUpperCase();
       if (letter && callLetters.has(letter)) call++;
       if (letter && letter === textLetter) text++;
       if (touchedContactIds.has(c.id)) touched++;
     }
-    return { priority, call, text, touched };
-  }, [allContacts, priorityById, touchedContactIds, currentWeekRotation]);
+    return {
+      priority: priorityQueue.counts.total,
+      call,
+      text,
+      touched,
+    };
+  }, [allContacts, touchedContactIds, currentWeekRotation, priorityQueue.counts.total]);
 
   const callingStatusCounts = useMemo(() => {
     let callable = 0;
@@ -307,12 +312,16 @@ export default function Database() {
   // so they always reflect the agent's full contact set, not the search-
   // filtered or page-capped client array. Fall back to `totalContacts` from
   // useContacts only while dbStats is still loading.
+  //
+  // "Priorities" comes from the SphereSync queue (System B) — same source
+  // as the Priorities tab, so the tile count always equals what the user
+  // sees when they click into it.
   const stats = useMemo(() => {
     const total = dbStats?.totalContacts ?? totalContacts;
     const recentNew = dbStats?.recentNew ?? 0;
     const pastClients = dbStats?.pastClients ?? 0;
-    const hotLeads = dbStats?.hotLeads ?? 0;
     const noTouch90d = dbStats?.noTouch90d ?? 0;
+    const { pipeline: pP, cadence: pC, engagement: pE, total: pT } = priorityQueue.counts;
 
     return [
       {
@@ -329,10 +338,12 @@ export default function Database() {
           : '—',
       },
       {
-        label: 'Hot priorities',
-        value: hotLeads.toLocaleString(),
-        delta: hotLeads > 0 ? 'Priority score 60+' : 'No hot priorities',
-        positive: hotLeads > 0,
+        label: 'Priorities',
+        value: pT.toLocaleString(),
+        delta: pT > 0
+          ? `${pP} pipeline · ${pC} cadence · ${pE} engaged`
+          : 'Nothing on the queue this week',
+        positive: pT > 0,
       },
       {
         label: 'No touch 90d+',
@@ -341,7 +352,7 @@ export default function Database() {
         danger: noTouch90d > 0,
       },
     ];
-  }, [dbStats, totalContacts]);
+  }, [dbStats, totalContacts, priorityQueue.counts]);
 
   // True when any filter chip is active. When ON, we page through the full
   // `allContacts` set client-side so the visible rows and the chip counts
@@ -409,10 +420,11 @@ export default function Database() {
       }
       return true;
     };
-    // priorityById + touchedContactIds + currentWeekRotation are deps for
-    // the SphereSync filters; sphereSyncFor closes over priorityById.
+    // priorityQueue.contactIds + touchedContactIds + currentWeekRotation
+    // are the deps for the SphereSync filters; sphereSyncFor closes over
+    // priorityQueue.contactIds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRelationships, filterPriorityOnly, filterCallCadence, filterTextCadence, filterTouchedThisWeek, lastTouchRange, selectedCallingStatuses, priorityById, touchedContactIds, currentWeekRotation]);
+  }, [selectedRelationships, filterPriorityOnly, filterCallCadence, filterTextCadence, filterTouchedThisWeek, lastTouchRange, selectedCallingStatuses, priorityQueue.contactIds, touchedContactIds, currentWeekRotation]);
 
   // Filtered full set when any chip is active, otherwise empty (we use the
   // server-paged `contacts` instead).
