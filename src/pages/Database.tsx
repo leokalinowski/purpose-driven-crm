@@ -43,7 +43,8 @@ import {
 // cool/cold/unscored) is gone; it was a UI bucketing of `priority_score`
 // that confused agents. Now we surface only the two SphereSync concepts:
 //   - Priorities: the contact appears on the SphereSync Priorities tab
-//     (priority_score >= 60 — the "needs your attention" cohort)
+//     (priority_band IS NOT NULL — pipeline OR cadence; see
+//     usePrioritizedQueue / compute-priority-scores set-based-v7)
 //   - Cadence:   the contact's category letter is in this week's
 //     SphereSync call rotation or text rotation
 //   - Touched:   the contact has at least one completed spheresync_task
@@ -233,9 +234,9 @@ export default function Database() {
 
   // Per-contact SphereSync membership lookup.
   //   - `isPriority` mirrors the SphereSync Priorities tab exactly: it's true
-  //     iff the contact is in any of the queue's three bands (pipeline /
-  //     cadence / engagement). System A's stale `priority_score >= 60` is
-  //     no longer consulted anywhere in the UI.
+  //     iff the contact is in the queue's pipeline or cadence band.
+  //     The legacy `priority_score >= 60` filter is no longer consulted
+  //     anywhere in the UI — that column is NULL for every row.
   //   - `inCallCadence` / `inTextCadence` come from the deterministic
   //     letter rotation — independent of the capped queue so the chips
   //     surface EVERY contact whose letter is up this week, not just
@@ -633,8 +634,9 @@ export default function Database() {
         </h4>
 
         {/* Priorities — single toggle. Matches the SphereSync Priorities tab
-            (priority_score ≥ 60). Replaces the prior 6-tier temperature
-            ladder, which surfaced low-signal noise. */}
+            exactly (contacts with priority_band='pipeline' OR 'cadence').
+            Replaces the prior 6-tier temperature ladder, which surfaced
+            low-signal noise. */}
         <label className="flex items-center gap-2.5 py-2.5 text-sm cursor-pointer text-reop-dark-blue hover:text-primary transition">
           <input
             type="checkbox"

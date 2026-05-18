@@ -6,7 +6,31 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
-## 2026-05-18 — Security audit: critical auth gates (PR TBD)
+## 2026-05-18 — Priority cleanup: kill half-migrated `priority_score` debris (PR TBD)
+
+**What.** Audit item #4 from the same live-system audit that produced PR #35. The set-based priority rewrite (PR #34) left the old weighted-score readers in the tree, several of them visibly broken:
+
+1. **`src/hooks/usePrioritizedContacts.ts` (199 lines)** — legacy 6-tier `TIER_META` scorer hook with red/orange/yellow/blue/slate buckets. Zero importers. **Deleted.**
+2. **`src/components/commander/ActionCard.tsx`** — rendered the per-contact tier badge from `item.priority_score`. Zero importers. **Deleted.**
+3. **`src/components/spheresync/ContactQuickSheet.tsx` lines 1949–2135 (186 lines)** — leftover Coach pane internals (`signalLabels`, `isMeaningful`, `humanizeSignalString`, `buildHumanSignals`, `SignalsView`, `COMPONENT_ORDER`, `ComponentBar` — the 5-weight bars with the "0.40 / 0.35 / 0.10 / 0.10 / 0.05" allocation). All orphaned; the current `CoachPane` is set-based. **Stripped.**
+4. **`useCoachingState.ts`** — removed the `priority_score: number | null` field on `TodayItem`, plus the now-orphaned `tierFor()` helper and `PriorityTier` type (both consumed only by ActionCard + usePrioritizedContacts).
+5. **`ContactQuickSheet.ContactRecord` type** — dropped `priority_score` + `priority_components` (no remaining reader inside the file).
+6. **`useDatabaseStats.hotLeads`** — dropped the field entirely. It queried `.gte('priority_score', 60)` which is permanently `0` since the v7 scorer writes `priority_score=NULL` for every contact. The "Hot leads" tile it powered was already replaced by the "Priorities" tile that reads `usePrioritizedQueue().counts` directly — `hotLeads` had zero readers.
+7. **`Database.tsx`** — fixed three stale comments that still said `priority_score >= 60`. The code was correct (reads `priorityQueue.contactIds`); the comments would have misled the next person to touch the file.
+
+**Why.** The set-based rebuild was conceptually correct but shipped half-migrated. The audit caught the debris: a "Hot Leads" tile that's permanently 0, a Coach pane file with 186 lines of dead weight-bar internals that read like they were still live, and a 199-line `usePrioritizedContacts.ts` hook that returns nothing because every contact gets the `unscored` bucket. Each item by itself was small; collectively they were a "is this thing still wired?" trap for anyone touching the priority surface.
+
+**What's left alone.** The `priority_score` + `priority_components` columns still exist in the DB (every row NULL). The `supabase/integrations/supabase/types.ts` rows for them are auto-generated and not hand-editable. A follow-up migration can `ALTER TABLE contacts DROP COLUMN priority_score, DROP COLUMN priority_components` once we're confident no external integrations read them — separate concern, not blocking.
+
+**Files.**
+- DELETED: `src/hooks/usePrioritizedContacts.ts`, `src/components/commander/ActionCard.tsx`
+- MODIFIED: `src/components/spheresync/ContactQuickSheet.tsx` (–186 lines), `src/hooks/useCoachingState.ts`, `src/hooks/useDatabaseStats.ts`, `src/pages/Database.tsx`
+
+**Audit alignment.** Closes Frontend-Critical #1, #2, #4, Backend-Critical #1, Backend-High #9. Remaining audit items (security high tier, broader frontend cleanup) tracked separately.
+
+---
+
+## 2026-05-18 — Security audit: critical auth gates (PR #35)
 
 **What.** Closed three categories of auth holes uncovered in the live-system audit:
 
@@ -44,7 +68,7 @@ Until step 3+4 both land, the cron command sends `X-Cron-Secret: 'unset'` and `r
 
 ---
 
-## 2026-05-18 — Priority system: set-based rebuild + UI overhaul (PR TBD)
+## 2026-05-18 — Priority system: set-based rebuild + UI overhaul (PR #34)
 
 **SUPERSEDES** the 0–100 weighted-score model from PRs #31 (backend) and #32 (frontend). Those PRs are closed; this one is the canonical rebuild.
 
