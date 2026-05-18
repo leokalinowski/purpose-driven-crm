@@ -6,6 +6,44 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
+## 2026-05-18 — Security audit: critical auth gates (PR TBD)
+
+**What.** Closed three categories of auth holes uncovered in the live-system audit:
+
+1. **Stripe webhook signature verification.** Production `stripe-webhook` v41 had a fallback branch that accepted unsigned payloads when `STRIPE_WEBHOOK_SECRET` was unset (`else { JSON.parse(body) }`). Deployed v42 that returns 400 instead — any unsigned call now fails closed. Secret is set in production.
+
+2. **`make-agent-webhook` PII leak.** Function was deployed with `verify_jwt: false`, no role check, and forwarded the full agent profile (email, phone, license, brokerage, GCI goal) to a Make.com scenario URL. UUIDs were enumerable (19 agents). Deployed v115 with `verify_jwt: true`, JWT validation, role gate (admin or editor only — mirrors the `EditorLanding.tsx` page gate), and UUID format check.
+
+3. **Unauthenticated cron + admin functions (8 total).**
+   - **3 manual-send-* functions** (`coaching-reminder`, `event-email`, `spheresync-email`) — all triggered org-wide email blasts and were callable by anyone with the URL. Now `verify_jwt: true` + admin-role check via `get_current_user_role()`.
+   - **5 cron-triggered functions** (`coaching-reminder`, `coaching-weekly-nudge`, `delight-daily-nudge`, `event-email-scheduler`, `event-reminder-email`, `dnc-monthly-check`) — were gated only by the trivially-spoofable `X-Cron-Job: true` header. Now require `X-Cron-Secret` matching the `CRON_SHARED_SECRET` env var, with a backward-compat fallback to the legacy header while the env var is unset (zero-downtime rollout).
+
+**The shared helper.** `supabase/functions/_shared/authGuards.ts` exports `requireCronAuth(req)` and `requireAdminAuth(req, url, key)`. Both return `null` on success or a 401/403 `Response` for the caller to return directly. Centralized so the next sensitive function can opt in with a one-line import.
+
+**The cron secret rollout.** Designed lenient-then-strict so the four steps could happen in any order without breaking cron:
+
+1. Deploy the hardened functions (in-body `requireCronAuth`).
+2. Apply `20260518000004_cron_shared_secret_headers` — `cron.alter_job` updates the 8 `net.http_post` commands to add `X-Cron-Secret` header reading from Supabase Vault: `coalesce((SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'cron_shared_secret' LIMIT 1), 'unset')`.
+3. Operator runs `SELECT vault.create_secret(...)` once to populate the vault row.
+4. Operator sets `CRON_SHARED_SECRET` env var on the Edge Functions runtime to the same value.
+
+Until step 3+4 both land, the cron command sends `X-Cron-Secret: 'unset'` and `requireCronAuth` falls back to the `X-Cron-Job` legacy check. After both are set, strict mode engages — invalid/missing secret returns 403.
+
+**Why Vault, not `ALTER DATABASE ... SET`.** First draft of the migration used `current_setting('app.cron_shared_secret', true)` and asked the operator to `ALTER DATABASE postgres SET app.cron_shared_secret = '...'`. Supabase managed Postgres denies that ALTER for custom GUC namespaces (`ERROR: 42501: permission denied to set parameter`). Vault is the supported path on this platform.
+
+**Verification.** End-to-end smoke tested with a one-off `cron-secret-debug` edge function that returned byte-level fingerprints (length, prefix, suffix, leading hex, trailing hex, whitespace flags) of both `Deno.env.get("CRON_SHARED_SECRET")` and the incoming `X-Cron-Secret` header. Confirmed exact 40-byte match. Then invoked `coaching-weekly-nudge` through the full cron command path: valid secret → `200 {"ok":true,"skipped":"today is not a configured nudge day"}`, bogus secret → `403 {"error":"Forbidden: invalid or missing cron secret"}`. Diagnostic function neutered (verify_jwt: true + 410 stub) for later dashboard deletion.
+
+**Key files.**
+- `supabase/functions/_shared/authGuards.ts` — `requireCronAuth` + `requireAdminAuth` helpers.
+- `supabase/functions/make-agent-webhook/index.ts` — v115.
+- `supabase/functions/manual-send-{coaching-reminder,event-email,spheresync-email}/index.ts` — v131/v133/v132.
+- `supabase/functions/{coaching-reminder,coaching-weekly-nudge,delight-daily-nudge,event-email-scheduler,event-reminder-email,dnc-monthly-check}/index.ts` — all redeployed with `requireCronAuth`.
+- `supabase/migrations/20260518000004_cron_shared_secret_headers.sql` — `cron.alter_job` × 8 to add the header.
+
+**Why now.** Same-day cleanup after the priority-rebuild merge (PR #34). The audit ran on the same live snapshot and these three items were ship-blockers — Stripe in particular was actively dangerous (an attacker who guessed the function URL could send arbitrary fake events and free-mint subscriptions).
+
+---
+
 ## 2026-05-18 — Priority system: set-based rebuild + UI overhaul (PR TBD)
 
 **SUPERSEDES** the 0–100 weighted-score model from PRs #31 (backend) and #32 (frontend). Those PRs are closed; this one is the canonical rebuild.

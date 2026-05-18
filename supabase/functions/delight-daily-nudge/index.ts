@@ -16,6 +16,7 @@
  */
 
 import { corsHeaders } from '../_shared/cors.ts';
+import { requireCronAuth } from '../_shared/authGuards.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 interface OpportunityRow {
@@ -79,15 +80,13 @@ function buildDescription(opp: OpportunityRow): string {
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
-  // Auth: cron header OR service-role bearer
-  const isCronCall = req.headers.get('X-Cron-Job') === 'true' || req.headers.get('x-cron-job') === 'true';
-  const authHeader = req.headers.get('authorization') ?? '';
-  const isServiceRole =
-    authHeader.toLowerCase().startsWith('bearer ') &&
-    authHeader.slice(7).trim() === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!isCronCall && !isServiceRole) {
-    return jsonResponse({ ok: false, error: 'unauthorized' }, 401);
-  }
+  // SECURITY (hardened 2026-05-18): require cron-secret header OR
+  // legacy X-Cron-Job header when CRON_SHARED_SECRET env is unset.
+  // Replaces the prior bearer-token-equality check (still safe but
+  // moves the secret to its own env var so we don't conflate cron
+  // auth with service-role auth).
+  const denied = requireCronAuth(req);
+  if (denied) return denied;
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

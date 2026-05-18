@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from "../_shared/cors.ts";
+import { requireCronAuth } from "../_shared/authGuards.ts";
 
 function parseXMLResponse(xmlText: string): DNCApiResponse {
   try {
@@ -66,6 +67,13 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // SECURITY (hardened 2026-05-18): require cron-secret header OR
+  // legacy X-Cron-Job header when CRON_SHARED_SECRET env is unset.
+  // Monthly DNC check costs $$ per phone number checked — never
+  // allow anonymous callers to trigger it.
+  const denied = requireCronAuth(req);
+  if (denied) return denied;
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
