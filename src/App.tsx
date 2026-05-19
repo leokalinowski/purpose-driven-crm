@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,52 +11,62 @@ import { ContactSheetProvider } from "@/components/spheresync/ContactSheetProvid
 import { ConversationStarterProvider } from "@/components/comm/ConversationStarterProvider";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { RouteGuard } from "@/components/layout/RouteGuard";
+
+// ─── Eagerly loaded routes ───────────────────────────────────────────────────
+// Pages that are part of the first-paint critical path for the typical agent
+// flow. Lazy-loading these would just trade one network round-trip for another
+// since they're loaded on the user's first visit anyway.
 import Auth from "./pages/Auth";
-// OAuthCallback removed — was Postiz-era social-oauth handler. Metricool's
-// social network connections happen inside Metricool's own UI (or via the
-// admin), so REOP doesn't need an OAuth callback for the social hub.
 import Index from "./pages/Index";
-import ResetPassword from "./pages/ResetPassword";
 import SphereSyncTasks from "./pages/SphereSyncTasks";
 import Database from "./pages/Database";
 import Pipeline from "./pages/Pipeline";
-import Events from "./pages/Events";
 import NotFound from "./pages/NotFound";
-import Newsletter from "./pages/Newsletter";
-import Coaching from "./pages/Coaching";
-import Transactions from "./pages/Transactions";
-import AdminTeamManagement from "./pages/AdminTeamManagement";
-import AdminEventsManagement from "./pages/AdminEventsManagement";
-import AdminDashboard from "./pages/AdminDashboard";
-import AdminNewsletter from "./pages/AdminNewsletter";
-import AdminDatabaseManagement from "./pages/AdminDatabaseManagement";
-import AdminEmailLogs from "./pages/AdminEmailLogs";
-import AdminCoachingManagement from "./pages/AdminCoachingManagement";
-import SocialScheduler from "./pages/SocialScheduler";
-import AdminSocialScheduler from "./pages/AdminSocialScheduler";
-import AdminSphereSyncRecovery from "./pages/AdminSphereSyncRecovery";
-import EventPublicPage from "./pages/EventPublicPage";
-import EditorLanding from "./pages/EditorLanding";
-import Support from "./pages/Support";
-import SupportArticle from "./pages/SupportArticle";
-import AdminSupportArticles from "./pages/AdminSupportArticles";
-import AdminSponsors from "./pages/AdminSponsors";
-import PipelineSurvey from "./pages/PipelineSurvey";
-import AdminSurveyResults from "./pages/AdminSurveyResults";
-import NewsletterBuilderPage from "./pages/NewsletterBuilder";
-import AdminAnnouncements from "./pages/AdminAnnouncements";
-import Settings from "./pages/Settings";
-import Pricing from "./pages/Pricing";
-import Welcome from "./pages/Welcome";
-import Resources from "./pages/Resources";
-import AdminResources from "./pages/AdminResources";
-import Delight from "./pages/Delight";
-import DesignSystem from "./pages/DesignSystem";
-import ContactDetail from "./pages/ContactDetail";
-import OpportunityDetail from "./pages/OpportunityDetail";
-import EventDetail from "./pages/EventDetail";
-import Search from "./pages/Search";
-import Scoreboard from "./pages/Scoreboard";
+
+// ─── Lazy-loaded routes ──────────────────────────────────────────────────────
+// Everything else. Each becomes its own chunk, fetched on first navigation.
+// Bundle size before this split: index-DAhLmizF.js = 3.05 MB / 810 KB gzip.
+// Routing pulled the entire app into the first chunk via the eager imports.
+// Goal of the split: keep the agent's "open app → see dashboard" path lean,
+// defer the admin surface, the newsletter builder, and detail pages until
+// they're actually visited.
+const ResetPassword = React.lazy(() => import("./pages/ResetPassword"));
+const Events = React.lazy(() => import("./pages/Events"));
+const Newsletter = React.lazy(() => import("./pages/Newsletter"));
+const Coaching = React.lazy(() => import("./pages/Coaching"));
+const Transactions = React.lazy(() => import("./pages/Transactions"));
+const AdminTeamManagement = React.lazy(() => import("./pages/AdminTeamManagement"));
+const AdminEventsManagement = React.lazy(() => import("./pages/AdminEventsManagement"));
+const AdminDashboard = React.lazy(() => import("./pages/AdminDashboard"));
+const AdminNewsletter = React.lazy(() => import("./pages/AdminNewsletter"));
+const AdminDatabaseManagement = React.lazy(() => import("./pages/AdminDatabaseManagement"));
+const AdminEmailLogs = React.lazy(() => import("./pages/AdminEmailLogs"));
+const AdminCoachingManagement = React.lazy(() => import("./pages/AdminCoachingManagement"));
+const SocialScheduler = React.lazy(() => import("./pages/SocialScheduler"));
+const AdminSocialScheduler = React.lazy(() => import("./pages/AdminSocialScheduler"));
+const AdminSphereSyncRecovery = React.lazy(() => import("./pages/AdminSphereSyncRecovery"));
+const EventPublicPage = React.lazy(() => import("./pages/EventPublicPage"));
+const EditorLanding = React.lazy(() => import("./pages/EditorLanding"));
+const Support = React.lazy(() => import("./pages/Support"));
+const SupportArticle = React.lazy(() => import("./pages/SupportArticle"));
+const AdminSupportArticles = React.lazy(() => import("./pages/AdminSupportArticles"));
+const AdminSponsors = React.lazy(() => import("./pages/AdminSponsors"));
+const PipelineSurvey = React.lazy(() => import("./pages/PipelineSurvey"));
+const AdminSurveyResults = React.lazy(() => import("./pages/AdminSurveyResults"));
+const NewsletterBuilderPage = React.lazy(() => import("./pages/NewsletterBuilder"));
+const AdminAnnouncements = React.lazy(() => import("./pages/AdminAnnouncements"));
+const Settings = React.lazy(() => import("./pages/Settings"));
+const Pricing = React.lazy(() => import("./pages/Pricing"));
+const Welcome = React.lazy(() => import("./pages/Welcome"));
+const Resources = React.lazy(() => import("./pages/Resources"));
+const AdminResources = React.lazy(() => import("./pages/AdminResources"));
+const Delight = React.lazy(() => import("./pages/Delight"));
+const DesignSystem = React.lazy(() => import("./pages/DesignSystem"));
+const ContactDetail = React.lazy(() => import("./pages/ContactDetail"));
+const OpportunityDetail = React.lazy(() => import("./pages/OpportunityDetail"));
+const EventDetail = React.lazy(() => import("./pages/EventDetail"));
+const Search = React.lazy(() => import("./pages/Search"));
+const Scoreboard = React.lazy(() => import("./pages/Scoreboard"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,9 +88,22 @@ const queryClient = new QueryClient({
 
 const HomeRoute = () => <Index />;
 
+/**
+ * Lightweight fallback shown while a lazy chunk loads. Matches the brand
+ * dark-blue background of the agent shell so the transition isn't a white
+ * flash. Real-world chunk loads finish in <300ms on a warm cache; first-time
+ * loads on a cold cache see this for ~1-2s.
+ */
+const RouteFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" aria-label="Loading" />
+  </div>
+);
+
 const AppContent = () => {
   return (
-    <Routes>
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
         <Route path="/" element={<HomeRoute />} />
         <Route path="/auth" element={<Auth />} />
           <Route path="/auth/reset" element={<ResetPassword />} />
@@ -134,6 +157,7 @@ const AppContent = () => {
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
+    </Suspense>
   );
 };
 

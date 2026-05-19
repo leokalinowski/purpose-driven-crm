@@ -6,7 +6,47 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
-## 2026-05-18 — Security audit: high-tier batch (PR TBD)
+## 2026-05-18 — Frontend audit cleanup (Track C, PR TBD)
+
+**What.** Five Track-C audit items from the same live-system audit. All UI/perf hygiene, no behavior changes for working flows.
+
+**C1. Deleted 10 dead dashboard components.** `1,163 lines removed` — every one verified zero-importer:
+- `WeeklyTouchpoints`, `WeeklyTasksBySystem`, `TaskPerformance`, `OverdueTasks`, `TransactionOpportunity`, `AgentIntelligenceWidget`, `RecentActivity` (note: NOT `RecentActivityFeed`, which IS used), `ExportButtons`, `NewsletterCadenceBanner`, `TabSummaries`
+
+The live dashboard imports `CommanderHero`, `StreakCard`, `Modules`, `RecentActivityFeed`, `UpcomingEvents`, `JumpBackIn`, `DashboardRefreshButton`. The 10 deleted files were vestigial from earlier dashboard iterations; the audit caught the dust.
+
+`AgentIntelligenceWidget` is the "computed but not rendered" Coach surface CLAUDE.md flagged — confirmed unused, deleted. If we want to bring AI intelligence to the dashboard later, build it fresh against the current `agent_intelligence_snapshots` schema instead of resurrecting an orphaned component.
+
+**C2. Filter-chip focus rings on Database.** All 7 filter checkboxes in `src/pages/Database.tsx` had `accent-primary` (which colors the check mark) but no focus outline. Keyboard navigation through the filter rail was invisible. Added `focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 rounded-sm` to every instance.
+
+**C3. Mobile pagination 30×30 → 44×44.** All 9 pagination buttons in Database (prev/next + page numbers + ellipsis spacer) were 30×30, below WCAG/HIG's 44px tap-target minimum. Made the size responsive: `w-[44px] h-[44px] md:w-[30px] md:h-[30px]` — full size on mobile, original on `md:` and up where pointer input doesn't need the extra hit area.
+
+**C4. PrioritiesTab Refresh button 28px → 44px on mobile.** Same fix pattern: `h-[44px] md:h-[28px]`.
+
+**C5. Route lazy-loading.** `src/App.tsx` was eagerly importing ~50 page components into the first chunk. Bundle before: `3,054 KB / 810 KB gzip` (Vercel's chunk-size warning had been firing for weeks). Split into:
+- **Eager** (loaded on first paint): `Auth`, `Index`, `SphereSyncTasks`, `Database`, `Pipeline`, `NotFound` — the agent's actual landing surface
+- **Lazy** (`React.lazy()`): everything else (admin pages, Settings, Newsletter, Newsletter builder, public RSVP, detail pages, etc.)
+
+Bundle after: `1,181 KB / 336 KB gzip` initial chunk (**-61% / -58%**). Lazy chunks: tiny (5–80 KB each) for low-traffic routes; one fatter ~365 KB chunk for `BarChart` (recharts) that's used by dashboard widgets, and a ~214 KB `SocialScheduler` chunk for the Metricool surface.
+
+A simple `<Suspense fallback={<RouteFallback />}>` wraps every lazy route — fallback is a small centered spinner. Real-world chunk loads finish in <300ms on warm cache.
+
+**What's NOT done (still on the audit board):**
+- `src/lib/comm.ts:45` raw-error toast leak (Frontend Critical #3) — would have stretched this PR
+- WeekHintBar key fragility (Medium) — defensive, no current bug
+- StreakCard color-only state (Medium, a11y)
+- HomeRoute is a no-op wrapper — `/` always renders `<Index />` for everyone (may or may not be desired; needs Pam/Leo decision before changing)
+- vite `manualChunks` config (the remaining ~1.18 MB initial chunk could be split further into vendor/react/etc.)
+
+**Files.** −1,163 / +106 across:
+- DELETED: 10 dashboard component files
+- MODIFIED: `src/App.tsx`, `src/pages/Database.tsx`, `src/components/spheresync/tabs/PrioritiesTab.tsx`
+
+**Verification.** `bun run build` clean, bundle size confirmed dropped (see above). No type errors. No behavior changes for any working flow — pure dead-code removal + accessibility + perf.
+
+---
+
+## 2026-05-18 — Security audit: high-tier batch (PR #37)
 
 **What.** Five audit items from the same live-system audit that produced PRs #35 (critical auth) and #36 (priority cleanup). Each was a real exposure or schema drift — none were ship-blockers individually, but together they close most of the high-tier surface area.
 
