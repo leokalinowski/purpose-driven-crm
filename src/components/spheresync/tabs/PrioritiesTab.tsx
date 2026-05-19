@@ -85,7 +85,9 @@ function CoachTrustBar() {
       <button
         onClick={handleRefresh}
         disabled={refreshing}
-        className="inline-flex items-center gap-1.5 h-[28px] px-2.5 rounded-md border border-border bg-card text-[11.5px] font-semibold text-reop-dark-blue hover:bg-reop-teal-soft hover:border-primary hover:text-primary transition disabled:opacity-60"
+        // h-[44px] on mobile (WCAG/HIG tap-target minimum), h-[28px] from md: up
+        // where pointer input doesn't need the same hit area.
+        className="inline-flex items-center gap-1.5 h-[44px] md:h-[28px] px-2.5 rounded-md border border-border bg-card text-[11.5px] font-semibold text-reop-dark-blue hover:bg-reop-teal-soft hover:border-primary hover:text-primary transition disabled:opacity-60"
       >
         {refreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
         {refreshing ? 'Refreshing…' : 'Refresh'}

@@ -616,7 +616,7 @@ export default function Database() {
                 type="checkbox"
                 checked={selectedRelationships.has(label)}
                 onChange={() => setSelectedRelationships((s) => toggleSetItem(s, label))}
-                className="w-[15px] h-[15px] accent-primary"
+                className="w-[15px] h-[15px] accent-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 rounded-sm"
               />
               <span className="flex-1">{label}</span>
               <span className="text-[11px] px-1.5 rounded-full bg-[hsl(210_20%_96%)] text-muted-foreground">
@@ -642,7 +642,7 @@ export default function Database() {
             type="checkbox"
             checked={filterPriorityOnly}
             onChange={() => setFilterPriorityOnly((v) => !v)}
-            className="w-[15px] h-[15px] accent-primary"
+            className="w-[15px] h-[15px] accent-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 rounded-sm"
           />
           <span className="flex-1">On the Priorities list</span>
           <span className="text-[11px] px-1.5 rounded-full bg-[hsl(210_20%_96%)] text-muted-foreground">
@@ -657,7 +657,7 @@ export default function Database() {
             type="checkbox"
             checked={filterCallCadence}
             onChange={() => setFilterCallCadence((v) => !v)}
-            className="w-[15px] h-[15px] accent-primary"
+            className="w-[15px] h-[15px] accent-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 rounded-sm"
           />
           <span className="flex-1">
             Calling this week
@@ -677,7 +677,7 @@ export default function Database() {
             type="checkbox"
             checked={filterTextCadence}
             onChange={() => setFilterTextCadence((v) => !v)}
-            className="w-[15px] h-[15px] accent-primary"
+            className="w-[15px] h-[15px] accent-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 rounded-sm"
           />
           <span className="flex-1">
             Texting this week
@@ -699,7 +699,7 @@ export default function Database() {
             type="checkbox"
             checked={filterTouchedThisWeek}
             onChange={() => setFilterTouchedThisWeek((v) => !v)}
-            className="w-[15px] h-[15px] accent-primary"
+            className="w-[15px] h-[15px] accent-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 rounded-sm"
           />
           <span className="flex-1">Touched this week</span>
           <span className="text-[11px] px-1.5 rounded-full bg-[hsl(210_20%_96%)] text-muted-foreground">
@@ -722,7 +722,7 @@ export default function Database() {
               name="last-touch"
               checked={lastTouchRange === o.value}
               onChange={() => setLastTouchRange(o.value)}
-              className="w-[15px] h-[15px] accent-primary"
+              className="w-[15px] h-[15px] accent-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 rounded-sm"
             />
             <span className="flex-1">{o.label}</span>
           </label>
@@ -751,7 +751,7 @@ export default function Database() {
               type="checkbox"
               checked={selectedCallingStatuses.has(row.v)}
               onChange={() => setSelectedCallingStatuses((s) => toggleSetItem(s, row.v))}
-              className="w-[15px] h-[15px] accent-primary"
+              className="w-[15px] h-[15px] accent-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 rounded-sm"
             />
             <span
               className={cn(
@@ -1044,7 +1044,7 @@ export default function Database() {
                                   <button
                                     onClick={() => handleCallContact(c)}
                                     title="Call"
-                                    className="w-[30px] h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center hover:bg-reop-teal-soft hover:text-primary hover:border-primary transition"
+                                    className="w-[44px] h-[44px] md:w-[30px] md:h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center hover:bg-reop-teal-soft hover:text-primary hover:border-primary transition"
                                   >
                                     <Phone className="w-3.5 h-3.5" />
                                   </button>
@@ -1052,7 +1052,7 @@ export default function Database() {
                                   <button
                                     title="DNC — cannot call"
                                     disabled
-                                    className="w-[30px] h-[30px] rounded-md border border-[hsl(0_60%_85%)] bg-[hsl(0_84%_95%)] text-[hsl(0_72%_45%)] flex items-center justify-center cursor-not-allowed"
+                                    className="w-[44px] h-[44px] md:w-[30px] md:h-[30px] rounded-md border border-[hsl(0_60%_85%)] bg-[hsl(0_84%_95%)] text-[hsl(0_72%_45%)] flex items-center justify-center cursor-not-allowed"
                                   >
                                     <ShieldOff className="w-3.5 h-3.5" />
                                   </button>
@@ -1060,7 +1060,7 @@ export default function Database() {
                                   <button
                                     title="No phone on file"
                                     disabled
-                                    className="w-[30px] h-[30px] rounded-md border border-border bg-card text-muted-foreground flex items-center justify-center cursor-not-allowed opacity-50"
+                                    className="w-[44px] h-[44px] md:w-[30px] md:h-[30px] rounded-md border border-border bg-card text-muted-foreground flex items-center justify-center cursor-not-allowed opacity-50"
                                   >
                                     <Phone className="w-3.5 h-3.5" />
                                   </button>
@@ -1070,7 +1070,7 @@ export default function Database() {
                                   disabled={!c.email}
                                   title={c.email ? 'Email' : 'No email on file'}
                                   className={cn(
-                                    'w-[30px] h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center transition',
+                                    'w-[44px] h-[44px] md:w-[30px] md:h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center transition',
                                     c.email
                                       ? 'hover:bg-reop-teal-soft hover:text-primary hover:border-primary'
                                       : 'opacity-50 cursor-not-allowed',
@@ -1081,7 +1081,7 @@ export default function Database() {
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <button
-                                      className="w-[30px] h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center hover:bg-reop-teal-soft hover:text-primary hover:border-primary transition"
+                                      className="w-[44px] h-[44px] md:w-[30px] md:h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center hover:bg-reop-teal-soft hover:text-primary hover:border-primary transition"
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <MoreHorizontal className="w-3.5 h-3.5" />
@@ -1270,7 +1270,7 @@ export default function Database() {
                   <button
                     onClick={() => goToPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className="w-[30px] h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center hover:bg-reop-teal-soft transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-[44px] h-[44px] md:w-[30px] md:h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center hover:bg-reop-teal-soft transition disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
@@ -1282,7 +1282,7 @@ export default function Database() {
                   <button
                     onClick={() => goToPage(Math.min(effectiveTotalPages, currentPage + 1))}
                     disabled={currentPage >= effectiveTotalPages}
-                    className="w-[30px] h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center hover:bg-reop-teal-soft transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-[44px] h-[44px] md:w-[30px] md:h-[30px] rounded-md border border-border bg-card text-reop-dark-blue flex items-center justify-center hover:bg-reop-teal-soft transition disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
@@ -1342,7 +1342,7 @@ function PaginationDots({
     <>
       {pages.map((p, i) =>
         p === '…' ? (
-          <span key={`gap-${i}`} className="w-[30px] h-[30px] flex items-center justify-center text-muted-foreground text-xs">
+          <span key={`gap-${i}`} className="w-[44px] h-[44px] md:w-[30px] md:h-[30px] flex items-center justify-center text-muted-foreground text-xs">
             …
           </span>
         ) : (
@@ -1350,7 +1350,7 @@ function PaginationDots({
             key={p}
             onClick={() => onPageChange(p)}
             className={cn(
-              'w-[30px] h-[30px] rounded-md border border-border text-xs font-medium transition',
+              'w-[44px] h-[44px] md:w-[30px] md:h-[30px] rounded-md border border-border text-xs font-medium transition',
               p === currentPage
                 ? 'bg-reop-dark-blue text-white border-reop-dark-blue'
                 : 'bg-card text-reop-dark-blue hover:bg-reop-teal-soft',
