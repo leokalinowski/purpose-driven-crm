@@ -36,7 +36,7 @@
  *   }
  */
 
-import { corsHeaders } from '../_shared/cors.ts';
+import { buildCorsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const METRICOOL_BASE_URL = 'https://app.metricool.com/api';
@@ -63,10 +63,10 @@ interface ResultEntry {
   networks: string[];
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
   });
 }
 
@@ -88,8 +88,8 @@ function extractConnectedNetworks(settings: unknown): string[] {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-  if (req.method !== 'POST') return jsonResponse({ ok: false, error: 'Method not allowed' }, 405);
+  if (req.method === 'OPTIONS') return new Response(null, { headers: buildCorsHeaders(req) });
+  if (req.method !== 'POST') return jsonResponse(req, { ok: false, error: 'Method not allowed' }, 405);
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -99,7 +99,7 @@ Deno.serve(async (req: Request) => {
     // --- Verify caller is admin -----------------------------------------
     const authHeader = req.headers.get('Authorization') ?? '';
     if (!authHeader.toLowerCase().startsWith('bearer ')) {
-      return jsonResponse({ ok: false, error: 'Missing bearer token' }, 401);
+      return jsonResponse(req, { ok: false, error: 'Missing bearer token' }, 401);
     }
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -107,7 +107,7 @@ Deno.serve(async (req: Request) => {
     });
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData.user) {
-      return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
+      return jsonResponse(req, { ok: false, error: 'Unauthorized' }, 401);
     }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
@@ -121,26 +121,26 @@ Deno.serve(async (req: Request) => {
       .eq('role', 'admin')
       .maybeSingle();
     if (roleErr) {
-      return jsonResponse({ ok: false, error: 'Role lookup failed', detail: roleErr.message }, 500);
+      return jsonResponse(req, { ok: false, error: 'Role lookup failed', detail: roleErr.message }, 500);
     }
     if (!roleRow) {
-      return jsonResponse({ ok: false, error: 'Admin only' }, 403);
+      return jsonResponse(req, { ok: false, error: 'Admin only' }, 403);
     }
 
     // --- Parse body ----------------------------------------------------
     let body: BulkRequest;
     try { body = await req.json(); } catch {
-      return jsonResponse({ ok: false, error: 'Invalid JSON body' }, 400);
+      return jsonResponse(req, { ok: false, error: 'Invalid JSON body' }, 400);
     }
     const userToken = (body.user_token ?? '').trim();
     const metricoolUserId = String(body.user_id_metricool ?? '').trim();
     const dryRun = body.dry_run === true;
 
     if (!userToken || !metricoolUserId) {
-      return jsonResponse({ ok: false, error: 'user_token and user_id_metricool are both required' }, 400);
+      return jsonResponse(req, { ok: false, error: 'user_token and user_id_metricool are both required' }, 400);
     }
     if (!/^\d+$/.test(metricoolUserId)) {
-      return jsonResponse({ ok: false, error: 'user_id_metricool must be an integer' }, 400);
+      return jsonResponse(req, { ok: false, error: 'user_id_metricool must be an integer' }, 400);
     }
 
     // --- Step 1: validate master creds via /admin/simpleProfiles -------
@@ -155,20 +155,21 @@ Deno.serve(async (req: Request) => {
       });
     } catch (err) {
       return jsonResponse(
+        req,
         { ok: false, error: 'Could not reach Metricool', detail: err instanceof Error ? err.message : String(err) },
         200,
       );
     }
     if (profilesRes.status === 401 || profilesRes.status === 403) {
-      return jsonResponse({ ok: false, error: 'Invalid master credentials. Verify the User Token + User ID at app.metricool.com → User Settings → API access.' }, 200);
+      return jsonResponse(req, { ok: false, error: 'Invalid master credentials. Verify the User Token + User ID at app.metricool.com → User Settings → API access.' }, 200);
     }
     if (!profilesRes.ok) {
       const text = await profilesRes.text();
-      return jsonResponse({ ok: false, error: `Metricool returned ${profilesRes.status}`, detail: text.slice(0, 500) }, 200);
+      return jsonResponse(req, { ok: false, error: `Metricool returned ${profilesRes.status}`, detail: text.slice(0, 500) }, 200);
     }
     let profiles: unknown;
     try { profiles = await profilesRes.json(); }
-    catch { return jsonResponse({ ok: false, error: 'Metricool /admin/simpleProfiles response was not JSON' }, 200); }
+    catch { return jsonResponse(req, { ok: false, error: 'Metricool /admin/simpleProfiles response was not JSON' }, 200); }
 
     const profileList = Array.isArray(profiles)
       ? profiles
@@ -191,7 +192,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (accessibleBlogIds.size === 0) {
-      return jsonResponse({
+      return jsonResponse(req, {
         ok: false,
         error: `Master credentials work, but the user has no brands. Got ${profileList.length} entries with no usable id.`,
       }, 200);
@@ -204,7 +205,7 @@ Deno.serve(async (req: Request) => {
       .not('metricool_brand_id', 'is', null)
       .neq('metricool_brand_id', '');
     if (candErr) {
-      return jsonResponse({ ok: false, error: 'Could not load candidates', detail: candErr.message }, 500);
+      return jsonResponse(req, { ok: false, error: 'Could not load candidates', detail: candErr.message }, 500);
     }
 
     // Get profile names + emails for the report.
@@ -321,10 +322,11 @@ Deno.serve(async (req: Request) => {
       dry_run: dryRun,
     };
 
-    return jsonResponse({ ok: true, summary, results, accessible_blog_count: accessibleBlogIds.size });
+    return jsonResponse(req, { ok: true, summary, results, accessible_blog_count: accessibleBlogIds.size });
   } catch (err) {
     console.error('[metricool-admin-bulk-connect] uncaught:', err);
     return jsonResponse(
+      req,
       { ok: false, error: 'Bulk connect failed', detail: err instanceof Error ? err.message : String(err) },
       500,
     );

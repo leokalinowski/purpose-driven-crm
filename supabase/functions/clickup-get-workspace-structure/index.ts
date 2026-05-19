@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
-import { corsHeaders } from "../_shared/cors.ts";
+import { buildCorsHeaders } from "../_shared/cors.ts";
 
 const TEAM_ID = "9011620633"; // Real Estate on Purpose
 
@@ -23,7 +23,7 @@ interface ClickUpSpace {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: buildCorsHeaders(req) });
   }
 
   try {
@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
       console.error("clickup-get-workspace-structure: getClaims failed:", claimsError?.message);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     if (roleError || userRole !== "admin") {
       return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), {
         status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
     if (!clickupApiToken) {
       return new Response(
         JSON.stringify({ error: "CLICKUP_API_TOKEN not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
       const errorText = await spacesResponse.text();
       return new Response(
         JSON.stringify({ error: "Failed to fetch spaces", details: errorText }),
-        { status: spacesResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: spacesResponse.status, headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -126,13 +126,13 @@ Deno.serve(async (req) => {
         team_name: "Real Estate on Purpose",
         structure: workspaceStructure,
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error fetching workspace structure:", error);
     return new Response(
       JSON.stringify({ error: "Internal server error", message: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

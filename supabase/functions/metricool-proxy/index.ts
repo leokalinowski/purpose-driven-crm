@@ -37,7 +37,7 @@
  * the same slug. No frontend code referenced the old proxy.
  */
 
-import { corsHeaders } from '../_shared/cors.ts';
+import { buildCorsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const METRICOOL_BASE_URL = 'https://app.metricool.com/api';
@@ -52,10 +52,10 @@ interface ProxyRequest {
   skipAuthInject?: boolean;
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
   });
 }
 
@@ -65,10 +65,10 @@ function isAllowedPath(path: string): boolean {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: buildCorsHeaders(req) });
   }
   if (req.method !== 'POST') {
-    return jsonResponse({ ok: false, error: 'Method not allowed' }, 405);
+    return jsonResponse(req, { ok: false, error: 'Method not allowed' }, 405);
   }
 
   try {
@@ -79,7 +79,7 @@ Deno.serve(async (req: Request) => {
     // --- Auth: verify caller is an authenticated REOP user --------------
     const authHeader = req.headers.get('Authorization') ?? '';
     if (!authHeader.toLowerCase().startsWith('bearer ')) {
-      return jsonResponse({ ok: false, error: 'Missing bearer token' }, 401);
+      return jsonResponse(req, { ok: false, error: 'Missing bearer token' }, 401);
     }
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -87,7 +87,7 @@ Deno.serve(async (req: Request) => {
     });
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData.user) {
-      return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
+      return jsonResponse(req, { ok: false, error: 'Unauthorized' }, 401);
     }
     const callerId = userData.user.id;
 
@@ -102,10 +102,11 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     if (brandErr) {
-      return jsonResponse({ ok: false, error: 'Brand lookup failed', detail: brandErr.message }, 500);
+      return jsonResponse(req, { ok: false, error: 'Brand lookup failed', detail: brandErr.message }, 500);
     }
     if (!brand) {
       return jsonResponse(
+        req,
         {
           ok: false,
           status: 412,
@@ -130,16 +131,17 @@ Deno.serve(async (req: Request) => {
     try {
       proxyReq = await req.json();
     } catch {
-      return jsonResponse({ ok: false, error: 'Invalid JSON body' }, 400);
+      return jsonResponse(req, { ok: false, error: 'Invalid JSON body' }, 400);
     }
 
     const method = (proxyReq.method ?? 'GET').toUpperCase();
     const path = proxyReq.path ?? '';
     if (!path.startsWith('/')) {
-      return jsonResponse({ ok: false, error: 'path must start with /' }, 400);
+      return jsonResponse(req, { ok: false, error: 'path must start with /' }, 400);
     }
     if (!isAllowedPath(path)) {
       return jsonResponse(
+        req,
         { ok: false, error: `Disallowed path. Must start with one of: ${ALLOWED_PATH_PREFIXES.join(', ')}` },
         400,
       );
@@ -189,6 +191,7 @@ Deno.serve(async (req: Request) => {
         upstream = await fetchOnce();
       } catch (err2) {
         return jsonResponse(
+          req,
           { ok: false, error: 'Metricool unreachable', detail: err2 instanceof Error ? err2.message : String(err2) },
           200,
         );
@@ -229,6 +232,7 @@ Deno.serve(async (req: Request) => {
           ?? `Upstream ${upstream.status}`);
 
     return jsonResponse(
+      req,
       {
         ok: upstream.ok,
         status: upstream.status,
@@ -243,6 +247,7 @@ Deno.serve(async (req: Request) => {
   } catch (err) {
     console.error('[metricool-proxy] uncaught:', err);
     return jsonResponse(
+      req,
       { ok: false, error: 'Proxy failure', detail: err instanceof Error ? err.message : String(err) },
       500,
     );

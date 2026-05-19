@@ -21,7 +21,7 @@
  * Auth: cron-bypass via `X-Cron-Job: true`, or service-role JWT.
  */
 
-import { corsHeaders } from '../_shared/cors.ts';
+import { buildCorsHeaders } from '../_shared/cors.ts';
 import { requireCronAuth } from '../_shared/authGuards.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -61,10 +61,10 @@ const DAY_CONFIGS: Record<number, DayConfig> = {
   },
 };
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
   });
 }
 
@@ -80,7 +80,7 @@ function isoWeek(date: Date): { week: number; year: number } {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (req.method === 'OPTIONS') return new Response(null, { headers: buildCorsHeaders(req) });
 
   // SECURITY (hardened 2026-05-18): require cron-secret header OR
   // legacy X-Cron-Job header when CRON_SHARED_SECRET env is unset.
@@ -115,7 +115,7 @@ Deno.serve(async (req: Request) => {
     dayConfig = DAY_CONFIGS[now.getUTCDay()];
   }
   if (!dayConfig && !body.force) {
-    return jsonResponse({
+    return jsonResponse(req, {
       ok: true,
       skipped: 'today is not a configured nudge day',
       utc_weekday: now.getUTCDay(),
@@ -136,7 +136,7 @@ Deno.serve(async (req: Request) => {
     .in('role', ['agent', 'admin']);
   if (profErr) {
     console.error('[coaching-weekly-nudge] profile load failed:', profErr);
-    return jsonResponse({ ok: false, error: profErr.message }, 500);
+    return jsonResponse(req, { ok: false, error: profErr.message }, 500);
   }
   interface AgentPref {
     user_id: string;
@@ -184,7 +184,7 @@ Deno.serve(async (req: Request) => {
     .in('agent_id', agentIds);
   if (subErr) {
     console.error('[coaching-weekly-nudge] submission load failed:', subErr);
-    return jsonResponse({ ok: false, error: subErr.message }, 500);
+    return jsonResponse(req, { ok: false, error: subErr.message }, 500);
   }
   const submittedSet = new Set((submitted ?? []).map((r: { agent_id: string }) => r.agent_id));
   const needsNudge = agentIds.filter((id) => !submittedSet.has(id));
@@ -259,7 +259,7 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  return jsonResponse({
+  return jsonResponse(req, {
     ok: true,
     week_number: weekNumber,
     year,
