@@ -11,6 +11,7 @@ import { ContactSheetProvider } from "@/components/spheresync/ContactSheetProvid
 import { ConversationStarterProvider } from "@/components/comm/ConversationStarterProvider";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { RouteGuard } from "@/components/layout/RouteGuard";
+import { TermsAcceptanceGate } from "@/components/legal/TermsAcceptanceGate";
 
 // ─── Eagerly loaded routes ───────────────────────────────────────────────────
 // Pages that are part of the first-paint critical path for the typical agent
@@ -67,6 +68,7 @@ const OpportunityDetail = React.lazy(() => import("./pages/OpportunityDetail"));
 const EventDetail = React.lazy(() => import("./pages/EventDetail"));
 const Search = React.lazy(() => import("./pages/Search"));
 const Scoreboard = React.lazy(() => import("./pages/Scoreboard"));
+const Terms = React.lazy(() => import("./pages/Terms"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -154,6 +156,7 @@ const AppContent = () => {
         <Route path="/events/:id" element={<EventDetail />} />
         <Route path="/search" element={<Search />} />
         <Route path="/scoreboard" element={<Scoreboard />} />
+        <Route path="/terms" element={<Terms />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
@@ -176,6 +179,12 @@ function App() {
               <ContactSheetProvider>
                 <TooltipProvider>
                   <AppContent />
+                  {/* TermsAcceptanceGate self-gates on `useAuth().user`
+                      and pathname — silent when signed-out or on public
+                      surfaces. Mount inside the auth tree so it can
+                      read the session, but OUTSIDE Routes so it can
+                      appear over any page. */}
+                  <TermsAcceptanceGate />
                   <Toaster />
                   <Sonner />
                 </TooltipProvider>

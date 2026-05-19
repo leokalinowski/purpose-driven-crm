@@ -6,6 +6,60 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
+## 2026-05-19 — T&C wiring + export-my-data (Track A + B1, PR TBD)
+
+**What.** First slice of the Terms & Conditions and PII tracks. Pam emailed a placeholder T&C draft yesterday — this PR wires the legal text into the app, gates every signed-in user behind an acceptance modal, adds a sidebar link to the full doc, and ships a self-service "download every database row scoped to me" export that maps to T&C §19. The legal text itself is verbatim from Pam's Google Doc (cleaned of `\[cite:N\]` annotations from whatever tool drafted it).
+
+**Track A — T&C wiring (mechanical, no legal decisions):**
+
+1. **Single source of truth at `src/content/legal/`**:
+   - `terms.md` — Pam's draft, cleaned. "Last Updated: May 6, 2026."
+   - `index.ts` — exports `TERMS_VERSION = '2026-05-06'` + `TERMS_LAST_UPDATED` + the raw markdown via Vite's `?raw` import. Bumping both in lockstep re-prompts every user on next page load.
+
+2. **`/terms` route + `src/pages/Terms.tsx`** — public-facing page (readable signed-out), lazy-loaded per the chunk-split convention. Renders the markdown through the existing `ArticleMarkdown` component (same one used by Support articles, so styling matches).
+
+3. **Migration `20260519000001_profiles_terms_acceptance`** — adds two columns:
+   - `terms_version text` — the version string the user accepted; NULL = never accepted.
+   - `terms_accepted_at timestamptz` — audit-trail timestamp.
+   Applied live via MCP.
+
+4. **`useTermsAcceptance` hook** + **`TermsAcceptanceGate` modal** — mounted once in `App.tsx` inside the auth tree but outside `Routes`. Non-dismissible Dialog (escape + outside-click blocked) when the signed-in user's stored version ≠ `TERMS_VERSION`. Two actions:
+   - **I accept the Terms** → write `terms_version` + `terms_accepted_at`, close modal
+   - **Decline & sign out** → `signOut()` (app is not usable without acceptance)
+   - Plus a "Open full page →" link to `/terms` for a more comfortable read.
+
+   Silent on public surfaces (`/auth`, `/event/`, `/terms`, `/pricing`, `/welcome`) so the gate never pops on top of a doc the user is trying to read or a non-authenticated public page.
+
+5. **Sidebar footer link** — small "Terms and Conditions" link below the Sign out button in `AppSidebar.tsx`.
+
+**Track B1 — Export-my-data (T&C §19 mapping):**
+
+1. **New edge function `export-my-data`** (deployed v1, `verify_jwt: true`). Self-service "give me all my data" download. Returns a single JSON bundle with every row scoped to the caller across 30 agent-owned tables (profiles, contacts, contact_activities, opportunities + activities + notes + stage history + tasks, transactions, spheresync_tasks + email_logs, coaching surface, events, email_logs, dnc_logs, clickup_tasks, metricool brands/links, support_tickets, etc.). RLS does the scoping — function uses a user-context Supabase client (anon key + Authorization header), never service-role, so there's no path to dump anyone else's data.
+
+   Per-table errors are captured into the bundle (`{ error: "..." }`) rather than aborting the whole export. `Content-Disposition: attachment` header so the browser saves it directly.
+
+2. **Settings → Data & export** — added a highlighted teal card below the existing 3 per-table CSV exports: "Complete account export (JSON)" → "Download everything" button. Calls the edge function with the user's access token, triggers the download, surfaces toast errors. Links to `/terms` §19 inline so the agent knows what they're getting.
+
+**Track B2 (hard-delete cascade) + B3 (security_incidents) — deferred.** Both need explicit Pam/legal decisions before shipping:
+- B2: what records MUST be retained for compliance (DNC suppressions, payment audit logs) vs purged on a "forget me" request? Wrong default = legal exposure.
+- B3: incident workflow needs the operational process defined (who's on call, who notifies customers, timing) before the storage schema is meaningful.
+
+**What the doc still needs from counsel (per §29/§30 of Pam's draft):**
+- Privacy Policy, DPA, AUP, Security Overview, Cookie Policy — all listed as companion docs the launch needs and which don't exist yet.
+- Legal entity name, exact retention timelines, arbitration-vs-court choice, sub-processor list. These are §30 placeholder fields.
+- Whether the product is branded "SphereSync" (Pam's draft) or "REOP Hub" / "Real Estate on Purpose" (per `CLAUDE.md`). Currently shipping with Pam's "SphereSync" branding verbatim — a one-line find-replace to swap later if Pam decides differently.
+
+**Files.** +12 created/modified, +1 migration:
+- NEW: `src/content/legal/terms.md`, `src/content/legal/index.ts`, `src/pages/Terms.tsx`, `src/hooks/useTermsAcceptance.ts`, `src/components/legal/TermsAcceptanceGate.tsx`, `supabase/functions/export-my-data/index.ts`, `supabase/migrations/20260519000001_profiles_terms_acceptance.sql`
+- MODIFIED: `src/App.tsx` (Terms route + gate mount), `src/components/layout/AppSidebar.tsx` (footer link), `src/pages/Settings.tsx` (full-export button)
+
+**Verification.**
+- Migration applied live via MCP.
+- Edge function deployed v1 (`verify_jwt: true`).
+- `bun run build` clean (2m 20s). New `Terms` lazy chunk created; initial chunk grew slightly to 1.37 MB / 392 KB gzip because of the markdown helper landing in eager paths (Settings/Auth already pull ArticleMarkdown's deps). Acceptable for now; can revisit when we do the vite `manualChunks` follow-up.
+
+---
+
 ## 2026-05-18 — Frontend audit cleanup (Track C, PR TBD)
 
 **What.** Five Track-C audit items from the same live-system audit. All UI/perf hygiene, no behavior changes for working flows.
