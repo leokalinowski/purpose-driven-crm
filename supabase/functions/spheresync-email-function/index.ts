@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 import { Resend } from "https://esm.sh/resend@4.0.0";
-import { corsHeaders } from "../_shared/cors.ts";
+import { buildCorsHeaders } from "../_shared/cors.ts";
 import { SPHERESYNC_CALLS, SPHERESYNC_TEXTS, getISOWeekNumber } from "../_shared/spheresync-config.ts";
 
 
@@ -86,7 +86,7 @@ async function sendEmail({ to, subject, html, text, bcc }: { to: string; subject
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: buildCorsHeaders(req) });
   }
 
   let requestSource = 'manual';
@@ -248,7 +248,7 @@ const handler = async (req: Request): Promise<Response> => {
         emails_skipped: 0,
         source: requestSource
       }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
         status: 200, // Return 200 but with warning flag
       });
     }
@@ -334,7 +334,7 @@ const handler = async (req: Request): Promise<Response> => {
         results: dryRunResults,
         source: requestSource
       }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
         status: 200,
       });
     }
@@ -801,7 +801,7 @@ const handler = async (req: Request): Promise<Response> => {
       execution_time: new Date().toISOString(),
       source: requestSource
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
       status: 200,
     });
 
@@ -845,7 +845,7 @@ const handler = async (req: Request): Promise<Response> => {
       timestamp: new Date().toISOString(),
       source: requestSource || 'unknown'
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
       status: 500,
     });
   }

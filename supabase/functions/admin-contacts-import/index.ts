@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0'
-import { corsHeaders } from '../_shared/cors.ts'
+import { buildCorsHeaders } from '../_shared/cors.ts'
 
 interface ContactInput {
   first_name?: string;
@@ -20,7 +20,7 @@ interface ContactInput {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: buildCorsHeaders(req) });
   }
 
   try {
@@ -32,7 +32,7 @@ serve(async (req) => {
       console.error('Missing or invalid Authorization header');
       return new Response(
         JSON.stringify({ success: false, error: 'Unauthorized: Missing authentication' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+        { headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' }, status: 401 }
       );
     }
 
@@ -53,7 +53,7 @@ serve(async (req) => {
       console.error('Authentication failed:', claimsError);
       return new Response(
         JSON.stringify({ success: false, error: 'Unauthorized: Invalid authentication' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+        { headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' }, status: 401 }
       );
     }
 
@@ -67,7 +67,7 @@ serve(async (req) => {
       console.error('Admin verification failed:', roleError, 'Role:', userRole);
       return new Response(
         JSON.stringify({ success: false, error: 'Forbidden: Only admins can perform bulk imports' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+        { headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' }, status: 403 }
       );
     }
 
@@ -219,7 +219,7 @@ serve(async (req) => {
         }
       }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
         status: 200 
       }
     );
@@ -233,7 +233,7 @@ serve(async (req) => {
         error: error.message || 'Failed to import contacts'
       }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
         status: 400 
       }
     );

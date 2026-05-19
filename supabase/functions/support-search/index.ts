@@ -14,7 +14,7 @@
  * RLS on support_articles already restricts to published rows for non-admins.
  */
 
-import { corsHeaders } from '../_shared/cors.ts';
+import { buildCorsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 interface SearchRequest {
@@ -35,16 +35,16 @@ interface SearchHit {
   rank: number;
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
   });
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-  if (req.method !== 'POST') return jsonResponse({ error: 'POST only' }, 405);
+  if (req.method === 'OPTIONS') return new Response(null, { headers: buildCorsHeaders(req) });
+  if (req.method !== 'POST') return jsonResponse(req, { error: 'POST only' }, 405);
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -54,23 +54,23 @@ Deno.serve(async (req: Request) => {
   // the endpoint guarded.
   const auth = req.headers.get('authorization') ?? '';
   if (!auth.toLowerCase().startsWith('bearer ')) {
-    return jsonResponse({ error: 'unauthorized' }, 401);
+    return jsonResponse(req, { error: 'unauthorized' }, 401);
   }
   const anonClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!);
   const { data: userData, error: userErr } = await anonClient.auth.getUser(auth.slice(7));
   if (userErr || !userData?.user) {
-    return jsonResponse({ error: 'unauthorized' }, 401);
+    return jsonResponse(req, { error: 'unauthorized' }, 401);
   }
 
   let body: SearchRequest;
   try {
     body = await req.json();
   } catch {
-    return jsonResponse({ error: 'invalid JSON' }, 400);
+    return jsonResponse(req, { error: 'invalid JSON' }, 400);
   }
 
   const q = (body.q ?? '').toString().trim();
-  if (q.length < 2) return jsonResponse({ hits: [] });
+  if (q.length < 2) return jsonResponse(req, { hits: [] });
   const limit = Math.max(1, Math.min(20, Number(body.limit ?? 8)));
   const categorySlug = body.category?.trim() || null;
 
@@ -111,7 +111,7 @@ Deno.serve(async (req: Request) => {
   const { data, error } = await query;
   if (error) {
     console.error('[support-search] query error:', error);
-    return jsonResponse({ error: error.message, hits: [] }, 500);
+    return jsonResponse(req, { error: error.message, hits: [] }, 500);
   }
 
   // Build hit objects with a simple snippet derived from the body. We
@@ -171,5 +171,5 @@ Deno.serve(async (req: Request) => {
     };
   });
 
-  return jsonResponse({ hits, q });
+  return jsonResponse(req, { hits, q });
 });

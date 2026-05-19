@@ -15,7 +15,7 @@
  * Auth: cron-bypass via X-Cron-Job: true header, or service-role JWT.
  */
 
-import { corsHeaders } from '../_shared/cors.ts';
+import { buildCorsHeaders } from '../_shared/cors.ts';
 import { requireCronAuth } from '../_shared/authGuards.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -51,10 +51,10 @@ const TRIGGER_DAYS: Array<{ days: number; tag: 'week' | 'tomorrow' | 'today' }> 
   { days: 0, tag: 'today' },
 ];
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
   });
 }
 
@@ -78,7 +78,7 @@ function buildDescription(opp: OpportunityRow): string {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (req.method === 'OPTIONS') return new Response(null, { headers: buildCorsHeaders(req) });
 
   // SECURITY (hardened 2026-05-18): require cron-secret header OR
   // legacy X-Cron-Job header when CRON_SHARED_SECRET env is unset.
@@ -108,7 +108,7 @@ Deno.serve(async (req: Request) => {
     .gte('days_away', 0);
   if (oppsErr) {
     console.error('[delight-daily-nudge] query failed:', oppsErr);
-    return jsonResponse({ ok: false, error: oppsErr.message }, 500);
+    return jsonResponse(req, { ok: false, error: oppsErr.message }, 500);
   }
 
   // Filter to only the days we trigger on.
@@ -165,7 +165,7 @@ Deno.serve(async (req: Request) => {
     totalSkipped += skipped;
   }
 
-  return jsonResponse({
+  return jsonResponse(req, {
     ok: true,
     candidates: candidates.length,
     created: totalCreated,

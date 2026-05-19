@@ -1,9 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
-import { corsHeaders } from "../_shared/cors.ts";
+import { buildCorsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: buildCorsHeaders(req) });
   }
 
   try {
@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
         console.error("clickup-sync: Missing Authorization header");
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
 
@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
         console.error("clickup-sync: getClaims failed:", claimsError?.message);
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
 
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
         console.error("clickup-sync: Role check failed:", roleError?.message, "role:", userRole);
         return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), {
           status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
     } else {
@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
 
     if (eventsWithLists.length === 0) {
       return new Response(JSON.stringify({ message: "No events with ClickUp lists found", synced: 0 }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -204,13 +204,13 @@ Deno.serve(async (req) => {
         events: eventsWithLists.length,
         errors: errors.length > 0 ? errors : undefined,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (err: any) {
     console.error("Sync error:", err);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
 });

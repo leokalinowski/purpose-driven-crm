@@ -6,7 +6,41 @@ An append-only record of significant decisions and what shipped. One entry per m
 
 ---
 
-## 2026-05-18 — Security audit: high-tier batch (PR TBD)
+## 2026-05-18 — CORS tighten + sync-realtor dedupe backport (PR TBD)
+
+**What.** Audit item B6: every edge function shipped with `Access-Control-Allow-Origin: *`, which lets a malicious page in another tab read the response of any function. PR ships two things together:
+
+1. **Origin-aware CORS helper.** `supabase/functions/_shared/cors.ts` now exports `buildCorsHeaders(req)` — echoes the request `Origin` back if it's in a closed allowlist (`https://hub.realestateonpurpose.com`, `http://localhost:5173`, `http://localhost:5174`, plus an optional `ALLOWED_ORIGINS` env var for temporary additions). Anything else gets the prod hub origin, which the browser rejects. The legacy static `corsHeaders` wildcard is kept as a deprecated export for the 44 inline-cors functions not yet migrated (follow-up PR).
+
+2. **28 edge functions migrated** from `corsHeaders` → `buildCorsHeaders(req)` on disk. Local helpers like `jsonResponse(body)` that closed over the old static were refactored to take `req: Request` as the first parameter; every call site updated to pass `req`. **25 of 28 deployed live** via MCP. Three pending operator action (see below).
+
+3. **Bonus: `sync-realtor-market-data` dedupe backport.** While inspecting that function for cors migration, found a live-vs-disk drift: live v5 has a `dedupe()` function (with `dropped` accounting in the response) added as an April-2026 hotfix because Realtor.com's CSV occasionally has duplicate `(zip_code, period_month)` pairs that crash Postgres' `ON CONFLICT` ("cannot affect row a second time"). The hotfix never made it back to disk. Backported to disk + applied cors migration. **Not deployed** — same operator-action queue as the spheresync functions.
+
+**The 3 functions NOT yet deployed live (disk is correct, deploy is pending):**
+- `spheresync-email-function` (854 lines)
+- `spheresync-generate-tasks` (549 lines)
+- `sync-realtor-market-data` (336 lines, includes dedupe backport)
+
+**Why deferred.** The Supabase MCP `deploy_edge_function` tool requires file content inline. For files in the 500+ line range the LLM-mediated round-trip becomes error-prone (a sub-agent shipped a condensed `generate-ai-newsletter` once, losing ~400 lines of prompt detail before it was caught and redeployed). To deploy safely, run from a terminal with the Supabase CLI:
+
+```bash
+export SUPABASE_ACCESS_TOKEN=<token>
+bunx supabase functions deploy spheresync-email-function --project-ref cguoaokqwgqvzkqqezcq --no-verify-jwt
+bunx supabase functions deploy spheresync-generate-tasks --project-ref cguoaokqwgqvzkqqezcq --no-verify-jwt
+bunx supabase functions deploy sync-realtor-market-data --project-ref cguoaokqwgqvzkqqezcq --no-verify-jwt
+```
+
+Until those run, the 3 functions keep using the wildcard cors helper bundled with their previous deploys (the prod runtime is bundle-snapshotted at deploy time — disk changes don't take effect until redeploy). Behavior is unchanged; just CORS isn't tightened yet on those 3.
+
+**The 44 inline-cors functions (out of scope here).** Mostly webhooks (Stripe, ClickUp, Resend, OpenToClose — server-to-server, no browser CORS surface), cron-only functions (already gated by `requireCronAuth` from PR #35), and a few legacy edge functions. Tracked as a follow-up.
+
+**Files.** 1 helper + 28 function migrations + 1 dedupe backport = 30 files, +368 / −247 lines.
+
+**Verification.** `bun run build` clean. 25 functions verified deployed via MCP. Spot-check: cron command path to `coaching-weekly-nudge` (CORS-tightened in this PR) still returns `200 {ok:true,...}` from PostgREST cron — confirms server-to-server doesn't trip the browser CORS gate.
+
+---
+
+## 2026-05-18 — Security audit: high-tier batch (PR #37)
 
 **What.** Five audit items from the same live-system audit that produced PRs #35 (critical auth) and #36 (priority cleanup). Each was a real exposure or schema drift — none were ship-blockers individually, but together they close most of the high-tier surface area.
 

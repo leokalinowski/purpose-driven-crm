@@ -1,4 +1,4 @@
-import { corsHeaders } from '../_shared/cors.ts';
+import { buildCorsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 /**
@@ -373,7 +373,7 @@ const LENGTH_GUIDANCE: Record<string, string> = {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: buildCorsHeaders(req) });
   }
 
   try {
@@ -643,7 +643,7 @@ No prose outside the JSON. Include AT LEAST ONE image block with a https://lorem
       console.error('xAI error:', aiResponse.status, errText);
       if (aiResponse.status === 429) {
         return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again in a moment.' }), {
-          status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 429, headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
         });
       }
       throw new Error(`xAI returned ${aiResponse.status}`);
@@ -900,14 +900,14 @@ No prose outside the JSON. Include AT LEAST ONE image block with a https://lorem
       market_data_period: marketResult.rows[0]?.period_month ?? marketResult.aggregate?.period_month ?? null,
       market_data_used: hasVerifiedData,
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
     console.error('generate-ai-newsletter error:', error);
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 });
