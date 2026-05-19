@@ -1,4 +1,4 @@
-import { corsHeaders } from "../_shared/cors.ts";
+import { buildCorsHeaders } from "../_shared/cors.ts";
 
 const CRAWLER_PATTERNS = [
   "facebookexternalhit", "Facebot", "Twitterbot", "LinkedInBot",
@@ -22,13 +22,13 @@ function esc(str: string): string {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: buildCorsHeaders(req) });
   }
 
   const url = new URL(req.url);
   const slug = url.searchParams.get("slug");
   if (!slug) {
-    return new Response("Missing slug", { status: 400, headers: corsHeaders });
+    return new Response("Missing slug", { status: 400, headers: buildCorsHeaders(req) });
   }
 
   const spaUrl = `${SITE_URL}/event/${slug}`;
@@ -44,13 +44,13 @@ Deno.serve(async (req) => {
       html = html.replace('<head>', '<head><base href="https://purpose-driven-crm.lovable.app/">');
       return new Response(html, {
         status: 200,
-        headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" },
+        headers: { ...buildCorsHeaders(req), "Content-Type": "text/html; charset=utf-8" },
       });
     } catch (e) {
       console.error("Failed to proxy SPA:", e);
       // Fallback: serve a simple page that loads the SPA client-side
       const fallback = `<!DOCTYPE html><html><head><meta charset="utf-8"/><script>window.location.replace("${spaUrl}");</script></head><body></body></html>`;
-      return new Response(fallback, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } });
+      return new Response(fallback, { status: 200, headers: { ...buildCorsHeaders(req), "Content-Type": "text/html; charset=utf-8" } });
     }
   }
 
@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
     if (!event) {
       // No published event found — just serve a redirect to the SPA page
       const fallback = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta http-equiv="refresh" content="0;url=${spaUrl}"/></head><body><p>Redirecting…</p></body></html>`;
-      return new Response(fallback, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } });
+      return new Response(fallback, { status: 200, headers: { ...buildCorsHeaders(req), "Content-Type": "text/html; charset=utf-8" } });
     }
 
     const ogTitle = event.title;
@@ -98,10 +98,10 @@ Deno.serve(async (req) => {
 <meta http-equiv="refresh" content="0;url=${spaUrl}"/>
 </head><body><p>Redirecting…</p></body></html>`;
 
-    return new Response(html, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } });
+    return new Response(html, { status: 200, headers: { ...buildCorsHeaders(req), "Content-Type": "text/html; charset=utf-8" } });
   } catch (err) {
     console.error("og-event-meta error:", err);
     const fallback = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta http-equiv="refresh" content="0;url=${spaUrl}"/></head><body><p>Redirecting…</p></body></html>`;
-    return new Response(fallback, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } });
+    return new Response(fallback, { status: 200, headers: { ...buildCorsHeaders(req), "Content-Type": "text/html; charset=utf-8" } });
   }
 });

@@ -31,10 +31,19 @@
  * Auth
  *   • cron:  X-Cron-Job: true  OR  source: pg_cron
  *   • user:  bearer token; admin only (the table's RLS already restricts writes)
+ *
+ * CHANGE LOG
+ *   2026-04 — Realtor.com CSV occasionally has duplicate (zip_code, period_month)
+ *             pairs (12 in the April 2026 file). Postgres ON CONFLICT can't
+ *             update the same row twice in one statement, so we dedupe in-memory
+ *             keeping the LAST occurrence per (zip, period) before upserting.
+ *             Backported from live v5 to disk 2026-05-18 as part of the CORS
+ *             hardening PR — the dedupe fix had drifted live-only.
+ *   2026-05-18 — CORS hardened: corsHeaders → buildCorsHeaders(req).
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { corsHeaders } from '../_shared/cors.ts';
+import { buildCorsHeaders } from '../_shared/cors.ts';
 
 const REALTOR_ZIP_CSV_URL =
   'https://econdata.s3-us-west-2.amazonaws.com/Reports/Core/RDC_Inventory_Core_Metrics_Zip.csv';
@@ -179,6 +188,22 @@ function toMarketStatsRow(r: RealtorRow, sourceUrl: string): MarketStatsRow | nu
   };
 }
 
+/**
+ * Dedupe by (zip_code, period_month) keeping the LAST occurrence in CSV order.
+ * Realtor.com sometimes emits the same ZIP twice across the file; the later
+ * row is treated as canonical. Required because Postgres ON CONFLICT cannot
+ * update the same row twice in one statement (`ERROR: 21000 — cannot affect
+ * row a second time`).
+ */
+function dedupe(rows: MarketStatsRow[]): { unique: MarketStatsRow[]; dropped: number } {
+  const map = new Map<string, MarketStatsRow>();
+  for (const r of rows) {
+    const key = `${r.zip_code}|${r.period_month}`;
+    map.set(key, r);
+  }
+  return { unique: [...map.values()], dropped: rows.length - map.size };
+}
+
 // ─── Auth helper ─────────────────────────────────────────────────────────────
 
 async function authorize(req: Request, supabaseUrl: string, anonKey: string): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
@@ -201,10 +226,10 @@ async function authorize(req: Request, supabaseUrl: string, anonKey: string): Pr
   return { ok: true };
 }
 
-function json(body: unknown, status = 200) {
+function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
   });
 }
 
@@ -212,7 +237,7 @@ function json(body: unknown, status = 200) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: buildCorsHeaders(req) });
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -220,11 +245,11 @@ Deno.serve(async (req) => {
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    return json({ error: 'Server not configured' }, 500);
+    return json(req, { error: 'Server not configured' }, 500);
   }
 
   const auth = await authorize(req, supabaseUrl, anonKey);
-  if (!auth.ok) return json({ error: auth.message }, auth.status);
+  if (!auth.ok) return json(req, { error: auth.message }, auth.status);
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -255,15 +280,15 @@ Deno.serve(async (req) => {
       },
     });
     if (!res.ok) {
-      return json({ error: `Realtor.com fetch failed: ${res.status} ${res.statusText}`, source_url: sourceUrl }, 502);
+      return json(req, { error: `Realtor.com fetch failed: ${res.status} ${res.statusText}`, source_url: sourceUrl }, 502);
     }
     csvText = await res.text();
   } catch (err) {
-    return json({ error: 'Realtor.com fetch threw', detail: err instanceof Error ? err.message : String(err) }, 502);
+    return json(req, { error: 'Realtor.com fetch threw', detail: err instanceof Error ? err.message : String(err) }, 502);
   }
 
   if (!csvText || csvText.length < 100) {
-    return json({ error: 'CSV response was empty or too small', size_bytes: csvText?.length ?? 0 }, 502);
+    return json(req, { error: 'CSV response was empty or too small', size_bytes: csvText?.length ?? 0 }, 502);
   }
 
   // 2. Parse + map
@@ -271,10 +296,10 @@ Deno.serve(async (req) => {
   try {
     realtorRows = parseRealtorCsv(csvText);
   } catch (err) {
-    return json({ error: 'CSV parse failed', detail: err instanceof Error ? err.message : String(err) }, 500);
+    return json(req, { error: 'CSV parse failed', detail: err instanceof Error ? err.message : String(err) }, 500);
   }
 
-  const statsRows: MarketStatsRow[] = [];
+  const statsRowsRaw: MarketStatsRow[] = [];
   let skipped = 0;
   for (const r of realtorRows) {
     const mapped = toMarketStatsRow(r, sourceUrl);
@@ -282,11 +307,14 @@ Deno.serve(async (req) => {
       skipped++;
       continue;
     }
-    statsRows.push(mapped);
+    statsRowsRaw.push(mapped);
   }
 
+  // 3. Dedupe (zip_code, period_month) so ON CONFLICT doesn't fire twice on same row.
+  const { unique: statsRows, dropped: deduped } = dedupe(statsRowsRaw);
+
   if (statsRows.length === 0) {
-    return json({
+    return json(req, {
       error: 'No mappable rows in CSV',
       parsed: realtorRows.length,
       skipped,
@@ -294,19 +322,23 @@ Deno.serve(async (req) => {
   }
 
   if (dryRun) {
-    return json({
+    return json(req, {
       ok: true,
       dry_run: true,
       source_url: sourceUrl,
       raw_rows: realtorRows.length,
-      mapped_rows: statsRows.length,
+      mapped_rows: statsRowsRaw.length,
+      deduped,
+      unique_rows: statsRows.length,
       skipped,
       sample: statsRows.slice(0, 3),
+      distinct_zips: new Set(statsRows.map((r) => r.zip_code)).size,
+      period_months: Array.from(new Set(statsRows.map((r) => r.period_month))).sort(),
       duration_ms: Date.now() - startedAt,
     });
   }
 
-  // 3. Batched upsert
+  // 4. Batched upsert
   let upserted = 0;
   for (let i = 0; i < statsRows.length; i += BATCH_SIZE) {
     const batch = statsRows.slice(i, i + BATCH_SIZE);
@@ -314,7 +346,7 @@ Deno.serve(async (req) => {
       .from('market_stats')
       .upsert(batch, { onConflict: 'zip_code,period_month' });
     if (error) {
-      return json({
+      return json(req, {
         error: 'Upsert batch failed',
         detail: error.message,
         upserted_so_far: upserted,
@@ -324,13 +356,15 @@ Deno.serve(async (req) => {
     upserted += batch.length;
   }
 
-  return json({
+  return json(req, {
     ok: true,
     source_url: sourceUrl,
     raw_rows: realtorRows.length,
+    deduped,
     upserted,
     skipped,
-    duration_ms: Date.now() - startedAt,
+    distinct_zips: new Set(statsRows.map((r) => r.zip_code)).size,
     period_months: Array.from(new Set(statsRows.map((r) => r.period_month))).sort(),
+    duration_ms: Date.now() - startedAt,
   });
 });

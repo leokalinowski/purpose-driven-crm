@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { corsHeaders } from "../_shared/cors.ts";
+import { buildCorsHeaders } from "../_shared/cors.ts";
 import { SPHERESYNC_CALLS, SPHERESYNC_TEXTS, getISOWeekNumber, getCurrentWeekTasks } from "../_shared/spheresync-config.ts";
 
 interface Contact {
@@ -206,7 +206,7 @@ Return ONLY a JSON array. No markdown, no explanation outside the JSON.`;
 
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: buildCorsHeaders(req) });
   }
 
   const startTime = new Date();
@@ -222,7 +222,7 @@ const handler = async (req: Request): Promise<Response> => {
     if (!supabaseUrl || !supabaseServiceKey) {
       return new Response(
         JSON.stringify({ error: 'Server configuration error' }),
-        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        { status: 500, headers: { 'Content-Type': 'application/json', ...buildCorsHeaders(req) } }
       );
     }
 
@@ -236,7 +236,7 @@ const handler = async (req: Request): Promise<Response> => {
     if (!isCronJob && (!authHeader || !authHeader.startsWith('Bearer '))) {
       return new Response(
         JSON.stringify({ error: 'Authentication required' }),
-        { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        { status: 401, headers: { 'Content-Type': 'application/json', ...buildCorsHeaders(req) } }
       );
     }
 
@@ -249,14 +249,14 @@ const handler = async (req: Request): Promise<Response> => {
       if (claimsError || !claimsData?.claims) {
         return new Response(
           JSON.stringify({ error: 'Invalid authentication' }),
-          { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          { status: 401, headers: { 'Content-Type': 'application/json', ...buildCorsHeaders(req) } }
         );
       }
       const { data: userRole, error: roleError } = await supabaseAuth.rpc('get_current_user_role');
       if (roleError || userRole !== 'admin') {
         return new Response(
           JSON.stringify({ error: 'Admin access required' }),
-          { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          { status: 403, headers: { 'Content-Type': 'application/json', ...buildCorsHeaders(req) } }
         );
       }
     }
@@ -519,7 +519,7 @@ const handler = async (req: Request): Promise<Response> => {
       },
       results,
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
       status: 200,
     });
 
@@ -540,7 +540,7 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     return new Response(JSON.stringify({ success: false, error: error.message, run_log_id: runLogId }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
       status: 500,
     });
   }

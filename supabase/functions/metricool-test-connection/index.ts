@@ -16,7 +16,7 @@
  *   { ok: false, error }
  */
 
-import { corsHeaders } from '../_shared/cors.ts';
+import { buildCorsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const METRICOOL_BASE_URL = 'https://app.metricool.com/api';
@@ -27,16 +27,16 @@ interface TestRequest {
   blog_id?: number | string;
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
   });
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-  if (req.method !== 'POST') return jsonResponse({ ok: false, error: 'Method not allowed' }, 405);
+  if (req.method === 'OPTIONS') return new Response(null, { headers: buildCorsHeaders(req) });
+  if (req.method !== 'POST') return jsonResponse(req, { ok: false, error: 'Method not allowed' }, 405);
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -45,7 +45,7 @@ Deno.serve(async (req: Request) => {
     // Verify caller authenticated
     const authHeader = req.headers.get('Authorization') ?? '';
     if (!authHeader.toLowerCase().startsWith('bearer ')) {
-      return jsonResponse({ ok: false, error: 'Missing bearer token' }, 401);
+      return jsonResponse(req, { ok: false, error: 'Missing bearer token' }, 401);
     }
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -53,14 +53,14 @@ Deno.serve(async (req: Request) => {
     });
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData.user) {
-      return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
+      return jsonResponse(req, { ok: false, error: 'Unauthorized' }, 401);
     }
 
     let body: TestRequest;
     try {
       body = await req.json();
     } catch {
-      return jsonResponse({ ok: false, error: 'Invalid JSON body' }, 400);
+      return jsonResponse(req, { ok: false, error: 'Invalid JSON body' }, 400);
     }
 
     const userToken = (body.user_token ?? '').trim();
@@ -69,12 +69,14 @@ Deno.serve(async (req: Request) => {
 
     if (!userToken || !metricoolUserId || !blogId) {
       return jsonResponse(
+        req,
         { ok: false, error: 'user_token, user_id_metricool, and blog_id are all required' },
         400,
       );
     }
     if (!/^\d+$/.test(metricoolUserId) || !/^\d+$/.test(blogId)) {
       return jsonResponse(
+        req,
         { ok: false, error: 'user_id_metricool and blog_id must be integers' },
         400,
       );
@@ -92,6 +94,7 @@ Deno.serve(async (req: Request) => {
       });
     } catch (err) {
       return jsonResponse(
+        req,
         { ok: false, error: 'Could not reach Metricool', detail: err instanceof Error ? err.message : String(err) },
         200,
       );
@@ -99,6 +102,7 @@ Deno.serve(async (req: Request) => {
 
     if (profilesRes.status === 401 || profilesRes.status === 403) {
       return jsonResponse(
+        req,
         {
           ok: false,
           error: 'Invalid credentials. Double-check the User Token and User ID at app.metricool.com → user settings.',
@@ -109,6 +113,7 @@ Deno.serve(async (req: Request) => {
     if (!profilesRes.ok) {
       const text = await profilesRes.text();
       return jsonResponse(
+        req,
         { ok: false, error: `Metricool returned ${profilesRes.status}`, detail: text.slice(0, 500) },
         200,
       );
@@ -118,7 +123,7 @@ Deno.serve(async (req: Request) => {
     try {
       profiles = await profilesRes.json();
     } catch {
-      return jsonResponse({ ok: false, error: 'Metricool response was not JSON' }, 200);
+      return jsonResponse(req, { ok: false, error: 'Metricool response was not JSON' }, 200);
     }
 
     // Metricool returns an array of brand objects with at least { id, label } — sometimes blogId.
@@ -137,6 +142,7 @@ Deno.serve(async (req: Request) => {
 
     if (!match) {
       return jsonResponse(
+        req,
         {
           ok: false,
           error: `blog_id ${blogId} is not under this account. Available brands: ${profileList
@@ -181,7 +187,7 @@ Deno.serve(async (req: Request) => {
       // non-fatal — UI just won't show the network pills on first save.
     }
 
-    return jsonResponse({
+    return jsonResponse(req, {
       ok: true,
       brand_label: match.label ?? `Brand ${blogId}`,
       blog_id: blogIdNum,
@@ -191,6 +197,7 @@ Deno.serve(async (req: Request) => {
   } catch (err) {
     console.error('[metricool-test-connection] uncaught:', err);
     return jsonResponse(
+      req,
       { ok: false, error: 'Test failed', detail: err instanceof Error ? err.message : String(err) },
       500,
     );

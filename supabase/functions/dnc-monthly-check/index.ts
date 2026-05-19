@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { corsHeaders } from "../_shared/cors.ts";
+import { buildCorsHeaders } from "../_shared/cors.ts";
 import { requireCronAuth } from "../_shared/authGuards.ts";
 
 function parseXMLResponse(xmlText: string): DNCApiResponse {
@@ -65,7 +65,7 @@ interface DNCApiResponse {
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: buildCorsHeaders(req) });
   }
 
   // SECURITY (hardened 2026-05-18): require cron-secret header OR
@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     console.error('[DNC Check] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
     return new Response(
       JSON.stringify({ error: "Server configuration error" }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      { status: 500, headers: { "Content-Type": "application/json", ...buildCorsHeaders(req) } }
     );
   }
 
@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
       console.error('[DNC Check] No authorization header provided');
       return new Response(
         JSON.stringify({ error: "Authentication required" }),
-        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        { status: 401, headers: { "Content-Type": "application/json", ...buildCorsHeaders(req) } }
       );
     }
 
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
       console.error('[DNC Check] Authentication failed:', claimsError?.message);
       return new Response(
         JSON.stringify({ error: "Invalid authentication" }),
-        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        { status: 401, headers: { "Content-Type": "application/json", ...buildCorsHeaders(req) } }
       );
     }
 
@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
       console.error('[DNC Check] Role check failed:', roleError.message);
       return new Response(
         JSON.stringify({ error: "Failed to verify user role" }),
-        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        { status: 500, headers: { "Content-Type": "application/json", ...buildCorsHeaders(req) } }
       );
     }
 
@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
       console.error(`[DNC Check] Non-admin user ${callerUserId} tried to run global batch`);
       return new Response(
         JSON.stringify({ error: "Admin access required for global DNC check. Agents can only check their own contacts." }),
-        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        { status: 403, headers: { "Content-Type": "application/json", ...buildCorsHeaders(req) } }
       );
     }
     if (specificAgentId !== callerUserId) {
@@ -174,7 +174,7 @@ Deno.serve(async (req) => {
       console.error(`[DNC Check] User ${callerUserId} tried to check agent ${specificAgentId}'s contacts`);
       return new Response(
         JSON.stringify({ error: "You can only run DNC checks on your own contacts" }),
-        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        { status: 403, headers: { "Content-Type": "application/json", ...buildCorsHeaders(req) } }
       );
     }
   }
@@ -423,7 +423,7 @@ Deno.serve(async (req) => {
       }
     }), {
       status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
@@ -434,7 +434,7 @@ Deno.serve(async (req) => {
       error: (error as Error).message
     }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' }
     });
   }
 });

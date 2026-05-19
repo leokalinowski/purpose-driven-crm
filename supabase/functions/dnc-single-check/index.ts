@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { corsHeaders } from "../_shared/cors.ts";
+import { buildCorsHeaders } from "../_shared/cors.ts";
 
 interface DNCApiResponse {
   nationalDNC: boolean;
@@ -49,7 +49,7 @@ async function fetchWithRetry(url: string, maxRetries = 1): Promise<Response> {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: buildCorsHeaders(req) });
   }
 
   try {
@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     if (!phone || !contactId) {
       return new Response(
         JSON.stringify({ error: 'Phone number and contact ID are required', success: false }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: 'Authorization required', success: false }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     if (userError || !user) {
       return new Response(
         JSON.stringify({ error: 'Invalid authentication', success: false }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
     if (contactError || !contactData) {
       return new Response(
         JSON.stringify({ error: 'Contact not found or access denied', success: false }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 403, headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
       console.error('DNC_API_KEY not found in environment variables');
       return new Response(
         JSON.stringify({ error: 'DNC API key not configured', success: false }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 500, headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
       console.error(`Invalid phone format: ${phone} (${phoneDigits.length} digits)`);
       return new Response(
         JSON.stringify({ error: `Phone must be 10 or 11 digits, got ${phoneDigits.length}`, success: false }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
     if (!updateData || updateData.length === 0) {
       return new Response(
         JSON.stringify({ error: 'Contact not found or access denied', success: false }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 403, headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -172,14 +172,14 @@ Deno.serve(async (req) => {
         nationalDNC: result.nationalDNC, stateDNC: result.stateDNC,
         dma: result.dma, litigator: result.litigator
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('DNC check error:', error);
     return new Response(
       JSON.stringify({ error: (error as Error).message || 'Internal server error', success: false }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' } }
     );
   }
 });

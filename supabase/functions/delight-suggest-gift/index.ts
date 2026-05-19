@@ -11,7 +11,7 @@
  * them (or admin override) before sending the contact details to the AI.
  */
 
-import { corsHeaders } from '../_shared/cors.ts';
+import { buildCorsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 interface SuggestRequest {
@@ -27,10 +27,10 @@ interface GiftSuggestion {
   reason: string;
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...buildCorsHeaders(req), 'Content-Type': 'application/json' },
   });
 }
 
@@ -41,8 +41,8 @@ const FALLBACK_SUGGESTIONS: GiftSuggestion[] = [
 ];
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-  if (req.method !== 'POST') return jsonResponse({ ok: false, error: 'Method not allowed' }, 405);
+  if (req.method === 'OPTIONS') return new Response(null, { headers: buildCorsHeaders(req) });
+  if (req.method !== 'POST') return jsonResponse(req, { ok: false, error: 'Method not allowed' }, 405);
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -54,20 +54,20 @@ Deno.serve(async (req: Request) => {
     // ── Auth ──
     const authHeader = req.headers.get('Authorization') ?? '';
     if (!authHeader.toLowerCase().startsWith('bearer ')) {
-      return jsonResponse({ ok: false, error: 'Missing bearer token' }, 401);
+      return jsonResponse(req, { ok: false, error: 'Missing bearer token' }, 401);
     }
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: userData, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !userData.user) return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
+    if (userErr || !userData.user) return jsonResponse(req, { ok: false, error: 'Unauthorized' }, 401);
 
     let body: SuggestRequest;
     try { body = await req.json(); } catch {
-      return jsonResponse({ ok: false, error: 'Invalid JSON body' }, 400);
+      return jsonResponse(req, { ok: false, error: 'Invalid JSON body' }, 400);
     }
-    if (!body.contact_id) return jsonResponse({ ok: false, error: 'contact_id required' }, 400);
+    if (!body.contact_id) return jsonResponse(req, { ok: false, error: 'contact_id required' }, 400);
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -84,10 +84,10 @@ Deno.serve(async (req: Request) => {
       .eq('id', body.contact_id)
       .maybeSingle();
     if (contactErr || !contactRow) {
-      return jsonResponse({ ok: false, error: 'Contact not found' }, 404);
+      return jsonResponse(req, { ok: false, error: 'Contact not found' }, 404);
     }
     if (!isAdmin && contactRow.agent_id !== userData.user.id) {
-      return jsonResponse({ ok: false, error: 'Not authorized for this contact' }, 403);
+      return jsonResponse(req, { ok: false, error: 'Not authorized for this contact' }, 403);
     }
 
     // ── Pull the agent's brand tone for voice matching ──
@@ -99,7 +99,7 @@ Deno.serve(async (req: Request) => {
 
     // ── Fall back if no AI key ──
     if (!XAI_API_KEY) {
-      return jsonResponse({ ok: true, suggestions: FALLBACK_SUGGESTIONS });
+      return jsonResponse(req, { ok: true, suggestions: FALLBACK_SUGGESTIONS });
     }
 
     const contactName = [contactRow.first_name, contactRow.last_name].filter(Boolean).join(' ') || 'this contact';
@@ -166,7 +166,7 @@ Return exactly 4 suggestions ordered most-thoughtful-first. No prose outside the
 
     if (!aiResponse.ok) {
       console.error('xAI error:', aiResponse.status, await aiResponse.text());
-      return jsonResponse({ ok: true, suggestions: FALLBACK_SUGGESTIONS, error: `AI fallback (status ${aiResponse.status})` });
+      return jsonResponse(req, { ok: true, suggestions: FALLBACK_SUGGESTIONS, error: `AI fallback (status ${aiResponse.status})` });
     }
     const aiData = await aiResponse.json();
     const content = aiData.choices?.[0]?.message?.content;
@@ -182,12 +182,13 @@ Return exactly 4 suggestions ordered most-thoughtful-first. No prose outside the
       !!s && typeof s.title === 'string' && typeof s.description === 'string',
     );
     if (suggestions.length === 0) {
-      return jsonResponse({ ok: true, suggestions: FALLBACK_SUGGESTIONS, error: 'AI returned no usable suggestions' });
+      return jsonResponse(req, { ok: true, suggestions: FALLBACK_SUGGESTIONS, error: 'AI returned no usable suggestions' });
     }
-    return jsonResponse({ ok: true, suggestions: suggestions.slice(0, 4) });
+    return jsonResponse(req, { ok: true, suggestions: suggestions.slice(0, 4) });
   } catch (err) {
     console.error('[delight-suggest-gift] uncaught:', err);
     return jsonResponse(
+      req,
       { ok: false, error: err instanceof Error ? err.message : 'Suggestion failed' },
       500,
     );
