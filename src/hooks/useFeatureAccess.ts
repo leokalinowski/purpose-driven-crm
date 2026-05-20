@@ -34,10 +34,14 @@ const ROUTE_MIN_TIER: Record<string, Tier> = {
   '/support': 'core',
   // Pipeline, Events, Resources are available to Core agents (per product
   // decision 2026-05). Transactions stays admin-only — it surfaces deal
-  // financials. Social Scheduler stays agent+ — it's a paid add-on tier.
+  // financials. Social Scheduler is managed+ — visible to Managed, Agent,
+  // and Admin (and Editor staff), but NOT Core (product decision 2026-05-20).
+  // NB: tier ordering is admin(1) < editor(2) < agent(3) < managed(4) <
+  // core(5), so 'managed' as the min-tier admits managed/agent/editor/admin
+  // and excludes only core.
   '/events': 'core',
   '/transactions': 'admin',
-  '/social-scheduler': 'agent',
+  '/social-scheduler': 'managed',
   '/pipeline': 'core',
   '/resources': 'core',
 };
