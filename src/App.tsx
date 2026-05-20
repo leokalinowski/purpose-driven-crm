@@ -130,7 +130,14 @@ const AppContent = () => {
         <Route path="/admin/database" element={<AdminDatabaseManagement />} />
         <Route path="/admin/email-logs" element={<AdminEmailLogs />} />
         <Route path="/admin/coaching" element={<AdminCoachingManagement />} />
-        <Route path="/social-scheduler" element={<SocialScheduler />} />
+        <Route
+          path="/social-scheduler"
+          element={
+            <RouteGuard route="/social-scheduler">
+              <SocialScheduler />
+            </RouteGuard>
+          }
+        />
         <Route path="/admin/social-scheduler" element={<AdminSocialScheduler />} />
         <Route path="/admin/spheresync-recovery" element={<AdminSphereSyncRecovery />} />
         {/* /oauth-callback removed with Postiz */}
