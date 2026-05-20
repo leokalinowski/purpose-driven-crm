@@ -1138,6 +1138,55 @@ function DataExportSection() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [exporting, setExporting] = useState<string | null>(null);
+  const [fullExporting, setFullExporting] = useState(false);
+
+  // Complete data export — maps to T&C §19 ("Customer may request export
+  // of certain Customer Data during the subscription term"). Calls the
+  // `export-my-data` edge function which bundles every agent-scoped table
+  // into one JSON document. The function is verify_jwt:true and runs
+  // every query through RLS, so we only get the caller's own rows.
+  const downloadFullExport = async () => {
+    if (!user?.id) return;
+    setFullExporting(true);
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not signed in');
+      const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)
+        ?? 'https://cguoaokqwgqvzkqqezcq.supabase.co';
+      const res = await fetch(`${supabaseUrl}/functions/v1/export-my-data`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          // Pass the anon key too — Supabase Edge Functions require it
+          // alongside the user token for verify_jwt routing.
+          apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '',
+        },
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`Export failed (${res.status}): ${text.slice(0, 200)}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const filename = res.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1]
+        ?? `reop-data-${new Date().toISOString().slice(0, 10)}.json`;
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: 'Export ready', description: 'Your full data bundle has downloaded.' });
+    } catch (err) {
+      toast({
+        title: 'Export failed',
+        description: err instanceof Error ? err.message : 'Try again in a moment.',
+        variant: 'destructive',
+      });
+    } finally {
+      setFullExporting(false);
+    }
+  };
 
   const downloadCsv = async (kind: 'contacts' | 'check_ins' | 'newsletters') => {
     if (!user?.id) return;
@@ -1238,6 +1287,38 @@ function DataExportSection() {
             </button>
           </div>
         ))}
+      </div>
+
+      {/* Complete account-wide JSON bundle — separate from the per-table
+          CSV exports above. Heavier (single ~JSON file with every row
+          across every agent-scoped table) and aligned to T&C §19 for
+          regulatory/data-portability requests. */}
+      <div className="mt-6 rounded-xl border-2 border-primary/30 bg-reop-teal-soft/40 p-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex-1 min-w-[240px]">
+            <div className="text-sm font-semibold text-reop-dark-blue">
+              Complete account export (JSON)
+            </div>
+            <p className="text-[12.5px] text-muted-foreground leading-snug mt-1">
+              One bundled JSON file containing every row in the database scoped to your account —
+              profile, contacts, activities, opportunities, coaching, events, email logs, and more.
+              Use this for backup, migration, or a data-portability request.
+              See{' '}
+              <a href="/terms" target="_blank" rel="noopener" className="text-primary hover:underline font-medium">
+                T&amp;C §19
+              </a>{' '}
+              for retention details.
+            </p>
+          </div>
+          <button
+            onClick={downloadFullExport}
+            disabled={fullExporting}
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-reop-teal-hover transition disabled:opacity-60"
+          >
+            {fullExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            {fullExporting ? 'Building bundle…' : 'Download everything'}
+          </button>
+        </div>
       </div>
     </SectionShell>
   );

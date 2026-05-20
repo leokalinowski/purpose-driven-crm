@@ -291,6 +291,13 @@ export function AppSidebar() {
           <LogOut className="h-4 w-4" aria-hidden="true" />
           Sign out
         </button>
+        {/* Legal footer link — subtle, but always reachable. */}
+        <Link
+          to="/terms"
+          className="px-3 text-[11px] text-sidebar-foreground/55 hover:text-sidebar-foreground transition-colors"
+        >
+          Terms and Conditions
+        </Link>
       </SidebarFooter>
     </Sidebar>
   );
